@@ -51,7 +51,18 @@ export const AUDIO = {
   whistle: { hzA: 880, hzB: 1175, ms: 1100, attackMs: 90, gain: 0.2, techId: 'pressureVesselBlueprint' },
 
   // Resonance pad (Era IV): harmonic sines on baseHz with a slow LFO on the gain; gain rises with RS/s. Owned spire only.
-  pad: { baseHz: 110, partials: [1, 2, 3], partialGains: [1, 0.5, 0.33], lfoHz: 0.15, lfoDepth: 0.35, minGain: 0.02, maxGain: 0.08, refPerSecond: 1, maxPerSecond: 100000, techId: 'resonatorSpire' },
+  pad: {
+    baseHz: 110,
+    partials: [1, 2, 3],
+    partialGains: [1, 0.5, 0.33],
+    lfoHz: 0.15,
+    lfoDepth: 0.35,
+    minGain: 0.02,
+    maxGain: 0.08,
+    refPerSecond: 1,
+    maxPerSecond: 100000,
+    techId: 'resonatorSpire',
+  },
 
   // Fork ping (Era IV): two sines, a decaying ring on each manual click (echoCrank owned) and on every Era IV purchase.
   forkPing: { hz: 512, partialRatio: 2.76, partialGain: 0.3, ms: 550, gain: 0.25, techId: 'echoCrank' },
