@@ -1,0 +1,122 @@
+import type { TechId } from './types';
+import type { AssetId } from '../assets/assetIds';
+import { CRANK_FEEDBACK } from './world';
+
+export const MACHINE_COMPONENT_IDS = ['supportFrame', 'handCrank', 'gearSmall', 'gearLarge', 'flywheel', 'wornMotor', 'pistonArray'] as const;
+export type MachineComponentId = typeof MACHINE_COMPONENT_IDS[number];
+
+export const SOCKET_IDS = ['crankHub', 'smallGearHub', 'largeGearHub', 'flywheelHub', 'motorMount', 'pistonBed'] as const;
+export type SocketId = typeof SOCKET_IDS[number];
+
+export interface Vec2 { x: number; y: number }
+
+export type MachineLayer = 'back' | 'frame' | 'mid' | 'front';
+
+/** Draw depth of each machine layer (relative to the machine container). */
+export const MACHINE_LAYER_DEPTH: Record<MachineLayer, number> = { back: 0, frame: 10, mid: 20, front: 30 };
+
+export type AnimationDriver = 'manual' | 'automation';
+
+export interface SpeedCurve { base: number; gain: number; min: number; max: number }
+
+export type ComponentAnimation =
+  | { kind: 'none' }
+  | { kind: 'clickRotate'; degreesPerClick: number; tweenMs: number }
+  | { kind: 'rotate'; driver: AnimationDriver; direction: 1 | -1; speed: SpeedCurve }                       // deg/s
+  | { kind: 'reciprocate'; driver: AnimationDriver; axis: 'x' | 'y'; amplitude: number; speed: SpeedCurve }  // cycles/s
+  | { kind: 'vibrate'; driver: AnimationDriver; amplitude: number; speed: SpeedCurve };
+
+export interface ConnectionPoint { id: string; at: Vec2; kind: 'shaft' | 'belt' | 'pipe' }
+
+export interface ProductionEffect { kind: 'vibrate' | 'glow' | 'dust' | 'steam'; driver: AnimationDriver; threshold: number; intensity: number }
+
+export interface MachineComponentDefinition {
+  id: MachineComponentId; techId: TechId; minLevel: number;      // visible when techLevels[techId] >= minLevel
+  assetId: AssetId; attach: { socket: SocketId | null; offset: Vec2 };   // socket null = machine origin
+  size: { width: number; height: number };                       // art px, equals the manifest dims of assetId
+  origin: Vec2;                                                  // normalised pivot of the sprite
+  layer: MachineLayer; animation: ComponentAnimation; connections: ConnectionPoint[]; effects: ProductionEffect[];
+}
+
+export interface MachineLink { from: { component: MachineComponentId; point: string }; to: { component: MachineComponentId; point: string }; kind: ConnectionPoint['kind'] }
+
+/** Machine-local art px bounding box of the whole machine. */
+export const MACHINE_BOUNDS = { left: -200, right: 200, top: -260, bottom: 0 };
+
+/** Machine-local art px positions of every socket. */
+export const MACHINE_SOCKETS: Record<SocketId, Vec2> = {
+  crankHub: { x: -70, y: -62 },
+  smallGearHub: { x: -20, y: -62 },
+  largeGearHub: { x: 30, y: -58 },
+  flywheelHub: { x: 130, y: -60 },
+  motorMount: { x: -146, y: -30 },
+  pistonBed: { x: 0, y: -98 },
+};
+
+/** Drive-train links between components. Empty in WP2. */
+export const MACHINE_LINKS: readonly MachineLink[] = [];
+
+export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefinition> = {
+  supportFrame: {
+    id: 'supportFrame', techId: 'handCrank', minLevel: 1,
+    assetId: 'machine.frame', attach: { socket: null, offset: { x: 0, y: 0 } },
+    size: { width: 200, height: 110 }, origin: { x: 0.5, y: 1 },
+    layer: 'frame', animation: { kind: 'none' },
+    connections: [{ id: 'shaft', at: { x: 0, y: 0 }, kind: 'shaft' }],
+    effects: [],
+  },
+  handCrank: {
+    id: 'handCrank', techId: 'handCrank', minLevel: 1,
+    assetId: 'machine.crank', attach: { socket: 'crankHub', offset: { x: 0, y: 0 } },
+    size: { width: 48, height: 48 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'front',
+    animation: { kind: 'clickRotate', degreesPerClick: CRANK_FEEDBACK.degreesPerClick, tweenMs: CRANK_FEEDBACK.tweenMs },
+    connections: [{ id: 'shaft', at: { x: 0, y: 0 }, kind: 'shaft' }],
+    effects: [],
+  },
+  gearSmall: {
+    id: 'gearSmall', techId: 'gearRatio', minLevel: 1,
+    assetId: 'machine.gearSmall', attach: { socket: 'smallGearHub', offset: { x: 0, y: 0 } },
+    size: { width: 40, height: 40 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid',
+    animation: { kind: 'rotate', driver: 'manual', direction: -1, speed: { base: 90, gain: 0.5, min: 30, max: 360 } },
+    connections: [{ id: 'shaft', at: { x: 0, y: 0 }, kind: 'shaft' }],
+    effects: [],
+  },
+  gearLarge: {
+    id: 'gearLarge', techId: 'reinforcedCrank', minLevel: 1,
+    assetId: 'machine.gearLarge', attach: { socket: 'largeGearHub', offset: { x: 0, y: 0 } },
+    size: { width: 64, height: 64 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid',
+    animation: { kind: 'rotate', driver: 'manual', direction: 1, speed: { base: 60, gain: 0.5, min: 20, max: 240 } },
+    connections: [{ id: 'shaft', at: { x: 0, y: 0 }, kind: 'shaft' }],
+    effects: [],
+  },
+  flywheel: {
+    id: 'flywheel', techId: 'flywheel', minLevel: 1,
+    assetId: 'machine.flywheel', attach: { socket: 'flywheelHub', offset: { x: 0, y: 0 } },
+    size: { width: 96, height: 96 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid',
+    animation: { kind: 'rotate', driver: 'automation', direction: 1, speed: { base: 120, gain: 0.6, min: 30, max: 480 } },
+    connections: [{ id: 'shaft', at: { x: 0, y: 0 }, kind: 'shaft' }],
+    effects: [{ kind: 'glow', driver: 'automation', threshold: 10, intensity: 0.4 }],
+  },
+  wornMotor: {
+    id: 'wornMotor', techId: 'wornMotor', minLevel: 1,
+    assetId: 'machine.motor', attach: { socket: 'motorMount', offset: { x: 0, y: 0 } },
+    size: { width: 64, height: 48 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid',
+    animation: { kind: 'vibrate', driver: 'automation', amplitude: 1, speed: { base: 8, gain: 0.3, min: 2, max: 20 } },
+    connections: [{ id: 'shaft', at: { x: 0, y: 0 }, kind: 'shaft' }],
+    effects: [{ kind: 'vibrate', driver: 'automation', threshold: 1, intensity: 0.5 }],
+  },
+  pistonArray: {
+    id: 'pistonArray', techId: 'pistonArray', minLevel: 1,
+    assetId: 'machine.piston', attach: { socket: 'pistonBed', offset: { x: 0, y: 0 } },
+    size: { width: 96, height: 64 }, origin: { x: 0.5, y: 1 },
+    layer: 'back',
+    animation: { kind: 'reciprocate', driver: 'automation', axis: 'y', amplitude: 6, speed: { base: 1.5, gain: 0.4, min: 0.5, max: 6 } },
+    connections: [{ id: 'shaft', at: { x: 0, y: 0 }, kind: 'shaft' }],
+    effects: [{ kind: 'steam', driver: 'automation', threshold: 5, intensity: 0.6 }],
+  },
+};
