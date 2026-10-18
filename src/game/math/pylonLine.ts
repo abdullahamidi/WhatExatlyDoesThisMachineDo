@@ -20,6 +20,7 @@ export interface PylonAnchorInput {
   bottomObjY: number;          // strip bottom y in parallax space
   scroll: Vec2;                // camera scrollX / scrollY
   tiles?: number;              // tiles to test on each side of the nearest one (default 2)
+  side?: 'any' | 'left';       // undefined / 'any' = right of `from` (legacy); 'left' = only anchors left of `from`
 }
 
 /** A pinnable anchor: tile index k along the strip and the index into anchorsArt. */
@@ -53,12 +54,14 @@ function anchorWorld(input: PylonAnchorInput, k: number, a: Vec2): Vec2 {
 }
 
 /**
- * Anchor nearest to `from` among the anchors lying right of `from` (world x > from.x), over the tiles around
- * `from`. Null when there is no such anchor or the input is invalid. Ties keep the first candidate.
+ * Anchor nearest to `from` over the tiles around `from`. By default only anchors lying right of `from`
+ * (world x > from.x) count; `side: 'left'` only anchors with world x < from.x. Null when there is no such
+ * anchor or the input is invalid. Ties keep the first candidate.
  */
 export function nearestPylonAnchor(input: PylonAnchorInput): PylonAnchorChoice | null {
   const { from, anchorsArt, tilePx, scale, scrollFactor: sf, stripLeftX, scroll } = input;
   const tiles = input.tiles ?? 2;
+  const leftSide = input.side === 'left';
   if (!Number.isFinite(tiles) || !validPylonInput(input)) return null;
   const span = Math.max(0, Math.floor(tiles)); // whole tiles on each side
 
@@ -70,7 +73,7 @@ export function nearestPylonAnchor(input: PylonAnchorInput): PylonAnchorChoice |
       const a = anchorsArt[index];
       if (a === undefined) continue;
       const point = anchorWorld(input, k, a);
-      if (point.x <= from.x) continue; // only wires right of the mast
+      if (leftSide ? point.x >= from.x : point.x <= from.x) continue; // wires on the requested side of the mast
       const distance = Math.hypot(point.x - from.x, point.y - from.y);
       if (distance < bestDistance) {
         bestDistance = distance;

@@ -112,6 +112,43 @@ describe('nearestPylonAnchor', () => {
   });
 });
 
+describe('nearestPylonAnchor side', () => {
+  it("side 'left' picks the nearest anchor left of the start point", () => {
+    const c = nearestPylonAnchor(input({ from: { x: 1030, y: 990 }, side: 'left' }));
+    expect(c?.ref).toEqual({ tile: 2, index: 0 });
+    expect(c?.point.x).toBeCloseTo(1024, 9);
+    expect(c?.point.y).toBeCloseTo(1000, 9);
+  });
+
+  it('keeps the default right-side pick when side is not given', () => {
+    const c = nearestPylonAnchor(input({ from: { x: 1030, y: 990 } }));
+    expect(c?.ref).toEqual({ tile: 3, index: 0 });
+    expect(c?.point.x).toBeCloseTo(1536, 9);
+  });
+
+  it("side 'any' equals the default result", () => {
+    const from = { x: 1030, y: 990 };
+    expect(nearestPylonAnchor(input({ from, side: 'any' }))).toEqual(nearestPylonAnchor(input({ from })));
+  });
+
+  it("side 'left' never returns a point at or right of from.x", () => {
+    const anchorsArt = [{ x: 0, y: 256 }, { x: 100, y: 128 }];
+    for (let i = 0; i < 200; i++) {
+      const fromX = -1500 + i * 17.3; // deterministic spread of start points
+      const c = nearestPylonAnchor(input({ from: { x: fromX, y: 990 }, anchorsArt, side: 'left' }));
+      expect(c).not.toBeNull();
+      expect(c?.point.x ?? NaN).toBeLessThan(fromX);
+    }
+  });
+
+  it("side 'left' returns null when no anchor in the window lies left of from.x", () => {
+    // the only anchor in the window is at world x 1112, right of from.x 1000
+    const anchorsArt = [{ x: 300, y: 256 }];
+    expect(nearestPylonAnchor(input({ from: { x: 1000, y: 990 }, anchorsArt, tiles: 0, side: 'left' }))).toBeNull();
+    expect(nearestPylonAnchor(input({ from: { x: 1000, y: 990 }, anchorsArt, tiles: 0 }))?.point.x).toBeCloseTo(1112, 9);
+  });
+});
+
 describe('pylonAnchorPoint', () => {
   it('matches the point nearestPylonAnchor chose for the same input', () => {
     const base = input({ from: { x: 1000, y: 990 } });
