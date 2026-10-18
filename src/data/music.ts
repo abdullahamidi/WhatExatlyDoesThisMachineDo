@@ -82,6 +82,7 @@ export const MUSIC = {
   themes: THEMES,
   keystones: KEYSTONES,
   busGain: 0.6,
+  chordToneChance: 0.7,   // chance a melody note is a chord tone (else a scale passing tone)
   lookaheadS: 0.5,
   maxEventsPerCall: 16,
   maxVoices: 8,

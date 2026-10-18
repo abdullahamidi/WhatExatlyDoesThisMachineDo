@@ -7,7 +7,6 @@ import type { MusicNoteEvent, MusicTheme, MusicThemeId } from '../data/music';
 import type { EndingPhase, TechId } from '../data/types';
 
 /** Chance that a note slot takes a chord tone (else a scale passing tone). Musical structure from WP15 C1 (p .7). */
-const CHORD_TONE_CHANCE = 0.7;
 
 /** Seeded PRNG (mulberry32): returns a function giving floats in [0, 1). Same seed, same sequence. */
 export function mulberry32(seed: number): () => number {
@@ -83,7 +82,7 @@ function activeAt(events: readonly MusicNoteEvent[], t: number): number {
 /**
  * Events of one bar, times relative to the bar start (0 .. barSeconds). Deterministic for (theme, bar, seed).
  * Bar bass: chord root an octave down on beat 1, sustained for the bar. Each 8th slot: density chance of a note,
- * a chord tone (CHORD_TONE_CHANCE) or a scale passing tone next to the root. Polyphony is capped at MUSIC.maxVoices.
+ * a chord tone (MUSIC.chordToneChance) or a scale passing tone next to the root. Polyphony is capped at MUSIC.maxVoices.
  */
 export function eventsForBar(theme: MusicTheme, bar: number, seed: number): MusicNoteEvent[] {
   const b = variationBar(theme, bar);
@@ -99,7 +98,7 @@ export function eventsForBar(theme: MusicTheme, bar: number, seed: number): Musi
   const chordTones = [d, d + 2, d + 4];
   for (let k = 0; k < slots; k++) {
     const sounds = rng() < theme.density;
-    const chord = rng() < CHORD_TONE_CHANCE;
+    const chord = rng() < MUSIC.chordToneChance;
     const pick = Math.floor(rng() * chordTones.length);
     const up = rng() < 0.5;
     if (!sounds) continue;
