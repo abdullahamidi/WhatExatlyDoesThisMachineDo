@@ -1,0 +1,33 @@
+// Usage: node smoke.mjs <url> <outdir>
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { chromium } = require(process.env.PW_PATH);
+const [url, out] = process.argv.slice(2);
+const errors = [], failed = [];
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+page.on('requestfailed', r => failed.push(r.url()));
+page.on('response', r => { if (r.status() >= 400) failed.push(r.status() + ' ' + r.url()); });
+await page.goto(url, { waitUntil: 'networkidle' });
+await page.waitForFunction(() => window.__wedtmd && document.querySelector('#hud-me'), null, { timeout: 15000 });
+await page.waitForTimeout(800);
+const txt = s => page.$eval(s, e => e.textContent.trim());
+const r = { canvas: !!(await page.$('#game canvas')), meStart: await txt('#hud-me') };
+await page.screenshot({ path: out + '/01-default.png' });
+const p = await page.evaluate(() => window.__wedtmd.crankClientPoint());
+for (let i = 0; i < 5; i++) { await page.mouse.click(p.x, p.y); await page.waitForTimeout(60); }
+await page.waitForTimeout(200);
+r.meAfter5 = await txt('#hud-me'); r.perClick = await txt('#hud-per-click'); r.perSec = await txt('#hud-per-second');
+await page.screenshot({ path: out + '/02-after-clicks.png' });
+await page.mouse.move(640, 360); for (let i = 0; i < 10; i++) await page.mouse.wheel(0, 300);
+await page.waitForTimeout(300); await page.screenshot({ path: out + '/03-zoom-out.png' });
+for (let i = 0; i < 20; i++) await page.mouse.wheel(0, -300);
+await page.mouse.move(200, 200); await page.mouse.down(); await page.mouse.move(1200, 650, { steps: 10 }); await page.mouse.up();
+await page.waitForTimeout(300); await page.screenshot({ path: out + '/04-zoom-in-pan.png' });
+await page.click('#hud-refocus'); await page.waitForTimeout(800);
+await page.screenshot({ path: out + '/05-refocus.png' });
+r.errors = errors; r.failed = failed;
+console.log(JSON.stringify(r, null, 2));
+await browser.close();
