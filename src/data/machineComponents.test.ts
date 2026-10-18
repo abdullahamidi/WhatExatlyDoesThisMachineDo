@@ -879,10 +879,14 @@ const PIPE_LINKS_EXPECTED: readonly MachineLink[] = [
     via: [{ x: -360, y: -13 }, { x: -360, y: -3 }, { x: -308, y: -3 }, { x: -308, y: -46 }], bore: 2, depth: MACHINE_LAYER_DEPTH.mid - 1, pipeStyle: 'water' },
 ];
 
+/** Era IV pipe P4 (WP10): steam from the manifold right outlet up to the spire exciter. */
+const PIPE_P4_EXPECTED: MachineLink = { from: { component: 'steamManifold', point: 'outR' }, to: { component: 'spireExciter', point: 'steam' }, kind: 'pipe',
+  via: [{ x: 48, y: -176 }, { x: 48, y: -126 }], bore: 4, pipeStyle: 'steam' };
+
 describe('era III machine data', () => {
   it('the 16 era-III components follow the contract table (tech, level, asset, size, origin, socket, layer, bias)', () => {
     expect(ERA_THREE_TABLE.length).toBe(16);
-    expect(MACHINE_COMPONENT_IDS.slice(29)).toEqual(ERA_THREE_TABLE.map((r) => r.id));
+    expect(MACHINE_COMPONENT_IDS.slice(29, 45)).toEqual(ERA_THREE_TABLE.map((r) => r.id));
     for (const row of ERA_THREE_TABLE) {
       const def = MACHINE_COMPONENTS[row.id];
       expect(def.techId, row.id).toBe(row.techId);
@@ -953,9 +957,9 @@ describe('era III machine data', () => {
     });
   });
 
-  it('era-III wiring: exactly four pipe links in contract order, each joining two pipe points', () => {
+  it('era-III wiring: the four era-III pipe links keep contract order, P4 is appended, each joins two pipe points', () => {
     const pipes = MACHINE_LINKS.filter((l) => l.kind === 'pipe');
-    expect(pipes).toEqual(PIPE_LINKS_EXPECTED);
+    expect(pipes).toEqual([...PIPE_LINKS_EXPECTED, PIPE_P4_EXPECTED]);
     for (const link of pipes) {
       expect(pointOf(link.from.component, link.from.point)?.kind).toBe('pipe');
       expect(pointOf(link.to.component, link.to.point)?.kind).toBe('pipe');
@@ -975,8 +979,9 @@ describe('era III machine data', () => {
       P2: [{ x: -246, y: -91 }, { x: -323, y: -79 }],
       P3: [{ x: -246, y: -91 }, { x: -412, y: -86 }],
       W1: [{ x: -362, y: -13 }, { x: -304, y: -46 }],
+      P4: [{ x: -11, y: -176 }, { x: 52, y: -126 }],
     };
-    const names = ['P1', 'P2', 'P3', 'W1'];
+    const names = ['P1', 'P2', 'P3', 'W1', 'P4'];
     const pipes = MACHINE_LINKS.filter((l) => l.kind === 'pipe');
     pipes.forEach((link, i) => {
       const name = names[i] ?? '';
@@ -1008,7 +1013,7 @@ describe('era III machine data', () => {
   });
 
   it('the era-III machine fits the bounds and the pylon feeds sit on real parts', () => {
-    expect(MACHINE_BOUNDS).toEqual({ left: -448, right: 448, top: -248, bottom: 8 });
+    expect(MACHINE_BOUNDS).toEqual({ left: -448, right: 448, top: -470, bottom: 8 });
     for (const row of ERA_THREE_TABLE) {
       const b = boundsOf(MACHINE_COMPONENTS[row.id]);
       expect(b.left, row.id).toBeGreaterThanOrEqual(MACHINE_BOUNDS.left);
@@ -1028,7 +1033,7 @@ describe('era III prefixes', () => {
 
   it('every era-III component is visible at the full stage', () => {
     const visible = visibleAt(levelsForEra3(STEPS));
-    for (const id of MACHINE_COMPONENT_IDS) expect(visible.has(id), id).toBe(true);
+    for (const id of MACHINE_COMPONENT_IDS.slice(0, 29 + ERA_THREE_TABLE.length)) expect(visible.has(id), id).toBe(true);
   });
 
   it('chimney, steamManifold and pressureGauge are visible exactly from boiler 1', () => {
