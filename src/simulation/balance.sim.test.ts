@@ -1,57 +1,20 @@
 import { beforeAll, describe, it, expect } from 'vitest';
 import { TECH_IDS } from '../data/types';
-import type { GameState, TechId, TechView } from '../data/types';
-import {
-  advance,
-  applyClick,
-  createInitialState,
-  evaluateMilestones,
-  getAllTechViews,
-  purchase,
-} from './index';
+import type { TechId } from '../data/types';
+import { DESIGN_MAX_VALUE } from '../data/balance';
+import { createInitialState } from './state';
+import { runGreedy } from './sim/greedy';
+import type { GreedyResult } from './sim/greedy';
 
 // Deterministic greedy-player simulation. Proves the pacing targets of the retuned tech table
-// (docs/plan/WP5.md). No clock, no randomness, no rendering. Re-run: npx vitest run src/simulation/balance.sim.test.ts
+// (docs/plan/WP5.md) and that era I is unchanged by the multi-resource economy (WP7).
+// No clock, no randomness, no rendering. Re-run: npx vitest run src/simulation/balance.sim.test.ts
 
 const SIM_SECONDS = 3600;
 const CLICKS_PER_SECOND = 4;
 
-/** Pick the cheapest purchasable-next tech (ties: TECH_IDS order); null when none. */
-function pickCheapest(state: GameState): TechView | null {
-  let pick: TechView | null = null;
-  for (const view of getAllTechViews(state)) {
-    if (view.status !== 'available' || view.nextCost === null || view.def.kind === 'milestone') continue;
-    if (pick === null || pick.nextCost === null || view.nextCost < pick.nextCost) pick = view;
-  }
-  return pick;
-}
-
-/** Simulates the greedy policy and returns the first simulated second each tech reached level 1. */
-function runGreedy(): Record<TechId, number> {
-  let state: GameState = createInitialState(0);
-  const firstAt = {} as Record<TechId, number>;
-  for (const id of TECH_IDS) firstAt[id] = Infinity;
-
-  const record = (t: number): void => {
-    for (const id of TECH_IDS) {
-      if (firstAt[id] === Infinity && state.techLevels[id] >= 1) firstAt[id] = t;
-    }
-  };
-  record(0);
-
-  for (let t = 1; t <= SIM_SECONDS; t++) {
-    for (let i = 0; i < CLICKS_PER_SECOND; i++) state = applyClick(state).state;
-    state = advance(state, 1);
-    state = evaluateMilestones(state).state;
-
-    const pick = pickCheapest(state);
-    if (pick !== null && pick.affordable) {
-      const result = purchase(state, pick.id);
-      if (result.ok) state = result.state;
-    }
-    record(t);
-  }
-  return firstAt;
+function eraOneOptions(buyIntervalSeconds: number) {
+  return { seconds: SIM_SECONDS, clicksPerSecond: CLICKS_PER_SECOND, stepSeconds: 1, buyIntervalSeconds };
 }
 
 function formatMmSs(seconds: number): string {
@@ -62,10 +25,12 @@ function formatMmSs(seconds: number): string {
 }
 
 describe('greedy balance simulation (WP5 pacing targets)', () => {
+  let result: GreedyResult;
   let firstAt: Record<TechId, number>;
 
   beforeAll(() => {
-    firstAt = runGreedy();
+    result = runGreedy(eraOneOptions(1));
+    firstAt = result.firstAt;
     console.table(TECH_IDS.map((id) => ({ tech: id, 'mm:ss': formatMmSs(firstAt[id]) })));
   });
 
@@ -86,5 +51,52 @@ describe('greedy balance simulation (WP5 pacing targets)', () => {
   it('generatorBlueprint is reached at 1200-1800 s', () => {
     expect(firstAt.generatorBlueprint).toBeGreaterThanOrEqual(1200);
     expect(firstAt.generatorBlueprint).toBeLessThanOrEqual(1800);
+  });
+
+  it('era I exact first-purchase times (EXACT: era I must not drift)', () => {
+    expect(firstAt.handCrank).toBe(0);
+    expect(firstAt.gearRatio).toBe(4);
+    expect(firstAt.wornMotor).toBe(13);
+    expect(firstAt.motorTuning).toBe(20);
+    expect(firstAt.reinforcedCrank).toBe(196);
+    expect(firstAt.flywheel).toBe(289);
+    expect(firstAt.pistonArray).toBe(722);
+    expect(firstAt.improvedPistons).toBe(758);
+    expect(firstAt.generatorBlueprint).toBe(1326);
+  });
+
+  it('maxValue is finite and below the design ceiling', () => {
+    expect(Number.isFinite(result.maxValue)).toBe(true);
+    expect(result.maxValue).toBeLessThan(DESIGN_MAX_VALUE);
+  });
+
+  it('is deterministic: two runs give identical firstAt', () => {
+    const again = runGreedy(eraOneOptions(1));
+    expect(again.firstAt).toEqual(firstAt);
+  });
+
+  it('a 30 s buy interval never reaches a tech earlier than the 1 s interval', () => {
+    const slow = runGreedy(eraOneOptions(30));
+    for (const id of TECH_IDS) {
+      expect(slow.firstAt[id]).toBeGreaterThanOrEqual(firstAt[id]);
+    }
+  });
+
+  it('honours an initial state (wornMotor already owned -> first at 0 s)', () => {
+    const base = createInitialState(0);
+    const initial = { ...base, techLevels: { ...base.techLevels, wornMotor: 1 } };
+    const owned = runGreedy({ ...eraOneOptions(1), seconds: 10, initial });
+    expect(owned.firstAt.wornMotor).toBe(0);
+  });
+
+  it('a 10 s run performs exactly 40 clicks at 4 clicks/s', () => {
+    const short = runGreedy({ ...eraOneOptions(1), seconds: 10 });
+    expect(short.final.totalClicks).toBe(40);
+  });
+
+  it('the full era I simulation runs in under 10 s', () => {
+    const start = Date.now();
+    runGreedy(eraOneOptions(1));
+    expect(Date.now() - start).toBeLessThan(10000);
   });
 });
