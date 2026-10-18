@@ -72,7 +72,7 @@
 .toast-body {
   margin-top: 4px;
   color: var(--amber-dim);
-  font-size: .8em;
+  font-size: max(12px, .8em);
 }
 
 .toast-body[hidden] {
@@ -120,6 +120,12 @@
   .toast--milestone {
     animation: none;
   }
+}
+
+/* Settings > REDUCED MOTION (root attribute set by bootstrap) turns the toast animations off as well. */
+#ui-root[data-reduced-motion="on"] .toast,
+#ui-root[data-reduced-motion="on"] .toast--milestone {
+  animation: none;
 }
 
 /* TECH INDEX is wider than the free column: while it is open the stack drops behind its backdrop so no toast covers

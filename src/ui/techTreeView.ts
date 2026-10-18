@@ -12,7 +12,7 @@ export type BuyState = 'buy' | 'insufficient' | 'locked' | 'maxed' | 'owned' | '
 
 export interface TechNodeView {
   id: TechId; name: string; status: TechStatus; kindLabel: TechKindLabel; milestone: boolean;
-  levelText: string; costText: string | null; affordable: boolean; selected: boolean; x: number; y: number; width: number; height: number;
+  levelText: string; costText: string | null; ariaLabel: string; affordable: boolean; selected: boolean; x: number; y: number; width: number; height: number;
 }
 export interface TechEdgeView { key: string; from: TechId; to: TechId; met: boolean; d: string }
 export interface TechDetailView {
@@ -145,6 +145,29 @@ function costTextOf(view: TechView): string | null {
   return view.nextCost === null ? null : `${formatCost(view.nextCost)} ${RESOURCES[view.def.costRes].short}`;
 }
 
+/** Status word of a node for its accessible name (WP12 D8). */
+function nodeStatusWord(view: TechView): 'locked' | 'available' | 'purchased' | 'maxed' {
+  if (view.status === 'locked') return 'locked';
+  if (view.status === 'available') return 'available';
+  return isAtMaxLevel(view) ? 'maxed' : 'purchased';
+}
+
+/**
+ * Accessible name of a tech node (WP12 D8): "<name>, <status word>, level <n>, cost <price> <resource>".
+ * No cost for purchased unlocks / milestones and for a maxed repeatable.
+ */
+export function nodeAriaLabel(view: TechView): string {
+  const word = nodeStatusWord(view);
+  const parts = [view.def.name, word, `level ${view.level}`];
+  const hasCost = view.nextCost !== null
+    && word !== 'maxed'
+    && !(word === 'purchased' && view.def.kind !== 'repeatable');
+  if (hasCost && view.nextCost !== null) {
+    parts.push(`cost ${formatCost(view.nextCost)} ${RESOURCES[view.def.costRes].short}`);
+  }
+  return parts.join(', ');
+}
+
 /** Detail status word for the selected tech. */
 function statusLabelOf(view: TechView): TechDetailView['statusLabel'] {
   if (view.status === 'locked') return 'LOCKED';
@@ -246,6 +269,7 @@ export function buildTechTreeView(
       milestone: view.def.kind === 'milestone',
       levelText: levelTextOf(view),
       costText: costTextOf(view),
+      ariaLabel: nodeAriaLabel(view),
       affordable: view.affordable,
       selected: view.id === selected,
       x: pos.x,

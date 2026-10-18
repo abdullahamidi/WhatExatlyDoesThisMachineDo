@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   TECH_TREE_LAYOUT,
   buildEraTabs,
   buildTechTreeView,
   defaultSelection,
   edgePath,
+  nodeAriaLabel,
   purchaseFailureText,
   reachedEras,
   techNodePosition,
@@ -12,6 +13,8 @@ import {
 import { getAllTechViews, getTechView, createInitialState, emptyResourceMap } from '../simulation';
 import { TECHNOLOGIES } from '../data/technologies';
 import type { GameState, ResourceMap, TechDefinition, TechId, TechView } from '../data/types';
+import { TECH_IDS } from '../data/types';
+import { setDefaultNotation } from '../utils/format';
 
 function stateWith(overrides: Partial<GameState>): GameState {
   return { ...createInitialState(0), ...overrides };
@@ -353,6 +356,71 @@ describe('techTreeView', () => {
     it('returns the first view when there is no handCrank and nothing is available', () => {
       const views = getAllTechViews(createInitialState(0), ERA_TWO_LOCKED).filter((v) => v.def.era === 2);
       expect(defaultSelection(views)).toBe('wornMotor');
+    });
+  });
+
+  describe('node accessible names (D8)', () => {
+    afterEach(() => {
+      setDefaultNotation('suffix');
+    });
+
+    /** Initial state with the given tech levels applied on top. */
+    function stateWithLevels(levels: Partial<Record<TechId, number>>): GameState {
+      const base = createInitialState(0);
+      return { ...base, techLevels: { ...base.techLevels, ...levels } };
+    }
+
+    it('names a purchased starting tech without a cost', () => {
+      const view = getTechView(createInitialState(0), 'handCrank');
+      expect(view.status).toBe('purchased');
+      expect(nodeAriaLabel(view)).toBe('Hand Crank, purchased, level 1');
+    });
+
+    it('names an available repeatable with its next cost in suffix notation', () => {
+      const view = getTechView(createInitialState(0), 'gearRatio');
+      expect(view.status).toBe('available');
+      expect(nodeAriaLabel({ ...view, nextCost: 1234 })).toBe('Gear Ratio, available, level 0, cost 1.24K ME');
+    });
+
+    it('names a locked tech as locked', () => {
+      const locked = getAllTechViews(createInitialState(0)).find((v) => v.status === 'locked');
+      if (locked === undefined) throw new Error('expected a locked tech in the initial state');
+      expect(nodeAriaLabel(locked).startsWith(`${locked.def.name}, locked, level 0`)).toBe(true);
+    });
+
+    it('names a purchased unlock without a cost', () => {
+      const id = TECH_IDS.find((t) => TECHNOLOGIES[t].kind === 'unlock');
+      if (id === undefined) throw new Error('expected an unlock tech');
+      const view = getTechView(stateWithLevels({ [id]: 1 }), id);
+      expect(view.status).toBe('purchased');
+      expect(nodeAriaLabel(view)).toBe(`${TECHNOLOGIES[id].name}, purchased, level 1`);
+    });
+
+    it('names a repeatable below its cap as available (its node status) with the next cost', () => {
+      const view = getTechView(stateWithLevels({ gearRatio: 3 }), 'gearRatio');
+      expect(view.status).toBe('available');
+      expect(nodeAriaLabel(view)).toMatch(/^Gear Ratio, available, level 3, cost \S+ ME$/);
+    });
+
+    it('names a repeatable at its cap as maxed without a cost', () => {
+      const view = getTechView(stateWithLevels({ gearRatio: 15 }), 'gearRatio');
+      expect(nodeAriaLabel(view)).toBe('Gear Ratio, maxed, level 15');
+    });
+
+    it('follows the default notation at call time', () => {
+      const view = getTechView(createInitialState(0), 'gearRatio');
+      setDefaultNotation('scientific');
+      expect(nodeAriaLabel({ ...view, nextCost: 1234 })).toBe('Gear Ratio, available, level 0, cost 1.24e3 ME');
+    });
+
+    it('is carried on every built node', () => {
+      const views = eraOneViewsOf(createInitialState(0));
+      const built = buildTechTreeView(views, emptyResourceMap(), null, 1);
+      for (const node of built.nodes) {
+        const view = views.find((v) => v.id === node.id);
+        if (view === undefined) throw new Error(`missing view for ${node.id}`);
+        expect(node.ariaLabel).toBe(nodeAriaLabel(view));
+      }
     });
   });
 });

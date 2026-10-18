@@ -1,5 +1,6 @@
 import './techTree.css';
 import type { TechId, TechView } from '../data/types';
+import { UI_ART } from '../data/achievements';
 import type { GameContext } from '../game/context';
 import type { GameSession } from '../simulation';
 import { buildEraTabs, buildTechTreeView, defaultSelection, purchaseFailureText, reachedEras } from './techTreeView';
@@ -99,6 +100,8 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-labelledby', 'tech-title');
+  // Status-marker glyphs (CSS, opt-in via #ui-root[data-status-markers="on"]) read this sheet.
+  overlay.style.setProperty('--ui-icons', `url(${UI_ART.icons16})`);
 
   const panel = createElement('div', { id: 'tech-panel' });
 
@@ -271,6 +274,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
       patch.text(refs.level, node.levelText);
       patch.text(refs.cost, node.costText ?? '');
       patch.attr(refs.button, 'class', nodeClassOf(node));
+      patch.attr(refs.button, 'aria-label', node.ariaLabel);
       patch.px(refs.button, 'left', node.x);
       patch.px(refs.button, 'top', node.y);
       patch.px(refs.button, 'width', node.width);
@@ -479,6 +483,8 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   const unsubscribes: Array<() => void> = [
     session.on('purchase', () => { dirty = true; }),
     session.on('unlock', () => { dirty = true; }),
+    // Notation changes re-format costs and requirement labels: rebuild on the next update.
+    session.on('settings', () => { dirty = true; }),
     session.on('reset', () => {
       selectedEra = 1;
       selected = isOpenFlag ? defaultSelection(viewsOfEra(1)) : null;
