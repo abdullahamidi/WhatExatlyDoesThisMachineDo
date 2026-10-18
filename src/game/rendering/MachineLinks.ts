@@ -3,7 +3,16 @@ import { DRIVE_TRAIN, MACHINE_COMPONENTS, MACHINE_COMPONENT_IDS, MACHINE_LINKS, 
 import type { MachineComponentId, Vec2 } from '../../data/machineComponents';
 import { partAngle, sliderCrank } from '../math/driveTrain';
 import { resolveAttachment } from '../math/machineLayout';
-import { beltTravel, coalesceRuns, pointsAlongBelt, rasterBelt, rasterCable, rasterLine } from '../math/machineLinks';
+import {
+  beltTravel,
+  coalesceRuns,
+  pointsAlongBelt,
+  rasterBelt,
+  rasterCable,
+  rasterLine,
+  rasterPipe,
+} from '../math/machineLinks';
+import type { PipeRect } from '../math/machineLinks';
 
 /** Key quantisation: belt endpoints are compared at 1/KEY_SCALE art px so sub-pixel noise does not redraw. */
 const KEY_SCALE = 100;
@@ -28,19 +37,35 @@ interface RodPlan { pin: Vec2; eye: Vec2 }
 interface CablePlan { a: Vec2; b: Vec2; sag: number }
 
 /**
+ * Pipe ready to rasterise: corner points in whole px (both ends rounded, via points rounded), draw depth, look and cache key
+ * (link index plus the corner list). The key is the raster cache id.
+ */
+interface PipePlan { depth: number; points: Vec2[]; style: 'steam' | 'water'; key: string }
+
+/**
  * Geometry of one draw, built from integers only. Each part has its own key: equal key means equal pixels for that part.
  * The belt key excludes the dash shift, so a moving belt only re-plots its dash pass.
+ * Pipes are keyed per depth (one Graphics each); pipeKey is all pipe parts in link order.
  */
 interface LinkPlan {
   belts: BeltPlan[];
   rods: RodPlan[];
   caps: Vec2[];
   cables: CablePlan[];
+  pipes: PipePlan[];
   beltKey: string;
   dashKey: string;
   rodKey: string;
   capKey: string;
   cableKey: string;
+  pipeKey: string;
+  pipeKeys: Map<number, string>;
+}
+
+/** Pipe depths in use: one Graphics per distinct depth of the pipe links (MACHINE_LINK_STYLE.pipe.depth unless a link sets its own). */
+function pipeDepths(): number[] {
+  const depths = MACHINE_LINKS.filter((link) => link.kind === 'pipe').map((link) => link.depth ?? MACHINE_LINK_STYLE.pipe.depth);
+  return Array.from(new Set(depths));
 }
 
 /** Rastered belt loops with their coalesced runs; inner pixels feed the dash pass. */
@@ -107,8 +132,11 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
   const rodKeyParts: string[] = [];
   const cables: CablePlan[] = [];
   const cableKeyParts: string[] = [];
+  const pipes: PipePlan[] = [];
+  const pipeKeyParts: string[] = [];
+  const pipeKeysByDepth = new Map<number, string[]>();
 
-  for (const link of MACHINE_LINKS) {
+  for (const [index, link] of MACHINE_LINKS.entries()) {
     const fromLive = ctx.isLive(link.from.component);
     const toLive = ctx.isLive(link.to.component);
 
@@ -155,6 +183,22 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
       const sag = link.sag ?? MACHINE_LINK_STYLE.cable.sagArtPx;
       cables.push({ a: qa, b: qb, sag });
       cableKeyParts.push(`c${qa.x},${qa.y};${qb.x},${qb.y};${sag}`);
+    } else if (link.kind === 'pipe') {
+      const depth = link.depth ?? MACHINE_LINK_STYLE.pipe.depth;
+      const depthParts = pipeKeysByDepth.get(depth) ?? [];
+      pipeKeysByDepth.set(depth, depthParts);
+      const a = ctx.pointOf(link.from.component, link.from.point);
+      const b = ctx.pointOf(link.to.component, link.to.point);
+      if (!fromLive || !toLive || a === null || b === null) {
+        depthParts.push('p-'); // hidden or assembling endpoint: no pipe
+        pipeKeyParts.push('p-');
+        continue;
+      }
+      const points = [roundPoint(a), ...(link.via ?? []).map(roundPoint), roundPoint(b)];
+      const key = `p${index}:${points.map((p) => `${p.x},${p.y}`).join(';')}`;
+      pipes.push({ depth, points, style: link.pipeStyle ?? 'steam', key });
+      depthParts.push(key);
+      pipeKeyParts.push(key);
     }
   }
 
@@ -173,20 +217,26 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
     capKeyParts.push(`c${k}`);
   }
 
+  const pipeKeys = new Map<number, string>();
+  for (const [depth, parts] of pipeKeysByDepth) pipeKeys.set(depth, parts.join('|'));
+
   return {
     belts,
     rods,
     caps,
     cables,
+    pipes,
     beltKey: beltKeyParts.join('|'),
     dashKey: dashKeyParts.join('|'),
     rodKey: rodKeyParts.join('|'),
     capKey: capKeyParts.join('|'),
     cableKey: cableKeyParts.join('|'),
+    pipeKey: pipeKeyParts.join('|'),
+    pipeKeys,
   };
 }
 
-/** Draws belts, the conrod and axle caps as 1x1 pixel rectangles on integer art px. */
+/** Draws belts, the conrod, axle caps, cables and steam / water pipes as 1x1 pixel rectangles on integer art px. */
 export class MachineLinks {
   private readonly belts: Phaser.GameObjects.Graphics;
   /** Dash pass on its own layer so a moving belt does not clear the belt edges. Added right after belts. */
@@ -195,14 +245,21 @@ export class MachineLinks {
   private readonly caps: Phaser.GameObjects.Graphics;
   /** Sagging cables (Era II wiring), above the rods. */
   private readonly cables: Phaser.GameObjects.Graphics;
+  /** Pipes: one Graphics per distinct pipe depth, added after the cables. */
+  private readonly pipeGraphics = new Map<number, Phaser.GameObjects.Graphics>();
   /** Keys of the last drawn parts; null until the first draw. Equal key means that Graphics is already correct. */
   private beltKey: string | null = null;
   private dashKey: string | null = null;
   private rodKey: string | null = null;
   private capKey: string | null = null;
   private cableKey: string | null = null;
+  private pipeKey: string | null = null;
+  /** Last drawn key per pipe depth; a depth is redrawn only when its own key changed. */
+  private pipeKeys = new Map<number, string>();
   /** Rastered belt loops by belt key; rebuilt from the current plan each draw so it never grows past the live belts. */
   private rasterCache = new Map<string, BeltRaster>();
+  /** Rastered pipes by pipe key; rebuilt from the live pipes each time the pipe key changes. */
+  private pipeRasterCache = new Map<string, PipeRect[]>();
 
   constructor(scene: Phaser.Scene, parent: Phaser.GameObjects.Container) {
     this.belts = scene.make.graphics({}, false).setDepth(MACHINE_LINK_STYLE.beltDepth);
@@ -215,6 +272,11 @@ export class MachineLinks {
     parent.add(this.rods);
     parent.add(this.caps);
     parent.add(this.cables);
+    for (const depth of pipeDepths()) {
+      const g = scene.make.graphics({}, false).setDepth(depth);
+      this.pipeGraphics.set(depth, g);
+      parent.add(g);
+    }
   }
 
   /** Redraws each part only when its own key changed; skips all Graphics work otherwise. */
@@ -254,11 +316,12 @@ export class MachineLinks {
       this.cables.clear();
       this.drawCables(plan.cables);
     }
+    this.drawPipes(plan);
   }
 
   /** Destroys the Graphics objects; safe to call twice. */
   destroy(): void {
-    for (const g of [this.belts, this.dashes, this.rods, this.caps, this.cables]) {
+    for (const g of [this.belts, this.dashes, this.rods, this.caps, this.cables, ...this.pipeGraphics.values()]) {
       if (g.scene) g.destroy(); // Phaser clears scene on destroy
     }
     this.beltKey = null;
@@ -266,7 +329,52 @@ export class MachineLinks {
     this.rodKey = null;
     this.capKey = null;
     this.cableKey = null;
+    this.pipeKey = null;
+    this.pipeKeys = new Map();
     this.rasterCache = new Map();
+    this.pipeRasterCache = new Map();
+  }
+
+  /**
+   * Pipes are static: nothing happens while the pipe key is unchanged. Otherwise the live pipes are rastered (cached by key)
+   * and each depth whose own key changed is cleared and refilled in link order.
+   */
+  private drawPipes(plan: LinkPlan): void {
+    if (plan.pipeKey === this.pipeKey) return;
+    this.pipeKey = plan.pipeKey;
+    const rasters = this.rasterPipes(plan.pipes);
+    for (const [depth, g] of this.pipeGraphics) {
+      const key = plan.pipeKeys.get(depth) ?? '';
+      if (this.pipeKeys.get(depth) === key) continue;
+      this.pipeKeys.set(depth, key);
+      g.clear();
+      let color: number | null = null; // colour of the last fill, so runs of one colour share a fillStyle
+      for (const pipe of plan.pipes) {
+        if (pipe.depth !== depth) continue;
+        for (const rect of rasters.get(pipe.key) ?? []) {
+          if (rect.color !== color) {
+            g.fillStyle(rect.color, 1);
+            color = rect.color;
+          }
+          g.fillRect(rect.x, rect.y, rect.w, rect.h);
+        }
+      }
+    }
+  }
+
+  /**
+   * Pairs each live pipe with its cached raster, rastering only unseen keys. The new cache holds exactly the live pipes,
+   * so keys of hidden pipes do not accumulate.
+   */
+  private rasterPipes(plans: readonly PipePlan[]): Map<string, PipeRect[]> {
+    const next = new Map<string, PipeRect[]>();
+    for (const plan of plans) {
+      if (next.has(plan.key)) continue;
+      const rects = this.pipeRasterCache.get(plan.key) ?? rasterPipe(plan.points, MACHINE_LINK_STYLE.pipe[plan.style]);
+      next.set(plan.key, rects);
+    }
+    this.pipeRasterCache = next;
+    return next;
   }
 
   /**

@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import type { GameSession } from '../../simulation';
 import { DRIVE_TRAIN, MACHINE_COMPONENTS, MACHINE_COMPONENT_IDS, MACHINE_MOTION } from '../../data/machineComponents';
-import type { MachineComponentId } from '../../data/machineComponents';
+import type { MachineComponentId, SpeedCurve } from '../../data/machineComponents';
+import { HAMMER_FX } from '../../data/steamFx';
 import { CRANK_FEEDBACK } from '../../data/world';
 import {
   addActivity,
@@ -11,6 +12,11 @@ import {
   decayActivity,
   driverValue,
   framesIndex,
+  gaugeFrame,
+  lowPass,
+  reciprocateOffset,
+  spinStep,
+  strikeCount,
   vibrateOffset,
 } from '../math/animation';
 import { addClickImpulse, partAngle, rotationFrame, sliderCrank, stepMaster } from '../math/driveTrain';
@@ -19,7 +25,7 @@ import { crankAngle, crankOffsetOnGearUp } from '../math/crankLink';
 import { resolveAttachment } from '../math/machineLayout';
 
 /**
- * Shows a driven part at deg. A sprite on a rotation sheet (`#rot` texture) shows the nearest pre-rendered frame with no
+ * Shows a driven or spin part at deg. A sprite on a rotation sheet (`#rot` texture) shows the nearest pre-rendered frame with no
  * angle; any other sprite (sheet missing) is rotated by angle.
  */
 function applyAngle(sprite: Phaser.GameObjects.Sprite, deg: number): void {
@@ -48,6 +54,10 @@ function drivenOf(id: MachineComponentId): { ratio: number; phaseDeg: number } {
  *
  * Before the gears are unlocked the crank is not meshed to thetaM: clicks turn only crankState, and the motor turns
  * thetaM alone. On the moment the pinion appears, the crank angle is captured as an offset on thetaM (no snap).
+ *
+ * Other kinds: `vibrate` / `frames` follow the manual, automation, electric or thermal (PR/s) driver; `spin` turns its own
+ * angle at a driver-set speed; `gauge` low-passes its driver into a needle frame; `reciprocate` strikes with thetaM and counts
+ * hammer strikes (see consumeStrikes).
  */
 export class MachineAnimator {
   private readonly session: GameSession;
@@ -59,6 +69,10 @@ export class MachineAnimator {
   private readonly rodCrank: { ratio: number; phaseDeg: number };
   /** Phase in cycles for vibrating parts. */
   private readonly phases = new Map<MachineComponentId, number>();
+  /** Own angle of each spin part (deg, [0, 360)); cleared on reset. */
+  private readonly spinAngles = new Map<MachineComponentId, number>();
+  /** Low-passed driver value of each gauge part; starts at 0 after a load and is cleared on reset. */
+  private readonly gaugeValues = new Map<MachineComponentId, number>();
   private master: MasterState = { deg: 0, pending: 0 };
   /** Crank-only angle state (degPerSec 0, click impulses only), used while the gears are not active. */
   private crankState: MasterState = { deg: 0, pending: 0 };
@@ -71,6 +85,8 @@ export class MachineAnimator {
   private lastDegPerSec = 0;
   /** Seconds of clamped frame time since the last reset: the clock of frame-cycle parts. */
   private elapsed = 0;
+  /** Hammer strikes since the last consumeStrikes call. */
+  private strikes = 0;
   private readonly unsubscribeClick: () => void;
   private readonly unsubscribeReset: () => void;
 
@@ -105,10 +121,14 @@ export class MachineAnimator {
       this.manual = 0;
       this.lastDegPerSec = 0;
       this.elapsed = 0;
+      this.strikes = 0;
       this.phases.clear();
-      // Stale angles must not snap in later: every driven part goes back to angle 0.
+      this.spinAngles.clear();
+      this.gaugeValues.clear();
+      // Stale angles must not snap in later: every driven and spin part goes back to angle 0.
       for (const id of MACHINE_COMPONENT_IDS) {
-        if (MACHINE_COMPONENTS[id].animation.kind !== 'driven') continue;
+        const kind = MACHINE_COMPONENTS[id].animation.kind;
+        if (kind !== 'driven' && kind !== 'spin') continue;
         const sprite = this.sprites.get(id);
         if (sprite !== undefined) applyAngle(sprite, 0);
       }
@@ -119,8 +139,10 @@ export class MachineAnimator {
   update(deltaMs: number, isActive: (id: MachineComponentId) => boolean): void {
     const dt = clampFrameSeconds(deltaMs, MACHINE_MOTION.maxFrameSeconds);
     this.elapsed += dt; // frame-cycle clock
+    const prevMasterDeg = this.master.deg; // before this frame's step: strike detection
     const me = this.session.rates.perSecond.me;
     const ee = this.session.rates.perSecond.ee;
+    const pr = this.session.rates.perSecond.pr;
     this.manual = decayActivity(this.manual, dt, MACHINE_MOTION.manualTauSeconds); // activity fades when idle
     const dv = driverValue('combined', this.manual, me);
     const degPerSec = dv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(DRIVE_TRAIN.masterSpeed, dv); // rest below threshold
@@ -135,8 +157,11 @@ export class MachineAnimator {
       const sprite = this.sprites.get(id);
       if (sprite === undefined) continue;
       if (!isActive(id)) {
-        // Assembling: the tween owns x/y/scale/alpha, but a visible driven part keeps turning so it does not snap on landing.
+        // Assembling: the tween owns x/y/scale/alpha, but a visible driven or spin part keeps turning so it does not snap on landing.
         if (anim.kind === 'driven' && sprite.visible) applyAngle(sprite, this.drivenAngle(id, anim));
+        if (anim.kind === 'spin' && sprite.visible) {
+          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr), dt);
+        }
         continue;
       }
 
@@ -153,7 +178,7 @@ export class MachineAnimator {
           break;
         }
         case 'vibrate': {
-          const vdv = driverValue(anim.driver, this.manual, me, ee);
+          const vdv = driverValue(anim.driver, this.manual, me, ee, pr);
           const speed = vdv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, vdv); // rest below threshold
           const base = resolveAttachment(MACHINE_COMPONENTS[id]);
           if (speed === 0) {
@@ -168,12 +193,46 @@ export class MachineAnimator {
         }
         case 'frames': {
           // Frame cycle: advances at up to maxHz while the driver is above rest, holds frame 0 otherwise.
-          const fdv = driverValue(anim.driver, this.manual, me, ee);
+          const fdv = driverValue(anim.driver, this.manual, me, ee, pr);
           sprite.setFrame(framesIndex(this.elapsed, anim.frames, anim.maxHz, fdv >= MACHINE_MOTION.restThreshold));
+          break;
+        }
+        case 'spin': {
+          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr), dt);
+          break;
+        }
+        case 'gauge': {
+          // Needle: the driver is low-passed, then mapped onto the log scale of the frames sheet.
+          const target = driverValue(anim.driver, this.manual, me, ee, pr);
+          const value = lowPass(this.gaugeValues.get(id) ?? 0, target, dt, anim.tauSeconds);
+          this.gaugeValues.set(id, value);
+          sprite.setFrame(gaugeFrame(value, anim.frames, anim.minLog, anim.maxLog));
+          break;
+        }
+        case 'reciprocate': {
+          // Ram: rides thetaM. A swing faster than HAMMER_FX.maxDegPerSec is parked mid-stroke and counts no strike.
+          const base = resolveAttachment(MACHINE_COMPONENTS[id]);
+          const deltaDeg = this.master.deg - prevMasterDeg;
+          const fast = dt > 0 && Math.abs(anim.ratio * deltaDeg) / dt > HAMMER_FX.maxDegPerSec;
+          if (fast) {
+            sprite.setPosition(base.x, base.y + HAMMER_FX.midOffsetArtPx);
+            break;
+          }
+          const offset = reciprocateOffset(this.master.deg, anim.ratio, anim.strokeArtPx, anim.phaseDeg);
+          sprite.setPosition(base.x, base.y + offset);
+          if (dt > 0) this.strikes += strikeCount(prevMasterDeg, this.master.deg, anim.ratio, anim.phaseDeg);
           break;
         }
       }
     }
+  }
+
+  /** Spin part: own angle += speed(driver) * dt, rest below the threshold; shown on its rotation sheet or rotated. */
+  private spinPart(id: MachineComponentId, sprite: Phaser.GameObjects.Sprite, anim: { speed: SpeedCurve }, dv: number, dt: number): void {
+    const speed = dv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, dv); // rest below threshold
+    const angle = spinStep(this.spinAngles.get(id) ?? 0, speed, dt);
+    this.spinAngles.set(id, angle);
+    applyAngle(sprite, angle);
   }
 
   /** Angle of a driven part: crank parts follow the crank state and gearing, the rest follow thetaM. */
@@ -202,9 +261,17 @@ export class MachineAnimator {
     return { masterDeg: this.master.deg, degPerSec: this.lastDegPerSec };
   }
 
-  /** Current driver inputs: manual activity, automation rate (ME/s) and electric rate (EE/s). */
-  getDriverValues(): { manual: number; automation: number; electric: number } {
-    return { manual: this.manual, automation: this.session.rates.perSecond.me, electric: this.session.rates.perSecond.ee };
+  /** Current driver inputs: manual activity, automation rate (ME/s), electric rate (EE/s) and thermal rate (PR/s). */
+  getDriverValues(): { manual: number; automation: number; electric: number; thermal: number } {
+    const rates = this.session.rates.perSecond;
+    return { manual: this.manual, automation: rates.me, electric: rates.ee, thermal: rates.pr };
+  }
+
+  /** Hammer strikes since the last call; returns the count and resets it to 0. */
+  consumeStrikes(): number {
+    const n = this.strikes;
+    this.strikes = 0;
+    return n;
   }
 
   /** Removes the session subscriptions. */

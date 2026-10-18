@@ -11,6 +11,7 @@ import {
   MACHINE_SHADOW_STYLE,
 } from '../../data/machineComponents';
 import type { MachineComponentId, Vec2 } from '../../data/machineComponents';
+import { HAMMER_FX } from '../../data/steamFx';
 import { componentDepth, machineLocalToWorld, resolveAttachment } from '../math/machineLayout';
 import { connectionOffset } from '../math/machineLinks';
 import { newlyVisible, visibleComponentIds } from '../math/machineVisibility';
@@ -28,9 +29,11 @@ function between(lo: number, hi: number): number {
  * Layout lives on the outer `container`; the inner `parts` container holds the sprites, links and contact shadows and is the only thing shaken.
  * Render modes (`MACHINE_RENDER.mode`):
  *  - `renderTexture`: `parts` is off the display list and is drawn once per frame into a RenderTexture on the art-pixel grid
- *    (RT pixel (-MACHINE_BOUNDS.left, -MACHINE_BOUNDS.top) is machine (0,0)); the RT is the only machine image on the display list, scaled by `container`.
+ *    (RT pixel (-MACHINE_BOUNDS.left, -MACHINE_BOUNDS.top) is machine (0,0); era III bounds: pixel (448, 248)); the RT is the only
+ *    machine image on the display list, scaled by `container`.
  *  - `direct`: `parts` sits under `container` and Phaser draws the sprites itself.
  * Newly unlocked parts fly in (assembly tween) and puff dust on landing; motion, links and shadows are driven per frame by `update`.
+ * Each hammer strike (animator) puffs dust at the hammer foot; `getHammerStrikes` counts them since the last session reset.
  */
 export class MachineView {
   readonly container: Phaser.GameObjects.Container;
@@ -49,6 +52,8 @@ export class MachineView {
   private readonly unsubscribes: Array<() => void> = [];
   private visibleIds: Set<MachineComponentId> = new Set();
   private shakeTween: Phaser.Tweens.TweenChain | null = null;
+  /** Hammer strikes seen since the last session reset. */
+  private hammerStrikes = 0;
 
   /** Animator gate: a part moves only while visible and not assembling. */
   private readonly isActive = (id: MachineComponentId): boolean => this.visibleIds.has(id) && !this.assembling.has(id);
@@ -95,9 +100,10 @@ export class MachineView {
     for (const id of MACHINE_COMPONENT_IDS) {
       const def = MACHINE_COMPONENTS[id];
       const att = resolveAttachment(def);
-      // Driven parts start on their RotSprite rotation sheet when it is loaded; the animator picks frames from it.
+      // Driven and spin parts start on their RotSprite rotation sheet when it is loaded; the animator picks frames from it.
       const rotKey = def.assetId + '#rot';
-      const textureKey = def.animation.kind === 'driven' && scene.textures.exists(rotKey) ? rotKey : def.assetId;
+      const rotates = def.animation.kind === 'driven' || def.animation.kind === 'spin';
+      const textureKey = rotates && scene.textures.exists(rotKey) ? rotKey : def.assetId;
       const sprite = scene.add
         .sprite(att.x, att.y, textureKey, 0)
         .setOrigin(def.origin.x, def.origin.y)
@@ -191,10 +197,14 @@ export class MachineView {
     const def = MACHINE_COMPONENTS[id];
     const base = resolveAttachment(def);
     const bottomY = base.y + (1 - def.origin.y) * def.size.height; // sprite bottom edge in art px
-    for (let i = 0; i < MACHINE_ASSEMBLY.puffCount; i += 1) {
-      const spread = MACHINE_ASSEMBLY.puffSpreadArtPx;
+    this.spawnDust(base.x, bottomY, MACHINE_ASSEMBLY.puffCount, MACHINE_ASSEMBLY.puffSpreadArtPx);
+  }
+
+  /** `count` dust puffs rising from (x, bottomY), spread uniformly over +-spread art px in x. Visual only. */
+  private spawnDust(x: number, bottomY: number, count: number, spread: number): void {
+    for (let i = 0; i < count; i += 1) {
       const img = this.scene.add
-        .image(base.x + between(-spread, spread), bottomY, 'fx.dust')
+        .image(x + between(-spread, spread), bottomY, 'fx.dust')
         .setAlpha(MACHINE_ASSEMBLY.puffAlpha)
         .setDepth(MACHINE_LAYER_DEPTH.front + 1);
       this.parts.add(img); // appended on top; no re-sort
@@ -235,6 +245,7 @@ export class MachineView {
   private reset(): void {
     this.stopAssemblies();
     this.destroyPuffs();
+    this.hammerStrikes = 0;
     this.sync();
   }
 
@@ -268,6 +279,13 @@ export class MachineView {
    */
   update(deltaMs: number): void {
     this.animator.update(deltaMs, this.isActive);
+    const strikes = this.animator.consumeStrikes();
+    if (strikes > 0) {
+      this.hammerStrikes += strikes;
+      for (let i = 0; i < Math.min(strikes, 2); i += 1) {
+        this.spawnDust(HAMMER_FX.dustAt.x, HAMMER_FX.dustAt.y, HAMMER_FX.dustPuffs, HAMMER_FX.dustSpreadArtPx);
+      }
+    }
     const drive = this.animator.getDrive();
     this.links.draw({ pointOf: this.pointOf, isLive: this.isActive, masterDeg: drive.masterDeg });
     this.drawShadows();
@@ -283,6 +301,11 @@ export class MachineView {
 
   isAssembling(id: MachineComponentId): boolean {
     return this.assembling.has(id);
+  }
+
+  /** Hammer strikes since the last session reset (monotonic between resets). */
+  getHammerStrikes(): number {
+    return this.hammerStrikes;
   }
 
   getComponentState(id: MachineComponentId): { visible: boolean; assembling: boolean; alpha: number; scale: number } {
