@@ -101,7 +101,8 @@ describe('startSession', () => {
     expect(first.session.state.res.me).toBeCloseTo(v1Save.state.me + perSecond * 1, 6);
     expect(first.session.state.lifetime.me).toBeCloseTo(v1Save.state.lifetimeMe + perSecond * 1, 6);
     expect(first.session.state.res.ee).toBe(0);
-    expect(first.session.state.techLevels).toEqual(v1Save.state.techLevels);
+    // Techs added after v1 (era II+) migrate in at level 0.
+    expect(first.session.state.techLevels).toEqual({ ...createInitialState(0).techLevels, ...v1Save.state.techLevels });
     expect(first.session.state.totalClicks).toBe(v1Save.state.totalClicks);
 
     const stored = JSON.parse(storage.getItem(SAVE_KEY) ?? 'null') as {

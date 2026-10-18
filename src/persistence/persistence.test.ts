@@ -390,7 +390,8 @@ describe('v1 fixture', () => {
     expect(result.state.res).toEqual(resources({ me: 12345.5 }));
     expect(result.state.lifetime).toEqual(resources({ me: 98765.25 }));
     expect(result.state.totalClicks).toBe(321);
-    expect(result.state.techLevels).toEqual(v1Save.state.techLevels);
+    // Techs added after v1 (era II+) migrate in at level 0.
+    expect(result.state.techLevels).toEqual({ ...createInitialState(0).techLevels, ...v1Save.state.techLevels });
     expect(result.state.lastSimTime).toBe(1700000000000);
     expect(result.state.createdAt).toBe(1699990000000);
     expect(result.settings.muted).toBe(true);
