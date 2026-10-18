@@ -13,7 +13,9 @@
 | WP5 | Balance, ASSET_GUIDE, README, build split, §16 checklist | ✅ done |
 | WP6 | Mechanical correctness + art polish (Art Director audit → drive train, assets, RotSprite) | ✅ done |
 | WP7 | Multi-resource core (ME/EE/PR/RS/XF), save v2 migration, number suffixes to Dc, greedy sim harness | ✅ done |
-| WP8–WP17 | Full game per docs/plan/ROADMAP_FULL.md (eras II–V, finale, prestige, settings, stats) | in progress |
+| WP8 | Multi-era infra + Era II Electrical (generator, coils, capacitor rack, spark gap, transformer, mast, lit pylons, era tabs, camera auto-frame, plaque) | ✅ done |
+| WP9 | Era III Thermal/Pressure (boiler, chimney, steam hammer, turbine, pipes, FX) | in progress |
+| WP10+ | Eras IV–V, finale, prestige, settings, stats per ROADMAP_FULL | — |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -40,12 +42,15 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 602 pass (34 files) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 908 pass (41 files) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
 - Balance (greedy 4 clicks/s): Worn Motor 0:13, Reinforced Crank 3:16, Piston Array 12:02,
   Generator Blueprint 22:06.
+
+## Balance (greedy harness, fast profile)
+Era I: blueprint 22:06 · Era II: generator 29:18, substation 60:23 · Era III target: vessel ~112 min.
 
 ## Known issues
 - Pylon cables peak slightly at tile seams (art; minor).
