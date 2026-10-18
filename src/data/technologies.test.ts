@@ -124,8 +124,15 @@ describe('technology table', () => {
     expect(gb.requires).toEqual([
       { type: 'tech', id: 'pistonArray', minLevel: 1 },
       { type: 'tech', id: 'flywheel', minLevel: 1 },
-      { type: 'lifetimeMe', amount: 200000 },
+      { type: 'lifetime', res: 'me', amount: 200000 },
     ]);
+  });
+
+  it('all techs are era 1 and cost ME', () => {
+    for (const id of TECH_IDS) {
+      expect(TECHNOLOGIES[id].era).toBe(1);
+      expect(TECHNOLOGIES[id].costRes).toBe('me');
+    }
   });
 
   it('flavor is optional per definition', () => {

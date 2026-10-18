@@ -1,5 +1,6 @@
 import { TECH_IDS } from '../data/types';
 import type { GameState, SettingsState, TechId } from '../data/types';
+import { emptyResourceMap } from './resources';
 
 export const DEFAULT_SETTINGS: SettingsState = { muted: false };
 
@@ -9,8 +10,8 @@ export function createInitialState(nowMs: number): GameState {
     techLevels[id] = id === 'handCrank' ? 1 : 0;
   }
   return {
-    me: 0,
-    lifetimeMe: 0,
+    res: emptyResourceMap(),
+    lifetime: emptyResourceMap(),
     totalClicks: 0,
     techLevels,
     lastSimTime: nowMs,
