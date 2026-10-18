@@ -31,6 +31,7 @@ declare global {
       systemMenuOpen(): boolean;
       modalCount(): number;
       audioUnlocked(): boolean;
+      cameraState(): { zoom: number; centerX: number; centerY: number };
     };
   }
 }
@@ -57,5 +58,19 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
   const systemMenuOpen = (): boolean => extras.systemMenu.isOpen();
   const modalCount = (): number => extras.modals.size();
   const audioUnlocked = (): boolean => extras.audio.unlocked;
-  window.__wedtmd = { session, crankClientPoint, componentState, techTreeOpen, saveNow, systemMenuOpen, modalCount, audioUnlocked };
+  const cameraState = (): { zoom: number; centerX: number; centerY: number } => {
+    const cam = game.scene.getScene('World').cameras.main;
+    return { zoom: cam.zoom, centerX: cam.midPoint.x, centerY: cam.midPoint.y };
+  };
+  window.__wedtmd = {
+    session,
+    crankClientPoint,
+    componentState,
+    techTreeOpen,
+    saveNow,
+    systemMenuOpen,
+    modalCount,
+    audioUnlocked,
+    cameraState,
+  };
 }

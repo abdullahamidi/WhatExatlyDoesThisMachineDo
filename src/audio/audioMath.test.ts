@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AUDIO } from '../data/audio';
-import { activityLevel, gearTickRate, humFrequency, humGain, masterTarget } from './audioMath';
+import { activityLevel, arcRate, gearTickRate, humFrequency, humGain, mainsGain, masterTarget } from './audioMath';
 
 const SAMPLE_INPUTS = [0, -5, NaN, Infinity, 1e12, 0.001, 1];
 
@@ -135,6 +135,64 @@ describe('AUDIO data', () => {
     for (const leaf of leaves) {
       expect(Number.isFinite(leaf.value), leaf.path).toBe(true);
       expect(leaf.value, leaf.path).toBeGreaterThanOrEqual(0);
+    }
+  });
+});
+
+describe('mainsGain', () => {
+  it('is 0 for ee 0, negative and NaN', () => {
+    expect(mainsGain(0)).toBe(0);
+    expect(mainsGain(-5)).toBe(0);
+    expect(mainsGain(NaN)).toBe(0);
+  });
+
+  it('is positive for ee 1', () => {
+    expect(mainsGain(1)).toBeGreaterThan(0);
+  });
+
+  it('stays within [minGain, maxGain] for positive ee, including huge values', () => {
+    for (const ee of [0.001, 1, 10, 1000, 1e12, Infinity]) {
+      const g = mainsGain(ee);
+      expect(g).toBeGreaterThanOrEqual(AUDIO.mains.minGain);
+      expect(g).toBeLessThanOrEqual(AUDIO.mains.maxGain);
+    }
+    expect(mainsGain(1e12)).toBeCloseTo(AUDIO.mains.maxGain, 9);
+  });
+
+  it('is monotonic non-decreasing', () => {
+    const list = [0, 0.001, 1, 10, 100, 1000, 5000, 1e6];
+    for (let i = 1; i < list.length; i++) {
+      expect(mainsGain(list[i]!)).toBeGreaterThanOrEqual(mainsGain(list[i - 1]!));
+    }
+  });
+});
+
+describe('arcRate', () => {
+  it('is 0 when the spark gap is not owned', () => {
+    expect(arcRate(1e12, false)).toBe(0);
+    expect(arcRate(100, false)).toBe(0);
+  });
+
+  it('is 0 for ee <= 0 and NaN, even with the spark gap', () => {
+    expect(arcRate(0, true)).toBe(0);
+    expect(arcRate(-5, true)).toBe(0);
+    expect(arcRate(NaN, true)).toBe(0);
+  });
+
+  it('stays within [minRate, maxRate] and never above 3 for positive ee', () => {
+    for (const ee of [0.001, 1, 10, 1000, 1e12, Infinity]) {
+      const r = arcRate(ee, true);
+      expect(r).toBeGreaterThanOrEqual(AUDIO.arc.minRate);
+      expect(r).toBeLessThanOrEqual(AUDIO.arc.maxRate);
+      expect(r).toBeLessThanOrEqual(3);
+    }
+    expect(arcRate(1e12, true)).toBeCloseTo(AUDIO.arc.maxRate, 9);
+  });
+
+  it('is monotonic non-decreasing', () => {
+    const list = [0.001, 1, 10, 100, 1000, 5000, 1e6];
+    for (let i = 1; i < list.length; i++) {
+      expect(arcRate(list[i]!, true)).toBeGreaterThanOrEqual(arcRate(list[i - 1]!, true));
     }
   });
 });

@@ -45,6 +45,23 @@ export function gearTickRate(perSecond: number, cfg: typeof AUDIO.gearTick = AUD
   return clampRange(lerp(cfg.minPerSecond, cfg.maxPerSecond, level), cfg.minPerSecond, cfg.maxPerSecond);
 }
 
+/** Mains hum gain (Era II): 0 when ee <= 0 or NaN, else lerp(minGain, maxGain, level); always within [minGain, maxGain] when positive. */
+export function mainsGain(eePerSecond: number, cfg: typeof AUDIO.mains = AUDIO.mains): number {
+  if (!(eePerSecond > 0)) return 0;
+  const level = activityLevel(eePerSecond, cfg.refPerSecond, cfg.maxPerSecond);
+  return clampRange(lerp(cfg.minGain, cfg.maxGain, level), cfg.minGain, cfg.maxGain);
+}
+
+/**
+ * Arc crackle rate (arcs/s): 0 unless the spark gap is owned and ee > 0 (or NaN -> 0),
+ * else lerp(minRate, maxRate, level); never above maxRate (3 arcs/s).
+ */
+export function arcRate(eePerSecond: number, sparkOwned: boolean, cfg: typeof AUDIO.arc = AUDIO.arc): number {
+  if (!sparkOwned || !(eePerSecond > 0)) return 0;
+  const level = activityLevel(eePerSecond, cfg.refPerSecond, cfg.maxPerSecond);
+  return clampRange(lerp(cfg.minRate, cfg.maxRate, level), cfg.minRate, cfg.maxRate);
+}
+
 /** Master target: 0 when muted or locked, else base (default AUDIO.masterGain). */
 export function masterTarget(muted: boolean, unlocked: boolean, base: number = AUDIO.masterGain): number {
   return muted || !unlocked ? 0 : base;

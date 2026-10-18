@@ -12,6 +12,9 @@ const MAX_TICKS_PER_CALL = 8; // scheduling cap per scheduleGearTicks call
 const PURCHASE_DROP_RATIO = 1.5; // purchase thunk starts at hz * this and drops to hz
 const STING_RING_RATIO = 2; // sting notes ring for this many noteMs
 const DENY_HOLD_RATIO = 0.8; // deny pulse holds full level for this fraction of its length
+const MAINS_FILTER_RATIO = 3; // mains lowpass sits at 3x the mains frequency
+const MAX_ARCS_PER_CALL = 8; // scheduling cap per scheduleArcs call
+const RELAY_CLICKS = 2; // relay purchase plays this many clicks
 
 export interface Synth {
   setMaster(target: number, rampSeconds: number): void;
@@ -23,6 +26,9 @@ export interface Synth {
   setHum(hz: number, gain: number): void; // one persistent oscillator, ramped; gain 0 = silent
   scheduleGearTicks(ticksPerSecond: number): void; // lookahead scheduling; 0 clears/resets the schedule
   setWind(on: boolean): void; // looped noise -> lowpass -> gain, slow gust LFO on the gain
+  setMains(gain: number): void; // AUDIO.mains 50 Hz + 100 Hz pair through a lowpass; gain 0 = silent
+  scheduleArcs(perSecond: number): void; // AUDIO.arc crackle bursts; 0 clears/resets the schedule; capped at arc.maxRate
+  playRelay(): void; // AUDIO.relay two square clicks (Era II purchase)
   suspend(): void; // context.suspend().catch(noop)
   resume(): void; // context.resume().catch(noop)
   isRunning(): boolean; // context.state === 'running'; false once closed or if the state cannot be read
@@ -50,6 +56,12 @@ interface WindNodes {
   gain: GainNode;
   depth: GainNode;
   lfo: OscillatorNode;
+}
+
+interface MainsNodes {
+  fundamental: OscillatorNode;
+  harmonic: OscillatorNode;
+  gain: GainNode;
 }
 
 /** Creates the master bus at gain 0 wired to the destination. Returns null if WebAudio refuses. */
@@ -169,13 +181,67 @@ function ensureWind(context: AudioContext, out: AudioNode, cache: WindNodes | nu
   return { source, gain, depth, lfo };
 }
 
+/** Mains pair: sawtooth fundamental plus a sine harmonic at harmonicGain, lowpassed, then the level gain. */
+function ensureMains(context: AudioContext, out: AudioNode, cache: MainsNodes | null): MainsNodes {
+  if (cache) return cache;
+  const m = AUDIO.mains;
+  const fundamental = context.createOscillator();
+  fundamental.type = 'sawtooth';
+  fundamental.frequency.value = m.hz;
+  const harmonic = context.createOscillator();
+  harmonic.type = 'sine';
+  harmonic.frequency.value = m.harmonicHz;
+  const harmonicLevel = context.createGain();
+  harmonicLevel.gain.value = m.harmonicGain;
+  const filter = context.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = m.hz * MAINS_FILTER_RATIO;
+  const gain = context.createGain();
+  gain.gain.value = 0;
+  fundamental.connect(filter);
+  harmonic.connect(harmonicLevel);
+  harmonicLevel.connect(filter);
+  filter.connect(gain);
+  gain.connect(out);
+  fundamental.start();
+  harmonic.start();
+  return { fundamental, harmonic, gain };
+}
+
+/** One arc crackle: a short noise burst through a throwaway high-pass. Nodes are released when it ends. */
+function playArc(context: AudioContext, out: AudioNode, noise: AudioBuffer, startAt: number): void {
+  const a = AUDIO.arc;
+  const decay = a.ms / 1000;
+  const src = context.createBufferSource();
+  const env = context.createGain();
+  const hp = context.createBiquadFilter();
+  src.buffer = noise;
+  hp.type = 'highpass';
+  hp.frequency.value = a.highpassHz;
+  env.gain.setValueAtTime(a.gain, startAt);
+  env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, startAt + decay);
+  src.connect(env);
+  env.connect(hp);
+  hp.connect(out);
+  src.onended = () => {
+    src.disconnect();
+    env.disconnect();
+    hp.disconnect();
+  };
+  const offset = Math.random() * Math.max(0, noise.duration - decay);
+  src.start(startAt, offset);
+  src.stop(startAt + decay + STOP_PAD_S);
+}
+
 export function createSynth(context: AudioContext): Synth {
   const master = openMaster(context);
   let closed = false;
   let nextTickTime = 0;
+  let nextArcTime = 0;
   let noise: AudioBuffer | null = null;
   let hum: HumNodes | null = null;
   let wind: WindNodes | null = null;
+  let mains: MainsNodes | null = null;
   const warned = new Set<string>();
 
   function warnOnce(name: string, err: unknown): void {
@@ -334,6 +400,49 @@ export function createSynth(context: AudioContext): Synth {
       });
     },
 
+    setMains(gain: number): void {
+      run('setMains', (out) => {
+        const amp = Number.isFinite(gain) && gain > 0 ? gain : 0;
+        mains = ensureMains(context, out, mains);
+        mains.gain.gain.setTargetAtTime(amp, context.currentTime, PARAM_TIME_CONSTANT_S);
+      });
+    },
+
+    scheduleArcs(perSecond: number): void {
+      run('scheduleArcs', (out) => {
+        if (!Number.isFinite(perSecond) || perSecond <= 0) {
+          nextArcTime = 0;
+          return;
+        }
+        const now = context.currentTime;
+        if (nextArcTime < now) nextArcTime = now;
+        const interval = 1 / Math.min(perSecond, AUDIO.arc.maxRate);
+        const n = getNoise();
+        let count = 0;
+        while (nextArcTime < now + AUDIO.lookaheadSeconds && count < MAX_ARCS_PER_CALL) {
+          playArc(context, out, n, nextArcTime);
+          nextArcTime += interval;
+          count++;
+        }
+      });
+    },
+
+    playRelay(): void {
+      run('playRelay', (out) => {
+        const r = AUDIO.relay;
+        const t0 = context.currentTime;
+        for (let i = 0; i < RELAY_CLICKS; i++) {
+          playVoice(context, out, {
+            wave: 'square',
+            hz: r.hz,
+            startAt: t0 + (i * (r.ms + r.gapMs)) / 1000,
+            decay: r.ms / 1000,
+            peak: r.gain,
+          });
+        }
+      });
+    },
+
     suspend(): void {
       run('suspend', () => {
         context.suspend().catch(() => undefined);
@@ -363,6 +472,8 @@ export function createSynth(context: AudioContext): Synth {
         hum?.osc.stop();
         wind?.source.stop();
         wind?.lfo.stop();
+        mains?.fundamental.stop();
+        mains?.harmonic.stop();
       } catch (err) {
         warnOnce('close', err);
       }

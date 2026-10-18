@@ -31,4 +31,13 @@ export const AUDIO = {
 
   // Wind bed: lowpassed noise with a slow gust LFO on its gain.
   wind: { gain: 0.05, lowpassHz: 420, gustPeriodS: 9, gustDepth: 0.6 },
+
+  // Mains hum (Era II): 50 Hz fundamental plus a 100 Hz harmonic; gain rises with EE/s on a log curve.
+  mains: { hz: 50, harmonicHz: 100, harmonicGain: 0.5, minGain: 0.02, maxGain: 0.09, refPerSecond: 1, maxPerSecond: 5000 },
+
+  // Arc crackle (Era II, needs the spark gap): arcs/s rise with EE/s, capped at maxRate.
+  arc: { minRate: 0.5, maxRate: 3, refPerSecond: 1, maxPerSecond: 5000, ms: 40, gain: 0.25, highpassHz: 1800 },
+
+  // Relay click on a purchase of an Era II tech: two short square clicks.
+  relay: { hz: 1200, ms: 18, gapMs: 55, gain: 0.35 },
 } as const;
