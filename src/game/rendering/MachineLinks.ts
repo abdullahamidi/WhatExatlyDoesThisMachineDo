@@ -60,12 +60,14 @@ interface LinkPlan {
   pinRods: PinRodPlan[];
   caps: Vec2[];
   cables: CablePlan[];
+  guyCables: CablePlan[];   // era V guy cables (cableStyle 'guy'), kept apart from the power cables
   pipes: PipePlan[];
   beltKey: string;
   dashKey: string;
   rodKey: string;
   capKey: string;
   cableKey: string;
+  guyKey: string;
   pipeKey: string;
   pipeKeys: Map<number, string>;
   pinRodKeys: Map<number, string>;
@@ -155,6 +157,8 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
   const pinRodKeysByDepth = new Map<number, string[]>();
   const cables: CablePlan[] = [];
   const cableKeyParts: string[] = [];
+  const guyCables: CablePlan[] = [];
+  const guyKeyParts: string[] = [];
   const pipes: PipePlan[] = [];
   const pipeKeyParts: string[] = [];
   const pipeKeysByDepth = new Map<number, string[]>();
@@ -216,15 +220,22 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
     } else if (link.kind === 'cable') {
       const a = ctx.pointOf(link.from.component, link.from.point);
       const b = ctx.pointOf(link.to.component, link.to.point);
+      const guy = link.cableStyle === 'guy'; // era V guy cable: own list and key; power cables keep theirs
       if (!fromLive || !toLive || a === null || b === null) {
-        cableKeyParts.push('c-'); // hidden or assembling end: no cable
+        if (guy) guyKeyParts.push('g-'); // hidden or assembling end: no guy cable
+        else cableKeyParts.push('c-'); // hidden or assembling end: no cable
         continue;
       }
       const qa = roundPoint(a);
       const qb = roundPoint(b);
       const sag = link.sag ?? MACHINE_LINK_STYLE.cable.sagArtPx;
-      cables.push({ a: qa, b: qb, sag });
-      cableKeyParts.push(`c${qa.x},${qa.y};${qb.x},${qb.y};${sag}`);
+      if (guy) {
+        guyCables.push({ a: qa, b: qb, sag });
+        guyKeyParts.push(`g${qa.x},${qa.y};${qb.x},${qb.y};${sag}`);
+      } else {
+        cables.push({ a: qa, b: qb, sag });
+        cableKeyParts.push(`c${qa.x},${qa.y};${qb.x},${qb.y};${sag}`);
+      }
     } else if (link.kind === 'pipe') {
       const depth = link.depth ?? MACHINE_LINK_STYLE.pipe.depth;
       const depthParts = pipeKeysByDepth.get(depth) ?? [];
@@ -270,19 +281,21 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
     pinRods,
     caps,
     cables,
+    guyCables,
     pipes,
     beltKey: beltKeyParts.join('|'),
     dashKey: dashKeyParts.join('|'),
     rodKey: rodKeyParts.join('|'),
     capKey: capKeyParts.join('|'),
     cableKey: cableKeyParts.join('|'),
+    guyKey: guyKeyParts.join('|'),
     pipeKey: pipeKeyParts.join('|'),
     pipeKeys,
     pinRodKeys,
   };
 }
 
-/** Draws belts, the conrod, axle caps, cables and steam / water pipes as 1x1 pixel rectangles on integer art px. */
+/** Draws belts, the conrod, axle caps, power cables, era V guy cables and steam / water pipes as 1x1 pixel rectangles on integer art px. */
 export class MachineLinks {
   private readonly belts: Phaser.GameObjects.Graphics;
   /** Dash pass on its own layer so a moving belt does not clear the belt edges. Added right after belts. */
@@ -291,6 +304,8 @@ export class MachineLinks {
   private readonly caps: Phaser.GameObjects.Graphics;
   /** Sagging cables (Era II wiring), above the rods. */
   private readonly cables: Phaser.GameObjects.Graphics;
+  /** Era V guy cables (dark wire rope), below the anchor sprites at MACHINE_LINK_STYLE.guy.depth. */
+  private readonly guyCables: Phaser.GameObjects.Graphics;
   /** Pipes: one Graphics per distinct pipe depth, added after the cables. */
   private readonly pipeGraphics = new Map<number, Phaser.GameObjects.Graphics>();
   /** Pin-to-pin rods: one Graphics per distinct depth of the pin-to-pin rod links in MACHINE_LINKS (static data, so always created; empty while no such rod is live, e.g. Era I-III). */
@@ -301,6 +316,7 @@ export class MachineLinks {
   private rodKey: string | null = null;
   private capKey: string | null = null;
   private cableKey: string | null = null;
+  private guyKey: string | null = null;
   private pipeKey: string | null = null;
   /** Last drawn key per pipe depth; a depth is redrawn only when its own key changed. */
   private pipeKeys = new Map<number, string>();
@@ -317,11 +333,13 @@ export class MachineLinks {
     this.rods = scene.make.graphics({}, false).setDepth(MACHINE_LINK_STYLE.rodDepth);
     this.caps = scene.make.graphics({}, false).setDepth(MACHINE_LINK_STYLE.capDepth);
     this.cables = scene.make.graphics({}, false).setDepth(MACHINE_LINK_STYLE.cable.depth);
+    this.guyCables = scene.make.graphics({}, false).setDepth(MACHINE_LINK_STYLE.guy.depth);
     parent.add(this.belts);
     parent.add(this.dashes);
     parent.add(this.rods);
     parent.add(this.caps);
     parent.add(this.cables);
+    parent.add(this.guyCables);
     for (const depth of pipeDepths()) {
       const g = scene.make.graphics({}, false).setDepth(depth);
       this.pipeGraphics.set(depth, g);
@@ -372,12 +390,17 @@ export class MachineLinks {
       this.cables.clear();
       this.drawCables(plan.cables);
     }
+    if (plan.guyKey !== this.guyKey) {
+      this.guyKey = plan.guyKey;
+      this.guyCables.clear();
+      this.drawGuyCables(plan.guyCables);
+    }
     this.drawPipes(plan);
   }
 
   /** Destroys the Graphics objects; safe to call twice. */
   destroy(): void {
-    for (const g of [this.belts, this.dashes, this.rods, this.caps, this.cables, ...this.pipeGraphics.values(), ...this.pinRodGraphics.values()]) {
+    for (const g of [this.belts, this.dashes, this.rods, this.caps, this.cables, this.guyCables, ...this.pipeGraphics.values(), ...this.pinRodGraphics.values()]) {
       if (g.scene) g.destroy(); // Phaser clears scene on destroy
     }
     this.beltKey = null;
@@ -385,6 +408,7 @@ export class MachineLinks {
     this.rodKey = null;
     this.capKey = null;
     this.cableKey = null;
+    this.guyKey = null;
     this.pipeKey = null;
     this.pipeKeys = new Map();
     this.pinRodKeys = new Map();
@@ -537,6 +561,29 @@ export class MachineLinks {
           { x: e.x + 1, y: e.y + 1 },
         ]);
       }
+    }
+  }
+
+  /**
+   * Guy cables (era V): a 1 px dark core line, and one dark pixel directly below each core pixel unless that pixel is
+   * core itself. No cyan highlight and no end caps.
+   */
+  private drawGuyCables(cables: readonly CablePlan[]): void {
+    const style = MACHINE_LINK_STYLE.guy;
+    for (const { a, b, sag } of cables) {
+      const core = rasterCable(a, b, sag);
+      const coreKeys = new Set(core.map((p) => `${p.x},${p.y}`));
+      const under: Vec2[] = [];
+      const underKeys = new Set<string>();
+      for (const p of core) {
+        const below: Vec2 = { x: p.x, y: p.y + 1 };
+        const k = `${below.x},${below.y}`;
+        if (coreKeys.has(k) || underKeys.has(k)) continue;
+        underKeys.add(k);
+        under.push(below);
+      }
+      this.plot(this.guyCables, style.core, core);
+      this.plot(this.guyCables, style.under, under);
     }
   }
 

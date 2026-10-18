@@ -24,12 +24,15 @@ function between(lo: number, hi: number): number {
   return lo + Math.random() * (hi - lo); // lo + r * span
 }
 
+/** Perf probe window: number of recent update() durations kept for getUpdateStats. Debug only, not tuning. */
+const UPDATE_SAMPLE_COUNT = 120;
+
 /**
  * The machine container: one sprite per component, visibility driven by tech levels.
  * Layout lives on the outer `container`; the inner `parts` container holds the sprites, links and contact shadows and is the only thing shaken.
  * Render modes (`MACHINE_RENDER.mode`):
  *  - `renderTexture`: `parts` is off the display list and is drawn once per frame into a RenderTexture on the art-pixel grid
- *    (RT pixel (-MACHINE_BOUNDS.left, -MACHINE_BOUNDS.top) is machine (0,0); era IV bounds: pixel (448, 470)); the RT is the only
+ *    (RT pixel (-MACHINE_BOUNDS.left, -MACHINE_BOUNDS.top) is machine (0,0); era V bounds: pixel (560, 616), RT 1120 x 624); the RT is the only
  *    machine image on the display list, scaled by `container`.
  *  - `direct`: `parts` sits under `container` and Phaser draws the sprites itself.
  * Newly unlocked parts fly in (assembly tween) and puff dust on landing; motion, links and shadows are driven per frame by `update`.
@@ -54,6 +57,9 @@ export class MachineView {
   private shakeTween: Phaser.Tweens.TweenChain | null = null;
   /** Hammer strikes seen since the last session reset. */
   private hammerStrikes = 0;
+  /** Ring buffer of the last update() durations (ms) for the perf probe; `updateCursor` is the next slot to write. */
+  private readonly updateSamplesMs: number[] = [];
+  private updateCursor = 0;
 
   /** Animator gate: a part moves only while visible and not assembling. */
   private readonly isActive = (id: MachineComponentId): boolean => this.visibleIds.has(id) && !this.assembling.has(id);
@@ -278,7 +284,10 @@ export class MachineView {
    * then (renderTexture mode) repaint the RenderTexture from `parts`, carrying the shake offset.
    */
   update(deltaMs: number): void {
+    const t0 = performance.now();
     this.animator.update(deltaMs, this.isActive);
+    // A bead crossed between front and back depth: re-sort so the parts stack follows.
+    if (this.animator.consumeDepthChanged()) this.parts.sort('depth');
     const strikes = this.animator.consumeStrikes();
     if (strikes > 0) {
       this.hammerStrikes += strikes;
@@ -302,6 +311,14 @@ export class MachineView {
         -MACHINE_BOUNDS.top + Math.round(this.parts.y),
       );
     }
+    this.recordUpdate(performance.now() - t0);
+  }
+
+  /** Keeps the last UPDATE_SAMPLE_COUNT update() durations; the oldest is overwritten once the buffer is full. */
+  private recordUpdate(ms: number): void {
+    if (this.updateSamplesMs.length < UPDATE_SAMPLE_COUNT) this.updateSamplesMs.push(ms);
+    else this.updateSamplesMs[this.updateCursor] = ms;
+    this.updateCursor = (this.updateCursor + 1) % UPDATE_SAMPLE_COUNT;
   }
 
   isAssembling(id: MachineComponentId): boolean {
@@ -321,6 +338,26 @@ export class MachineView {
 
   getComponentSprite(id: MachineComponentId): Phaser.GameObjects.Sprite | undefined {
     return this.sprites.get(id);
+  }
+
+  /** Current frame of a latch part (animator); null for any other part. */
+  latchFrame(id: MachineComponentId): number | null {
+    return this.animator.latchFrame(id);
+  }
+
+  /**
+   * Perf probe: mean and max of the recent update() durations (ms) plus the sprite count.
+   * Before the first update the timings are zero.
+   */
+  getUpdateStats(): { meanMs: number; maxMs: number; components: number } {
+    const n = this.updateSamplesMs.length;
+    let sum = 0;
+    let max = 0;
+    for (const ms of this.updateSamplesMs) {
+      sum += ms;
+      if (ms > max) max = ms;
+    }
+    return { meanMs: n === 0 ? 0 : sum / n, maxMs: max, components: this.sprites.size };
   }
 
   /** World px position of a component's attachment point. */

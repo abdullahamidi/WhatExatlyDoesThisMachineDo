@@ -8,6 +8,7 @@ import type { SaveController } from '../persistence/saveController';
 import type { GameAudio } from '../audio/gameAudio';
 import type { MachineComponentId } from '../data/machineComponents';
 import { MACHINE_COMPONENTS } from '../data/machineComponents';
+import { MACHINE_ANCHOR } from '../data/world';
 import { machineLocalToWorld, resolveAttachment } from './math/machineLayout';
 import { worldToClient } from './math/camera';
 import type { WorldScene } from './scenes/WorldScene';
@@ -31,7 +32,8 @@ declare global {
       systemMenuOpen(): boolean;
       modalCount(): number;
       audioUnlocked(): boolean;
-      cameraState(): { zoom: number; centerX: number; centerY: number };
+      cameraState(): { zoom: number; centerX: number; centerY: number; relX: number; relY: number };
+      machineStats(): { meanMs: number; maxMs: number; components: number };
     };
   }
 }
@@ -58,9 +60,17 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
   const systemMenuOpen = (): boolean => extras.systemMenu.isOpen();
   const modalCount = (): number => extras.modals.size();
   const audioUnlocked = (): boolean => extras.audio.unlocked;
-  const cameraState = (): { zoom: number; centerX: number; centerY: number } => {
+  /** Camera centre is also reported relative to the machine anchor (rel = centre - MACHINE_ANCHOR). */
+  const cameraState = (): { zoom: number; centerX: number; centerY: number; relX: number; relY: number } => {
     const cam = game.scene.getScene('World').cameras.main;
-    return { zoom: cam.zoom, centerX: cam.midPoint.x, centerY: cam.midPoint.y };
+    const centerX = cam.midPoint.x;
+    const centerY = cam.midPoint.y;
+    return { zoom: cam.zoom, centerX, centerY, relX: centerX - MACHINE_ANCHOR.x, relY: centerY - MACHINE_ANCHOR.y };
+  };
+  /** Machine update timing (last 120 frames) for the perf probe; zeros while the machine is missing. */
+  const machineStats = (): { meanMs: number; maxMs: number; components: number } => {
+    const scene = game.scene.getScene<WorldScene>('World');
+    return scene.getMachine()?.getUpdateStats() ?? { meanMs: 0, maxMs: 0, components: 0 };
   };
   window.__wedtmd = {
     session,
@@ -72,5 +82,6 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     modalCount,
     audioUnlocked,
     cameraState,
+    machineStats,
   };
 }
