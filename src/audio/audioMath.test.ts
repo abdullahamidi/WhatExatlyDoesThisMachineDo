@@ -1,11 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { AUDIO } from '../data/audio';
+import type { EndingPhase } from '../data/types';
 import type { LevelSnapshot } from './audioMath';
 import {
   activityLevel,
   arcRate,
   boilerGain,
   busGain,
+  chirpSweeps,
+  chordFrequencies,
   droneGain,
   gearTickRate,
   humFrequency,
@@ -17,6 +20,7 @@ import {
   servoFraction,
   servoGain,
   servoHz,
+  windAllowed,
 } from './audioMath';
 
 const SAMPLE_INPUTS = [0, -5, NaN, Infinity, 1e12, 0.001, 1];
@@ -397,5 +401,81 @@ describe('levelsChanged', () => {
     const nan: LevelSnapshot = { ...BASE, master: Number.NaN };
     expect(levelsChanged(nan, { ...nan })).toBe(false);
     expect(levelsChanged({ ...BASE, master: 0 }, { ...BASE, master: -0 })).toBe(true);
+  });
+});
+
+describe('chordFrequencies', () => {
+  it('multiplies the root by each ratio, in order', () => {
+    const hz = chordFrequencies(100, [4, 5, 6, 8]);
+    expect(hz).toHaveLength(4);
+    expect(hz[0]).toBeCloseTo(400, 9);
+    expect(hz[1]).toBeCloseTo(500, 9);
+    expect(hz[2]).toBeCloseTo(600, 9);
+    expect(hz[3]).toBeCloseTo(800, 9);
+  });
+
+  it('gives an empty list for a non-positive or non-finite root, and for no ratios', () => {
+    for (const root of [0, -5, NaN, Infinity]) {
+      expect(chordFrequencies(root, [4, 5, 6, 8])).toEqual([]);
+    }
+    expect(chordFrequencies(100, [])).toEqual([]);
+  });
+
+  it('resolveChord ratios are a major triad plus octave (root, 5/4, 3/2, 2)', () => {
+    const [root, third, fifth, octave] = AUDIO.resolveChord.ratios;
+    expect(root).toBeGreaterThan(0);
+    expect(AUDIO.resolveChord.ratios).toHaveLength(4);
+    expect((third ?? 0) / (root ?? 1)).toBeCloseTo(1.25, 9);
+    expect((fifth ?? 0) / (root ?? 1)).toBeCloseTo(1.5, 9);
+    expect((octave ?? 0) / (root ?? 1)).toBeCloseTo(2, 9);
+  });
+
+  it('resolveChord frequencies are ascending and audible', () => {
+    const hz = chordFrequencies(AUDIO.resolveChord.baseHz, AUDIO.resolveChord.ratios);
+    for (let i = 0; i < hz.length; i++) {
+      expect(hz[i]).toBeGreaterThan(20);
+      expect(hz[i]).toBeLessThan(20000);
+      if (i > 0) expect(hz[i]).toBeGreaterThan(hz[i - 1]!);
+    }
+  });
+});
+
+describe('chirpSweeps', () => {
+  it('has AUDIO.chirp.count sweeps (2 to 3 short chirps)', () => {
+    const sweeps = chirpSweeps();
+    expect(sweeps).toHaveLength(AUDIO.chirp.count);
+    expect(sweeps.length).toBeGreaterThanOrEqual(2);
+    expect(sweeps.length).toBeLessThanOrEqual(3);
+  });
+
+  it('starts at 0 and steps by gapMs; every sweep has sweepMs duration and sweeps upward', () => {
+    const sweeps = chirpSweeps();
+    sweeps.forEach((sweep, i) => {
+      expect(sweep.startS).toBeCloseTo((i * AUDIO.chirp.gapMs) / 1000, 9);
+      expect(sweep.durationS).toBeCloseTo(AUDIO.chirp.sweepMs / 1000, 9);
+      expect(sweep.fromHz).toBeCloseTo(AUDIO.chirp.fromHz, 9);
+      expect(sweep.toHz).toBeCloseTo(AUDIO.chirp.toHz, 9);
+      expect(sweep.fromHz).toBeLessThan(sweep.toHz);
+      expect(sweep.durationS).toBeGreaterThan(0);
+    });
+  });
+
+  it('follows the config it is given', () => {
+    const cfg = { count: 1, gapMs: 100, sweepMs: 50, fromHz: 1000, toHz: 2000, modHz: 10, modDepth: 5, gain: 0.1 } as const;
+    expect(chirpSweeps(cfg)).toEqual([{ startS: 0, durationS: 0.05, fromHz: 1000, toHz: 2000 }]);
+    expect(chirpSweeps({ ...cfg, count: 0 })).toEqual([]);
+  });
+});
+
+describe('windAllowed', () => {
+  const TABLE: ReadonlyArray<[EndingPhase, boolean]> = [
+    ['none', true],
+    ['sequence', true],
+    ['choice', false],
+    ['postgame', false],
+  ];
+
+  it.each(TABLE)('phase %s -> %s', (phase, allowed) => {
+    expect(windAllowed(phase)).toBe(allowed);
   });
 });

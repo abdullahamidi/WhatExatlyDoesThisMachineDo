@@ -2,6 +2,8 @@
 // Tuning numbers come from AUDIO (src/data/audio.ts); the constants below are structural only.
 
 import { AUDIO } from '../data/audio';
+import { chirpSweeps, chordFrequencies } from './audioMath';
+import type { ChirpSweep } from './audioMath';
 
 const ENVELOPE_FLOOR = 0.0001; // exponential ramps cannot target 0
 const STOP_PAD_S = 0.05; // oscillator/source stop time after its envelope ends
@@ -47,6 +49,8 @@ export interface Synth {
   setDrone(gain: number): void; // AUDIO.drone two sines with a slow LFO on the gain (XF/s); gain 0 = silent
   playSwell(): void; // AUDIO.swell reversed swell: rising filtered noise and sawtooth, then a hard stop (Era V purchase)
   playBeadTicks(delaySeconds?: number): void; // AUDIO.beadTick soft sine ticks (finalAlignment milestone, after the sting)
+  playResolveChord(): void; // AUDIO.resolveChord major triad plus octave, slow attack, long decay (finale S5)
+  playChirps(): void; // AUDIO.chirp FM-ish sine sweeps, `count` of them (finale flock)
   suspend(): void; // context.suspend().catch(noop)
   resume(): void; // context.resume().catch(noop)
   isRunning(): boolean; // context.state === 'running'; false once closed or if the state cannot be read
@@ -505,6 +509,46 @@ function playSwellVoice(context: AudioContext, out: AudioNode, noise: AudioBuffe
   saw.stop(stopAt + STOP_PAD_S);
 }
 
+/**
+ * One FM-ish flock chirp: a sine sweeping exponentially from fromHz to toHz, its pitch wobbled by a sine modulator
+ * (AUDIO.chirp modHz / modDepth), through one exponential envelope. Nodes are released when both sources end.
+ */
+function playChirpSweep(context: AudioContext, out: AudioNode, startAt: number, sweep: ChirpSweep): void {
+  const c = AUDIO.chirp;
+  const endAt = startAt + sweep.durationS;
+  const env = context.createGain();
+  env.gain.setValueAtTime(c.gain, startAt);
+  env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, endAt);
+  env.connect(out);
+  const osc = context.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(sweep.fromHz, startAt);
+  osc.frequency.exponentialRampToValueAtTime(sweep.toHz, endAt);
+  const mod = context.createOscillator();
+  mod.type = 'sine';
+  mod.frequency.value = c.modHz;
+  const modDepth = context.createGain();
+  modDepth.gain.value = c.modDepth;
+  mod.connect(modDepth);
+  modDepth.connect(osc.frequency);
+  osc.connect(env);
+  let live = 2;
+  const release = (): void => {
+    live -= 1;
+    if (live > 0) return;
+    osc.disconnect();
+    mod.disconnect();
+    modDepth.disconnect();
+    env.disconnect();
+  };
+  osc.onended = release;
+  mod.onended = release;
+  osc.start(startAt);
+  osc.stop(endAt + STOP_PAD_S);
+  mod.start(startAt);
+  mod.stop(endAt + STOP_PAD_S);
+}
+
 export function createSynth(context: AudioContext): Synth {
   const graph = openGraph(context);
   let closed = false;
@@ -837,6 +881,27 @@ export function createSynth(context: AudioContext): Synth {
             decay: b.ms / 1000,
             peak: b.gain,
           });
+        }
+      });
+    },
+
+    playResolveChord(): void {
+      run('playResolveChord', 'sfx', (out) => {
+        const c = AUDIO.resolveChord;
+        playSineCluster(context, out, context.currentTime, {
+          hzs: chordFrequencies(c.baseHz, c.ratios),
+          gain: c.gain,
+          attackMs: c.attackMs,
+          ms: c.ms,
+        });
+      });
+    },
+
+    playChirps(): void {
+      run('playChirps', 'sfx', (out) => {
+        const t0 = context.currentTime;
+        for (const sweep of chirpSweeps()) {
+          playChirpSweep(context, out, t0 + sweep.startS, sweep);
         }
       });
     },

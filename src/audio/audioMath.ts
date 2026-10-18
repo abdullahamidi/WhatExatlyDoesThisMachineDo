@@ -2,6 +2,7 @@
 
 import { AUDIO } from '../data/audio';
 import { VOLUME_RANGE } from '../data/settings';
+import type { EndingPhase } from '../data/types';
 
 /** Clamp x into [lo, hi]; NaN falls back to lo; -0 comes back as +0. */
 function clampRange(x: number, lo: number, hi: number): number {
@@ -100,6 +101,46 @@ export function servoGain(level: number, maxLevel: number, cfg: typeof AUDIO.ser
 /** Servo whirr pitch (Hz): lerp(minHz, maxHz, fraction); minHz at fraction 0. */
 export function servoHz(level: number, maxLevel: number, cfg: typeof AUDIO.servo = AUDIO.servo): number {
   return lerp(cfg.minHz, cfg.maxHz, servoFraction(level, maxLevel));
+}
+
+/** Resolve chord frequencies (Hz): rootHz * each ratio, in ratio order. Non-finite or non-positive root -> empty list. */
+export function chordFrequencies(rootHz: number, ratios: readonly number[]): number[] {
+  if (!Number.isFinite(rootHz) || rootHz <= 0) return [];
+  return ratios.map((ratio) => rootHz * ratio);
+}
+
+/** One FM-ish chirp: starts at startS (seconds from the cue), sweeps fromHz -> toHz over durationS. */
+export interface ChirpSweep {
+  readonly startS: number;
+  readonly durationS: number;
+  readonly fromHz: number;
+  readonly toHz: number;
+}
+
+/** The chirp fields the sweep list reads (widened to numbers so tests can pass other configs). */
+export interface ChirpConfig {
+  readonly count: number;
+  readonly gapMs: number;
+  readonly sweepMs: number;
+  readonly fromHz: number;
+  readonly toHz: number;
+}
+
+/** Flock chirp list: `count` sweeps from AUDIO.chirp, gapMs apart, all the same length and pitch range. */
+export function chirpSweeps(cfg: ChirpConfig = AUDIO.chirp): ChirpSweep[] {
+  const sweeps: ChirpSweep[] = [];
+  for (let i = 0; i < cfg.count; i++) {
+    sweeps.push({ startS: (i * cfg.gapMs) / 1000, durationS: cfg.sweepMs / 1000, fromHz: cfg.fromHz, toHz: cfg.toHz });
+  }
+  return sweeps;
+}
+
+/**
+ * Wind bed allowed by the ending phase: on in 'none' and 'sequence' (the sequence is cut by the windStop beat
+ * through a local flag in gameAudio); off in 'choice' and 'postgame'.
+ */
+export function windAllowed(phase: EndingPhase): boolean {
+  return phase === 'none' || phase === 'sequence';
 }
 
 /** Bus gain from a volume percent: clamped to the volume range, then divided by its max; non-finite -> 1 (unity). */

@@ -81,4 +81,10 @@ export const AUDIO = {
 
   // Bead ticks (Era V milestone): `count` soft sine ticks at hz, gapMs apart, after the sting; techId is the milestone that triggers them.
   beadTick: { hz: 2200, count: 4, gapMs: 80, ms: 30, gain: 0.12, techId: 'finalAlignment' },
+
+  // Finale resolve chord (WP13 S5): major triad plus octave (ratios 4:5:6:8 on baseHz), slow attack, long decay. One-shot on the sfx bus.
+  resolveChord: { baseHz: 130.81, ratios: [4, 5, 6, 8], ms: 4000, attackMs: 900, gain: 0.14 },
+
+  // Finale flock chirps (WP13 birds): `count` short FM-ish sine sweeps from fromHz up to toHz, each sweepMs long, gapMs apart; modHz/modDepth wobble the pitch. One-shot on the sfx bus.
+  chirp: { count: 3, gapMs: 140, sweepMs: 90, fromHz: 2600, toHz: 3800, modHz: 55, modDepth: 60, gain: 0.07 },
 } as const;

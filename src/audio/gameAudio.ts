@@ -9,7 +9,7 @@ import type { SettingsState } from '../data/types';
 import { TECHNOLOGIES } from '../data/technologies';
 import type { GameFeedback } from '../game/context';
 import type { GameSession } from '../simulation';
-import { arcRate, boilerGain, busGain, droneGain, gearTickRate, humFrequency, humGain, levelsChanged, mainsGain, masterTarget, padGain, servoGain, servoHz } from './audioMath';
+import { arcRate, boilerGain, busGain, droneGain, gearTickRate, humFrequency, humGain, levelsChanged, mainsGain, masterTarget, padGain, servoGain, servoHz, windAllowed } from './audioMath';
 import type { LevelSnapshot } from './audioMath';
 import { createSynth } from './synth';
 import type { Synth } from './synth';
@@ -57,6 +57,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
   let timer: number | null = null;
   let unsubscribers: Array<() => void> = [];
   let appliedLevels: LevelSnapshot | null = null; // last set pushed to the synth; the tick skips unchanged sets
+  let windStopped = false; // finale windStop beat fired: wind off for the rest of the sequence (cleared when the phase is 'none')
   const warned = new Set<string>();
   const doc: Document | undefined = target.document;
 
@@ -84,6 +85,16 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
   }
 
   /**
+   * Wind bed wanted: the ending phase allows it (none / sequence) and the windStop beat has not fired.
+   * Reading the phase here means a reload in choice or postgame has no wind. The flag clears once the phase is back to 'none'.
+   */
+  function windWanted(): boolean {
+    const phase = session.state.ending.phase;
+    if (phase === 'none') windStopped = false;
+    return windAllowed(phase) && !windStopped;
+  }
+
+  /**
    * Master target (mute, master volume), wind bed and the sfx / ambient bus levels from the settings.
    * Pushes to the synth only when the set changed since the last push (the tick calls this every 200 ms);
    * `force` pushes anyway (unlock, settings change, tab visible). Never resumes the context: callers decide that.
@@ -93,7 +104,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     if (!s) return;
     const next: LevelSnapshot = {
       master: masterTarget(settings.muted, true, AUDIO.masterGain, busGain(settings.masterVolume)),
-      wind: !settings.muted,
+      wind: !settings.muted && windWanted(),
       sfxBus: busGain(settings.sfxVolume),
       ambientBus: busGain(settings.ambientVolume),
     };
@@ -239,6 +250,22 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
       }),
       feedback.partLanded.on(oneShot('partLanded', (s) => s.playClunk())),
       feedback.purchaseDenied.on(oneShot('purchaseDenied', (s) => s.playDeny())),
+      feedback.finaleBeat.on((beat) => {
+        try {
+          if (beat === 'windStop') {
+            windStopped = true;
+            applyLevels(session.settings); // pushes the wind-off set now, not on the next tick
+            return;
+          }
+          const s = synth;
+          if (!s || session.settings.muted) return;
+          if (beat === 'swell') s.playSwell();
+          else if (beat === 'chord') s.playResolveChord();
+          else if (beat === 'flock') s.playChirps();
+        } catch (error) {
+          warnOnce('finaleBeat', error);
+        }
+      }),
       session.on('settings', (settings) => {
         try {
           applyLevels(settings, true);
