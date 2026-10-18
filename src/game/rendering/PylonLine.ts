@@ -5,8 +5,8 @@ import { MACHINE_COMPONENTS, MACHINE_LINK_STYLE } from '../../data/machineCompon
 import type { Vec2 } from '../../data/machineComponents';
 import type { TechId } from '../../data/types';
 import { ASSET_MANIFEST } from '../../assets/manifest';
-import { minZoomToFit } from '../math/camera';
-import { parallaxStrip, isLayerVisible, fadeStep } from '../math/parallax';
+import { effectiveMinZoom } from '../math/camera';
+import { parallaxStrip, isLayerVisible, fadeStep, layerPhase } from '../math/parallax';
 import { machineLocalToWorld } from '../math/machineLayout';
 import { resolveConnectionPoint } from '../math/machineLinks';
 import { cableParabola, nearestPylonAnchor, pylonAnchorPoint, pylonCableStart } from '../math/pylonLine';
@@ -34,6 +34,8 @@ interface ActivePylonLine {
 
 function pylonStrip(def: ParallaxLayerDef): PylonStrip {
   const entry = ASSET_MANIFEST[def.assetId];
+  // same tile phase ParallaxBackground uses, so the wire anchors sit on the drawn pylons
+  const phase = layerPhase(def.scrollFactor, entry.width, PIXEL_SCALE);
   const geometry = parallaxStrip({
     scrollFactor: def.scrollFactor,
     bottomY: def.bottomY,
@@ -42,7 +44,9 @@ function pylonStrip(def: ParallaxLayerDef): PylonStrip {
     world: WORLD,
     view: VIEW,
     focus: CAMERA.focus,
-    minZoom: minZoomToFit(VIEW, WORLD),
+    minZoom: effectiveMinZoom(VIEW, WORLD, CAMERA.minZoom),
+    phaseShiftPx: phase.phaseShiftPx,
+    periodPx: phase.periodPx,
   });
   return {
     def,

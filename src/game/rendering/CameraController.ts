@@ -4,7 +4,7 @@ import { PALETTE_CSS } from '../../data/palette';
 import type { Vec2 } from '../../data/machineComponents';
 import type { GameSession } from '../../simulation';
 import {
-  minZoomToFit,
+  effectiveMinZoom,
   clampZoom,
   clampCenter,
   zoomAroundPoint,
@@ -29,7 +29,7 @@ export class CameraController {
   private readonly scene: Phaser.Scene;
   private readonly session: GameSession;
   private readonly camera: Phaser.Cameras.Scene2D.Camera;
-  private readonly minZoom: number = minZoomToFit(VIEW, WORLD);
+  private readonly minZoom: number = effectiveMinZoom(VIEW, WORLD, CAMERA.minZoom);
   private center: Vec2;
   private zoom: number;
   private drag: DragState | null = null;

@@ -1,13 +1,13 @@
 import Phaser from 'phaser';
 import type { AssetId } from '../../assets/assetIds';
-import { WORLD, DUST, DUST_RISING } from '../../data/world';
+import { MACHINE_ANCHOR, DUST, DUST_RISING } from '../../data/world';
 
 const DUST_TEXTURE: AssetId = 'fx.dust';
 
 /** Mote emitter config: the shared look (life, size, fade, count) with this stream's spawn top and vertical drift. */
 function moteConfig(spawnTopY: number, speedY: [number, number], emitting: boolean): Phaser.Types.GameObjects.Particles.ParticleEmitterConfig {
   return {
-    x: { min: 0, max: WORLD.width },
+    x: { min: MACHINE_ANCHOR.x - DUST.spawnHalfWidth, max: MACHINE_ANCHOR.x + DUST.spawnHalfWidth },
     y: { min: spawnTopY, max: DUST.spawnBottomY },
     lifespan: { min: DUST.lifespanMs[0], max: DUST.lifespanMs[1] },
     speedX: { min: DUST.speedX[0], max: DUST.speedX[1] },
@@ -20,7 +20,7 @@ function moteConfig(spawnTopY: number, speedY: [number, number], emitting: boole
   };
 }
 
-// Drifting dust motes spread across the whole world, pre-populated so the first frame already has dust.
+// Drifting dust motes spread across the band around the machine (MACHINE_ANCHOR.x +- DUST.spawnHalfWidth), pre-populated so the first frame already has dust.
 // Two streams share the look: `normal` (DUST band and drift) and `rising` (Era IV, once the spire stands:
 // DUST_RISING band and upward drift). Only one emits at a time; the stopped stream's live motes finish naturally.
 export class DustField {
