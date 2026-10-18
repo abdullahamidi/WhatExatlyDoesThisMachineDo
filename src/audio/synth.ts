@@ -86,6 +86,7 @@ interface PadNodes {
 
 interface ServoNodes {
   osc: OscillatorNode;
+  filter: BiquadFilterNode;
   gain: GainNode;
 }
 
@@ -385,7 +386,7 @@ function ensureServo(context: AudioContext, out: AudioNode, hz: number, cache: S
   filter.connect(gain);
   gain.connect(out);
   osc.start();
-  return { osc, gain };
+  return { osc, filter, gain };
 }
 
 export function createSynth(context: AudioContext): Synth {
@@ -714,7 +715,11 @@ export function createSynth(context: AudioContext): Synth {
         boiler?.gain.disconnect();
         for (const o of pad?.oscs ?? []) o.stop();
         pad?.lfo.stop();
+        pad?.gain.disconnect();
+        pad?.depth.disconnect();
         servo?.osc.stop();
+        servo?.filter.disconnect();
+        servo?.gain.disconnect();
       } catch (err) {
         warnOnce('close', err);
       }

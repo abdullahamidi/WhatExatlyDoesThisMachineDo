@@ -55,12 +55,6 @@ export const HAMMER_FX = {
   maxDegPerSec: 1080, midOffsetArtPx: -7, dustPuffs: 3, dustSpreadArtPx: 3, dustAt: { x: -334, y: -22 },
 } as const;
 
-/**
- * Milestone whistle burst (CR-B): the relief emitter fires `count` puffs when the vessel blueprint is bought.
- * @deprecated use MILESTONE_BURSTS (removed once SteamFx switches)
- */
-export const MILESTONE_BURST = { techId: 'pressureVesselBlueprint', emitter: 'relief', count: 4 } as const;
-
 /** Milestone bursts in order: the vessel whistles (relief, 4 puffs) and the convergence chord of all three calliope whistles (6 puffs, every point). */
 export const MILESTONE_BURSTS = [
   { techId: 'pressureVesselBlueprint', emitter: 'relief', count: 4 },

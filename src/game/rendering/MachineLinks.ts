@@ -293,7 +293,7 @@ export class MachineLinks {
   private readonly cables: Phaser.GameObjects.Graphics;
   /** Pipes: one Graphics per distinct pipe depth, added after the cables. */
   private readonly pipeGraphics = new Map<number, Phaser.GameObjects.Graphics>();
-  /** Pin-to-pin rods: one Graphics per distinct depth (created only when such a rod exists, so Era I-III have none). */
+  /** Pin-to-pin rods: one Graphics per distinct depth of the pin-to-pin rod links in MACHINE_LINKS (static data, so always created; empty while no such rod is live, e.g. Era I-III). */
   private readonly pinRodGraphics = new Map<number, Phaser.GameObjects.Graphics>();
   /** Keys of the last drawn parts; null until the first draw. Equal key means that Graphics is already correct. */
   private beltKey: string | null = null;

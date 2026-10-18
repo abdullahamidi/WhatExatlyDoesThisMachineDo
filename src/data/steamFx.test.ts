@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { STEAM_EMITTERS, STEAM_FX, HAMMER_FX, MILESTONE_BURST, MILESTONE_BURSTS } from './steamFx';
+import { STEAM_EMITTERS, STEAM_FX, HAMMER_FX, MILESTONE_BURSTS } from './steamFx';
 import type { SteamEmitter } from './steamFx';
 import { TECH_IDS } from './types';
 import { TECHNOLOGIES } from './technologies';
@@ -127,9 +127,6 @@ describe('MILESTONE_BURSTS (WP10 milestone whistles)', () => {
     }
   });
 
-  it('MILESTONE_BURST (deprecated alias) still equals the first MILESTONE_BURSTS entry', () => {
-    expect(MILESTONE_BURSTS[0]).toEqual(MILESTONE_BURST);
-  });
 });
 
 describe('STEAM_FX and HAMMER_FX', () => {
@@ -162,11 +159,11 @@ describe('STEAM_FX and HAMMER_FX', () => {
   });
 });
 
-describe('MILESTONE_BURST', () => {
+describe('MILESTONE_BURSTS[0]', () => {
   it('names a burst emitter and a milestone tech', () => {
-    expect(emitter(MILESTONE_BURST.emitter).mode.kind).toBe('burst');
-    expect(TECHNOLOGIES[MILESTONE_BURST.techId].kind).toBe('milestone');
-    expect(MILESTONE_BURST.techId).toBe('pressureVesselBlueprint');
-    expect(MILESTONE_BURST.count).toBeGreaterThanOrEqual(1);
+    expect(emitter(MILESTONE_BURSTS[0].emitter).mode.kind).toBe('burst');
+    expect(TECHNOLOGIES[MILESTONE_BURSTS[0].techId].kind).toBe('milestone');
+    expect(MILESTONE_BURSTS[0].techId).toBe('pressureVesselBlueprint');
+    expect(MILESTONE_BURSTS[0].count).toBeGreaterThanOrEqual(1);
   });
 });

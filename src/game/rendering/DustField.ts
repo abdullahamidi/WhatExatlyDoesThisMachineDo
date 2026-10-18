@@ -53,6 +53,10 @@ export class DustField {
     } else {
       this.rising.stop();
       this.normal.start();
+      if (immediate) {
+        this.normal.fastForward(DUST.lifespanMs[1]);
+        this.rising.killAll();
+      }
     }
   }
 
