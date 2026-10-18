@@ -261,6 +261,21 @@ describe('computeRates', () => {
     expect(r.perSecond.me).toBeCloseTo(0, 9);
   });
 
+  it('ending marker contributes nothing to perClick or perSecond', () => {
+    const withEnding = withEffects({ gearRatio: [{ type: 'ending' }] });
+    const withoutEnding = withEffects({ gearRatio: [] });
+    const levels = withLevels({ gearRatio: 3 });
+    const a = computeRates(levels, withEnding);
+    const b = computeRates(levels, withoutEnding);
+    expect(a.perClick).toEqual(b.perClick);
+    expect(a.perSecond).toEqual(b.perSecond);
+  });
+
+  it('ending marker leaves the rates result shape unchanged (no offline cap field: perClick and perSecond only)', () => {
+    const r = computeRates(withLevels({ gearRatio: 3 }), withEffects({ gearRatio: [{ type: 'ending' }] }));
+    expect(Object.keys(r).sort()).toEqual(['perClick', 'perSecond']);
+  });
+
   it('techs at level 0 are ignored', () => {
     const techs = withEffects({ wornMotor: [{ type: 'autoAdd', amount: 4, res: 'ee' }] });
     const r = computeRates(withLevels({ wornMotor: 0 }), techs);

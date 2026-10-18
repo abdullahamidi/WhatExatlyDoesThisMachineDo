@@ -4,6 +4,7 @@ import {
   activityLevel,
   arcRate,
   boilerGain,
+  droneGain,
   gearTickRate,
   humFrequency,
   humGain,
@@ -273,6 +274,43 @@ describe('padGain', () => {
     for (let i = 1; i < list.length; i++) {
       expect(padGain(list[i]!, true)).toBeGreaterThanOrEqual(padGain(list[i - 1]!, true));
     }
+  });
+});
+
+describe('droneGain', () => {
+  it('is 0 when nullChamber is not owned, even with huge XF/s', () => {
+    expect(droneGain(1e12, false)).toBe(0);
+    expect(droneGain(Infinity, false)).toBe(0);
+  });
+
+  it('is 0 for xf 0, negative and NaN, even when owned', () => {
+    expect(droneGain(0, true)).toBe(0);
+    expect(droneGain(-5, true)).toBe(0);
+    expect(droneGain(NaN, true)).toBe(0);
+  });
+
+  it('is positive for xf 1 when owned', () => {
+    expect(droneGain(1, true)).toBeGreaterThan(0);
+  });
+
+  it('stays within [minGain, maxGain] for huge values', () => {
+    for (const xf of [0.001, 1, 10, 1000, 1e15, Infinity]) {
+      const g = droneGain(xf, true);
+      expect(g).toBeGreaterThanOrEqual(AUDIO.drone.minGain);
+      expect(g).toBeLessThanOrEqual(AUDIO.drone.maxGain);
+    }
+    expect(droneGain(1e15, true)).toBeLessThanOrEqual(AUDIO.drone.maxGain);
+  });
+
+  it('is monotonic non-decreasing over xf', () => {
+    const list = [1, 10, 1e3, 1e6, 1e9];
+    for (let i = 1; i < list.length; i++) {
+      expect(droneGain(list[i]!, true)).toBeGreaterThanOrEqual(droneGain(list[i - 1]!, true));
+    }
+  });
+
+  it('equals maxGain at maxPerSecond', () => {
+    expect(droneGain(AUDIO.drone.maxPerSecond, true)).toBeCloseTo(AUDIO.drone.maxGain, 9);
   });
 });
 

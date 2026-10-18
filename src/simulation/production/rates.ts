@@ -32,7 +32,8 @@ import { emptyResourceMap } from '../resources';
 //   perClick.me = clickAdd x clickMult          (clickMult affects manual ME only)
 //   perClick[r] = echo[r] x perSecond[r]        for r != me (clickMult does NOT apply to echo)
 //
-// Techs with level <= 0 contribute nothing; `none` effects are ignored; a clickEcho on `me` is ignored.
+// Techs with level <= 0 contribute nothing; `none` and `ending` effects are ignored (`ending` is a marker
+// that WP12 reads for the finale; it contributes nothing here); a clickEcho on `me` is ignored.
 // Era I only uses autoAdd(me), autoPct(me), clickAdd, clickMult, none, so every other resource stays 0
 // and every multiplier stays 1: the era-I values are unchanged.
 
@@ -85,6 +86,8 @@ export function computeRates(
           autoClicks += effect.perSecond * level;
           break;
         case 'none':
+          break;
+        case 'ending': // marker only: no rate, click or offline contribution
           break;
       }
     }

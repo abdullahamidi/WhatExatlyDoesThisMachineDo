@@ -2,7 +2,8 @@ export const TECH_IDS = ['handCrank','gearRatio','reinforcedCrank','flywheel','w
   'motorTuning','pistonArray','improvedPistons','generatorBlueprint',
   'generator','copperWinding','motorRetrofit','dynamoCrank','capacitorBank','sparkGap','transformer','powerLines','substationBlueprint',
   'boiler','firebox','inductionHeater','steamHammer','superheater','condenser','turbine','reliefValves','pressureVesselBlueprint',
-  'resonatorSpire','harmonicCoil','pressureResonator','crankServo','echoCrank','phaseLock','standingWave','crystalLattice','harmonicConvergence'] as const;
+  'resonatorSpire','harmonicCoil','pressureResonator','crankServo','echoCrank','phaseLock','standingWave','crystalLattice','harmonicConvergence',
+  'nullChamber','containmentRing','resonantSiphon','graviticAnchor','inversionCrank','lensArray','horizonField','skyAperture','finalAlignment','primaryFunction'] as const;
 export type TechId = typeof TECH_IDS[number];
 export const RESOURCE_IDS = ['me', 'ee', 'pr', 'rs', 'xf'] as const;
 export type ResourceId = typeof RESOURCE_IDS[number];
@@ -24,6 +25,7 @@ export type Effect =                                      // repeatable effects 
   | { type: 'clickEcho'; seconds: number; res: ResourceId } // per click = seconds*lvl * perSecond[res]
   | { type: 'offlineHours'; hours: number } // adds hours * level to the offline cap
   | { type: 'autoClick'; perSecond: number } // perSecond * level automatic crank clicks per second
+  | { type: 'ending' } // marker: starts the finale (WP12); no rate, click or offline effect
   | { type: 'none' };
 export type Requirement =
   | { type: 'tech'; id: TechId; minLevel: number }

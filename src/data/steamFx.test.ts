@@ -94,7 +94,7 @@ describe('STEAM_EMITTERS', () => {
   it('calliope is three whistles on the resonance driver: gate pressureResonator 1, threshold 0, burst 2 x 150 ms every 5..8 s while RS/s > 1, round robin', () => {
     const c = emitter('calliope');
     expect(c.assetId).toBe('fx.steamPuff');
-    expect(c.at).toEqual([{ x: -72, y: -193 }, { x: -44, y: -193 }, { x: -16, y: -194 }]);
+    expect(c.at).toEqual([{ x: -72, y: -211 }, { x: -44, y: -216 }, { x: -16, y: -221 }]);
     expect(c.gate).toEqual({ techId: 'pressureResonator', minLevel: 1 });
     expect(c.driver).toBe('resonance');
     expect(c.threshold).toBe(0);

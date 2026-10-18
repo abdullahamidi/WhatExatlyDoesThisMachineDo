@@ -67,6 +67,8 @@ export function describeEffect(effect: Effect, n: number): string {
       return `+${fmt(effect.hours * n)}h offline buffer`;
     case 'autoClick':
       return `+${fmt(effect.perSecond * n)} auto-cranks/s`;
+    case 'ending':
+      return 'Engages the primary function';
     case 'none':
       return 'Effect unknown';
   }

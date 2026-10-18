@@ -72,4 +72,13 @@ export const AUDIO = {
 
   // Milestone chord (Era IV): three sines at baseHz * ratios, after the sting; techId is the milestone that triggers it.
   chord: { baseHz: 110, ratios: [3, 4, 5], ms: 1200, attackMs: 250, gain: 0.18, techId: 'harmonicConvergence' },
+
+  // Sub-bass drone (Era V): two sines (hz and hz * partialRatio) with a slow LFO on the gain; gain rises with XF/s. Owned nullChamber only.
+  drone: { hz: 41, partialRatio: 2, partialGain: 0.3, lfoHz: 0.07, lfoDepth: 0.35, minGain: 0.02, maxGain: 0.09, refPerSecond: 1, maxPerSecond: 100000000, techId: 'nullChamber' },
+
+  // Reversed swell (Era V purchase): filtered noise with a rising lowpass plus a sawtooth, one gain that rises over ms then stops hard.
+  swell: { ms: 900, noiseLowpassFromHz: 300, noiseLowpassToHz: 2400, noiseGain: 0.18, sawHz: 110, sawGain: 0.12, gain: 0.3 },
+
+  // Bead ticks (Era V milestone): `count` soft sine ticks at hz, gapMs apart, after the sting; techId is the milestone that triggers them.
+  beadTick: { hz: 2200, count: 4, gapMs: 80, ms: 30, gain: 0.12, techId: 'finalAlignment' },
 } as const;

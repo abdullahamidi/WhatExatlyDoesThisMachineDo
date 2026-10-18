@@ -76,6 +76,13 @@ export function padGain(rsPerSecond: number, owned: boolean, cfg: typeof AUDIO.p
   return clampRange(lerp(cfg.minGain, cfg.maxGain, level), cfg.minGain, cfg.maxGain);
 }
 
+/** Drone gain (Era V): 0 unless nullChamber is owned and xf > 0 (or NaN -> 0), else lerp(minGain, maxGain, level). */
+export function droneGain(xfPerSecond: number, owned: boolean, cfg: typeof AUDIO.drone = AUDIO.drone): number {
+  if (!owned || !(xfPerSecond > 0)) return 0;
+  const level = activityLevel(xfPerSecond, cfg.refPerSecond, cfg.maxPerSecond);
+  return clampRange(lerp(cfg.minGain, cfg.maxGain, level), cfg.minGain, cfg.maxGain);
+}
+
 /** Servo fraction: level / maxLevel clamped to [0, 1]; 0 for non-finite or non-positive level, or maxLevel <= 0. */
 export function servoFraction(level: number, maxLevel: number): number {
   if (!Number.isFinite(level) || level <= 0 || !(maxLevel > 0)) return 0;

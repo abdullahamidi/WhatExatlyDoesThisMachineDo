@@ -89,7 +89,7 @@ await page.evaluate((buys) => {
 }, [...S9, '@substationBlueprint']);
 await page.click('#hud-tech'); await page.waitForTimeout(200);
 ok('11_tabs', { tabs: await page.$$eval('.tech-tab', bs => bs.map(b => ({ text: b.textContent.trim(), selected: b.getAttribute('aria-selected') === 'true', disabled: b.disabled }))), me: await txt('#tech-me') });
-ok('11_tabCount', await page.$$eval('.tech-tab', bs => bs.length));
+ok('11_tabCount', await page.$$eval('.tech-tab', bs => bs.length)); // expect 5 (era V tab exists)
 await page.click('#tech-tab-3'); await page.waitForTimeout(200);
 ok('11_header', await txt('#tech-me'));
 ok('11_nodes', await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length));
@@ -114,11 +114,37 @@ await page.evaluate((buys) => {
 }, [...S9, '@substationBlueprint', 'boiler', ...Array(3).fill('inductionHeater'), ...Array(20).fill('firebox'), 'steamHammer', 'superheater', ...Array(5).fill('condenser'), 'turbine', 'reliefValves', '@pressureVesselBlueprint']);
 await page.click('#hud-tech'); await page.waitForTimeout(200);
 ok('12_tabs', { tabs: await page.$$eval('.tech-tab', bs => bs.map(b => ({ text: b.textContent.trim(), selected: b.getAttribute('aria-selected') === 'true', disabled: b.disabled }))), me: await txt('#tech-me') });
-ok('12_tabCount', await page.$$eval('.tech-tab', bs => bs.length));
+ok('12_tabCount', await page.$$eval('.tech-tab', bs => bs.length)); // expect 5 (era V tab exists)
+ok('12_tab5', await page.$$eval('.tech-tab', bs => (bs[4] ? bs[4].textContent.trim() : ''))); // expect 'SIGNAL ?'
 await page.click('#tech-tab-4'); await page.waitForTimeout(200);
 ok('12_header', await txt('#tech-me'));
 ok('12_nodes', await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length));
 ok('12_spire', await page.$eval('[data-tech=resonatorSpire]', e => [...e.classList]).catch(() => 'missing'));
+await page.keyboard.press('Escape'); await page.waitForTimeout(250);
+// era V fast-forward (stages.mjs S13 full list written inline), one page.evaluate
+await page.evaluate((buys) => {
+  const s = window.__wedtmd.session;
+  // start from the session's own clock: a backwards update() credits nothing
+  let t = Math.max(Date.now(), s.state.lastSimTime);
+  const jump = () => { t += 8 * 3600 * 1000; s.update(t); };
+  for (const id of buys) {
+    if (id.startsWith('@')) {
+      const tech = id === '@blueprint' ? 'generatorBlueprint' : id.slice(1);
+      for (let k = 0; k < 8 && s.state.techLevels[tech] !== 1; k++) jump();
+      continue;
+    }
+    if (s.state.techLevels.wornMotor) jump();
+    let r = s.purchase(id);
+    for (let k = 0; k < 6 && !r.ok; k++) { jump(); r = s.purchase(id); }
+  }
+}, [...S9, '@substationBlueprint', 'boiler', ...Array(3).fill('inductionHeater'), ...Array(20).fill('firebox'), 'steamHammer', 'superheater', ...Array(5).fill('condenser'), 'turbine', 'reliefValves', '@pressureVesselBlueprint', 'resonatorSpire', ...Array(3).fill('crankServo'), ...Array(25).fill('harmonicCoil'), ...Array(3).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(3).fill('standingWave'), 'crystalLattice', '@harmonicConvergence']);
+await page.click('#hud-tech'); await page.waitForTimeout(200);
+ok('13_tabs', { tabs: await page.$$eval('.tech-tab', bs => bs.map(b => ({ text: b.textContent.trim(), selected: b.getAttribute('aria-selected') === 'true', disabled: b.disabled }))), me: await txt('#tech-me') });
+ok('13_tabCount', await page.$$eval('.tech-tab', bs => bs.length)); // expect 5
+await page.click('#tech-tab-5'); await page.waitForTimeout(200);
+ok('13_header', await txt('#tech-me')); // expect ends '???'
+ok('13_nodes', await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length)); // expect 10
+ok('13_null', await page.$eval('[data-tech=nullChamber]', e => [...e.classList]).catch(() => 'missing'));
 await page.keyboard.press('Escape'); await page.waitForTimeout(250);
 res.errors = errors; res.failed = failed;
 console.log(JSON.stringify(res, null, 1));

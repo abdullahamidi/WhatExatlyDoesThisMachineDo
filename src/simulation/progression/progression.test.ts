@@ -237,6 +237,8 @@ describe('describeEffect', () => {
     expect(describeEffect({ type: 'convert', amount: 0.5, res: 'ee' }, 2)).toBe('Converts ME/s into EE/s (×1)');
     expect(describeEffect({ type: 'clickEcho', seconds: 2, res: 'ee' }, 2)).toBe('Clicks echo 4s of EE/s');
     expect(describeEffect({ type: 'none' }, 1)).toBe('Effect unknown');
+    expect(describeEffect({ type: 'ending' }, 1)).toBe('Engages the primary function');
+    expect(describeEffect({ type: 'ending' }, 3)).toBe('Engages the primary function');
   });
 
   it('describes the offline buffer', () => {

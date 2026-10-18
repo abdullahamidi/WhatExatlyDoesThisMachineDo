@@ -15,6 +15,7 @@ const DENY_HOLD_RATIO = 0.8; // deny pulse holds full level for this fraction of
 const MAINS_FILTER_RATIO = 3; // mains lowpass sits at 3x the mains frequency
 const MAX_ARCS_PER_CALL = 8; // scheduling cap per scheduleArcs call
 const RELAY_CLICKS = 2; // relay purchase plays this many clicks
+const SWELL_STOP_RAMP_S = 0.005; // reversed swell drops to silence over this long at its hard stop
 
 export interface Synth {
   setMaster(target: number, rampSeconds: number): void;
@@ -36,6 +37,9 @@ export interface Synth {
   playForkPing(): void; // AUDIO.forkPing two decaying sines (manual click with echoCrank, Era IV purchase)
   setServo(gain: number, hz: number): void; // AUDIO.servo looped sawtooth -> lowpass -> gain; gain 0 = silent
   playChord(delaySeconds?: number): void; // AUDIO.chord three sines with attack and decay (milestone, after the sting)
+  setDrone(gain: number): void; // AUDIO.drone two sines with a slow LFO on the gain (XF/s); gain 0 = silent
+  playSwell(): void; // AUDIO.swell reversed swell: rising filtered noise and sawtooth, then a hard stop (Era V purchase)
+  playBeadTicks(delaySeconds?: number): void; // AUDIO.beadTick soft sine ticks (finalAlignment milestone, after the sting)
   suspend(): void; // context.suspend().catch(noop)
   resume(): void; // context.resume().catch(noop)
   isRunning(): boolean; // context.state === 'running'; false once closed or if the state cannot be read
@@ -88,6 +92,15 @@ interface ServoNodes {
   osc: OscillatorNode;
   filter: BiquadFilterNode;
   gain: GainNode;
+}
+
+interface DroneNodes {
+  fundamental: OscillatorNode;
+  partial: OscillatorNode;
+  partialLevel: GainNode;
+  gain: GainNode;
+  lfo: OscillatorNode;
+  depth: GainNode;
 }
 
 /** Sines sounding together through one envelope: linear attack, exponential decay to the floor. Released when all have ended. */

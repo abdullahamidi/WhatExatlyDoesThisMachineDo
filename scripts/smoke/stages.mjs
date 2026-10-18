@@ -8,10 +8,17 @@ const S9 = [...S7, '@blueprint', 'generator', ...Array(5).fill('motorRetrofit'),
 const S10 = [...S9, '@substationBlueprint', 'boiler'];
 const S11 = [...S10, ...Array(3).fill('inductionHeater'), ...Array(20).fill('firebox'), 'steamHammer', 'superheater', ...Array(5).fill('condenser'), 'turbine', 'reliefValves', '@pressureVesselBlueprint'];
 const S12 = [...S11, 'resonatorSpire'];
+const S13 = [...S12, ...Array(3).fill('crankServo'), ...Array(25).fill('harmonicCoil'), ...Array(3).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(3).fill('standingWave'), 'crystalLattice', '@harmonicConvergence'];
+const S14 = [...S13, 'nullChamber'];
+const S15 = [...S14, ...Array(25).fill('containmentRing'), ...Array(20).fill('resonantSiphon'), ...Array(10).fill('graviticAnchor'), 'inversionCrank', 'lensArray', ...Array(20).fill('horizonField'), 'skyAperture', '@finalAlignment'];
+const S16 = [...S15, 'primaryFunction'];
 // the 16 Era III machine parts (WP9 C3), reported for s10_boiler / s11_era3_full
 const PARTS = ['boiler', 'chimney', 'steamManifold', 'pressureGauge', 'gaugeNeedle', 'fireboxGlow1', 'fireboxGlow2', 'fireboxGlow3', 'inductionHeater', 'superheater', 'reliefValves', 'steamHammer', 'hammerRam', 'condenser', 'turbine', 'turbineRotor'];
 // the 16 Era IV machine parts (WP10 C3), reported for s12_spire / s13_era4_full
 const PARTS4 = ['spireTower', 'spireExciter', 'spireWave', 'coilRing1', 'coilRing2', 'coilRing3', 'coilRing4', 'calliope', 'servoBase', 'servoArm', 'koenigFork', 'emitterDishL', 'emitterDishR', 'dishWavesL', 'dishWavesR', 'crystal'];
+// the 38 Era V machine parts (WP11 C3), reported for s14_null / s15_era5_full / s16_primary
+const PARTS5 = ['nullGallery', 'nullChamber', 'nullCore', 'nullCoreGlint', 'ring1Back', 'ring2Back', 'ring3Back', 'ring4Back', 'ring1Front', 'ring2Front', 'ring3Front', 'ring4Front', 'ring1Bead', 'ring2Bead', 'ring3Bead', 'ring4Bead', 'siphonTube1L', 'siphonTube1R', 'siphonTube2L', 'siphonTube2R', 'siphonTube3L', 'siphonTube3R', 'siphonArcs1', 'siphonArcs2', 'siphonArcs3', 'graviticAnchorL', 'graviticAnchorR', 'anchorGlow1L', 'anchorGlow1R', 'anchorGlow2L', 'anchorGlow2R', 'anchorGlow3L', 'anchorGlow3R', 'inversionGhost', 'lensLight', 'lensColumn', 'aperture', 'namePlate'];
+const PERF = process.env.PERF === '1';
 const stages = {
   s0_crank: [],
   s1_gear: ['gearRatio'],
@@ -26,7 +33,10 @@ const stages = {
   s10_boiler: S10,
   s11_era3_full: S11,
   s12_spire: S12,
-  s13_era4_full: [...S12, ...Array(3).fill('crankServo'), ...Array(25).fill('harmonicCoil'), ...Array(3).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(3).fill('standingWave'), 'crystalLattice', '@harmonicConvergence'],
+  s13_era4_full: S13,
+  s14_null: S14,
+  s15_era5_full: S15,
+  s16_primary: S16,
 };
 const only = process.env.ONLY ? process.env.ONLY.split(',') : Object.keys(stages);
 const b = await chromium.launch();
@@ -63,8 +73,18 @@ for (const name of only) {
     console.log(name, JSON.stringify(res));
   }
   await p.waitForTimeout(2500);
+  // era V stages: click the crank 3x so the 3 s inversion ghost shows in the shot and the frames
+  if (name === 's15_era5_full' || name === 's16_primary') {
+    const cp = await p.evaluate(() => window.__wedtmd.crankClientPoint());
+    for (let i = 0; i < 3; i++) await p.mouse.click(cp.x, cp.y);
+    await p.waitForTimeout(150);
+  }
   await p.mouse.move(5, 5);
   await p.screenshot({ path: `${out}/${name}.png` });
+  if (PERF && (name === 's13_era4_full' || name === 's15_era5_full')) {
+    await p.waitForTimeout(3000);
+    console.log(name, 'machineStats', JSON.stringify(await p.evaluate(() => window.__wedtmd.machineStats?.() ?? null)));
+  }
   console.log(name, 'camera', JSON.stringify(await p.evaluate(() => window.__wedtmd.cameraState())));
   console.log(name, 'plaque', JSON.stringify(await p.$eval('#hud-plaque', e => e.textContent.trim()).catch(() => null)));
   if (name === 's10_boiler' || name === 's11_era3_full') {
@@ -72,6 +92,9 @@ for (const name of only) {
   }
   if (name === 's12_spire' || name === 's13_era4_full') {
     console.log(name, 'parts4', JSON.stringify(await p.evaluate((ids) => Object.fromEntries(ids.map(i => [i, window.__wedtmd.componentState(i)?.visible ?? null])), PARTS4)));
+  }
+  if (name === 's14_null' || name === 's15_era5_full' || name === 's16_primary') {
+    console.log(name, 'parts5', JSON.stringify(await p.evaluate((ids) => Object.fromEntries(ids.map(i => [i, window.__wedtmd.componentState(i)?.visible ?? null])), PARTS5)));
   }
   for (let f = 0; f < nframes; f++) {
     await p.screenshot({ path: `${out}/${name}-f${String(f).padStart(2,'0')}.png` });
