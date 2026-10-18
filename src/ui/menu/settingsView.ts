@@ -110,7 +110,7 @@ export function settingsViewModel(s: Readonly<SettingsState>): SettingsControl[]
   ];
 }
 
-/** Root attributes for the DOM (T9 applies them to the document root). */
+/** Root attributes for the app shell (T9 applies them to the top-level game root element). */
 export function uiRootAttrs(s: Readonly<SettingsState>): UiRootAttrs {
   return {
     zoom: String(s.uiScale / 100),

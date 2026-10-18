@@ -29,7 +29,7 @@ describe('achievementCards: locked and unlocked', () => {
   });
 
   it('unlocked card: colour sheet, no lock icon, LOGGED status', () => {
-    const card = achievementCards({ unlocked: { firstTurn: 1 } }).find((c) => c.id === 'firstTurn');
+    const card = achievementCards({ firstTurn: 1 }).find((c) => c.id === 'firstTurn');
     expect(card?.unlocked).toBe(true);
     expect(card?.locked).toBe(false);
     expect(card?.statusText).toBe('LOGGED');
@@ -45,13 +45,13 @@ describe('achievementCards: locked and unlocked', () => {
   });
 
   it('only the given ids are unlocked', () => {
-    const cards = achievementCards({ unlocked: { firstTurn: 5, steadyHand: 6 } });
+    const cards = achievementCards({ firstTurn: 5, steadyHand: 6 });
     const unlockedIds = cards.filter((c) => c.unlocked).map((c) => c.id);
     expect(unlockedIds).toEqual(['firstTurn', 'steadyHand']);
   });
 
   it('an unknown id in the unlocked map does not create a card', () => {
-    const cards = achievementCards({ unlocked: { nope: 1 } as AchievementsState['unlocked'] });
+    const cards = achievementCards({ nope: 1 } as AchievementsState['unlocked']);
     expect(cards).toHaveLength(ACHIEVEMENT_LIST.length);
   });
 });
@@ -69,7 +69,7 @@ describe('achievementCards: secret rows', () => {
   });
 
   it('unlocked secret: real name and description shown', () => {
-    const card = achievementCards({ unlocked: { eraExotic: 1 } }).find((c) => c.id === 'eraExotic');
+    const card = achievementCards({ eraExotic: 1 }).find((c) => c.id === 'eraExotic');
     expect(card?.secretHidden).toBe(false);
     expect(card?.name).toBe(ACHIEVEMENTS.eraExotic.name);
     expect(card?.description).toBe(ACHIEVEMENTS.eraExotic.description);
@@ -94,7 +94,7 @@ describe('achievementCards: sprite geometry', () => {
 
   it('frame 0 sits at the origin of a 16-frame sheet', () => {
     const custom: AchievementDefinition = { ...ACHIEVEMENTS.firstTurn, icon: 0 };
-    const card = achievementCards({ unlocked: { firstTurn: 1 } }, [custom])[0];
+    const card = achievementCards({ firstTurn: 1 }, [custom])[0];
     expect(card?.badge.bgPosition).toBe('0px 0px');
     expect(card?.badge.bgSize).toBe(`${BADGE_VIEW.badgeFrames * frameBox}px 48px`);
     expect(card?.badge.bgSize).toBe('768px 48px');
@@ -102,7 +102,7 @@ describe('achievementCards: sprite geometry', () => {
 
   it('frame 15 is offset by 15 frames of 48 px', () => {
     const custom: AchievementDefinition = { ...ACHIEVEMENTS.firstTurn, icon: 15 };
-    const card = achievementCards({ unlocked: { firstTurn: 1 } }, [custom])[0];
+    const card = achievementCards({ firstTurn: 1 }, [custom])[0];
     expect(card?.badge.frameIndex).toBe(15);
     expect(card?.badge.bgPosition).toBe('-720px 0px');
   });
