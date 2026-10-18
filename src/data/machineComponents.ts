@@ -187,7 +187,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     size: { width: 32, height: 32 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 2,
     animation: { kind: 'driven', ratio: -1.75, phaseDeg: 0 },
-    connections: [{ id: 'belt', at: { x: 0, y: 0 }, kind: 'belt', radius: 15 }],
+    connections: [{ id: 'belt', at: { x: 0, y: 0 }, kind: 'belt', radius: 8 }],   // r8 < pinion root r11: belt rides inside the teeth
     effects: [],
   },
   handCrank: {
@@ -204,7 +204,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     id: 'flywheelPedestal', techId: 'flywheel', minLevel: 1,
     assetId: 'machine.pedestal', attach: { socket: 'flywheelBase', offset: { x: 0, y: 0 } },
     size: { width: 48, height: 64 }, origin: { x: 0.5, y: 1 },
-    layer: 'back',
+    layer: 'back', depthBias: 21,   // near-side stand: in front of the flywheel (20), behind the overhung hub pulley (23) and belt (25)
     animation: { kind: 'none' },
     connections: [],
     effects: [],
@@ -214,7 +214,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.flywheel', attach: { socket: 'flywheelHub', offset: { x: 0, y: 0 } },
     size: { width: 96, height: 96 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid',
-    animation: { kind: 'driven', ratio: -2.1875, phaseDeg: 0 },
+    animation: { kind: 'driven', ratio: -1.1666666667, phaseDeg: 0 },
     connections: [],
     effects: [{ kind: 'glow', driver: 'automation', threshold: 10, intensity: 0.4 }],
   },
@@ -223,7 +223,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.pulleyFlywheel', attach: { socket: 'flywheelHub', offset: { x: 0, y: 0 } },
     size: { width: 28, height: 28 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 3,
-    animation: { kind: 'driven', ratio: -2.1875, phaseDeg: 0 },
+    animation: { kind: 'driven', ratio: -1.1666666667, phaseDeg: 0 },   // -1.75 * 8 / 12
     connections: [{ id: 'belt', at: { x: 0, y: 0 }, kind: 'belt', radius: 12 }],
     effects: [],
   },

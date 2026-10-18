@@ -12,3 +12,4 @@ PW_PATH=$PW node scripts/smoke/wp4-persistence.mjs  http://localhost:4173/ /tmp/
 PW_PATH=$PW node scripts/smoke/full-machine.mjs     http://localhost:4173/ /tmp/smoke/full.png
 ```
 Each prints a JSON result; `errors` must be empty. They use the read-only `window.__wedtmd` debug hook.
+PW_PATH=$PW node scripts/smoke/stages.mjs http://localhost:4173/ /tmp/smoke/stages   # unlock-stage screenshots (ONLY=s0_crank,... FRAME_MS=40 optional)
