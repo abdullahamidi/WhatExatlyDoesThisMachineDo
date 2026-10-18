@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { MACHINE_COMPONENTS, MACHINE_SOCKETS } from '../../data/machineComponents';
-import type { SocketId, Vec2 } from '../../data/machineComponents';
+import type { MachineComponentDefinition, SocketId, Vec2 } from '../../data/machineComponents';
 import { MACHINE_ANCHOR, PIXEL_SCALE } from '../../data/world';
 import { createInitialState } from '../../simulation';
 import {
@@ -61,14 +61,13 @@ describe('machineLocalToWorld', () => {
 describe('isComponentVisible', () => {
   const levels = createInitialState(0).techLevels;
 
-  it('shows only the hand crank components at the start', () => {
-    expect(isComponentVisible(MACHINE_COMPONENTS.supportFrame, levels)).toBe(true);
-    expect(isComponentVisible(MACHINE_COMPONENTS.handCrank, levels)).toBe(true);
-    expect(isComponentVisible(MACHINE_COMPONENTS.gearSmall, levels)).toBe(false);
-    expect(isComponentVisible(MACHINE_COMPONENTS.gearLarge, levels)).toBe(false);
-    expect(isComponentVisible(MACHINE_COMPONENTS.flywheel, levels)).toBe(false);
-    expect(isComponentVisible(MACHINE_COMPONENTS.wornMotor, levels)).toBe(false);
-    expect(isComponentVisible(MACHINE_COMPONENTS.pistonArray, levels)).toBe(false);
+  it('shows the frame, bearings, main shaft and hand crank at the start', () => {
+    for (const id of ['supportFrame', 'bearingM', 'bearingP', 'mainShaft', 'handCrank'] as const) {
+      expect(isComponentVisible(MACHINE_COMPONENTS[id], levels)).toBe(true);
+    }
+    for (const id of ['gearLarge', 'gearSmall', 'crankPulley', 'flywheelPedestal', 'flywheel', 'flywheelPulley', 'motorPlinth', 'wornMotor', 'motorPulley', 'pistonYoke', 'pistonArray'] as const) {
+      expect(isComponentVisible(MACHINE_COMPONENTS[id], levels)).toBe(false);
+    }
   });
 
   it('shows the small gear once gearRatio is owned', () => {
@@ -81,10 +80,24 @@ describe('isComponentVisible', () => {
 });
 
 describe('componentDepth', () => {
-  it('derives depth from the layer', () => {
+  it('derives depth from the layer plus the sub-layer bias', () => {
     expect(componentDepth(MACHINE_COMPONENTS.supportFrame)).toBe(10);
+    expect(componentDepth(MACHINE_COMPONENTS.bearingM)).toBe(11);
     expect(componentDepth(MACHINE_COMPONENTS.handCrank)).toBe(30);
-    expect(componentDepth(MACHINE_COMPONENTS.pistonArray)).toBe(0);
+    expect(componentDepth(MACHINE_COMPONENTS.mainShaft)).toBe(22);
+    expect(componentDepth(MACHINE_COMPONENTS.flywheelPulley)).toBe(23);
+    expect(componentDepth(MACHINE_COMPONENTS.pistonYoke)).toBe(0);
+    expect(componentDepth(MACHINE_COMPONENTS.pistonArray)).toBe(1);
+  });
+
+  it('adds depthBias on top of the layer depth', () => {
+    const def: MachineComponentDefinition = { ...MACHINE_COMPONENTS.handCrank, layer: 'mid', depthBias: 4 };
+    expect(componentDepth(def)).toBe(24);
+  });
+
+  it('treats a missing depthBias as 0', () => {
+    const def: MachineComponentDefinition = { ...MACHINE_COMPONENTS.handCrank, layer: 'mid', depthBias: undefined };
+    expect(componentDepth(def)).toBe(20);
   });
 });
 

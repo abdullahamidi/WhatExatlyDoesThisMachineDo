@@ -12,12 +12,13 @@ export const PARALLAX_BOTTOM_MARGIN = 200;                      // world px the 
 export interface ParallaxLayerDef { id: string; assetId: AssetId; scrollFactor: number;
   bottomY: number;      // world y where the texture BOTTOM appears when the camera is centred on CAMERA.focus
   depth: number; alpha: number;
-  underfill: number | null }   // colour of a rectangle filled below the texture so panning shows no gap
+  underfill: number | null;   // colour of a rectangle filled below the texture so panning shows no gap
+  tint?: number }             // tint: haze colour multiplied into the layer (audit S3 #14)
 export const PARALLAX_LAYERS: readonly ParallaxLayerDef[] = [
   { id: 'sky',       assetId: 'bg.sky',       scrollFactor: 0,    bottomY: VIEW.height,                       depth: DEPTH.background,      alpha: 1,    underfill: null },
   { id: 'mountains', assetId: 'bg.mountains', scrollFactor: 0.15, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 10, alpha: 0.45, underfill: PALETTE.industrialGray },
-  { id: 'skyline',   assetId: 'bg.skyline',   scrollFactor: 0.3,  bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 20, alpha: 0.5,  underfill: PALETTE.grayDark },
-  { id: 'pylons',    assetId: 'bg.pylons',    scrollFactor: 0.55, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 30, alpha: 0.75, underfill: null },
+  { id: 'skyline',   assetId: 'bg.skyline',   scrollFactor: 0.3,  bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 20, alpha: 0.4,  underfill: PALETTE.grayDark },
+  { id: 'pylons',    assetId: 'bg.pylons',    scrollFactor: 0.55, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 30, alpha: 0.45, underfill: null, tint: 0xb8a98f },
 ];
 export const GROUND_LAYER = { assetId: 'terrain.ground', depth: DEPTH.ground } as const;   // scrollFactor 1, spans GROUND_Y..WORLD.height
 export const HORIZON_STRIP = { height: 6, color: PALETTE.rustDark, alpha: 0.6 } as const;  // thin darker strip at GROUND_Y

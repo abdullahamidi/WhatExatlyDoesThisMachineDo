@@ -4,16 +4,16 @@ import { createInitialState } from '../../simulation';
 import { visibleComponentIds, newlyVisible } from './machineVisibility';
 
 describe('visibleComponentIds', () => {
-  it('shows only the frame and the hand crank at the start', () => {
+  it('shows the frame, bearings, main shaft and hand crank at the start', () => {
     const levels = createInitialState(0).techLevels;
-    expect(visibleComponentIds(levels)).toEqual(new Set<MachineComponentId>(['supportFrame', 'handCrank']));
+    expect(visibleComponentIds(levels)).toEqual(new Set<MachineComponentId>(['supportFrame', 'bearingM', 'bearingP', 'mainShaft', 'handCrank']));
   });
 
   it('adds the small gear once gear ratio is installed', () => {
     const levels = { ...createInitialState(0).techLevels, gearRatio: 1 };
     const visible = visibleComponentIds(levels);
     expect(visible.has('gearSmall')).toBe(true);
-    expect(visible.size).toBe(3);
+    expect(visible.size).toBe(6);
   });
 
   it('returns a fresh set each call', () => {

@@ -48,26 +48,12 @@ export function clampFrameSeconds(deltaMs: number, maxSeconds: number): number {
   return Math.min(deltaMs / 1000, maxSeconds); // min(delta / 1000, max)
 }
 
-/** Angle advance in degrees wrapped to [0, 360): x = deg + direction * degPerSecond * dt. */
-export function advanceAngle(deg: number, degPerSecond: number, direction: 1 | -1, dtSeconds: number): number {
-  const x = deg + direction * degPerSecond * dtSeconds; // linear advance
-  const raw = Number.isFinite(x) ? x : deg; // non-finite advance keeps the old angle
-  const wrapped = ((raw % 360) + 360) % 360; // wrap into [0, 360)
-  return noNegativeZero(wrapped);
-}
-
 /** Phase advance in cycles wrapped to [0, 1): x = phase + cps * dt; x - floor(x). */
 export function advancePhase(phase: number, cyclesPerSecond: number, dtSeconds: number): number {
   const x = phase + cyclesPerSecond * dtSeconds; // linear advance
   const raw = Number.isFinite(x) ? x : phase; // non-finite advance keeps the old phase
   const frac = raw - Math.floor(raw); // fractional part
   return frac >= 1 || !Number.isFinite(frac) ? 0 : noNegativeZero(frac); // rounding can give exactly 1
-}
-
-/** Vertical reciprocating offset in whole art px: round(-A * (1 - cos(2 pi phase)) / 2). */
-export function reciprocateOffset(phase: number, amplitude: number): number {
-  const v = Math.round((-amplitude * (1 - Math.cos(2 * Math.PI * phase))) / 2); // one swing from 0 to -A and back
-  return noNegativeZero(v);
 }
 
 /** Vibration offset in whole art px: x = round(A sin(2 pi phase 7)), y = round(A sin(2 pi phase 11 + 1)). */

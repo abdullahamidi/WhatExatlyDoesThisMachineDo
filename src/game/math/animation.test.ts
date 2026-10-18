@@ -6,9 +6,7 @@ import {
   addActivity,
   driverValue,
   clampFrameSeconds,
-  advanceAngle,
   advancePhase,
-  reciprocateOffset,
   vibrateOffset,
 } from './animation';
 
@@ -114,29 +112,6 @@ describe('clampFrameSeconds', () => {
   });
 });
 
-describe('advanceAngle', () => {
-  it('advances forward and wraps past 360', () => {
-    expect(advanceAngle(350, 20, 1, 1)).toBe(10);
-  });
-
-  it('advances backward and wraps below 0', () => {
-    expect(advanceAngle(10, 20, -1, 1)).toBe(350);
-  });
-
-  it('stays in [0, 360) for huge and negative dt', () => {
-    for (const dt of [1e6, 1e12, -1e6, -3.7]) {
-      const a = advanceAngle(123, 45, 1, dt);
-      expect(a).toBeGreaterThanOrEqual(0);
-      expect(a).toBeLessThan(360);
-    }
-  });
-
-  it('never returns -0', () => {
-    expect(Object.is(advanceAngle(0, 0, 1, 0), -0)).toBe(false);
-    expect(advanceAngle(360, 0, 1, 0)).toBe(0);
-  });
-});
-
 describe('advancePhase', () => {
   it('stays in [0, 1) for negative and huge dt', () => {
     for (const dt of [-3.7, 1e6]) {
@@ -148,20 +123,6 @@ describe('advancePhase', () => {
 
   it('wraps forward progress', () => {
     expect(advancePhase(0.75, 0.5, 1)).toBeCloseTo(0.25, 9);
-  });
-});
-
-describe('reciprocateOffset', () => {
-  it('is zero at phase 0', () => {
-    expect(reciprocateOffset(0, 3)).toBe(0);
-  });
-
-  it('reaches -amplitude at half a cycle', () => {
-    expect(reciprocateOffset(0.5, 3)).toBe(-3);
-  });
-
-  it('rounds to whole px', () => {
-    expect(reciprocateOffset(0.25, 4)).toBe(-2);
   });
 });
 

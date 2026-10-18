@@ -30,15 +30,17 @@ export class ParallaxBackground {
       const spanY = parallaxSpan(WORLD.height, VIEW.height, minZoom, sf);
       const pos = parallaxPosition({ x: 0, y: def.bottomY }, CAMERA.focus, VIEW, sf);
 
-      this.objects.push(
-        scene.add
-          .tileSprite(spanX.min, pos.y, spanX.max - spanX.min, entry.height * PIXEL_SCALE, def.assetId)
-          .setOrigin(0, 1)
-          .setTileScale(PIXEL_SCALE, PIXEL_SCALE)
-          .setScrollFactor(sf)
-          .setDepth(def.depth)
-          .setAlpha(def.alpha),
-      );
+      const strip = scene.add
+        .tileSprite(spanX.min, pos.y, spanX.max - spanX.min, entry.height * PIXEL_SCALE, def.assetId)
+        .setOrigin(0, 1)
+        .setTileScale(PIXEL_SCALE, PIXEL_SCALE)
+        .setScrollFactor(sf)
+        .setDepth(def.depth)
+        .setAlpha(def.alpha);
+      if (def.tint !== undefined) {
+        strip.setTint(def.tint);
+      }
+      this.objects.push(strip);
 
       // Solid fill below the strip so panning never reveals a gap.
       if (def.underfill !== null && spanY.max - pos.y > 0) {

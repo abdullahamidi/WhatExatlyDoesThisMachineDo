@@ -14,7 +14,7 @@ export interface ToastMessage {
 
 // Toast stack limits and timings (ms). Milestones stay on screen longer.
 export const TOAST_CONFIG = {
-  maxVisible: 3,
+  maxVisible: 2,
   durationMs: 3200,
   milestoneDurationMs: 6500,
   welcomeDurationMs: 7000,

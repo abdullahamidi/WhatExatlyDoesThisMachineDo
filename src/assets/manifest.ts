@@ -61,9 +61,41 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     id: 'machine.motor', file: 'machine/worn-motor.png', width: 64, height: 48, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     description: 'Worn electric motor bolted to the frame, shaking as it runs.',
   },
-  'machine.piston': {
-    id: 'machine.piston', file: 'machine/piston-array.png', width: 96, height: 64, origin: { x: 0.5, y: 1 }, tileable: 'none',
-    description: 'Piston array whose base sits at the bottom of the sprite, pumping up and down.',
+  'machine.bearingPlate': {
+    id: 'machine.bearingPlate', file: null, width: 16, height: 16, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Square riveted steel bearing plate with a round bearing housing at its centre.',
+  },
+  'machine.pulleyMotor': {
+    id: 'machine.pulleyMotor', file: null, width: 12, height: 12, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Tiny steel V-pulley seen face-on, with a rim ring and a hub dot.',
+  },
+  'machine.pulleyMain': {
+    id: 'machine.pulleyMain', file: null, width: 24, height: 24, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Cast main pulley face-on with a 4-hole web and a raised crank-pin boss at its right side.',
+  },
+  'machine.pulleyCrank': {
+    id: 'machine.pulleyCrank', file: null, width: 32, height: 32, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Flat-belt pulley seen face-on with a crowned rim, five spokes and a hub.',
+  },
+  'machine.pulleyFlywheel': {
+    id: 'machine.pulleyFlywheel', file: null, width: 28, height: 28, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Hub pulley bolted to the flywheel, seen face-on with four spokes.',
+  },
+  'machine.pedestal': {
+    id: 'machine.pedestal', file: null, width: 48, height: 64, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Cast-iron A-frame bearing stand in side view with a plummer block cap and bolted foot plates.',
+  },
+  'machine.motorPlinth': {
+    id: 'machine.motorPlinth', file: null, width: 48, height: 10, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Low riveted iron skid with four hold-down bolts and sand dust along its top edge.',
+  },
+  'machine.pistonBlock': {
+    id: 'machine.pistonBlock', file: null, width: 96, height: 58, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Static block of three identical vertical cylinders with capped heads on a foot plate.',
+  },
+  'machine.pistonYoke': {
+    id: 'machine.pistonYoke', file: null, width: 80, height: 16, origin: { x: 0.5, y: 0.75 }, tileable: 'none',
+    description: 'Horizontal steel crosshead bar with a centre pin eye and three plunger rods rising from it.',
   },
   'fx.steam': {
     id: 'fx.steam', file: 'fx/steam.png', width: 16, height: 16, origin: { x: 0.5, y: 0.5 }, tileable: 'none',

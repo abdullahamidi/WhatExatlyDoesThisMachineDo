@@ -12,22 +12,25 @@
   --haze:#d2bf9c;
 }
 
+/* top-right column: never covers x < 900 at 1280x720 (right 16 + width 360); audit defect 11 */
 #toast-stack {
   position: fixed;
   top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  right: 16px;
+  left: auto;
+  transform: none;
   z-index: 200;
   pointer-events: none;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  align-items: center;
+  align-items: flex-end;
 }
 
 .toast {
   position: relative;
-  max-width: min(560px, 92vw);
+  box-sizing: border-box;
+  max-width: min(360px, 92vw);
   padding: 8px 14px;
   background: var(--iron-2);
   border: 2px solid var(--rust);
@@ -37,7 +40,7 @@
   font-size: clamp(12px, 1.4vw, 16px);
   text-transform: uppercase;
   letter-spacing: .08em;
-  text-align: center;
+  text-align: right;
   /* Matches TOAST_CONFIG.fadeMs (250 ms). */
   transition: opacity 250ms ease-out;
   animation: toast-in 200ms ease-out;

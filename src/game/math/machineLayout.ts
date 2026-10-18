@@ -19,9 +19,9 @@ export function isComponentVisible(def: MachineComponentDefinition, techLevels: 
   return techLevels[def.techId] >= def.minLevel; // level >= minLevel
 }
 
-/** Draw depth of a component, from its layer. */
+/** Draw depth of a component: layer depth plus its optional sub-layer bias (default 0). */
 export function componentDepth(def: MachineComponentDefinition): number {
-  return MACHINE_LAYER_DEPTH[def.layer]; // layer -> depth table
+  return MACHINE_LAYER_DEPTH[def.layer] + (def.depthBias ?? 0); // layer depth + depthBias
 }
 
 /** Machine-local art px bounding box of a component's sprite. */

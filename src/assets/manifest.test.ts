@@ -55,6 +55,44 @@ describe('ASSET_MANIFEST', () => {
   });
 });
 
+describe('WP6 machine assets', () => {
+  const NEW_MACHINE_ENTRIES: ReadonlyArray<{ id: AssetId; width: number; height: number; origin: { x: number; y: number } }> = [
+    { id: 'machine.bearingPlate', width: 16, height: 16, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.pulleyMotor', width: 12, height: 12, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.pulleyMain', width: 24, height: 24, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.pulleyCrank', width: 32, height: 32, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.pulleyFlywheel', width: 28, height: 28, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.pedestal', width: 48, height: 64, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.motorPlinth', width: 48, height: 10, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.pistonBlock', width: 96, height: 58, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.pistonYoke', width: 80, height: 16, origin: { x: 0.5, y: 0.75 } },
+  ];
+
+  it('has the contract width, height and origin for each of the 9 new machine ids', () => {
+    expect(NEW_MACHINE_ENTRIES.length).toBe(9);
+    for (const want of NEW_MACHINE_ENTRIES) {
+      const entry = ASSET_MANIFEST[want.id];
+      expect(entry.width, want.id).toBe(want.width);
+      expect(entry.height, want.id).toBe(want.height);
+      expect(entry.origin, want.id).toEqual(want.origin);
+      expect(entry.tileable, want.id).toBe('none');
+    }
+  });
+
+  it('no longer registers the removed piston id', () => {
+    expect(ASSET_IDS.some((id) => id.endsWith('piston'))).toBe(false);
+    expect(Object.keys(ASSET_MANIFEST).some((id) => id.endsWith('piston'))).toBe(false);
+  });
+
+  it('gives every file-backed entry a unique .png path', () => {
+    const files = ASSET_IDS.map((id) => ASSET_MANIFEST[id].file).filter((f): f is string => f !== null);
+    expect(new Set(files).size).toBe(files.length);
+    for (const file of files) {
+      expect(file.endsWith('.png')).toBe(true);
+    }
+  });
+});
+
 describe('resolveAssetUrl', () => {
   const base: AssetEntry = ASSET_MANIFEST['machine.crank'];
 
