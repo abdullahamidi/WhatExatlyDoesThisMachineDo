@@ -1,10 +1,26 @@
-export const NUMBER_SUFFIXES: ReadonlyArray<{ value: number; suffix: string }> =
-  [{ value: 1e3, suffix: 'K' }, { value: 1e6, suffix: 'M' }, { value: 1e9, suffix: 'B' }, { value: 1e12, suffix: 'T' }];
+export const NUMBER_SUFFIXES: ReadonlyArray<{ value: number; suffix: string }> = [
+  { value: 1e3, suffix: 'K' },
+  { value: 1e6, suffix: 'M' },
+  { value: 1e9, suffix: 'B' },
+  { value: 1e12, suffix: 'T' },
+  { value: 1e15, suffix: 'Qa' },
+  { value: 1e18, suffix: 'Qi' },
+  { value: 1e21, suffix: 'Sx' },
+  { value: 1e24, suffix: 'Sp' },
+  { value: 1e27, suffix: 'Oc' },
+  { value: 1e30, suffix: 'No' },
+  { value: 1e33, suffix: 'Dc' },
+];
 
 export type RoundMode = 'floor' | 'ceil' | 'round';
 
+/** 'suffix' = K..Dc then exponent form; 'scientific' = d.dde<n>; 'engineering' = exponent multiple of 3. */
+export type NumberNotation = 'suffix' | 'scientific' | 'engineering';
+
 const EPSILON = 1e-9;
-const EXPONENT_CEILING = '1.00e15';
+const EXPONENT_CEILING = '1.00e36';
+/** Suffix notation switches to exponent form at and above this value. */
+const EXPONENT_FROM = 1e36;
 
 function roundTo(x: number, decimals: number, mode: RoundMode): number {
   const factor = 10 ** decimals;
@@ -32,29 +48,63 @@ function formatLarge(v: number, mode: RoundMode): string {
   return next ? `1${next.suffix}` : EXPONENT_CEILING;
 }
 
-function formatMagnitude(a: number, mode: RoundMode): string {
-  if (a >= 1e15) return a.toExponential(2).replace('+', '');
-  if (a < 1000) {
-    const rounded = roundTo(a, 1, mode);
-    if (rounded < 1000) return trimZeros(rounded.toFixed(1));
-    return formatLarge(1000, mode);
-  }
+/** Splits a finite positive number into mantissa and decimal exponent (exact at powers of ten). */
+function splitExponential(a: number): { mantissa: number; exponent: number } {
+  const [mantissaText = '0', exponentText = '0'] = a.toExponential(9).split('e');
+  return { mantissa: Number(mantissaText), exponent: Number(exponentText) };
+}
+
+function formatScientific(a: number, mode: RoundMode): string {
+  const { mantissa, exponent } = splitExponential(a);
+  const rounded = roundTo(mantissa, 2, mode);
+  if (rounded < 10) return `${rounded.toFixed(2)}e${exponent}`;
+  return `1.00e${exponent + 1}`;
+}
+
+function formatEngineering(a: number, mode: RoundMode): string {
+  const { mantissa, exponent } = splitExponential(a);
+  const power = Math.floor(exponent / 3) * 3;
+  const scaled = mantissa * 10 ** (exponent - power);
+  const decimals = scaled < 10 ? 2 : scaled < 100 ? 1 : 0;
+  const rounded = roundTo(scaled, decimals, mode);
+  if (rounded < 1000) return `${trimZeros(rounded.toFixed(decimals))}e${power}`;
+  return `1e${power + 3}`;
+}
+
+/** Formats a magnitude that is at least 1000 (or rounded up to 1000) in the chosen notation. */
+function formatThousandsAndUp(a: number, mode: RoundMode, notation: NumberNotation): string {
+  if (notation === 'scientific') return formatScientific(a, mode);
+  if (notation === 'engineering') return formatEngineering(a, mode);
+  if (a >= EXPONENT_FROM) return a.toExponential(2).replace('+', '');
   return formatLarge(a, mode);
 }
 
-export function formatNumber(n: number, mode: RoundMode = 'floor'): string {
+function formatMagnitude(a: number, mode: RoundMode, notation: NumberNotation): string {
+  if (a < 1000) {
+    const rounded = roundTo(a, 1, mode);
+    if (rounded < 1000) return trimZeros(rounded.toFixed(1));
+    return formatThousandsAndUp(1000, mode, notation);
+  }
+  return formatThousandsAndUp(a, mode, notation);
+}
+
+export function formatNumber(
+  n: number,
+  mode: RoundMode = 'floor',
+  notation: NumberNotation = 'suffix',
+): string {
   if (!Number.isFinite(n)) return '0';
-  const body = formatMagnitude(Math.abs(n), mode);
+  const body = formatMagnitude(Math.abs(n), mode, notation);
   return n < 0 && body !== '0' ? `-${body}` : body;
 }
 
 /** Formats a price. Prices round up so a displayed price is never lower than the charged price. */
-export function formatCost(n: number): string {
-  return formatNumber(n, 'ceil');
+export function formatCost(n: number, notation?: NumberNotation): string {
+  return formatNumber(n, 'ceil', notation);
 }
 
-export function formatRate(n: number): string {
-  return `${formatNumber(n)}/s`;
+export function formatRate(n: number, notation?: NumberNotation): string {
+  return `${formatNumber(n, 'floor', notation)}/s`;
 }
 
 export function formatDuration(seconds: number): string {

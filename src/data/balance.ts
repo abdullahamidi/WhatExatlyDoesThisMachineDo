@@ -20,3 +20,9 @@ export const MAX_UPDATE_SECONDS = OFFLINE_CAP_SECONDS;
  * (e.g. a tab resuming after being hidden), instead of being advanced silently.
  */
 export const OFFLINE_REPORT_THRESHOLD_SECONDS = 60;
+
+/** Design ceiling: balance simulations assert every value stays finite and below this. */
+export const DESIGN_MAX_VALUE = 1e100;
+
+/** All-resource per-second multiplier; stays 1 until prestige (WP15) provides a real one. */
+export const META_MULT = 1;

@@ -2,11 +2,17 @@ import { describe, it, expect } from 'vitest';
 import { NUMBER_SUFFIXES, formatCost, formatNumber, formatRate, formatDuration } from './format';
 
 describe('NUMBER_SUFFIXES', () => {
-  it('has four strictly ascending entries', () => {
-    expect(NUMBER_SUFFIXES).toHaveLength(4);
+  it('has eleven strictly ascending entries', () => {
+    expect(NUMBER_SUFFIXES).toHaveLength(11);
     for (let i = 1; i < NUMBER_SUFFIXES.length; i++) {
       expect(NUMBER_SUFFIXES[i]!.value).toBeGreaterThan(NUMBER_SUFFIXES[i - 1]!.value);
     }
+  });
+
+  it('names every suffix up to Dc', () => {
+    expect(NUMBER_SUFFIXES.map((entry) => entry.suffix)).toEqual([
+      'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc',
+    ]);
   });
 });
 
@@ -28,11 +34,22 @@ describe('formatNumber (floor, default)', () => {
     [2.5e6, '2.5M'],
     [1e9, '1B'],
     [1e12, '1T'],
-    [1e15, '1.00e15'],
-    [2.5e16, '2.50e16'],
+    [1e15, '1Qa'],
+    [2.5e16, '25Qa'],
+    [1e18, '1Qi'],
+    [1e21, '1Sx'],
+    [1e24, '1Sp'],
+    [1e27, '1Oc'],
+    [1e30, '1No'],
+    [1e33, '1Dc'],
+    [1.5e33, '1.5Dc'],
+    [1e36, '1.00e36'],
+    [1.234e36, '1.23e36'],
+    [1e100, '1.00e100'],
   ])('formats %s as %s', (n, expected) => {
     expect(formatNumber(n)).toBe(expected);
     expect(formatNumber(n, 'floor')).toBe(expected);
+    expect(formatNumber(n, 'floor', 'suffix')).toBe(expected);
   });
 });
 
@@ -42,6 +59,7 @@ describe('formatNumber (ceil)', () => {
     [12.79, '12.8'],
     [999999, '1M'],
     [0.01, '0.1'],
+    [999999999999999, '1Qa'],
   ])('formats %s as %s', (n, expected) => {
     expect(formatNumber(n, 'ceil')).toBe(expected);
   });
@@ -52,6 +70,8 @@ describe('formatNumber (round)', () => {
     [12.79, '12.8'],
     [999999, '1M'],
     [999.95, '1K'],
+    [999999999999999, '1Qa'],
+    [9.999e35, '1.00e36'],
   ])('formats %s as %s', (n, expected) => {
     expect(formatNumber(n, 'round')).toBe(expected);
   });
@@ -63,11 +83,68 @@ describe('formatNumber negatives', () => {
     expect(formatNumber(-1500)).toBe('-1.5K');
     expect(formatNumber(-0.01)).toBe('0');
   });
+
+  it('re-attaches the sign for large and notation outputs', () => {
+    expect(formatNumber(-2.5e16)).toBe('-25Qa');
+    expect(formatNumber(-1e36)).toBe('-1.00e36');
+    expect(formatNumber(-1500, 'floor', 'scientific')).toBe('-1.50e3');
+    expect(formatNumber(-1500, 'floor', 'engineering')).toBe('-1.5e3');
+  });
 });
 
 describe('formatNumber invalid input', () => {
   it.each([NaN, Infinity, -Infinity])('formats %s as "0"', (n) => {
     expect(formatNumber(n)).toBe('0');
+    expect(formatNumber(n, 'floor', 'scientific')).toBe('0');
+    expect(formatNumber(n, 'floor', 'engineering')).toBe('0');
+  });
+});
+
+describe('formatNumber notations', () => {
+  it.each([
+    [1500, '1.50e3'],
+    [1e6, '1.00e6'],
+    [123456, '1.23e5'],
+    [999999, '9.99e5'],
+    [1e36, '1.00e36'],
+  ])('scientific formats %s as %s', (n, expected) => {
+    expect(formatNumber(n, 'floor', 'scientific')).toBe(expected);
+  });
+
+  it.each([
+    [1500, '1.5e3'],
+    [123456, '123e3'],
+    [1e6, '1e6'],
+    [2.5e16, '25e15'],
+    [999999, '999e3'],
+  ])('engineering formats %s as %s', (n, expected) => {
+    expect(formatNumber(n, 'floor', 'engineering')).toBe(expected);
+  });
+
+  it('rounds the mantissa up and bumps the exponent (carry)', () => {
+    expect(formatNumber(999999, 'ceil', 'scientific')).toBe('1.00e6');
+    expect(formatNumber(999999, 'round', 'scientific')).toBe('1.00e6');
+    expect(formatNumber(999999, 'ceil', 'engineering')).toBe('1e6');
+    expect(formatNumber(999999, 'round', 'engineering')).toBe('1e6');
+  });
+
+  it('carries a value below 1000 that rounds up to 1000 into the notation', () => {
+    expect(formatNumber(999.95, 'round')).toBe('1K');
+    expect(formatNumber(999.95, 'round', 'scientific')).toBe('1.00e3');
+    expect(formatNumber(999.95, 'round', 'engineering')).toBe('1e3');
+  });
+
+  it('keeps suffix output below 1000 identical across notations', () => {
+    for (const n of [0, 0.5, 12.7, 999.9]) {
+      expect(formatNumber(n, 'floor', 'suffix')).toBe(formatNumber(n));
+      expect(formatNumber(n, 'floor', 'scientific')).toBe(formatNumber(n));
+      expect(formatNumber(n, 'floor', 'engineering')).toBe(formatNumber(n));
+    }
+  });
+
+  it('defaults the notation to suffix', () => {
+    expect(formatNumber(1500)).toBe(formatNumber(1500, 'floor', 'suffix'));
+    expect(formatNumber(1e15)).toBe('1Qa');
   });
 });
 
@@ -76,6 +153,12 @@ describe('formatCost', () => {
     expect(formatCost(1015)).toBe('1.02K');
     expect(formatCost(10)).toBe('10');
   });
+
+  it('passes the notation through', () => {
+    expect(formatCost(1500, 'engineering')).toBe('1.5e3');
+    expect(formatCost(1500, 'scientific')).toBe('1.50e3');
+    expect(formatCost(1500)).toBe('1.5K');
+  });
 });
 
 describe('formatRate', () => {
@@ -83,6 +166,11 @@ describe('formatRate', () => {
     expect(formatRate(12.5)).toBe('12.5/s');
     expect(formatRate(0)).toBe('0/s');
     expect(formatRate(1500)).toBe('1.5K/s');
+  });
+
+  it('passes the notation through', () => {
+    expect(formatRate(1500, 'scientific')).toBe('1.50e3/s');
+    expect(formatRate(1500, 'engineering')).toBe('1.5e3/s');
   });
 });
 
