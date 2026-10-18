@@ -97,6 +97,20 @@ export class SteamFx {
     this.ageLive(dt);
   }
 
+  /**
+   * Finale burst (WP13 calliope beat): `count` puffs from the named burst emitter, in round robin over its points.
+   * Same path and flashes policy as the milestone bursts, so nothing fires under reduced motion.
+   */
+  fireBurst(emitterId: string, count: number): void {
+    if (!motionPolicy(this.session.settings).flashes) return;
+    if (!Number.isFinite(count) || count < 1) return;
+    const lane = this.lanes.find((l) => l.emitter.id === emitterId);
+    if (lane === undefined) return;
+    const mode = lane.emitter.mode;
+    if (mode.kind !== 'burst') return;
+    this.scheduleBurst(lane.emitter, Math.floor(count), mode.spacingMs, this.clock, null);
+  }
+
   /** Unsubscribes, destroys every pooled image and clears all queues; safe to call twice. */
   destroy(): void {
     for (const off of this.unsubscribers) off();
