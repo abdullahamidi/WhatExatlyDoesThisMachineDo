@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { WORLD, GROUND_Y, PIXEL_SCALE, GROUND_LAYER, HORIZON_STRIP } from '../../data/world';
+import { WORLD, GROUND_Y, PIXEL_SCALE, GROUND_LAYER, HORIZON_STRIP, GROUND_SHADE } from '../../data/world';
 
 // Tiled ground below the horizon line plus the thin darker horizon strip.
 export class Terrain {
@@ -19,6 +19,21 @@ export class Terrain {
         .setOrigin(0, 0)
         .setDepth(GROUND_LAYER.depth + 1),
     );
+    // Far-ground haze just under the horizon, then stacked foreground shade bands (hard steps, no gradient).
+    this.objects.push(
+      scene.add
+        .rectangle(0, GROUND_Y + HORIZON_STRIP.height, WORLD.width, GROUND_SHADE.haze.height, GROUND_SHADE.haze.color, GROUND_SHADE.haze.alpha)
+        .setOrigin(0, 0)
+        .setDepth(GROUND_LAYER.depth + 1),
+    );
+    for (const start of GROUND_SHADE.bandStarts) {
+      this.objects.push(
+        scene.add
+          .rectangle(0, GROUND_Y + start, WORLD.width, WORLD.height - GROUND_Y - start, GROUND_SHADE.color, GROUND_SHADE.alpha)
+          .setOrigin(0, 0)
+          .setDepth(GROUND_LAYER.depth + 1),
+      );
+    }
   }
 
   destroy(): void {

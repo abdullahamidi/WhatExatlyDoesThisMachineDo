@@ -22,12 +22,18 @@ export class FloatingText {
       worldPos.y + FLOATING_TEXT.spawnOffsetY,
     );
     textObj.setAlpha(1).setVisible(true);
+    // Rise decelerates; alpha holds near 1 for the first half, then fades (Quad.easeIn), so the number stays readable.
     this.scene.tweens.add({
       targets: textObj,
       y: textObj.y - CRANK_FEEDBACK.floatRisePx,
-      alpha: 0,
       duration: CRANK_FEEDBACK.floatMs,
       ease: 'Cubic.easeOut',
+    });
+    this.scene.tweens.add({
+      targets: textObj,
+      alpha: 0,
+      duration: CRANK_FEEDBACK.floatMs,
+      ease: 'Quad.easeIn',
       onComplete: () => textObj.setVisible(false),
     });
   }
@@ -54,7 +60,8 @@ export class FloatingText {
       .text(0, 0, '', {
         fontFamily: 'monospace',
         fontSize: FLOATING_TEXT.fontSizePx + 'px',
-        color: PALETTE_CSS.mutedOrange,
+        color: FLOATING_TEXT.color,
+        fontStyle: 'bold',
         stroke: PALETTE_CSS.ink,
         strokeThickness: FLOATING_TEXT.strokePx,
       })

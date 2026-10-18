@@ -21,6 +21,10 @@ export const PARALLAX_LAYERS: readonly ParallaxLayerDef[] = [
   { id: 'pylons',    assetId: 'bg.pylons',    scrollFactor: 0.55, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 30, alpha: 0.45, underfill: null, tint: 0xb8a98f },
 ];
 export const GROUND_LAYER = { assetId: 'terrain.ground', depth: DEPTH.ground } as const;   // scrollFactor 1, spans GROUND_Y..WORLD.height
+export const GROUND_SHADE: { color: number; alpha: number; bandStarts: readonly number[];
+  haze: { color: number; alpha: number; height: number } } =
+  { color: PALETTE.ink, alpha: 0.07, bandStarts: [64, 128, 192],
+    haze: { color: PALETTE.skyHaze, alpha: 0.3, height: 18 } };   // world px below GROUND_Y; haze under the horizon strip, bands are hard steps
 export const HORIZON_STRIP = { height: 6, color: PALETTE.rustDark, alpha: 0.6 } as const;  // thin darker strip at GROUND_Y
 export const DUST: { maxParticles: number; frequencyMs: number; lifespanMs: [number, number]; speedX: [number, number];
   speedY: [number, number]; alpha: [number, number]; scale: [number, number]; depth: number; spawnTopY: number; spawnBottomY: number } =
@@ -29,4 +33,5 @@ export const DUST: { maxParticles: number; frequencyMs: number; lifespanMs: [num
     spawnTopY: GROUND_Y - 520, spawnBottomY: GROUND_Y - 20 };
 export const CRANK_FEEDBACK = { degreesPerClick: 90, tweenMs: 160, shakePx: 1 /* art px */, shakeMs: 60,
   floatRisePx: 40, floatMs: 1100, floatPoolSize: 24, hitRadius: 36 /* art px, crank click area */ } as const;
-export const FLOATING_TEXT = { fontSizePx: 24, strokePx: 4, jitterX: 14, spawnOffsetY: -56 } as const;   // world px
+export const FLOATING_TEXT = { fontSizePx: 24, strokePx: 4, jitterX: 14, spawnOffsetY: -56, color: '#ffd27a' } as const;   // world px
+export const CRANK_PULSE = { color: 0xffd27a, radiusArtPx: 20, strokeArtPx: 2, alphaPeak: 0.6, periodMs: 1200 } as const;   // first-click ring on the crank (art px)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PARALLAX_LAYERS } from './world';
+import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_PULSE } from './world';
 import type { ParallaxLayerDef } from './world';
 import { TOAST_CONFIG } from './notifications';
 
@@ -47,5 +47,40 @@ describe('PARALLAX_LAYERS haze', () => {
 describe('TOAST_CONFIG', () => {
   it('shows at most two toasts', () => {
     expect(TOAST_CONFIG.maxVisible).toBe(2);
+  });
+});
+
+describe('GROUND_SHADE', () => {
+  it('band starts are strictly ascending, non-negative and inside the ground', () => {
+    const starts = GROUND_SHADE.bandStarts;
+    for (let i = 0; i < starts.length; i++) {
+      const s = starts[i] as number;
+      expect(s).toBeGreaterThanOrEqual(0);
+      expect(s).toBeLessThan(WORLD.height - GROUND_Y);
+      if (i > 0) expect(s).toBeGreaterThan(starts[i - 1] as number);
+    }
+  });
+
+  it('alphas are in (0, 1]', () => {
+    expect(GROUND_SHADE.alpha).toBeGreaterThan(0);
+    expect(GROUND_SHADE.alpha).toBeLessThanOrEqual(1);
+    expect(GROUND_SHADE.haze.alpha).toBeGreaterThan(0);
+    expect(GROUND_SHADE.haze.alpha).toBeLessThanOrEqual(1);
+  });
+
+  it('haze height is positive', () => {
+    expect(GROUND_SHADE.haze.height).toBeGreaterThan(0);
+  });
+});
+
+describe('FLOATING_TEXT and CRANK_PULSE', () => {
+  it('floating text colour is a 6-digit hex string', () => {
+    expect(FLOATING_TEXT.color).toMatch(/^#[0-9a-f]{6}$/i);
+  });
+
+  it('crank pulse peak alpha is in (0, 1] and period is positive', () => {
+    expect(CRANK_PULSE.alphaPeak).toBeGreaterThan(0);
+    expect(CRANK_PULSE.alphaPeak).toBeLessThanOrEqual(1);
+    expect(CRANK_PULSE.periodMs).toBeGreaterThan(0);
   });
 });
