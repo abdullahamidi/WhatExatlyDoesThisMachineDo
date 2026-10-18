@@ -1,14 +1,91 @@
 import { beforeAll, describe, it, expect } from 'vitest';
-import { TECH_IDS } from '../../data/types';
-import type { TechDefinition, TechId } from '../../data/types';
+import { RESOURCE_IDS, TECH_IDS } from '../../data/types';
+import type { GameState, ResourceId, TechDefinition, TechId, TechView } from '../../data/types';
 import { TECHNOLOGIES } from '../../data/technologies';
 import { runGreedy, maxPurchaseGap } from './greedy';
-import type { GreedyResult } from './greedy';
+import type { GreedyOptions, GreedyResult } from './greedy';
+import { applyClick, advance } from '../production/tick';
+import { computeRates } from '../production/rates';
+import { getAllTechViews } from '../progression/status';
+import { purchase } from '../progression/purchase';
+import { evaluateMilestones } from '../progression/milestones';
+import { createInitialState } from '../state';
 
 const CLICKS_PER_SECOND = 4;
 
 function options(seconds: number) {
   return { seconds, clicksPerSecond: CLICKS_PER_SECOND, stepSeconds: 1, buyIntervalSeconds: 1 };
+}
+
+// Test-local copy of the pre-optimisation harness: the views are recomputed for every resource.
+function referencePickCheapest(views: readonly TechView[], res: ResourceId): TechView | null {
+  let pick: TechView | null = null;
+  for (const view of views) {
+    if (view.status !== 'available' || view.nextCost === null || view.def.kind === 'milestone') continue;
+    if (view.def.costRes !== res) continue;
+    if (pick === null || pick.nextCost === null || view.nextCost < pick.nextCost) pick = view;
+  }
+  return pick;
+}
+
+function referenceRun(o: GreedyOptions): GreedyResult {
+  const techs = o.techs ?? TECHNOLOGIES;
+  let state: GameState = o.initial ?? createInitialState(0);
+  const firstAt = {} as Record<TechId, number>;
+  for (const id of TECH_IDS) firstAt[id] = Infinity;
+  const purchases: Array<{ t: number; id: TechId }> = [];
+
+  const record = (t: number): void => {
+    for (const id of TECH_IDS) {
+      if (firstAt[id] === Infinity && state.techLevels[id] >= 1) firstAt[id] = t;
+    }
+  };
+  record(0);
+
+  const steps = Math.floor(o.seconds / o.stepSeconds);
+  let clickDebt = 0;
+  let maxValue = 0;
+  const track = (value: number): void => {
+    if (!Number.isFinite(value)) maxValue = Infinity;
+    else if (value > maxValue) maxValue = value;
+  };
+
+  for (let k = 1; k <= steps; k++) {
+    const t = k * o.stepSeconds;
+
+    clickDebt += o.clicksPerSecond * o.stepSeconds;
+    const clicks = Math.floor(clickDebt + 1e-9);
+    clickDebt -= clicks;
+    for (let i = 0; i < clicks; i++) state = applyClick(state, techs).state;
+
+    state = advance(state, o.stepSeconds, techs);
+    state = evaluateMilestones(state, techs).state;
+
+    const ratio = t / o.buyIntervalSeconds;
+    if (Math.abs(ratio - Math.round(ratio)) < 1e-9) {
+      for (const res of RESOURCE_IDS) {
+        const pick = referencePickCheapest(getAllTechViews(state, techs), res);
+        if (pick !== null && pick.affordable) {
+          const result = purchase(state, pick.id, techs);
+          if (result.ok) {
+            state = result.state;
+            purchases.push({ t, id: pick.id });
+          }
+        }
+      }
+    }
+    record(t);
+
+    const rates = computeRates(state, techs);
+    for (const r of RESOURCE_IDS) {
+      track(state.res[r]);
+      track(state.lifetime[r]);
+      track(rates.perSecond[r]);
+      track(rates.perClick[r]);
+    }
+  }
+
+  return { firstAt, maxValue, final: state, purchases };
 }
 
 // Era-I table, with the generatorBlueprint lifetime requirement lowered from 200K ME to 20K ME.
@@ -60,6 +137,27 @@ describe('runGreedy', () => {
       if (def.kind === 'starting' || def.kind === 'milestone') continue;
       expect(purchases.filter((p) => p.id === id).length).toBe(final.techLevels[id]);
     }
+  });
+
+  it('the optimised harness matches the per-resource reference run (same picks, same order)', () => {
+    const opts = options(1500);
+    const fast = runGreedy(opts);
+    const reference = referenceRun(opts);
+    expect(fast.firstAt).toEqual(reference.firstAt);
+    expect(fast.purchases).toEqual(reference.purchases);
+    expect(fast.maxValue).toEqual(reference.maxValue);
+  });
+
+  it('era I exact first-purchase times hold on the optimised harness', () => {
+    const run = runGreedy(options(1500));
+    expect(run.firstAt.gearRatio).toBe(4);
+    expect(run.firstAt.wornMotor).toBe(13);
+    expect(run.firstAt.motorTuning).toBe(20);
+    expect(run.firstAt.reinforcedCrank).toBe(196);
+    expect(run.firstAt.flywheel).toBe(289);
+    expect(run.firstAt.pistonArray).toBe(722);
+    expect(run.firstAt.improvedPistons).toBe(758);
+    expect(run.firstAt.generatorBlueprint).toBe(1326);
   });
 });
 

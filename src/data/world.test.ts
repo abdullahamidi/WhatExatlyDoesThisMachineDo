@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_PULSE, CAMERA, DEPTH, PARALLAX_FADE_MS, PYLON_LINE, PYLON_FEEDS, MACHINE_ANCHOR, PIXEL_SCALE } from './world';
+import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_PULSE, CAMERA, DEPTH, PARALLAX_FADE_MS, PYLON_LINE, PYLON_FEEDS, MACHINE_ANCHOR, PIXEL_SCALE, DUST, DUST_RISING } from './world';
 import type { ParallaxLayerDef } from './world';
 import { TOAST_CONFIG } from './notifications';
 import { MACHINE_BOUNDS, MACHINE_COMPONENTS } from './machineComponents';
+import { TECH_IDS } from './types';
 
 function layer(id: string): ParallaxLayerDef {
   const found = PARALLAX_LAYERS.find((l) => l.id === id);
@@ -133,8 +134,32 @@ describe('PYLON_FEEDS (WP9 CR-A world-space cable feeds)', () => {
     expect(MACHINE_ANCHOR.x + PIXEL_SCALE * MACHINE_BOUNDS.right).toBeLessThanOrEqual(WORLD.width);
   });
 
-  it('MACHINE_BOUNDS is the era III box', () => {
-    expect(MACHINE_BOUNDS).toEqual({ left: -448, right: 448, top: -248, bottom: 8 });
+  it('MACHINE_BOUNDS is the era IV box', () => {
+    expect(MACHINE_BOUNDS).toEqual({ left: -448, right: 448, top: -470, bottom: 8 });
+  });
+
+  it('the era IV spire top stays on the world: 180 world px below the top edge at the machine anchor', () => {
+    expect(MACHINE_ANCHOR.y + PIXEL_SCALE * MACHINE_BOUNDS.top).toBe(180);
+  });
+});
+
+describe('DUST_RISING (WP10 rising dust)', () => {
+  it('is the resonator spire gate at level 1 with speedY [-18, -6] and spawn top GROUND_Y - 900', () => {
+    expect(DUST_RISING).toEqual({ techId: 'resonatorSpire', minLevel: 1, speedY: [-18, -6], spawnTopY: GROUND_Y - 900 });
+  });
+
+  it('rises: speedY is ordered and negative (screen y goes up)', () => {
+    expect(DUST_RISING.speedY[0]).toBeLessThanOrEqual(DUST_RISING.speedY[1]);
+    expect(DUST_RISING.speedY[1]).toBeLessThan(0);
+  });
+
+  it('spawns inside the world and above the normal dust spawn top', () => {
+    expect(DUST_RISING.spawnTopY).toBeGreaterThanOrEqual(0);
+    expect(DUST_RISING.spawnTopY).toBeLessThan(DUST.spawnTopY);
+  });
+
+  it('its gate tech is a known tech', () => {
+    expect(TECH_IDS).toContain(DUST_RISING.techId);
   });
 });
 

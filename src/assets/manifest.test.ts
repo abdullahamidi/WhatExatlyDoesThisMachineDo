@@ -333,13 +333,14 @@ describe('WP6c rotation sheets and sky', () => {
     'machine.pulleyMotor',
     'machine.pulleyGenerator',
     'machine.turbineRotor',
+    'machine.servoArm',
   ];
 
   it('has a disk file for the sky entry', () => {
     expect(ASSET_MANIFEST['bg.sky'].file).not.toBeNull();
   });
 
-  it('gives exactly the eleven machine ids (ten WP6 + WP8, plus the era III turbine rotor) a rotation sheet', () => {
+  it('gives exactly the twelve machine ids (ten WP6 + WP8, the era III turbine rotor, the era IV servo arm) a rotation sheet', () => {
     const withRotation = ASSET_IDS.filter((id) => ASSET_MANIFEST[id].rotation !== undefined);
     expect(withRotation.slice().sort()).toEqual([...ROTATION_IDS].sort());
   });
@@ -370,7 +371,7 @@ describe('WP6c rotation sheets and sky', () => {
         frame: { width: entry.width, height: entry.height, count: rotation.frames },
       });
       expect(
-        load?.url.startsWith('assets/machine/rot/') || load?.url.startsWith('assets/machine/era2/rot/') || load?.url.startsWith('assets/machine/era3/rot/'),
+        load?.url.startsWith('assets/machine/rot/') || load?.url.startsWith('assets/machine/era2/rot/') || load?.url.startsWith('assets/machine/era3/rot/') || load?.url.startsWith('assets/machine/era4/rot/'),
         id,
       ).toBe(true);
     }
@@ -381,5 +382,108 @@ describe('WP6c rotation sheets and sky', () => {
     for (const id of ROTATION_IDS) {
       expect(keys[keys.indexOf(id + '#rot') - 1], id).toBe(id);
     }
+  });
+});
+
+describe('WP10 era IV machine and fx assets', () => {
+  const ERA4_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; height: number; origin: { x: number; y: number } }> = [
+    { id: 'machine.spireTower', file: 'machine/era4/spire-tower.png', width: 80, height: 320, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.spireExciter', file: 'machine/era4/spire-exciter.png', width: 24, height: 32, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.spireWave', file: 'machine/era4/spire-wave.png', width: 128, height: 270, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.coilRing1', file: 'machine/era4/coil-ring-1.png', width: 248, height: 8, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.coilRing2', file: 'machine/era4/coil-ring-2.png', width: 192, height: 8, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.coilRing3', file: 'machine/era4/coil-ring-3.png', width: 144, height: 8, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.coilRing4', file: 'machine/era4/coil-ring-4.png', width: 120, height: 8, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.calliope', file: 'machine/era4/calliope.png', width: 72, height: 40, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.servoBase', file: 'machine/era4/servo-base.png', width: 28, height: 20, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.servoArm', file: 'machine/era4/servo-arm.png', width: 48, height: 48, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.koenigFork', file: 'machine/era4/koenig-fork.png', width: 88, height: 44, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.emitterDish', file: 'machine/era4/emitter-dish.png', width: 40, height: 64, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.dishWaves', file: 'machine/era4/dish-waves.png', width: 240, height: 64, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.crystal', file: 'machine/era4/crystal.png', width: 128, height: 48, origin: { x: 0.5, y: 1 } },
+  ];
+
+  it('appends the 14 era IV ids after fx.smoke, in contract order', () => {
+    expect(ASSET_IDS.length).toBe(ASSET_IDS.indexOf('fx.smoke') + 1 + 14);
+    expect(ASSET_IDS.slice(ASSET_IDS.indexOf('fx.smoke') + 1)).toEqual(ERA4_ENTRIES.map((e) => e.id));
+  });
+
+  it('has the contract file, width, height, origin and tileable none for each new id', () => {
+    for (const want of ERA4_ENTRIES) {
+      const entry = ASSET_MANIFEST[want.id];
+      expect(entry.file, want.id).toBe(want.file);
+      expect(entry.width, want.id).toBe(want.width);
+      expect(entry.height, want.id).toBe(want.height);
+      expect(entry.origin, want.id).toEqual(want.origin);
+      expect(entry.tileable, want.id).toBe('none');
+      expect(entry.description.trim().length, want.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('has a frame only for the eight sheet entries, with the contract frame sizes and counts', () => {
+    const SHEETS: ReadonlyArray<{ id: AssetId; frame: { width: number; height: number; count: number } }> = [
+      { id: 'machine.spireWave', frame: { width: 16, height: 270, count: 8 } },
+      { id: 'machine.coilRing1', frame: { width: 62, height: 8, count: 4 } },
+      { id: 'machine.coilRing2', frame: { width: 48, height: 8, count: 4 } },
+      { id: 'machine.coilRing3', frame: { width: 36, height: 8, count: 4 } },
+      { id: 'machine.coilRing4', frame: { width: 30, height: 8, count: 4 } },
+      { id: 'machine.koenigFork', frame: { width: 22, height: 44, count: 4 } },
+      { id: 'machine.dishWaves', frame: { width: 40, height: 64, count: 6 } },
+      { id: 'machine.crystal', frame: { width: 32, height: 48, count: 4 } },
+    ];
+    for (const want of SHEETS) {
+      expect(ASSET_MANIFEST[want.id].frame, want.id).toEqual(want.frame);
+    }
+    for (const id of ['machine.spireTower', 'machine.spireExciter', 'machine.calliope', 'machine.servoBase', 'machine.servoArm', 'machine.emitterDish'] as const) {
+      expect(ASSET_MANIFEST[id].frame, id).toBeUndefined();
+    }
+  });
+
+  it('gives the servo arm a 432x432 rotation sheet of 80 frames under machine/era4/rot/', () => {
+    expect(ASSET_MANIFEST['machine.servoArm'].rotation).toEqual({ file: 'machine/era4/rot/servo-arm-rot.png', frames: 80 });
+    const files = Object.keys(import.meta.glob('/public/assets/**/*.png'));
+    expect(files).toContain('/public/assets/machine/era4/rot/servo-arm-rot.png');
+  });
+
+  it('has a disk file for every era IV entry', () => {
+    const files = Object.keys(import.meta.glob('/public/assets/**/*.png'));
+    for (const want of ERA4_ENTRIES) {
+      expect(files, want.id).toContain(`/public/assets/${want.file}`);
+    }
+  });
+
+  it('plans the era IV sheet entries as spritesheets with their frame', () => {
+    const loads = planAssetLoads();
+    for (const id of ['machine.spireWave', 'machine.coilRing1', 'machine.coilRing4', 'machine.koenigFork', 'machine.dishWaves', 'machine.crystal'] as const) {
+      const load = loads.find((l) => l.key === id);
+      expect(load?.kind, id).toBe('spritesheet');
+      expect(load?.frame, id).toEqual(ASSET_MANIFEST[id].frame);
+    }
+  });
+
+  it('cuts the spire wave into 8 cells of 16x270 at x 0..112 step 16', () => {
+    const rects = sheetFrameRects(ASSET_MANIFEST['machine.spireWave']);
+    expect(rects.length).toBe(8);
+    rects.forEach((r, i) => {
+      expect(r).toEqual({ x: i * 16, y: 0, width: 16, height: 270 });
+    });
+  });
+
+  it('cuts the crystal into 4 cells of 32x48 at x 0, 32, 64, 96', () => {
+    expect(sheetFrameRects(ASSET_MANIFEST['machine.crystal'])).toEqual([
+      { x: 0, y: 0, width: 32, height: 48 },
+      { x: 32, y: 0, width: 32, height: 48 },
+      { x: 64, y: 0, width: 32, height: 48 },
+      { x: 96, y: 0, width: 32, height: 48 },
+    ]);
+  });
+
+  it('cuts the first coil ring into 4 cells of 62x8 at x 0, 62, 124, 186', () => {
+    expect(sheetFrameRects(ASSET_MANIFEST['machine.coilRing1'])).toEqual([
+      { x: 0, y: 0, width: 62, height: 8 },
+      { x: 62, y: 0, width: 62, height: 8 },
+      { x: 124, y: 0, width: 62, height: 8 },
+      { x: 186, y: 0, width: 62, height: 8 },
+    ]);
   });
 });

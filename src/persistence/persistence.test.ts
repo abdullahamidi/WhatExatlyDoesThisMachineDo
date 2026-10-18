@@ -5,6 +5,8 @@ import { SAVE_BACKUP_KEY, SAVE_KEY } from '../data/balance';
 import { TECHNOLOGIES } from '../data/technologies';
 import { createInitialState } from '../simulation/state';
 import { emptyResourceMap } from '../simulation/resources';
+import { applyOffline } from '../simulation/production/tick';
+import { computeRates } from '../simulation/production/rates';
 import { MIGRATIONS, SAVE_VERSION, migrate, migrateV1ToV2, validateEnvelope } from './schema';
 import type { Migration } from './schema';
 import { deserialize, serialize } from './codec';
@@ -438,6 +440,49 @@ describe('era III save compatibility (WP9)', () => {
     const result = deserialize(serialize(state, { muted: false }, 2000), 3000);
     expect(result.status).toBe('loaded');
     expect(result.state).toEqual(state);
+  });
+});
+
+describe('era IV save compatibility (WP10)', () => {
+  const ERA_FOUR_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 4);
+
+  it('a v2 save without any era IV keys loads as loaded with every era IV level at 0', () => {
+    const base = withLevels({ gearRatio: 2 });
+    const parsed = JSON.parse(serialize(base, { muted: false }, 2000)) as {
+      state: { techLevels: Partial<Record<TechId, number>> };
+    };
+    expect(ERA_FOUR_IDS).toHaveLength(9);
+    for (const id of ERA_FOUR_IDS) delete parsed.state.techLevels[id];
+
+    const result = deserialize(JSON.stringify(parsed), 3000);
+    expect(result.status).toBe('loaded');
+    for (const id of ERA_FOUR_IDS) expect(result.state.techLevels[id]).toBe(0);
+    expect(result.state.techLevels.gearRatio).toBe(2);
+  });
+
+  it('a round trip with era IV levels and resonance set is lossless', () => {
+    const state = withLevels(
+      { resonatorSpire: 1, harmonicCoil: 12, crankServo: 3, echoCrank: 1, harmonicConvergence: 1 },
+      {
+        res: resources({ pr: 10, rs: 1234.5 }),
+        lifetime: resources({ pr: 2000000, rs: 30000000 }),
+        totalClicks: 9,
+        lastSimTime: 1000,
+        createdAt: 500,
+      },
+    );
+    const result = deserialize(serialize(state, { muted: false }, 2000), 3000);
+    expect(result.status).toBe('loaded');
+    expect(result.state).toEqual(state);
+  });
+
+  it('offline progress counts servo auto-cranks (crankServo adds to the offline gain)', () => {
+    const hour = 3600 * 1000;
+    const withServo = withLevels({ wornMotor: 1, crankServo: 2 }, { lastSimTime: 0 });
+    const withoutServo = withLevels({ wornMotor: 1 }, { lastSimTime: 0 });
+    const { report } = applyOffline(withServo, hour);
+    expect(report.gained.me).toBeCloseTo(computeRates(withServo).perSecond.me * 3600, 6);
+    expect(report.gained.me).toBeGreaterThan(applyOffline(withoutServo, hour).report.gained.me);
   });
 });
 

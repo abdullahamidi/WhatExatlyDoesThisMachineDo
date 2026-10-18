@@ -250,6 +250,72 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     frame: { width: 16, height: 16, count: 4 },
     description: 'Four-frame dark smoke puff sheet, used for the boiler chimney.',
   },
+  // Era IV: resonance spire, coil rings, calliope, servo, fork, dishes and crystal (delivered PNGs under machine/era4/).
+  'machine.spireTower': {
+    id: 'machine.spireTower', file: 'machine/era4/spire-tower.png', width: 80, height: 320, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Lattice resonator tower on a squat base, tapering to a bare mast at the top.',
+  },
+  'machine.spireExciter': {
+    id: 'machine.spireExciter', file: 'machine/era4/spire-exciter.png', width: 24, height: 32, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Small steam exciter housing on the tower foot with a steam inlet on its left side.',
+  },
+  'machine.spireWave': {
+    id: 'machine.spireWave', file: 'machine/era4/spire-wave.png', width: 128, height: 270, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 16, height: 270, count: 8 },
+    description: 'Eight-frame standing wave sheet: a thin vibrating rod shown at one phase per frame.',
+  },
+  'machine.coilRing1': {
+    id: 'machine.coilRing1', file: 'machine/era4/coil-ring-1.png', width: 248, height: 8, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 62, height: 8, count: 4 },
+    description: 'Four-frame toroidal coil ring, widest of the four stacked windings.',
+  },
+  'machine.coilRing2': {
+    id: 'machine.coilRing2', file: 'machine/era4/coil-ring-2.png', width: 192, height: 8, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 48, height: 8, count: 4 },
+    description: 'Four-frame toroidal coil ring, second winding up the tower.',
+  },
+  'machine.coilRing3': {
+    id: 'machine.coilRing3', file: 'machine/era4/coil-ring-3.png', width: 144, height: 8, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 36, height: 8, count: 4 },
+    description: 'Four-frame toroidal coil ring, third winding up the tower.',
+  },
+  'machine.coilRing4': {
+    id: 'machine.coilRing4', file: 'machine/era4/coil-ring-4.png', width: 120, height: 8, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 30, height: 8, count: 4 },
+    description: 'Four-frame toroidal coil ring, narrowest winding at the top of the coil.',
+  },
+  'machine.calliope': {
+    id: 'machine.calliope', file: 'machine/era4/calliope.png', width: 72, height: 40, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Calliope: a row of three steam whistles on a brass-trimmed manifold box.',
+  },
+  'machine.servoBase': {
+    id: 'machine.servoBase', file: 'machine/era4/servo-base.png', width: 28, height: 20, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Low servo gearbox housing with a bolted foot and an empty hub seat on top.',
+  },
+  'machine.servoArm': {
+    id: 'machine.servoArm', file: 'machine/era4/servo-arm.png', width: 48, height: 48, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    rotation: { file: 'machine/era4/rot/servo-arm-rot.png', frames: 80 },
+    description: 'Servo arm seen face-on: a hub, a toothed arm and a pin boss that the coupling rod hooks onto.',
+  },
+  'machine.koenigFork': {
+    id: 'machine.koenigFork', file: 'machine/era4/koenig-fork.png', width: 88, height: 44, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 22, height: 44, count: 4 },
+    description: 'Four-frame Koenig tuning fork sheet, the tines swinging as it rings.',
+  },
+  'machine.emitterDish': {
+    id: 'machine.emitterDish', file: 'machine/era4/emitter-dish.png', width: 40, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Parabolic emitter dish on a yoke, facing outward from the tower.',
+  },
+  'machine.dishWaves': {
+    id: 'machine.dishWaves', file: 'machine/era4/dish-waves.png', width: 240, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 40, height: 64, count: 6 },
+    description: 'Six-frame sheet of the rings of wave light that leave an emitter dish.',
+  },
+  'machine.crystal': {
+    id: 'machine.crystal', file: 'machine/era4/crystal.png', width: 128, height: 48, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 32, height: 48, count: 4 },
+    description: 'Four-frame quartz crystal sheet seated in the crown, one glow level per frame.',
+  },
 };
 
 export interface AssetLoad {

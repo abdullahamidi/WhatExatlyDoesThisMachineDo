@@ -32,6 +32,15 @@ describe('PALETTE_CSS', () => {
     expect(PALETTE.steam).toBe(0xe8e0cc);
   });
 
+  it('has the three Era IV verdigris keys for the resonance machine', () => {
+    expect(PALETTE_CSS.verdigrisDark).toBe('#3f5e52');
+    expect(PALETTE_CSS.verdigris).toBe('#7fae96');
+    expect(PALETTE_CSS.verdigrisLight).toBe('#cfe8d6');
+    expect(PALETTE.verdigrisDark).toBe(0x3f5e52);
+    expect(PALETTE.verdigris).toBe(0x7fae96);
+    expect(PALETTE.verdigrisLight).toBe(0xcfe8d6);
+  });
+
   it('has the same keys as PALETTE', () => {
     expect(Object.keys(PALETTE_CSS).sort()).toEqual(Object.keys(PALETTE).sort());
   });

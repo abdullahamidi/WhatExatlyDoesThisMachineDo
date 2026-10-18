@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { STEAM_EMITTERS, STEAM_FX, HAMMER_FX, MILESTONE_BURST } from './steamFx';
+import { STEAM_EMITTERS, STEAM_FX, HAMMER_FX, MILESTONE_BURST, MILESTONE_BURSTS } from './steamFx';
 import type { SteamEmitter } from './steamFx';
 import { TECH_IDS } from './types';
 import { TECHNOLOGIES } from './technologies';

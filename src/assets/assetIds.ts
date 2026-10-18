@@ -7,5 +7,7 @@ export const ASSET_IDS = ['bg.sky','bg.mountains','bg.skyline','bg.pylons','terr
   'machine.motorRetrofit','machine.dynamo','machine.capacitorRack','machine.sparkGap','machine.transformer','machine.cableMast',
   'machine.boiler','machine.chimney','machine.steamManifold','machine.gauge','machine.gaugeNeedle',
   'machine.fireGlow1','machine.fireGlow2','machine.fireGlow3','machine.inductionHeater','machine.superheater','machine.reliefValves','machine.steamHammer','machine.hammerRam',
-  'machine.condenser','machine.turbine','machine.turbineRotor','fx.steamPuff','fx.smoke'] as const;
+  'machine.condenser','machine.turbine','machine.turbineRotor','fx.steamPuff','fx.smoke',
+  'machine.spireTower','machine.spireExciter','machine.spireWave','machine.coilRing1','machine.coilRing2','machine.coilRing3','machine.coilRing4',
+  'machine.calliope','machine.servoBase','machine.servoArm','machine.koenigFork','machine.emitterDish','machine.dishWaves','machine.crystal'] as const;
 export type AssetId = typeof ASSET_IDS[number];

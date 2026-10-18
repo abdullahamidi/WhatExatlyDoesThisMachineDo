@@ -49,6 +49,9 @@ export const DUST: { maxParticles: number; frequencyMs: number; lifespanMs: [num
   { maxParticles: 60, frequencyMs: 250, lifespanMs: [6000, 11000], speedX: [10, 30], speedY: [-4, 4],
     alpha: [0, 0.35] /* [end, start] fade */, scale: [1, 2.5], depth: DEPTH.dust,
     spawnTopY: GROUND_Y - 520, spawnBottomY: GROUND_Y - 20 };
+/** Rising dust once the spire stands (Era IV): mote speedY [-18, -6] world px/s, spawn top GROUND_Y - 900. */
+export const DUST_RISING: { techId: TechId; minLevel: number; speedY: [number, number]; spawnTopY: number } =
+  { techId: 'resonatorSpire', minLevel: 1, speedY: [-18, -6], spawnTopY: GROUND_Y - 900 };
 export const CRANK_FEEDBACK = { degreesPerClick: 90, tweenMs: 160, shakePx: 1 /* art px */, shakeMs: 60,
   floatRisePx: 40, floatMs: 1100, floatPoolSize: 24, hitRadius: 36 /* art px, crank click area */ } as const;
 export const FLOATING_TEXT = { fontSizePx: 24, strokePx: 4, jitterX: 14, spawnOffsetY: -56, color: '#ffd27a' } as const;   // world px

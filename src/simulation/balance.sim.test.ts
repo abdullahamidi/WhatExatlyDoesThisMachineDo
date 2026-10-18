@@ -9,11 +9,11 @@ import type { GreedyResult } from './sim/greedy';
 
 // Deterministic greedy-player simulation. Proves the pacing targets of the retuned tech table
 // (docs/plan/WP5.md), that era I is unchanged by the multi-resource economy (WP7), that the
-// era II (Electrical) pacing targets hold (WP8) and that the era III (Thermal) targets hold (WP9).
-// No clock, no randomness, no rendering.
+// era II (Electrical) pacing targets hold (WP8), that the era III (Thermal) targets hold (WP9)
+// and that the era IV (Resonance) targets hold (WP10). No clock, no randomness, no rendering.
 // Re-run: npx vitest run src/simulation/balance.sim.test.ts
 
-const MAIN_SECONDS = 10800;
+const MAIN_SECONDS = 12600;
 const CLICKS_PER_SECOND = 4;
 
 function eraOneOptions(buyIntervalSeconds: number) {
@@ -22,11 +22,15 @@ function eraOneOptions(buyIntervalSeconds: number) {
 
 // Profiles. A = main greedy run; B = slow buyer; C = casual clicker (no offline progress).
 const PROFILE_A = eraOneOptions(1);
-const PROFILE_B = { seconds: 12600, clicksPerSecond: CLICKS_PER_SECOND, stepSeconds: 1, buyIntervalSeconds: 30 };
-const PROFILE_C = { seconds: 21600, clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30 };
+const PROFILE_B = { seconds: 13800, clicksPerSecond: CLICKS_PER_SECOND, stepSeconds: 1, buyIntervalSeconds: 30 };
+const PROFILE_C = { seconds: 23400, clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30 };
 
 const ERA_TWO_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 2);
 const ERA_THREE_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 3);
+const ERA_FOUR_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 4);
+
+// Prefix of run A used by the determinism checks (a 3600 s run must match A's first hour exactly).
+const PREFIX_SECONDS = 3600;
 
 function formatMmSs(seconds: number): string {
   if (!Number.isFinite(seconds)) return 'never';
@@ -35,12 +39,21 @@ function formatMmSs(seconds: number): string {
   return `${mm}:${ss}`;
 }
 
-// Each profile is computed once per file. `aAgain` is the single extra determinism run.
+// Each profile is computed once per file. `aPrefix` is the single extra determinism run (first hour of A).
 let a: GreedyResult;
-let aAgain: GreedyResult;
+let aPrefix: GreedyResult;
 let aMs = 0;
 let b: GreedyResult;
 let c: GreedyResult;
+
+/** A prefix run must reproduce exactly the first `PREFIX_SECONDS` of the full run. */
+function expectPrefixOfFullRun(prefix: GreedyResult, full: GreedyResult): void {
+  for (const id of TECH_IDS) {
+    const expected = full.firstAt[id] <= PREFIX_SECONDS ? full.firstAt[id] : Infinity;
+    expect(prefix.firstAt[id]).toBe(expected);
+  }
+  expect(prefix.purchases).toEqual(full.purchases.filter((p) => p.t <= PREFIX_SECONDS));
+}
 
 beforeAll(() => {
   const start = Date.now();
@@ -48,7 +61,7 @@ beforeAll(() => {
   aMs = Date.now() - start;
   b = runGreedy(PROFILE_B);
   c = runGreedy(PROFILE_C);
-  aAgain = runGreedy(PROFILE_A);
+  aPrefix = runGreedy({ ...PROFILE_A, seconds: PREFIX_SECONDS });
   console.table(
     TECH_IDS.map((id) => ({
       tech: id,
@@ -96,8 +109,8 @@ describe('greedy balance simulation (WP5 pacing targets)', () => {
     expect(a.maxValue).toBeLessThan(DESIGN_MAX_VALUE);
   });
 
-  it('is deterministic: two runs give identical firstAt', () => {
-    expect(aAgain.firstAt).toEqual(a.firstAt);
+  it('is deterministic: the first hour of a run equals the same hour of the full run', () => {
+    expectPrefixOfFullRun(aPrefix, a);
   });
 
   it('a 30 s buy interval never reaches a tech earlier than the 1 s interval', () => {
@@ -166,9 +179,8 @@ describe('era II pacing targets (WP8 Electrical)', () => {
     }
   });
 
-  it('A is deterministic: firstAt and purchases repeat exactly', () => {
-    expect(aAgain.firstAt).toEqual(a.firstAt);
-    expect(aAgain.purchases).toEqual(a.purchases);
+  it('A is deterministic: firstAt and purchases repeat exactly over the first hour', () => {
+    expectPrefixOfFullRun(aPrefix, a);
   });
 });
 
@@ -205,6 +217,54 @@ describe('era III pacing targets (WP9 Thermal)', () => {
         run.firstAt.pressureVesselBlueprint,
       );
       expect(gap).toBeLessThanOrEqual(1200);
+    }
+  });
+});
+
+describe('era IV pacing targets (WP10 Resonance)', () => {
+  it('A: resonatorSpire reached at 7050-7800 s', () => {
+    expect(a.firstAt.resonatorSpire).toBeGreaterThanOrEqual(7050);
+    expect(a.firstAt.resonatorSpire).toBeLessThanOrEqual(7800);
+  });
+
+  it('A: harmonicConvergence reached at 9900-12300 s', () => {
+    expect(a.firstAt.harmonicConvergence).toBeGreaterThanOrEqual(9900);
+    expect(a.firstAt.harmonicConvergence).toBeLessThanOrEqual(12300);
+  });
+
+  it('A: every era-IV tech is reached', () => {
+    for (const id of ERA_FOUR_IDS) {
+      expect(Number.isFinite(a.firstAt[id])).toBe(true);
+    }
+  });
+
+  it('B: harmonicConvergence reached by 12900 s', () => {
+    expect(b.firstAt.harmonicConvergence).toBeLessThanOrEqual(12900);
+  });
+
+  it('C: harmonicConvergence reached by 22800 s', () => {
+    expect(c.firstAt.harmonicConvergence).toBeLessThanOrEqual(22800);
+  });
+
+  it('C: crankServo reaches level 5 or more by the end of the run', () => {
+    expect(c.final.techLevels.crankServo).toBeGreaterThanOrEqual(5);
+  });
+
+  it('no purchase gap longer than 1200 s between pressureVesselBlueprint and harmonicConvergence (A, B, C)', () => {
+    for (const run of [a, b, c]) {
+      const gap = maxPurchaseGap(
+        run.purchases,
+        run.firstAt.pressureVesselBlueprint,
+        run.firstAt.harmonicConvergence,
+      );
+      expect(gap).toBeLessThanOrEqual(1200);
+    }
+  });
+
+  it('maxValue is finite and below the design ceiling for A, B and C (era IV)', () => {
+    for (const run of [a, b, c]) {
+      expect(Number.isFinite(run.maxValue)).toBe(true);
+      expect(run.maxValue).toBeLessThan(DESIGN_MAX_VALUE);
     }
   });
 });

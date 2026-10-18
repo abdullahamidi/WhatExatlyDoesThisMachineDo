@@ -74,13 +74,16 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
 
     const ratio = t / o.buyIntervalSeconds;
     if (Math.abs(ratio - Math.round(ratio)) < 1e-9) {
+      // views are rebuilt only after a successful purchase: identical picks, far fewer rebuilds
+      let views = getAllTechViews(state, techs);
       for (const res of RESOURCE_IDS) {
-        const pick = pickCheapest(getAllTechViews(state, techs), res);
+        const pick = pickCheapest(views, res);
         if (pick !== null && pick.affordable) {
           const result = purchase(state, pick.id, techs);
           if (result.ok) {
             state = result.state;
             purchases.push({ t, id: pick.id });
+            views = getAllTechViews(state, techs);
           }
         }
       }
