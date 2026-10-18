@@ -41,5 +41,10 @@ Iteration loop:
    fix assignments go back to workers.
 6. Director updates `docs/PROJECT_STATUS.md`, commits, reports a 3–6 line summary to the user.
 
+Project-local agent definitions are loaded only at session start. In a session where they were created
+mid-session (or are otherwise not registered), invoke each role as a `general-purpose` agent with the
+matching `model` override (`opus` / `sonnet` / `haiku`) and instruct it to read and follow its definition
+file in `.claude/agents/`. Verify the effective model from the subagent transcript's `"model"` field.
+
 No global forced subagent model setting is used — each role's model comes from its own frontmatter.
 If a requested model is unavailable, report it rather than substituting a more expensive one.
