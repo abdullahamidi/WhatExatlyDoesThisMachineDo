@@ -24,7 +24,7 @@ Accent (orange/yellow) only for small glints, heat, warning paint — never larg
 
 ## Tools
 - Machine parts: `create_image_pro` (no_background true, palette above, `style_image_url` = approved anchor after step 1).
-- Backgrounds: `create_image_pro` with no_background false, palette above, `max_colors` ≤ 12.
+- Backgrounds: `create_image_pro` with **no_background true** (layers are alpha-blended over a separate sky image — sky area MUST be transparent), palette above, `max_colors` ≤ 6–8. Ground tile: no_background false.
 - Cleanup on every approved image: `pixelart_workbench` `repair <id>`, then `lint <id>`; fix flagged orphan pixels/outline gaps.
 - Download final PNG via the returned download URL into `public/assets/...` (exact path below).
 
@@ -54,3 +54,10 @@ the exact size honouring the pivot rule — never resample/scale.
 ## Approved anchor
 machine.flywheel = job 344ab19d-a156-4ed0-8aab-fc27fedf71b5 index 0 (workbench score 97.2).
 Style URL for `style_image_url`: https://api.pixellab.ai/mcp/images/344ab19d-a156-4ed0-8aab-fc27fedf71b5/download?index=0
+
+## Background REDO prompts (Opus review round 1 — all rejected)
+- bg.mountains: "transparent background, no sky. One low-contrast distant ridge silhouette in #9c9182/#b8a98f, faint ruin silhouettes in #7d8286 only. Ridge peaks between y=90 and y=140 and meets the left and right edges at the same height (y≈135). Solid #5a5f63 from y=156 down. No creatures, no objects, no black, no outlines, no foreground." max_colors 6.
+- bg.skyline: "transparent background. Ruined towers and girders in #2b2e31/#3e4246/#5a5f63 only, a few dim #6e3a22 windows, no haze or smoke smears, no ink-black foreground rubble. Building bases on y=220, solid #2b2e31 from y=220 down. The outer 16px at the left and right edges are low rubble at the same height."
+- bg.pylons: "single pylon centred at x=128, feet exactly on y=156, about 130px tall (top near y=24). Fully transparent below y=156: no ground, rubble or grass. Cables hang from the crossarm tips and droop to their lowest point at the left and right image edges, crossing both edges at the same heights (y≈84 and y≈96)." Then clear rows ≥157 by pixel fill.
+- terrain.ground: "seamless texture, orthographic view straight down onto flat cracked dry earth. Even density everywhere: no horizon, haze, gradient, paths or diagonal streaks. Base #8a7a64 with #a8957a/#c9b28a crack plates, #5f5244 fine cracks, a few small pebbles."
+Post-fix by pixel ops (allowed): force solid bands below ground lines, clear transparent zones, seam inpaint.
