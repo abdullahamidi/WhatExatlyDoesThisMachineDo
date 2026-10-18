@@ -91,3 +91,44 @@ export function worldToClient(
     y: canvasRect.top + (screenY * canvasRect.height) / gameSize.height,
   };
 }
+
+export interface Bounds { left: number; top: number; right: number; bottom: number }
+
+// visible world rect of a camera: centre +- view / (2 * zoom) per axis
+export function viewBounds(center: Vec2, zoom: number, view: Size): Bounds {
+  const halfW = view.width / (2 * zoom);
+  const halfH = view.height / (2 * zoom);
+  return { left: center.x - halfW, top: center.y - halfH, right: center.x + halfW, bottom: center.y + halfH };
+}
+
+// true when b, grown by margin on every side, lies inside view (edges inclusive)
+export function boundsInView(b: Bounds, view: Bounds, margin: number): boolean {
+  return b.left - margin >= view.left && b.right + margin <= view.right
+    && b.top - margin >= view.top && b.bottom + margin <= view.bottom;
+}
+
+export interface FitViewOptions {
+  margin: number;
+  pixelScale: number;
+  minZoom: number;
+  maxZoom: number;
+  defaultZoom: number;
+  defaultCenter: Vec2;
+  world: Size;
+}
+
+// default view when b already fits it (with margin); otherwise the largest grid zoom that fits b, capped at
+// defaultZoom, centred on b and clamped inside the world
+export function fitView(b: Bounds, view: Size, o: FitViewOptions): { center: Vec2; zoom: number } {
+  const defaultCenter = clampCenter(o.defaultCenter, o.defaultZoom, view, o.world);
+  if (boundsInView(b, viewBounds(defaultCenter, o.defaultZoom, view), o.margin)) {
+    return { center: defaultCenter, zoom: o.defaultZoom };
+  }
+  const boundsWidth = b.right - b.left;
+  const boundsHeight = b.bottom - b.top;
+  const fit = Math.min(view.width / (boundsWidth + 2 * o.margin), view.height / (boundsHeight + 2 * o.margin));
+  const step = zoomStep(o.pixelScale);
+  const zoom = clampZoom(Math.floor(fit / step + 1e-9) * step, o.minZoom, Math.min(o.maxZoom, o.defaultZoom));
+  const centre = { x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 };
+  return { center: clampCenter(centre, zoom, view, o.world), zoom };
+}

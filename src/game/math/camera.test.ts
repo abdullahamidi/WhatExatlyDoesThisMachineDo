@@ -10,9 +10,17 @@ import {
   zoomStep,
   snapZoom,
   wheelToSnappedZoom,
+  viewBounds,
+  boundsInView,
+  fitView,
 } from './camera';
-import type { RectLike } from './camera';
+import type { Bounds, FitViewOptions, RectLike } from './camera';
 import { VIEW, WORLD, CAMERA } from '../../data/world';
+import { TECH_IDS } from '../../data/types';
+import type { TechId } from '../../data/types';
+import { TECHNOLOGIES } from '../../data/technologies';
+import { createInitialState } from '../../simulation';
+import { visibleMachineBounds, boundsToWorld } from './machineBounds';
 
 describe('minZoomToFit / clampZoom', () => {
   it('derives the fit-to-world minimum zoom', () => {
@@ -230,5 +238,99 @@ describe('zoom grid (pixel-perfect steps)', () => {
     expect(z).toBe(2);
     for (let i = 0; i < 4; i++) z = wheelToSnappedZoom(z, 1, PS, MIN, MAX);
     expect(z).toBe(1);
+  });
+});
+
+describe('viewBounds / boundsInView', () => {
+  it('spans view / zoom around the centre, symmetrically', () => {
+    const b = viewBounds({ x: 1280, y: 960 }, 2, { width: 1280, height: 720 });
+    expect(b).toEqual({ left: 960, top: 780, right: 1600, bottom: 1140 });
+    expect((b.left + b.right) / 2).toBe(1280);
+    expect((b.top + b.bottom) / 2).toBe(960);
+  });
+
+  it('accepts a box inside the view and a box exactly on the margin edge', () => {
+    const view: Bounds = { left: 0, top: 0, right: 100, bottom: 100 };
+    expect(boundsInView({ left: 20, top: 20, right: 80, bottom: 80 }, view, 10)).toBe(true);
+    expect(boundsInView({ left: 10, top: 10, right: 90, bottom: 90 }, view, 10)).toBe(true);
+    expect(boundsInView({ left: 0, top: 0, right: 100, bottom: 100 }, view, 0)).toBe(true);
+  });
+
+  it('rejects a box 1 px outside the margin on any side', () => {
+    const view: Bounds = { left: 0, top: 0, right: 100, bottom: 100 };
+    expect(boundsInView({ left: 10, top: 10, right: 90, bottom: 90 }, view, 11)).toBe(false);
+    expect(boundsInView({ left: 10, top: 10, right: 91, bottom: 90 }, view, 10)).toBe(false);
+    expect(boundsInView({ left: 9, top: 10, right: 90, bottom: 90 }, view, 10)).toBe(false);
+    expect(boundsInView({ left: 10, top: 10, right: 90, bottom: 101 }, view, 0)).toBe(false);
+  });
+});
+
+describe('fitView', () => {
+  const FIT: FitViewOptions = {
+    margin: 48,
+    pixelScale: 2,
+    minZoom: 0.5,
+    maxZoom: 2,
+    defaultZoom: 1,
+    defaultCenter: { x: 1280, y: 960 },
+    world: WORLD,
+  };
+
+  /** Era-I levels: every era-I tech at its max (null max = 1), era-II techs at 0. */
+  function eraOneMaxed(): Record<TechId, number> {
+    const levels: Record<TechId, number> = { ...createInitialState(0).techLevels };
+    for (const id of TECH_IDS) {
+      const def = TECHNOLOGIES[id];
+      if (def.era === 1) levels[id] = def.maxLevel ?? 1;
+    }
+    return levels;
+  }
+
+  it('keeps the default view when the bounds already fit it, centre clamped in the world', () => {
+    const b: Bounds = { left: 900, top: 700, right: 1000, bottom: 800 };
+    expect(fitView(b, VIEW, FIT)).toEqual({ center: { x: 1280, y: 960 }, zoom: 1 });
+    const small: Bounds = { left: 100, top: 100, right: 200, bottom: 200 };
+    expect(fitView(small, VIEW, { ...FIT, defaultCenter: { x: 100, y: 100 } })).toEqual({ center: { x: 640, y: 360 }, zoom: 1 });
+  });
+
+  it('returns the default view for the full era-I machine bounds', () => {
+    const b = boundsToWorld(visibleMachineBounds(eraOneMaxed()));
+    expect(fitView(b, VIEW, FIT)).toEqual({ center: { x: 1280, y: 960 }, zoom: 1 });
+  });
+
+  it('fits a 1232-wide bounds at zoom 0.75', () => {
+    const b: Bounds = { left: 1000, top: 500, right: 2232, bottom: 900 };
+    expect(fitView(b, VIEW, FIT)).toEqual({ center: { x: 1616, y: 700 }, zoom: 0.75 });
+  });
+
+  it('caps a small far-right bounds at the default zoom and centres on it', () => {
+    const b: Bounds = { left: 1850, top: 900, right: 1900, bottom: 950 };
+    expect(fitView(b, VIEW, FIT)).toEqual({ center: { x: 1875, y: 925 }, zoom: 1 });
+  });
+
+  it('falls back to minZoom when the bounds are wider than the world', () => {
+    const b: Bounds = { left: 0, top: 0, right: 2600, bottom: 100 };
+    expect(fitView(b, VIEW, FIT)).toEqual({ center: { x: 1280, y: 720 }, zoom: 0.5 });
+  });
+
+  it('clamps the centre inside the world for bounds at the world edge', () => {
+    const b: Bounds = { left: 2400, top: 1300, right: 2560, bottom: 1440 };
+    const out = fitView(b, VIEW, FIT);
+    expect(out.center).toEqual({ x: 1920, y: 1080 });
+    expect(out.zoom).toBe(1);
+  });
+
+  it('always returns a zoom on the k * step grid', () => {
+    const step = 0.25;
+    const sizes: Array<[number, number]> = [[100, 50], [500, 200], [900, 400], [1232, 400], [1600, 300], [2600, 100]];
+    for (const [w, h] of sizes) {
+      for (const x0 of [0, 700, 1500]) {
+        const b: Bounds = { left: x0, top: 200, right: x0 + w, bottom: 200 + h };
+        const { zoom } = fitView(b, VIEW, FIT);
+        expect(Math.abs(zoom / step - Math.round(zoom / step))).toBeLessThan(1e-9);
+        expect(zoom).toBeGreaterThanOrEqual(0.5);
+        expect(zoom).toBeLessThanOrEqual(1);
+      }
+    }
   });
 });
