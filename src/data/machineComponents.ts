@@ -45,17 +45,17 @@ export interface MachineComponentDefinition {
 export interface MachineLink { from: { component: MachineComponentId; point: string }; to: { component: MachineComponentId; point: string }; kind: ConnectionPoint['kind'] }
 
 /** Machine-local art px bounding box of the whole machine. */
-export const MACHINE_BOUNDS = { left: -200, right: 200, top: -260, bottom: 0 };
+export const MACHINE_BOUNDS = { left: -200, right: 200, top: -200, bottom: 8 };
 
 /** Machine-local art px positions of every socket. */
 // PROVISIONAL: art is being remade; tuning edits numbers only.
 export const MACHINE_SOCKETS: Record<SocketId, Vec2> = {
-  crankHub: { x: -60, y: -43 },
-  smallGearHub: { x: -30, y: -52 },
-  largeGearHub: { x: 8, y: -66 },
-  pistonBed: { x: 54, y: -48 },
+  crankHub: { x: -62, y: -78 },
+  smallGearHub: { x: -30, y: -30 },
+  largeGearHub: { x: 4, y: -62 },
+  pistonBed: { x: 40, y: -106 },
   flywheelHub: { x: 150, y: -48 },
-  motorMount: { x: -150, y: -24 },
+  motorMount: { x: -140, y: -16 },
 };
 
 /** Motion: manual activity decay, frame clamp and rest threshold (compares the DRIVER value, not speed). */
@@ -155,7 +155,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     size: { width: 64, height: 48 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid',
     animation: { kind: 'vibrate', driver: 'automation', amplitude: 1, speed: { base: 8, gain: 0.3, min: 2, max: 20 } },
-    connections: [{ id: 'pulley', at: { x: -20, y: -6 }, kind: 'belt', radius: 8 }],
+    connections: [{ id: 'pulley', at: { x: 24, y: -4 }, kind: 'belt', radius: 8 }],
     effects: [{ kind: 'vibrate', driver: 'automation', threshold: 1, intensity: 0.5 }],
   },
   pistonArray: {
