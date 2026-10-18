@@ -30,7 +30,7 @@ export const FINALE_TRACKS: Record<FinaleTrackId, { startS: number; durS: number
   { sky: { startS: 19.3, durS: 8 }, glow: { startS: 19.3, durS: 4 }, mountains: { startS: 27.3, durS: 6 }, skyline: { startS: 29.3, durS: 8 },
     ground: { startS: 21.3, durS: 3 } };   // ground = reduced-motion crossfade only
 export const FINALE_DUST = { reverseAtS: 19.3, reverseS: 6, speedY: [6, 18] } as const;   // then stopped
-export const FINALE_WIPE = { startS: 21.3, pxPerS: 120, bandPx: 16, maxStepPx: 48, stepPx: 4, seed: 41, regrowthLagS: [2, 5, 8] } as const;   // world px; edge 0..24 screen px at the full view (16 read as a ruler edge, in-game review WP13 #6)
+export const FINALE_WIPE = { startS: 21.3, pxPerS: 120, bandPx: 16, maxStepPx: 32, stepPx: 4, seed: 41, regrowthLagS: [2, 5, 8] } as const;   // world px; edge 0..16 screen px at the full view (16 read as a ruler edge, in-game review WP13 #6)
 export const RESTORED_GROUND = { groundAssetId: 'terrain.groundGreen' satisfies AssetId, groundDepth: DEPTH.ground + 0.5,
   regrowth: [{ assetId: 'bg.regrowth1' }, { assetId: 'bg.regrowth2' }, { assetId: 'bg.regrowth3' }] satisfies readonly { assetId: AssetId }[], regrowthDepth: DEPTH.ground + 2,
   regrowthBottomOffsetPx: 6 } as const;
