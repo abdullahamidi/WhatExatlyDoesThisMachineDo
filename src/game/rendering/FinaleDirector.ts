@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import type { GameSession } from '../../simulation';
 import { motionPolicy } from '../../simulation/settings';
 import type { EndingPhase } from '../../data/types';
-import { FINALE_BOOST, FINALE_CLOCK, FINALE_PLATE } from '../../data/finale';
+import { FINALE_BOOST, FINALE_CLOCK, FINALE_PLATE, FINALE_REVEAL } from '../../data/finale';
 import type { FinaleBeat } from '../../data/finale';
 import { MACHINE_COMPONENTS } from '../../data/machineComponents';
 import { beatsBetween, finaleEndS, finaleFrame } from '../math/finale';
@@ -64,6 +64,8 @@ export class FinaleDirector {
   private neutralApplied = false;
   private overriding = false;
   private frame: FinaleFrame | null = null;
+  /** High-water mark of the film clock: beats at or before it have fired this run (seeking back never refires). */
+  private firedUpTo = 0;
   private readonly costs: number[] = [];
   private costCursor = 0;
   private destroyed = false;
@@ -83,7 +85,7 @@ export class FinaleDirector {
     // 'postgame' show the end state at once.
     const phase = this.phase();
     if (phase === 'sequence') this.begin();
-    if (phase === 'choice' || phase === 'postgame') this.t = finaleEndS();
+    if (phase === 'choice' || phase === 'postgame') this.t = this.endS();
     this.present(0);
   }
 
@@ -101,10 +103,11 @@ export class FinaleDirector {
   skip(): void {
     if (this.destroyed || this.phase() !== 'sequence') return;
     const prev = this.t;
-    this.t = Math.max(prev, finaleEndS());
-    for (const beat of beatsBetween(prev, this.t)) {
+    this.t = Math.max(prev, this.endS());
+    for (const beat of beatsBetween(Math.max(prev, this.firedUpTo), this.t)) {
       if (beat === 'plate' || beat === 'chord') this.fireBeat(beat);
     }
+    this.firedUpTo = Math.max(this.firedUpTo, this.t);
     this.deps.session.finishEndingSequence();
   }
 
@@ -148,6 +151,11 @@ export class FinaleDirector {
     return this.deps.session.state.ending.phase;
   }
 
+  /** Film time the buttons are up, in the reduced-motion mode this run uses (matches typewriter). */
+  private endS(): number {
+    return finaleEndS(FINALE_REVEAL, this.reduced);
+  }
+
   private readReduced(): boolean {
     return !motionPolicy(this.deps.session.settings).flashes;
   }
@@ -161,6 +169,7 @@ export class FinaleDirector {
   private begin(): void {
     if (this.destroyed) return;
     this.t = 0;
+    this.firedUpTo = 0;
     this.reduced = this.readReduced();
     this.start = this.cameraPose();
     this.neutralApplied = false;
@@ -170,23 +179,25 @@ export class FinaleDirector {
   private reset(): void {
     if (this.destroyed) return;
     this.t = 0;
+    this.firedUpTo = 0;
     this.neutralApplied = false;
     this.present(0);
   }
 
-  /** Moves the clock; during the sequence fires the crossed beats and finishes at finaleEndS. */
+  /** Moves the clock; during the sequence fires the beats crossed past the high-water mark and finishes at endS. */
   private moveTo(next: number): void {
     const prev = this.t;
     this.t = next;
     if (this.phase() !== 'sequence') return;
-    for (const beat of beatsBetween(prev, next)) this.fireBeat(beat);
-    if (next >= finaleEndS()) this.deps.session.finishEndingSequence(); // after the last line types and the buttons appear
+    for (const beat of beatsBetween(Math.max(prev, this.firedUpTo), next)) this.fireBeat(beat);
+    this.firedUpTo = Math.max(this.firedUpTo, next);
+    if (next >= this.endS()) this.deps.session.finishEndingSequence(); // after the last line types and the buttons appear
   }
 
   private fireBeat(beat: FinaleBeat): void {
     const d = this.deps;
     if (beat === 'calliope') d.steamFx.fireBurst(FINALE_BOOST.calliope.emitter, FINALE_BOOST.calliope.count);
-    else if (beat === 'plate') d.fx.plateDust(d.machine.getComponentWorldPosition(PLATE_ID), FINALE_PLATE.puffs);
+    else if (beat === 'plate' && !this.reduced) d.fx.plateDust(d.machine.getComponentWorldPosition(PLATE_ID), FINALE_PLATE.puffs);
     if (beat !== 'flock') d.emitBeat(beat);
   }
 

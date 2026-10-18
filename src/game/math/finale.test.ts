@@ -39,6 +39,37 @@ describe('timeline', () => {
     expect(finaleEndS(cfg)).toBeCloseTo(14.2 + 0.2 + 0.5, 9);
   });
 
+  it('reduced finaleEndS skips the last line typing (choice start + buttonsDelayS)', () => {
+    expect(finaleEndS(FINALE_REVEAL, true)).toBeCloseTo(choiceStartS() + FINALE_REVEAL.buttonsDelayS, 9);
+    expect(finaleEndS(FINALE_REVEAL, true)).toBeLessThan(finaleEndS());
+    expect(finaleEndS(FINALE_REVEAL, false)).toBe(finaleEndS());
+  });
+
+  it('finaleEndS(cfg, reduced) is the earliest film time the typewriter shows the buttons, in both modes', () => {
+    const cfgs: RevealCfg[] = [
+      FINALE_REVEAL,
+      { startS: 10, nameplateFadeMs: 800, holdS: 1, cps: 10, linePauseS: 2, lines: ['abcd'], lastLine: 'xy', buttonsDelayS: 0.5 },
+    ];
+    for (const cfg of cfgs) {
+      for (const reduced of [false, true]) {
+        const end = finaleEndS(cfg, reduced);
+        const buttonsAt = (t: number): boolean => typewriter(t - cfg.startS, cfg, reduced).buttons;
+        expect(buttonsAt(end - 1e-6)).toBe(false);
+        expect(buttonsAt(end + 1e-6)).toBe(true);
+        // bisection over film time: buttons is monotone, so the edge it finds is the first true sample
+        let lo = 0;
+        let hi = end + 1;
+        expect(buttonsAt(hi)).toBe(true);
+        for (let i = 0; i < 80; i++) {
+          const mid = (lo + hi) / 2;
+          if (buttonsAt(mid)) hi = mid;
+          else lo = mid;
+        }
+        expect(hi).toBeCloseTo(end, 6);
+      }
+    }
+  });
+
   it('shotAt switches at every shot boundary', () => {
     expect(shotAt(0)).toBe('S0');
     expect(shotAt(1.99)).toBe('S0');

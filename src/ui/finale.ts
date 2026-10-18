@@ -180,6 +180,12 @@ export function createFinaleOverlay(root: HTMLElement, deps: FinaleOverlayDeps):
     cycleReason.textContent = '';
   };
 
+  /** Traps Tab inside the overlay for the whole time it is shown (sequence and choice). Disposes any previous trap first. */
+  function armFocusTrap(): void {
+    if (disposeFocusTrap !== null) disposeFocusTrap();
+    disposeFocusTrap = trapFocus(overlay);
+  }
+
   function show(): void {
     if (shown) return;
     shown = true;
@@ -187,6 +193,7 @@ export function createFinaleOverlay(root: HTMLElement, deps: FinaleOverlayDeps):
     root.classList.add('finale-active');
     setHudInert(true);
     overlay.hidden = false;
+    armFocusTrap();
   }
 
   function hide(): void {
@@ -247,7 +254,6 @@ export function createFinaleOverlay(root: HTMLElement, deps: FinaleOverlayDeps):
 
   function updateFocus(model: FinaleOverlayModel): void {
     if (model.buttons) {
-      if (disposeFocusTrap === null) disposeFocusTrap = trapFocus(overlay);
       if (focusedFor !== keep) {
         focusedFor = keep;
         keep.focus();

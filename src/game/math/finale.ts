@@ -104,9 +104,14 @@ export function choiceStartS(cfg: RevealCfg = FINALE_REVEAL): number {
   return cfg.startS + lastLineStartS(cfg);
 }
 
-/** Film time at which the buttons are up: choice start + last line typing + buttonsDelayS (= 64.47 with the C3 data). */
-export function finaleEndS(cfg: RevealCfg = FINALE_REVEAL): number {
-  return choiceStartS(cfg) + cfg.lastLine.length / cfg.cps + cfg.buttonsDelayS;
+/**
+ * Film time at which the buttons are up (= the earliest t where typewriter(...).buttons is true). Normal: choice start +
+ * last line typing + buttonsDelayS (= 64.47 with the C3 data). reduced: the last line appears whole, so choice start +
+ * buttonsDelayS.
+ */
+export function finaleEndS(cfg: RevealCfg = FINALE_REVEAL, reduced = false): number {
+  const typing = reduced ? 0 : cfg.lastLine.length / cfg.cps;
+  return choiceStartS(cfg) + typing + cfg.buttonsDelayS;
 }
 
 /** Storyboard shot at film time t (S5 from choiceStartS). Below FINALE_SHOTS.s1 it is S0. */
