@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { PARALLAX_LAYERS, PARALLAX_FADE_MS, PYLON_LINE, VIEW, WORLD, CAMERA, PIXEL_SCALE, DEPTH } from '../../data/world';
-import type { ParallaxLayerDef } from '../../data/world';
+import type { ParallaxLayerDef, PylonFeed } from '../../data/world';
 import { MACHINE_COMPONENTS, MACHINE_LINK_STYLE } from '../../data/machineComponents';
 import type { Vec2 } from '../../data/machineComponents';
 import type { TechId } from '../../data/types';
@@ -24,10 +24,10 @@ interface PylonStrip {
   tileHeightPx: number;
 }
 
-/** Everything needed to draw the cable; null in the class when the layer or the mast point is missing. */
+/** Everything needed to draw the cable; null in the class when the layer or the feed point is missing. */
 interface ActivePylonLine {
   strip: PylonStrip;
-  mast: Vec2;
+  start: Vec2;
 }
 
 function pylonStrip(def: ParallaxLayerDef): PylonStrip {
@@ -51,14 +51,16 @@ function pylonStrip(def: ParallaxLayerDef): PylonStrip {
   };
 }
 
-// Thin cyan cable from the cable mast top to the lit pylon insulator it is pinned to (CR7).
-// It lives in world space, outside the machine texture: its far end moves with the pylons layer parallax,
-// its near end moves with the machine. Visibility and fade follow the pylonsLit layer, and the fade-in
-// waits until the cable mast has finished assembling. The anchor is chosen once on first light and kept.
+// Thin cyan cable from a machine feed point (the cable mast top, or the turbine export) to the lit pylon
+// insulator it is pinned to (CR7, CR-A). It lives in world space, outside the machine texture: its far end
+// moves with the pylons layer parallax, its near end moves with the machine. Visibility and fade follow the
+// pylonsLit layer and the feed's tech gate, and the fade-in waits until the feed's part has finished
+// assembling. The anchor is chosen once on first light and kept.
 export class PylonLine {
   private readonly graphics: Phaser.GameObjects.Graphics;
   private readonly active: ActivePylonLine | null;
-  private readonly mastAssembling: () => boolean;
+  private readonly feed: PylonFeed;
+  private readonly componentAssembling: () => boolean;
   private fade: number;
   private lastKey: string | null = null;
   private pinned: PylonAnchorRef | null = null; // chosen on first light; cleared once the layer hides
@@ -66,25 +68,33 @@ export class PylonLine {
   constructor(
     scene: Phaser.Scene,
     techLevels: Readonly<Record<TechId, number>>,
-    mastAssembling: () => boolean = () => false,
+    feed: PylonFeed,
+    componentAssembling: () => boolean = () => false,
   ) {
     const def = PARALLAX_LAYERS.find((layer) => layer.id === 'pylonsLit');
-    const top = resolveConnectionPoint(MACHINE_COMPONENTS.cableMast, 'top');
+    const point = resolveConnectionPoint(MACHINE_COMPONENTS[feed.component], feed.point);
     this.graphics = scene.add
       .graphics()
       .setScrollFactor(1)
       .setDepth((def?.depth ?? DEPTH.background) + PYLON_LINE.depthOffset);
-    this.active = def !== undefined && top !== null ? { strip: pylonStrip(def), mast: machineLocalToWorld(top) } : null;
-    this.mastAssembling = mastAssembling;
+    this.active = def !== undefined && point !== null ? { strip: pylonStrip(def), start: machineLocalToWorld(point) } : null;
+    this.feed = feed;
+    this.componentAssembling = componentAssembling;
     // Already lit at load: no fade-in.
-    this.fade = def !== undefined && isLayerVisible(def, techLevels) ? 1 : 0;
+    this.fade = def !== undefined && isLayerVisible(def, techLevels) && this.gateMet(techLevels) ? 1 : 0;
+  }
+
+  /** True when the feed's tech gate (if any) is owned at the required level. */
+  private gateMet(techLevels: Readonly<Record<TechId, number>>): boolean {
+    const gate = this.feed.gate;
+    return gate === undefined || techLevels[gate.techId] >= gate.minLevel;
   }
 
   // Fades toward the layer's target and redraws only when the camera scroll or the fade changed.
   update(camera: Phaser.Cameras.Scene2D.Camera, techLevels: Readonly<Record<TechId, number>>, deltaMs: number): void {
     const active = this.active;
     if (active === null) return;
-    const target = isLayerVisible(active.strip.def, techLevels) && !this.mastAssembling() ? 1 : 0;
+    const target = isLayerVisible(active.strip.def, techLevels) && this.gateMet(techLevels) && !this.componentAssembling() ? 1 : 0;
     this.fade = fadeStep(this.fade, target, deltaMs, PARALLAX_FADE_MS);
     if (this.fade === 0) {
       if (this.lastKey !== null) {
@@ -107,10 +117,10 @@ export class PylonLine {
   }
 
   private draw(active: ActivePylonLine, scroll: Vec2, fade: number): void {
-    const { strip, mast } = active;
+    const { strip, start } = active;
     const style = MACHINE_LINK_STYLE.cable;
     const input: PylonAnchorInput = {
-      from: mast,
+      from: start,
       anchorsArt: PYLON_LINE.anchorsArt,
       tilePx: strip.tilePx,
       tileHeightPx: strip.tileHeightPx,
@@ -119,14 +129,15 @@ export class PylonLine {
       stripLeftX: strip.stripLeftX,
       bottomObjY: strip.bottomObjY,
       scroll,
+      side: this.feed.side,
     };
     if (this.pinned === null) this.pinned = nearestPylonAnchor(input)?.ref ?? null; // first light: choose once
     const anchor = this.pinned === null ? null : pylonAnchorPoint(input, this.pinned);
     this.graphics.clear();
     if (anchor === null) return;
 
-    const distance = Math.hypot(anchor.x - mast.x, anchor.y - mast.y);
-    const points = cableParabola(mast, anchor, distance * PYLON_LINE.sagFraction, CABLE_SEGMENTS);
+    const distance = Math.hypot(anchor.x - start.x, anchor.y - start.y);
+    const points = cableParabola(start, anchor, distance * PYLON_LINE.sagFraction, CABLE_SEGMENTS);
     const [head, ...rest] = points;
     if (head === undefined) return;
 
@@ -138,6 +149,6 @@ export class PylonLine {
     this.graphics.strokePath();
 
     this.graphics.fillStyle(style.hi, 1);
-    for (const p of [mast, anchor]) this.graphics.fillRect(p.x - 1, p.y - 1, 2, 2); // 2x2 end caps
+    for (const p of [start, anchor]) this.graphics.fillRect(p.x - 1, p.y - 1, 2, 2); // 2x2 end caps
   }
 }

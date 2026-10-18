@@ -4,8 +4,10 @@ import type { Hud } from '../../ui/hud';
 import type { TechTree } from '../../ui/techTree';
 import type { ModalStack } from '../../ui/modalStack';
 import { buildHudView } from '../../ui/hudView';
+import { PYLON_FEEDS } from '../../data/world';
 import { ParallaxBackground } from '../rendering/ParallaxBackground';
 import { PylonLine } from '../rendering/PylonLine';
+import { SteamFx } from '../rendering/SteamFx';
 import { Terrain } from '../rendering/Terrain';
 import { DustField } from '../rendering/DustField';
 import { FloatingText } from '../rendering/FloatingText';
@@ -21,7 +23,8 @@ export class WorldScene extends Phaser.Scene {
   private lastRevision = -1;
   private machineView: MachineView | null = null;
   private background: ParallaxBackground | null = null;
-  private pylonLine: PylonLine | null = null;
+  private pylonLines: PylonLine[] = [];
+  private steamFx: SteamFx | null = null;
 
   constructor(ctx: GameContext, ui: { hud: Hud; techTree: TechTree; modals: ModalStack }) {
     super('World');
@@ -32,12 +35,16 @@ export class WorldScene extends Phaser.Scene {
   create(): void {
     const background = new ParallaxBackground(this, this.ctx.session.state.techLevels);
     this.background = background;
-    const pylonLine = new PylonLine(this, this.ctx.session.state.techLevels, () => this.machineView?.isAssembling('cableMast') === true);
-    this.pylonLine = pylonLine;
+    const pylonLines = PYLON_FEEDS.map(
+      (feed) => new PylonLine(this, this.ctx.session.state.techLevels, feed, () => this.machineView?.isAssembling(feed.component) === true),
+    );
+    this.pylonLines = pylonLines;
     const terrain = new Terrain(this);
     const dust = new DustField(this);
     const machine = new MachineView(this, this.ctx);
     this.machineView = machine;
+    const steamFx = new SteamFx(this, this.ctx.session, () => this.machineView);
+    this.steamFx = steamFx;
     const floatingText = new FloatingText(this);
     const crank = new HandCrank(this, this.ctx, machine, floatingText);
     const camera = new CameraController(this, this.ctx.session);
@@ -50,15 +57,19 @@ export class WorldScene extends Phaser.Scene {
       () => crank.destroy(),
       () => floatingText.destroy(),
       () => {
+        this.steamFx = null;
+        steamFx.destroy();
+      },
+      () => {
         this.machineView = null;
         machine.destroy();
       },
       () => dust.destroy(),
       () => terrain.destroy(),
       () => {
-        this.pylonLine = null;
-        pylonLine.destroy();
+        this.pylonLines = [];
       },
+      ...pylonLines.map((line) => () => line.destroy()),
       () => {
         this.background = null;
         background.destroy();
@@ -88,8 +99,9 @@ export class WorldScene extends Phaser.Scene {
   override update(_time: number, delta: number): void {
     this.ctx.session.update();
     this.background?.update(this.ctx.session.state.techLevels, delta);
-    this.pylonLine?.update(this.cameras.main, this.ctx.session.state.techLevels, delta);
+    for (const line of this.pylonLines) line.update(this.cameras.main, this.ctx.session.state.techLevels, delta);
     this.machineView?.update(delta);
+    this.steamFx?.update(delta);
     if (this.ctx.session.revision !== this.lastRevision) this.renderHud();
     this.ui.techTree.update();
     // Phaser also handles window-level mouse events, so a DOM overlay alone does not shield the canvas.
