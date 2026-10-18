@@ -18,7 +18,11 @@ export class BootScene extends Phaser.Scene {
     for (const load of planAssetLoads()) {
       if (load.kind === 'spritesheet') {
         if (load.frame === undefined) continue;
-        this.load.spritesheet(load.key, load.url, { frameWidth: load.frame.width, frameHeight: load.frame.height });
+        this.load.spritesheet(load.key, load.url, {
+          frameWidth: load.frame.width,
+          frameHeight: load.frame.height,
+          endFrame: load.frame.count - 1,
+        });
       } else {
         this.load.image(load.key, load.url);
       }

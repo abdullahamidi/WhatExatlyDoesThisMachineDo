@@ -110,20 +110,26 @@ describe('resolveAssetUrl', () => {
   });
 });
 
+/** Copy of an entry without its rotation sheet (custom-manifest fixtures must not pull in #rot loads). */
+function withoutRotation(entry: AssetEntry): AssetEntry {
+  const { rotation: _rotation, ...rest } = entry;
+  return rest;
+}
+
 describe('planAssetLoads', () => {
   it('loads exactly the file-backed entries of the real manifest as images', () => {
     const fileBacked = ASSET_IDS.filter((id) => ASSET_MANIFEST[id].file !== null);
-    expect(planAssetLoads().map((l) => l.key)).toEqual(fileBacked);
-    expect(planAssetLoads().every((l) => l.kind === 'image')).toBe(true);
+    const images = planAssetLoads().filter((l) => l.kind === 'image');
+    expect(images.map((l) => l.key)).toEqual(fileBacked);
   });
 
   it('plans file-backed entries in ASSET_IDS order with the correct kind and frame', () => {
     const procedural = Object.fromEntries(
-      ASSET_IDS.map((id) => [id, { ...ASSET_MANIFEST[id], file: null }]),
+      ASSET_IDS.map((id) => [id, { ...withoutRotation(ASSET_MANIFEST[id]), file: null }]),
     ) as Record<AssetId, AssetEntry>;
     const custom: Record<AssetId, AssetEntry> = {
       ...procedural,
-      'machine.crank': { ...ASSET_MANIFEST['machine.crank'], file: 'machine/hand-crank.png' },
+      'machine.crank': { ...withoutRotation(ASSET_MANIFEST['machine.crank']), file: 'machine/hand-crank.png' },
       'fx.dust': { ...ASSET_MANIFEST['fx.dust'], file: 'fx/dust.png', frame: { width: 4, height: 4, count: 3 } },
     };
     const loads = planAssetLoads(custom);
@@ -151,5 +157,64 @@ describe('missingTextureIds', () => {
   it('honours a custom ids argument', () => {
     expect(missingTextureIds(() => false, ['fx.dust', 'bg.sky'])).toEqual(['fx.dust', 'bg.sky']);
     expect(missingTextureIds((k) => k === 'bg.sky', ['fx.dust', 'bg.sky'])).toEqual(['fx.dust']);
+  });
+});
+
+describe('WP6c rotation sheets and sky', () => {
+  const ROTATION_IDS: readonly AssetId[] = [
+    'machine.flywheel',
+    'machine.gearLarge',
+    'machine.gearSmall',
+    'machine.crank',
+    'machine.crankBrace',
+    'machine.pulleyMain',
+    'machine.pulleyCrank',
+    'machine.pulleyFlywheel',
+    'machine.pulleyMotor',
+  ];
+
+  it('has a disk file for the sky entry', () => {
+    expect(ASSET_MANIFEST['bg.sky'].file).not.toBeNull();
+  });
+
+  it('gives exactly the nine machine ids a rotation sheet', () => {
+    const withRotation = ASSET_IDS.filter((id) => ASSET_MANIFEST[id].rotation !== undefined);
+    expect(withRotation.slice().sort()).toEqual([...ROTATION_IDS].sort());
+  });
+
+  it('has an existing png and an integer frame count above 1 for every rotation entry', () => {
+    const files = Object.keys(import.meta.glob('/public/assets/**/*.png'));
+    for (const id of ROTATION_IDS) {
+      const rotation = ASSET_MANIFEST[id].rotation;
+      expect(rotation, id).toBeDefined();
+      if (rotation === undefined) continue;
+      expect(files, id).toContain(`/public/assets/${rotation.file}`);
+      expect(Number.isInteger(rotation.frames) && rotation.frames > 1, id).toBe(true);
+    }
+  });
+
+  it('plans one #rot spritesheet per rotation entry with the entry frame size and frame count', () => {
+    const rotLoads = planAssetLoads().filter((l) => l.key.endsWith('#rot'));
+    expect(rotLoads.map((l) => l.key).sort()).toEqual(ROTATION_IDS.map((id) => id + '#rot').sort());
+    for (const id of ROTATION_IDS) {
+      const entry = ASSET_MANIFEST[id];
+      const rotation = entry.rotation;
+      if (rotation === undefined) continue;
+      const load = rotLoads.find((l) => l.key === id + '#rot');
+      expect(load, id).toEqual({
+        key: id + '#rot',
+        url: 'assets/' + rotation.file,
+        kind: 'spritesheet',
+        frame: { width: entry.width, height: entry.height, count: rotation.frames },
+      });
+      expect(load?.url.startsWith('assets/machine/rot/'), id).toBe(true);
+    }
+  });
+
+  it('places each #rot load right after its own entry load', () => {
+    const keys = planAssetLoads().map((l) => l.key);
+    for (const id of ROTATION_IDS) {
+      expect(keys[keys.indexOf(id + '#rot') - 1], id).toBe(id);
+    }
   });
 });

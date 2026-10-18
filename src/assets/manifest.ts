@@ -9,13 +9,15 @@ export interface AssetEntry {
   origin: { x: number; y: number };
   tileable: 'none' | 'x' | 'xy';
   frame?: { width: number; height: number; count: number };
+  /** Pre-rendered rotation sheet (RotSprite frames, grid layout, frame size = width x height). Loaded as `${id}#rot`. */
+  rotation?: { file: string; frames: number }; // file under public/assets/
   description: string;
 }
 
 export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   'bg.sky': {
-    id: 'bg.sky', file: null, width: 1280, height: 720, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
-    description: 'Hazy, desaturated sky with a bright haze band near 65% of the height.',
+    id: 'bg.sky', file: 'bg/sky.png', width: 1280, height: 720, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Dusty sky in the four sky palette tones as hard stepped strata, pale sun disc upper-left (light direction); screen-fixed, shown at 2x.',
   },
   'bg.mountains': {
     id: 'bg.mountains', file: 'bg/mountains.png', width: 512, height: 256, origin: { x: 0, y: 1 }, tileable: 'x',
@@ -43,18 +45,22 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   },
   'machine.crank': {
     id: 'machine.crank', file: 'machine/hand-crank.png', width: 48, height: 48, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    rotation: { file: 'machine/rot/hand-crank-rot.png', frames: 80 },
     description: 'Hand crank with its hub at the centre; the player clicks it to work the machine.',
   },
   'machine.gearSmall': {
     id: 'machine.gearSmall', file: 'machine/gear-small.png', width: 40, height: 40, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    rotation: { file: 'machine/rot/gear-small-rot.png', frames: 80 },
     description: 'Small toothed gear meshed into the drive train.',
   },
   'machine.gearLarge': {
     id: 'machine.gearLarge', file: 'machine/gear-large.png', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    rotation: { file: 'machine/rot/gear-large-rot.png', frames: 140 },
     description: 'Large reinforced toothed gear that slows and steadies the drive.',
   },
   'machine.flywheel': {
     id: 'machine.flywheel', file: 'machine/flywheel.png', width: 96, height: 96, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    rotation: { file: 'machine/rot/flywheel-rot.png', frames: 180 },
     description: 'Heavy flywheel that stores momentum for the machine.',
   },
   'machine.motor': {
@@ -67,18 +73,22 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   },
   'machine.pulleyMotor': {
     id: 'machine.pulleyMotor', file: 'machine/pulley-motor.png', width: 12, height: 12, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    rotation: { file: 'machine/rot/pulley-motor-rot.png', frames: 24 },
     description: 'Tiny steel V-pulley seen face-on, with a rim ring and a hub dot.',
   },
   'machine.pulleyMain': {
     id: 'machine.pulleyMain', file: 'machine/pulley-main.png', width: 24, height: 24, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    rotation: { file: 'machine/rot/pulley-main-rot.png', frames: 140 },
     description: 'Cast main pulley face-on with a 4-hole web and a raised crank-pin boss at its right side.',
   },
   'machine.pulleyCrank': {
     id: 'machine.pulleyCrank', file: 'machine/pulley-crank.png', width: 32, height: 32, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    rotation: { file: 'machine/rot/pulley-crank-rot.png', frames: 80 },
     description: 'Small flat-belt pulley (r8, centred in a 32×32 canvas) with crowned rim and solid three-rib web; belt rides inside the pinion root.',
   },
   'machine.pulleyFlywheel': {
     id: 'machine.pulleyFlywheel', file: 'machine/pulley-flywheel.png', width: 28, height: 28, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    rotation: { file: 'machine/rot/pulley-flywheel-rot.png', frames: 180 },
     description: 'Hub pulley bolted to the flywheel, seen face-on with four spokes.',
   },
   'machine.pedestal': {
@@ -99,6 +109,7 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   },
   'machine.crankBrace': {
     id: 'machine.crankBrace', file: 'machine/crank-brace.png', width: 48, height: 48, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    rotation: { file: 'machine/rot/crank-brace-rot.png', frames: 80 },
     description: 'Riveted doubler strap and bolted boss flange that overlay the hand crank.',
   },
   'fx.steam': {
@@ -108,7 +119,7 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
 };
 
 export interface AssetLoad {
-  key: AssetId;
+  key: string; // an AssetId, or `${AssetId}#rot` for a rotation sheet
   url: string;
   kind: 'image' | 'spritesheet';
   frame?: AssetEntry['frame'];
@@ -119,7 +130,10 @@ export function resolveAssetUrl(entry: AssetEntry, baseUrl: string = 'assets/'):
   return entry.file === null ? null : baseUrl + entry.file;
 }
 
-/** Lists load descriptors in ASSET_IDS order for every file-backed entry (kind = spritesheet iff frame). */
+/**
+ * Lists load descriptors in ASSET_IDS order for every file-backed entry (kind = spritesheet iff frame).
+ * Each entry with a rotation sheet also gets a `${id}#rot` spritesheet load right after its own load.
+ */
 export function planAssetLoads(
   manifest: Record<AssetId, AssetEntry> = ASSET_MANIFEST,
   baseUrl: string = 'assets/',
@@ -128,10 +142,19 @@ export function planAssetLoads(
   for (const id of ASSET_IDS) {
     const entry = manifest[id];
     const url = resolveAssetUrl(entry, baseUrl);
-    if (url === null) continue;
-    const load: AssetLoad = { key: id, url, kind: entry.frame ? 'spritesheet' : 'image' };
-    if (entry.frame !== undefined) load.frame = entry.frame;
-    loads.push(load);
+    if (url !== null) {
+      const load: AssetLoad = { key: id, url, kind: entry.frame ? 'spritesheet' : 'image' };
+      if (entry.frame !== undefined) load.frame = entry.frame;
+      loads.push(load);
+    }
+    if (entry.rotation !== undefined) {
+      loads.push({
+        key: id + '#rot',
+        url: baseUrl + entry.rotation.file,
+        kind: 'spritesheet',
+        frame: { width: entry.width, height: entry.height, count: entry.rotation.frames },
+      });
+    }
   }
   return loads;
 }
