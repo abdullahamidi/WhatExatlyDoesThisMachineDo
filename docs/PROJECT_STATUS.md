@@ -15,11 +15,11 @@
 | WP7 | Multi-resource core (ME/EE/PR/RS/XF), save v2 migration, number suffixes to Dc, greedy sim harness | ✅ done |
 | WP8 | Multi-era infra + Era II Electrical (generator, coils, capacitor rack, spark gap, transformer, mast, lit pylons, era tabs, camera auto-frame, plaque) | ✅ done |
 | WP9 | Era III Thermal/Pressure (boiler, chimney, steam hammer, turbine, pipes, steam/smoke FX, relief valves offline buffer) | ✅ done |
-| WP10 | Era IV Resonance (spire, coils, crystal, dishes, calliope, fork, crank servo autoClick) | ✅ done (art review pending) |
-| WP11 | Era V Exotic (crown, rings, siphons, lens, aperture/beam, anchors, world 3840×2160) | in progress |
-| WP12 | Settings, accessibility, stats, achievements, save export/import (roadmap WP10) | planning |
-| WP13 | Ending sequence, reveal, postgame, restored world (roadmap WP14) | planning |
-| WP14 | New-cycle prestige: Echoes, Memory perks (roadmap WP15) | — |
+| WP10 | Era IV Resonance (spire, coils, crystal, dishes, calliope, fork, crank servo autoClick) | ✅ done |
+| WP11 | Era V Exotic (crown, rings, siphons, lens, aperture/beam, anchors, world 3840×2160, violet sky, eclipse) | ✅ done |
+| WP12 | Settings, accessibility, stats, achievements, save export/import, reduced motion (roadmap WP10) | implemented, validating |
+| WP13 | Ending sequence, reveal, postgame, restored world (roadmap WP14) | in progress |
+| WP14 | New-cycle prestige: Echoes, Memory perks (roadmap WP15) | planning |
 | WP15 | Music bed, audio mix, perf pass (roadmap WP16) | — |
 | WP16 | Release: full balance, end-to-end smoke, docs, final art audit (roadmap WP17) | — |
 
@@ -48,7 +48,7 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 1165 pass (43 files) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 1804 pass (57 files) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
@@ -56,7 +56,7 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   Generator Blueprint 22:06.
 
 ## Balance (greedy harness, fast profile)
-Era I: blueprint 22:06 · Era II: generator 29:18, substation 60:23 · Era III (A/B/C): boiler 67:17/80:00/164:30, vessel 112:14/126:01/260:31 · Era IV (A/B/C): convergence 174:13/189:07/351:33.
+Era I: blueprint 22:06 · Era II: generator 29:18, substation 60:23 · Era III (A/B/C): boiler 67:17/80:00/164:30, vessel 112:14/126:01/260:31 · Era IV (A/B/C): convergence 174:13/189:07/351:33 · Era V (A/B/C): primaryFunction 254:37/270:00/447:30.
 
 ## Known issues
 - Pylon cables peak slightly at tile seams (art; minor).
