@@ -1,0 +1,102 @@
+/* Industrial terminal HUD. Works at 1280x720 and when the window is resized. System fonts only. */
+
+/* keep in sync with src/data/palette.ts */
+.hud-panel, .hud-buttons {
+  --ink:#14110f;
+  --iron:#2b2e31;
+  --iron-2:#1d1f21;
+  --rust:#8c4a2a;
+  --rust-dark:#4e2a1a;
+  --amber:#d9822b;
+  --amber-dim:#a8957a;
+  --haze:#d2bf9c;
+}
+
+.hud-panel {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  min-width: clamp(180px, 18vw, 260px);
+  padding: 10px 14px;
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  box-shadow: 0 0 0 2px var(--ink), inset 0 0 18px rgba(0, 0, 0, .6);
+  color: var(--amber);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(12px, 1.5vw, 18px);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  pointer-events: auto;
+  user-select: none;
+}
+
+.hud-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .22) 0 1px, transparent 1px 3px);
+}
+
+.hud-title {
+  color: var(--amber-dim);
+  font-size: .75em;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--rust-dark);
+  padding-bottom: 4px;
+}
+
+.hud-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.hud-label {
+  color: var(--amber-dim);
+}
+
+.hud-value {
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 6px rgba(217, 130, 43, .55);
+}
+
+#hud-me {
+  font-size: 1.6em;
+}
+
+.hud-buttons {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.hud-btn {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(11px, 1.3vw, 15px);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--amber);
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.hud-btn:hover {
+  background: var(--rust-dark);
+  color: var(--haze);
+}
+
+.hud-btn:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.hud-btn[aria-disabled="true"] {
+  opacity: .55;
+  cursor: help;
+}

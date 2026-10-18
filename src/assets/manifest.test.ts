@@ -72,13 +72,18 @@ describe('resolveAssetUrl', () => {
 });
 
 describe('planAssetLoads', () => {
-  it('returns no loads for the real manifest (all procedural)', () => {
-    expect(planAssetLoads()).toEqual([]);
+  it('loads exactly the file-backed entries of the real manifest as images', () => {
+    const fileBacked = ASSET_IDS.filter((id) => ASSET_MANIFEST[id].file !== null);
+    expect(planAssetLoads().map((l) => l.key)).toEqual(fileBacked);
+    expect(planAssetLoads().every((l) => l.kind === 'image')).toBe(true);
   });
 
   it('plans file-backed entries in ASSET_IDS order with the correct kind and frame', () => {
+    const procedural = Object.fromEntries(
+      ASSET_IDS.map((id) => [id, { ...ASSET_MANIFEST[id], file: null }]),
+    ) as Record<AssetId, AssetEntry>;
     const custom: Record<AssetId, AssetEntry> = {
-      ...ASSET_MANIFEST,
+      ...procedural,
       'machine.crank': { ...ASSET_MANIFEST['machine.crank'], file: 'machine/hand-crank.png' },
       'fx.dust': { ...ASSET_MANIFEST['fx.dust'], file: 'fx/dust.png', frame: { width: 4, height: 4, count: 3 } },
     };

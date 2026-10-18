@@ -38,31 +38,31 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     description: 'Single dust mote particle drifting over the wasteland.',
   },
   'machine.frame': {
-    id: 'machine.frame', file: null, width: 200, height: 110, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    id: 'machine.frame', file: 'machine/support-frame.png', width: 200, height: 110, origin: { x: 0.5, y: 1 }, tileable: 'none',
     description: 'Riveted, rusty support frame whose base sits on the ground line.',
   },
   'machine.crank': {
-    id: 'machine.crank', file: null, width: 48, height: 48, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    id: 'machine.crank', file: 'machine/hand-crank.png', width: 48, height: 48, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     description: 'Hand crank with its hub at the centre; the player clicks it to work the machine.',
   },
   'machine.gearSmall': {
-    id: 'machine.gearSmall', file: null, width: 40, height: 40, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    id: 'machine.gearSmall', file: 'machine/gear-small.png', width: 40, height: 40, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     description: 'Small toothed gear meshed into the drive train.',
   },
   'machine.gearLarge': {
-    id: 'machine.gearLarge', file: null, width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    id: 'machine.gearLarge', file: 'machine/gear-large.png', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     description: 'Large reinforced toothed gear that slows and steadies the drive.',
   },
   'machine.flywheel': {
-    id: 'machine.flywheel', file: null, width: 96, height: 96, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    id: 'machine.flywheel', file: 'machine/flywheel.png', width: 96, height: 96, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     description: 'Heavy flywheel that stores momentum for the machine.',
   },
   'machine.motor': {
-    id: 'machine.motor', file: null, width: 64, height: 48, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    id: 'machine.motor', file: 'machine/worn-motor.png', width: 64, height: 48, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     description: 'Worn electric motor bolted to the frame, shaking as it runs.',
   },
   'machine.piston': {
-    id: 'machine.piston', file: null, width: 96, height: 64, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    id: 'machine.piston', file: 'machine/piston-array.png', width: 96, height: 64, origin: { x: 0.5, y: 1 }, tileable: 'none',
     description: 'Piston array whose base sits at the bottom of the sprite, pumping up and down.',
   },
   'fx.steam': {
