@@ -7,6 +7,7 @@ import type { SystemMenu } from '../ui/systemMenu';
 import type { SaveController } from '../persistence/saveController';
 import type { GameAudio } from '../audio/gameAudio';
 import type { PrestigeState } from '../data/types';
+import type { AudioStats } from '../data/music';
 import type { CyclePreview } from '../simulation/prestige';
 import type { MachineComponentId } from '../data/machineComponents';
 import { MACHINE_COMPONENTS } from '../data/machineComponents';
@@ -54,6 +55,7 @@ declare global {
       displayObjects(): number;
       uiStats(): { meanMs: number; maxMs: number };
       perfMarks(): { bootStartMs: number; firstFrameMs: number } | null;
+      audioStats(): AudioStats | null;
       prestige(): PrestigeState;
       cycleState(): CycleDebugState;
     };
@@ -127,6 +129,8 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     if (boot === undefined && firstFrame === undefined) return null;
     return { bootStartMs: boot?.startTime ?? 0, firstFrameMs: firstFrame?.startTime ?? 0 };
   };
+  /** Music and mix readout (WP15): theme, slot gains, duck, live and music voices, master peak. Zeros before the first gesture. */
+  const audioStats = (): AudioStats | null => extras.audio.stats();
   window.__wedtmd = {
     session,
     crankClientPoint,
@@ -144,6 +148,7 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     displayObjects,
     uiStats,
     perfMarks,
+    audioStats,
     prestige,
     cycleState,
   };

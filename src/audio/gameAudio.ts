@@ -499,8 +499,16 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     synth = null;
     appliedLevels = null;
     unlocked = false;
+    slots[0] = newMusicSlot();
+    slots[1] = newMusicSlot();
+    activeSlot = 0;
+    fade = null;
+    musicOn = false;
+    duckNow = 1;
+    clearBeats();
     if (s) {
       try {
+        s.stopMusic();
         s.close();
       } catch (error) {
         warnOnce('dispose', error);
@@ -508,10 +516,39 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     }
   }
 
+  /** Idle readout: nothing has been created yet (or the controller is disposed). */
+  function idleStats(): AudioStats {
+    return { unlocked: false, running: false, theme: null, slotGains: [0, 0], duck: 0, liveVoices: 0, musicVoices: 0, dropped: 0, peakDb: null };
+  }
+
+  /** Live readout for the debug hook. Never throws; reads the synth counters and the controller state. */
+  function stats(): AudioStats {
+    const s = synth;
+    if (!s) return idleStats();
+    try {
+      const counters = s.stats();
+      return {
+        unlocked: true,
+        running: s.isRunning(),
+        theme: slots[activeSlot].theme,
+        slotGains: [slots[0].gain, slots[1].gain],
+        duck: duckNow,
+        liveVoices: counters.liveVoices,
+        musicVoices: counters.musicVoices,
+        dropped: counters.dropped,
+        peakDb: counters.peakDb,
+      };
+    } catch (error) {
+      warnOnce('stats', error);
+      return idleStats();
+    }
+  }
+
   return {
     get unlocked(): boolean {
       return unlocked;
     },
+    stats,
     dispose,
   };
 }
