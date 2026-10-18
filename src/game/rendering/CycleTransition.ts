@@ -9,8 +9,6 @@ import { cycleTransitionAlpha, cycleTransitionEndMs, cycleTransitionPeakMs } fro
 // onPeak fires once when the clock crosses the peak (the cycle swap runs there, the screen is white), onDone once at the end.
 
 const TRANSITION_DEPTH = DEPTH.floatingText + 3;
-/** Frame-step guard: a long frame (tab switch, GC stall) never jumps the clock past the peak and end in one update. */
-const MAX_STEP_MS = 250;
 
 export interface CycleTransitionState {
   active: boolean;
@@ -18,10 +16,10 @@ export interface CycleTransitionState {
   alpha: number;
 }
 
-/** Step in ms: non-finite or negative input is zero, a long frame is capped at MAX_STEP_MS. */
+/** Step in ms: non-finite or negative input is zero, a long frame is capped at CYCLE_TRANSITION.maxStepMs. */
 function stepMs(deltaMs: number): number {
   const raw = Number.isFinite(deltaMs) ? deltaMs : 0;
-  return Math.min(MAX_STEP_MS, Math.max(0, raw));
+  return Math.min(CYCLE_TRANSITION.maxStepMs, Math.max(0, raw));
 }
 
 export class CycleTransition {

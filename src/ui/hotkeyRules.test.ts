@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { resolveHotkey, wrapFocusIndex, type HotkeyEventLike, type HotkeyTargetKind } from './hotkeyRules';
+import {
+  pushTrap, removeTrap, resolveHotkey, topTrap, wrapFocusIndex, type HotkeyEventLike, type HotkeyTargetKind,
+} from './hotkeyRules';
 
 function ev(overrides: Partial<HotkeyEventLike> = {}): HotkeyEventLike {
   return {
@@ -167,5 +169,63 @@ describe('wrapFocusIndex', () => {
     expect(wrapFocusIndex(7, 3, true)).toBe(2);
     expect(wrapFocusIndex(Number.NaN, 3, false)).toBe(0);
     expect(wrapFocusIndex(0.5, 3, true)).toBe(2);
+  });
+});
+
+describe('focus trap stack', () => {
+  it('pushes onto the top: the last armed trap is the one that owns Tab', () => {
+    let stack: string[] = [];
+    stack = pushTrap(stack, 'finale');
+    expect(topTrap(stack)).toBe('finale');
+    stack = pushTrap(stack, 'confirm');
+    expect(stack).toEqual(['finale', 'confirm']);
+    expect(topTrap(stack)).toBe('confirm');
+  });
+
+  it('returns a new array and never mutates the input', () => {
+    const before: readonly string[] = ['finale'];
+    const after = pushTrap(before, 'confirm');
+    expect(before).toEqual(['finale']);
+    expect(after).not.toBe(before);
+    const removed = removeTrap(after, 'finale');
+    expect(after).toEqual(['finale', 'confirm']);
+    expect(removed).toEqual(['confirm']);
+  });
+
+  it('re-pushing an armed trap moves it to the top without duplicating it', () => {
+    const stack = pushTrap(pushTrap(['a', 'b'], 'a'), 'c');
+    expect(pushTrap(stack, 'a')).toEqual(['b', 'c', 'a']);
+  });
+
+  it('removing the top hands Tab back to the trap below', () => {
+    const stack = pushTrap(pushTrap(['menu'], 'confirm'), 'other');
+    const afterTop = removeTrap(stack, 'other');
+    expect(topTrap(afterTop)).toBe('confirm');
+    expect(topTrap(removeTrap(afterTop, 'confirm'))).toBe('menu');
+  });
+
+  it('removing a middle trap keeps the order of the rest and leaves the top unchanged', () => {
+    const stack = ['finale', 'menu', 'confirm'];
+    const afterMiddle = removeTrap(stack, 'menu');
+    expect(afterMiddle).toEqual(['finale', 'confirm']);
+    expect(topTrap(afterMiddle)).toBe('confirm');
+  });
+
+  it('removing an absent trap is a no-op', () => {
+    expect(removeTrap(['a', 'b'], 'zzz')).toEqual(['a', 'b']);
+    expect(removeTrap<string>([], 'a')).toEqual([]);
+  });
+
+  it('an empty stack has no top', () => {
+    expect(topTrap<string>([])).toBeNull();
+  });
+
+  it('identity, not value: two distinct trap tokens are separate entries', () => {
+    const a = { name: 'x' };
+    const b = { name: 'x' };
+    const stack = pushTrap(pushTrap([], a), b);
+    expect(stack).toHaveLength(2);
+    expect(topTrap(removeTrap(stack, a))).toBe(b);
+    expect(removeTrap(stack, { name: 'x' })).toHaveLength(2);
   });
 });

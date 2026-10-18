@@ -52,12 +52,16 @@ export const MEMORY_SOURCE_TECH = 'handCrank' as const;
 export const CYCLE_LABEL = { prefix: 'CYCLE ', base: 42, digits: 4 } as const;
 
 // New-cycle white transition (ART §7). Times in ms; `reduced` is used when reduced motion is on.
-export const CYCLE_TRANSITION = { color: PALETTE.steam, inMs: 800, outMs: 1500, reduced: { inMs: 500, outMs: 500 } } as const;
+// maxStepMs caps one frame's clock step (tab switch, GC stall) so a long frame never skips the peak and end at once.
+export const CYCLE_TRANSITION = {
+  color: PALETTE.steam, inMs: 800, outMs: 1500, reduced: { inMs: 500, outMs: 500 }, maxStepMs: 250,
+} as const;
 
 // Memory UI sheets (ART §8). perks.png = 5 frames of 32², perk-slot.png = 3 frames of 36², drawn at `scale`.
+// beginIcon = ui.icons16 frame on the cycle confirm BEGIN button.
 export const PRESTIGE_ART = {
   echo: 'assets/ui/echo.png', perks: 'assets/ui/perks.png', perkSlot: 'assets/ui/perk-slot.png',
-  perkFrame: 32, slotFrame: 36, slotInset: 2, scale: 2, slot: { locked: 0, affordable: 1, owned: 2 },
+  perkFrame: 32, slotFrame: 36, slotInset: 2, scale: 2, slot: { locked: 0, affordable: 1, owned: 2 }, beginIcon: 1,
 } as const;
 
 const KEPT_LINES: readonly string[] = ['Echoes and Memory perks', 'Settings', 'Stats and achievements'];

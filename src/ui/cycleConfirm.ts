@@ -1,7 +1,7 @@
 import './cycleConfirm.css';
 import { ASSET_MANIFEST, resolveAssetUrl } from '../assets/manifest';
 import type { AssetId } from '../assets/assetIds';
-import { PRESTIGE_TEXT } from '../data/prestige';
+import { PRESTIGE_ART, PRESTIGE_TEXT } from '../data/prestige';
 import type { CyclePreview } from '../simulation/prestige';
 import { buildCycleConfirm } from './cycleConfirmView';
 import type { CycleConfirmModel } from './cycleConfirmView';
@@ -24,8 +24,6 @@ export interface CycleConfirmHandle {
 }
 
 const MODAL_ID = 'cycleConfirm';
-/** ui.icons16 frame on the BEGIN button (ART_ERA5 §8). */
-const BEGIN_ICON = 1;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -124,7 +122,7 @@ export function createCycleConfirm(root: HTMLElement, deps: CycleConfirmDeps): C
   const reset = makeList(PRESTIGE_TEXT.resetTitle, 'cycle-confirm-reset');
   lists.append(kept.section, reset.section);
   const buttons = el('div', 'cycle-confirm-buttons');
-  const beginParts = makeButton('cycle-confirm-begin', BEGIN_ICON, true);
+  const beginParts = makeButton('cycle-confirm-begin', PRESTIGE_ART.beginIcon, true);
   const cancelParts = makeButton('cycle-confirm-cancel', null, false);
   cancelParts.label.textContent = PRESTIGE_TEXT.cancel;
   buttons.append(beginParts.button, cancelParts.button);

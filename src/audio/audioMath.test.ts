@@ -180,12 +180,13 @@ describe('AUDIO data', () => {
     expect(AUDIO.sting.notesHz).toHaveLength(3);
   });
 
-  it('has every numeric leaf finite and >= 0', () => {
+  it('has every numeric leaf finite and >= 0 (dB leaves excepted)', () => {
     const leaves: Array<{ path: string; value: number }> = [];
     numericLeaves(AUDIO, '', leaves);
     expect(leaves.length).toBeGreaterThan(0);
     for (const leaf of leaves) {
       expect(Number.isFinite(leaf.value), leaf.path).toBe(true);
+      if (leaf.path === 'limiter.threshold') continue; // compressor threshold is in dBFS (negative by design)
       expect(leaf.value, leaf.path).toBeGreaterThanOrEqual(0);
     }
   });

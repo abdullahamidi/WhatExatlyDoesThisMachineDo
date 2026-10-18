@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createNewCycleController, createNewCycleStub } from './newCycle';
 import type { CyclePort, NewCycleControllerDeps } from './newCycle';
 import { FINALE_CHOICE } from '../data/finale';
-import { PRESTIGE_TEXT } from '../data/prestige';
+import { ECHO_RULES, PRESTIGE_TEXT } from '../data/prestige';
 import type { EndingPhase, EndingState, GameState, PrestigeState, SettingsState } from '../data/types';
 import { DEFAULT_SETTINGS, createInitialState } from '../simulation/state';
 import { DEFAULT_PRESTIGE } from '../simulation/prestige';
@@ -134,6 +134,67 @@ describe('createNewCycleController begin', () => {
     expect(h.closeDialogs).toHaveBeenCalledTimes(1);
     expect(h.playTransition).toHaveBeenCalledTimes(1);
     expect(h.session.beginNewCycle).toHaveBeenCalledTimes(1);
+  });
+
+  it('BEGIN with an unchanged preview commits at once (no second dialog)', () => {
+    const h = harness('choice', { confirmNewCycle: true });
+    createNewCycleController(h.deps).begin();
+    const onBegin = h.confirm.mock.calls[0]?.[1] as () => void;
+    onBegin();
+    expect(h.confirm).toHaveBeenCalledTimes(1);
+    expect(h.playTransition).toHaveBeenCalledTimes(1);
+    expect(h.session.beginNewCycle).toHaveBeenCalledTimes(1);
+  });
+
+  it('BEGIN after xf crossed a threshold re-renders the dialog with the new preview instead of committing', () => {
+    const h = harness('postgame', { confirmNewCycle: true });
+    createNewCycleController(h.deps).begin();
+    expect(h.confirm.mock.calls[0]?.[0]).toMatchObject({ echoesGained: 3 });
+    const firstBegin = h.confirm.mock.calls[0]?.[1] as () => void;
+
+    // Lifetime Restoration Flux crosses the first threshold (+1 Echo) while the dialog is open.
+    h.session.state.lifetime.xf = ECHO_RULES.bonusAtXf[0];
+    firstBegin();
+
+    expect(h.confirm).toHaveBeenCalledTimes(2);
+    expect(h.confirm.mock.calls[1]?.[0]).toMatchObject({ echoesGained: 4, allowed: true });
+    expect(h.playTransition).not.toHaveBeenCalled();
+    expect(h.closeDialogs).not.toHaveBeenCalled();
+    expect(h.session.beginNewCycle).not.toHaveBeenCalled();
+
+    // The second BEGIN on the re-rendered dialog commits.
+    const secondBegin = h.confirm.mock.calls[1]?.[1] as () => void;
+    secondBegin();
+    expect(h.confirm).toHaveBeenCalledTimes(2);
+    expect(h.playTransition).toHaveBeenCalledTimes(1);
+    expect(h.session.beginNewCycle).toHaveBeenCalledTimes(1);
+    expect(h.session.beginNewCycle).toHaveBeenCalledWith(12345);
+  });
+
+  it('a stale BEGIN after the preview changed twice re-renders again until the numbers settle', () => {
+    const h = harness('choice', { confirmNewCycle: true });
+    createNewCycleController(h.deps).begin();
+    h.session.state.lifetime.xf = ECHO_RULES.bonusAtXf[0];
+    (h.confirm.mock.calls[0]?.[1] as () => void)();
+    h.session.state.lifetime.xf = ECHO_RULES.bonusAtXf[1];
+    (h.confirm.mock.calls[1]?.[1] as () => void)();
+    expect(h.confirm).toHaveBeenCalledTimes(3);
+    expect(h.confirm.mock.calls[2]?.[0]).toMatchObject({ echoesGained: 5 });
+    expect(h.session.beginNewCycle).not.toHaveBeenCalled();
+    (h.confirm.mock.calls[2]?.[1] as () => void)();
+    expect(h.session.beginNewCycle).toHaveBeenCalledTimes(1);
+  });
+
+  it('a BEGIN after the reveal was lost neither re-renders nor commits', () => {
+    const h = harness('choice', { confirmNewCycle: true });
+    createNewCycleController(h.deps).begin();
+    const onBegin = h.confirm.mock.calls[0]?.[1] as () => void;
+    h.session.state.lifetime.xf = ECHO_RULES.bonusAtXf[0];
+    h.session.state.ending = { phase: 'sequence', engagedAt: 0 };
+    onBegin();
+    expect(h.confirm).toHaveBeenCalledTimes(1);
+    expect(h.playTransition).not.toHaveBeenCalled();
+    expect(h.session.beginNewCycle).not.toHaveBeenCalled();
   });
 
   it('closes dialogs before the transition starts', () => {

@@ -56,3 +56,22 @@ export function wrapFocusIndex(index: number, count: number, backwards: boolean)
   if (backwards) return (index - 1 + count) % count;
   return (index + 1) % count;
 }
+
+/**
+ * Focus-trap stack (oldest first). Only the top (most recently armed) trap handles Tab, so stacked dialogs
+ * never fight over focus. Pure: returns a new array, never mutates the input.
+ */
+export function pushTrap<T>(stack: readonly T[], trap: T): T[] {
+  return [...stack.filter((t) => t !== trap), trap];
+}
+
+/** Removes `trap` wherever it sits in the stack (a middle trap disposed first leaves the others in order). */
+export function removeTrap<T>(stack: readonly T[], trap: T): T[] {
+  return stack.filter((t) => t !== trap);
+}
+
+/** The trap that owns Tab: the top of the stack, or null when the stack is empty. */
+export function topTrap<T>(stack: readonly T[]): T | null {
+  if (stack.length === 0) return null;
+  return stack[stack.length - 1] ?? null;
+}

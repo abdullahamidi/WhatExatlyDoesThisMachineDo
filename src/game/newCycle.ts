@@ -35,7 +35,7 @@ export interface CyclePort {
 export interface NewCycleControllerDeps {
   session: CyclePort;
   now(): number;
-  /** Opens the confirm dialog (DOM). onConfirm runs only when the player presses BEGIN. */
+  /** Opens the confirm dialog (DOM). The dialog closes before onConfirm runs; onConfirm runs only when the player presses BEGIN. */
   confirm(preview: CyclePreview, onConfirm: () => void): void;
   /** Runs the transition. onPeak fires once at the white peak; onDone fires once when it ends (sync when no scene). */
   playTransition(onPeak: () => void, onDone: () => void): void;
@@ -53,6 +53,8 @@ export interface NewCycleController extends NewCycleHook {
 /**
  * Controller behind BEGIN A NEW CYCLE. blockedReason: busy -> PRESTIGE_TEXT.busy, not revealed -> PRESTIGE_TEXT.blocked,
  * else null. begin: blocked -> no-op; confirmNewCycle ON -> confirm dialog first, OFF -> commit at once.
+ * Dialog BEGIN re-reads the preview: a changed echoesGained (xf crossed a threshold while open) re-renders the dialog
+ * with the new numbers and waits for another BEGIN; otherwise it commits.
  * commit: re-checks the block, marks busy, closes dialogs, plays the transition; beginNewCycle runs once at the peak.
  */
 export function createNewCycleController(deps: NewCycleControllerDeps): NewCycleController {
@@ -85,11 +87,24 @@ export function createNewCycleController(deps: NewCycleControllerDeps): NewCycle
     deps.playTransition(onPeak, onDone);
   };
 
+  // Opens the dialog showing `shown`. Its BEGIN re-reads the preview before committing.
+  const openConfirm = (shown: CyclePreview): void => {
+    deps.confirm(shown, () => {
+      if (blockedReason() !== null) return; // busy or the reveal was lost: commit would no-op anyway
+      const fresh = preview();
+      if (fresh.echoesGained !== shown.echoesGained) {
+        openConfirm(fresh);
+        return;
+      }
+      commit();
+    });
+  };
+
   return {
     blockedReason,
     begin: () => {
       if (blockedReason() !== null) return;
-      if (deps.session.settings.confirmNewCycle) deps.confirm(preview(), commit);
+      if (deps.session.settings.confirmNewCycle) openConfirm(preview());
       else commit();
     },
     preview,

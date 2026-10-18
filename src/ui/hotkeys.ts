@@ -3,7 +3,7 @@
 // the bubble listener here only sees Escape when no modal consumed it (it opens the system menu).
 
 import type { ModalStack } from './modalStack';
-import { resolveHotkey, wrapFocusIndex } from './hotkeyRules';
+import { pushTrap, removeTrap, resolveHotkey, topTrap, wrapFocusIndex } from './hotkeyRules';
 import type { HotkeyTargetKind } from './hotkeyRules';
 
 export interface HotkeyDeps {
@@ -100,14 +100,21 @@ function focusableWithin(container: HTMLElement): HTMLElement[] {
   );
 }
 
+/** Armed focus traps, oldest first. Only the top one handles Tab (stacked dialogs: cycle confirm over the finale). */
+let trapStack: readonly object[] = [];
+
 /**
  * Keeps Tab / Shift+Tab inside `container`: focus cycles over its visible focusable descendants.
- * Focus outside the container enters at the first (Tab) or last (Shift+Tab) item. Returns the disposer.
+ * Focus outside the container enters at the first (Tab) or last (Shift+Tab) item. Arming moves the trap to the top
+ * of the stack; disposing removes it from wherever it sits. Returns the disposer.
  */
 export function trapFocus(container: HTMLElement): () => void {
   const doc = container.ownerDocument;
+  const token: object = {};
+  trapStack = pushTrap(trapStack, token);
   const listener = (event: KeyboardEvent): void => {
     if (event.key !== 'Tab') return;
+    if (topTrap(trapStack) !== token) return;
     const items = focusableWithin(container);
     const active = doc.activeElement;
     const index = items.findIndex((el) => el === active);
@@ -119,5 +126,6 @@ export function trapFocus(container: HTMLElement): () => void {
   doc.addEventListener('keydown', listener);
   return () => {
     doc.removeEventListener('keydown', listener);
+    trapStack = removeTrap(trapStack, token);
   };
 }
