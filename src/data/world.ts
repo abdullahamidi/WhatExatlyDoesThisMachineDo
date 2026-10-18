@@ -9,7 +9,8 @@ export const PIXEL_SCALE = 2;                                   // art px -> wor
 export const MACHINE_ANCHOR = { x: 1920, y: GROUND_Y } as const;
 export const CAMERA = { focus: { x: 1920, y: GROUND_Y - 160 }, defaultZoom: 1, maxZoom: 2, minZoom: 0.5,
   wheelZoomFactor: 1.1, wheelStepCooldownMs: 80, dragThresholdPx: 4, refocusMs: 450,
-  fitMarginPx: 72, autoFrame: true, hudTopInsetPx: 240 } as const;   // minZoom explicit (below 0.5 one art px is smaller than a screen px); fitMarginPx: world px kept clear around the machine when auto-framing; hudTopInsetPx: screen px under the HUD panel, the machine top is kept below it when auto-framing
+  fitMarginPx: 72, autoFrame: true, hudTopInsetPx: 240,
+  fullViewGroundBandPx: 160, fullViewTopMinPx: 24 } as const;   // minZoom explicit (below 0.5 one art px is smaller than a screen px); fitMarginPx: world px kept clear around the machine when auto-framing; hudTopInsetPx: screen px under the HUD panel, the machine top is kept below it when auto-framing; fullView*: framing at the min zoom (ART_ERA5 in-game review F2): ground line kept fullViewGroundBandPx above the screen bottom (pre-WP11 eras III-IV framing), machine top >= fullViewTopMinPx, base + fitMarginPx above the bottom edge
 /** World x the tiled background patterns are phased to: the pre-WP11 machine anchor, so eras I-IV backgrounds stay pixel-identical. */
 export const PATTERN_ORIGIN_X = 1280;
 export const DEPTH = { background: -100, ground: 0, machine: 100, dust: 200, floatingText: 300 } as const;
