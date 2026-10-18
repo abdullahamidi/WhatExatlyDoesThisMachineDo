@@ -1,7 +1,7 @@
 # Project Status
 
 ## Current milestone
-**First playable vertical slice — complete.** WP1–WP5 done; GAME_SPEC §16 and §17 all PASS (EM final validation).
+**Vertical slice — release-quality.** WP1–WP6 done. GAME_SPEC §16/§17 PASS; Art Director verdict RELEASE-READY (docs/plan/ART_AUDIT.md phases 1–5).
 
 ## Roadmap
 | WP | Scope | State |
@@ -11,6 +11,7 @@
 | WP3 | Tech tree overlay + modular machine components | ✅ done |
 | WP4 | Save/load, offline welcome-back, system menu, audio, system logs | ✅ done |
 | WP5 | Balance, ASSET_GUIDE, README, build split, §16 checklist | ✅ done |
+| WP6 | Mechanical correctness + art polish (Art Director audit → drive train, assets, RotSprite) | ✅ done |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -27,14 +28,20 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   rare system logs.
 - **WP5** balance retune + greedy sim test, `docs/ASSET_GUIDE.md`, `README.md`, Phaser chunk split,
   browser smoke scripts in `scripts/smoke/`.
+- **WP6** (Art Director loop): web-researched audit of the machine; mechanically coherent drive train
+  (one master angle, gear ratios, meshing module-4 gears, belts tangent+wrapped over real pulleys with
+  moving dashes, crank-pin connecting rod → piston yoke, flywheel on pedestal, motor on plinth, bearings,
+  crank brace); coherent at every unlock stage; art-resolution RenderTexture; RotSprite pre-rendered
+  rotation frames (clean 1-px outlines, exact gear mesh per frame); banded sky with sun, ground haze,
+  contact shadows, readable +ME text, first-click crank pulse, snapped zoom, toasts top-right.
 - **Art**: every sprite and background layer is PixelLab Pro in one locked palette from one style
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 477 pass (30 files) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 602 pass (34 files) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
-  full machine → Generator Blueprint. 0 console errors.
+  full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
 - Balance (greedy 4 clicks/s): Worn Motor 0:13, Reinforced Crank 3:16, Piston Array 12:02,
   Generator Blueprint 22:06.
 
@@ -42,9 +49,15 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 - Pylon cables peak slightly at tile seams (art; minor).
 - Audio verified by code review only (no audible check in CI).
 - `fx.steam` sprite exists but no renderer uses it yet.
+- Thin cloud streaks behind the sun (cosmetic, accepted).
+- Some WP6 parts (gears, pulleys, yoke) are hand-pixelled to exact geometry rather than PixelLab output.
 - Phaser chunk >500 KB by nature; warning limit raised rather than removed.
 
 ## Important technical decisions
+- Art Director agent (`.claude/agents/art-director.md`, Opus) owns visual/mechanical correctness;
+  audit + fix log in docs/plan/ART_AUDIT.md; tools in scripts/art and scripts/smoke.
+- Rotating parts use RotSprite sheets (`<id>#rot`, frame = rotationFrame(deg, N)); gear sheets 140/80
+  frames keep the 1.75 ratio exact. Regenerate with scripts/art/make_rot.py.
 - Phaser pinned to 3.90.0 (npm `latest` is Phaser 4). No `override` on create/preload/init; `update` requires it.
 - Vitest ^5 (advisories in 3.x). Node ≥22.12 required by Vitest 5.
 - Production: `perClick = Σ clickAdd·lvl × Π clickMult^lvl`; `perSecond = Σ autoAdd·lvl × (1 + Σ autoPct·lvl/100)`.
