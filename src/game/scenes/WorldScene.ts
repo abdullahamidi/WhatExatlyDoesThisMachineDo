@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { GameContext } from '../context';
 import type { Hud } from '../../ui/hud';
 import type { TechTree } from '../../ui/techTree';
+import type { ModalStack } from '../../ui/modalStack';
 import { buildHudView } from '../../ui/hudView';
 import { ParallaxBackground } from '../rendering/ParallaxBackground';
 import { Terrain } from '../rendering/Terrain';
@@ -14,12 +15,12 @@ import { HandCrank } from '../entities/HandCrank';
 // Builds the wasteland, machine and camera; reads session state each frame and pushes it to the HUD.
 export class WorldScene extends Phaser.Scene {
   private readonly ctx: GameContext;
-  private readonly ui: { hud: Hud; techTree: TechTree };
+  private readonly ui: { hud: Hud; techTree: TechTree; modals: ModalStack };
   private readonly disposables: Array<() => void> = [];
   private lastRevision = -1;
   private machineView: MachineView | null = null;
 
-  constructor(ctx: GameContext, ui: { hud: Hud; techTree: TechTree }) {
+  constructor(ctx: GameContext, ui: { hud: Hud; techTree: TechTree; modals: ModalStack }) {
     super('World');
     this.ctx = ctx;
     this.ui = ui;
@@ -77,7 +78,8 @@ export class WorldScene extends Phaser.Scene {
     if (this.ctx.session.revision !== this.lastRevision) this.renderHud();
     this.ui.techTree.update();
     // Phaser also handles window-level mouse events, so a DOM overlay alone does not shield the canvas.
-    this.input.enabled = !this.ui.techTree.isOpen();
+    // Gate on any modal dialog open (tech tree, system menu, reset confirm), not just the tech tree.
+    this.input.enabled = !this.ui.modals.isOpen();
   }
 
   private renderHud(): void {

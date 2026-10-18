@@ -44,8 +44,12 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
   const refocusButton = createElement('button', { id: 'hud-refocus', className: 'hud-btn', text: 'REFOCUS' });
   refocusButton.type = 'button';
   refocusButton.title = 'Re-centre the camera on the machine';
+  const systemButton = createElement('button', { id: 'hud-system', className: 'hud-btn', text: 'SYSTEM' });
+  systemButton.type = 'button';
+  systemButton.title = 'Open the system menu';
   buttons.appendChild(techButton);
   buttons.appendChild(refocusButton);
+  buttons.appendChild(systemButton);
 
   root.appendChild(panel);
   root.appendChild(buttons);
@@ -54,8 +58,10 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
 
   const onTech = (): void => commands.openTechTree.emit();
   const onRefocus = (): void => commands.refocus.emit();
+  const onSystem = (): void => commands.openSystemMenu.emit();
   techButton.addEventListener('click', onTech);
   refocusButton.addEventListener('click', onRefocus);
+  systemButton.addEventListener('click', onSystem);
 
   const setText = (el: HTMLElement, key: keyof Readout, text: string): void => {
     if (written[key] === text) return;
@@ -72,6 +78,7 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
     destroy(): void {
       techButton.removeEventListener('click', onTech);
       refocusButton.removeEventListener('click', onRefocus);
+      systemButton.removeEventListener('click', onSystem);
       panel.remove();
       buttons.remove();
     },

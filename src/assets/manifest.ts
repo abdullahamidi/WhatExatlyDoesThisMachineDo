@@ -18,19 +18,19 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     description: 'Hazy, desaturated sky with a bright haze band near 65% of the height.',
   },
   'bg.mountains': {
-    id: 'bg.mountains', file: null, width: 512, height: 256, origin: { x: 0, y: 1 }, tileable: 'x',
+    id: 'bg.mountains', file: 'bg/mountains.png', width: 512, height: 256, origin: { x: 0, y: 1 }, tileable: 'x',
     description: 'Far ridge with distant ruins; tiles horizontally, period = width, ground line at y=156.',
   },
   'bg.skyline': {
-    id: 'bg.skyline', file: null, width: 512, height: 320, origin: { x: 0, y: 1 }, tileable: 'x',
+    id: 'bg.skyline', file: 'bg/skyline.png', width: 512, height: 320, origin: { x: 0, y: 1 }, tileable: 'x',
     description: 'Ruined city skyline; tiles horizontally, period = width, ground line at y=220.',
   },
   'bg.pylons': {
-    id: 'bg.pylons', file: null, width: 256, height: 256, origin: { x: 0, y: 1 }, tileable: 'x',
+    id: 'bg.pylons', file: 'bg/pylons.png', width: 256, height: 256, origin: { x: 0, y: 1 }, tileable: 'x',
     description: 'Rusted pylons with sagging wires; tiles horizontally, period = width, ground line at y=156.',
   },
   'terrain.ground': {
-    id: 'terrain.ground', file: null, width: 256, height: 128, origin: { x: 0, y: 0 }, tileable: 'xy',
+    id: 'terrain.ground', file: 'terrain/ground.png', width: 256, height: 128, origin: { x: 0, y: 0 }, tileable: 'xy',
     description: 'Cracked sand ground tile that tiles in both directions.',
   },
   'fx.dust': {
