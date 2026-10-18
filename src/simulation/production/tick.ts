@@ -63,7 +63,8 @@ export function offlineCapSeconds(
 }
 
 /**
- * Offline progress since state.lastSimTime, automation only (never clicks), capped at capSeconds.
+ * Offline progress since state.lastSimTime, automation only, incl. servo auto-cranks; never manual clicks,
+ * capped at capSeconds.
  * A clock that went backwards (or a non-finite time) yields zero elapsed time.
  */
 export function computeOffline(

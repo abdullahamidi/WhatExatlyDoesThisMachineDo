@@ -65,6 +65,8 @@ export function describeEffect(effect: Effect, n: number): string {
       return `Clicks echo ${fmt(effect.seconds * n)}s of ${RESOURCES[effect.res].short}/s`;
     case 'offlineHours':
       return `+${fmt(effect.hours * n)}h offline buffer`;
+    case 'autoClick':
+      return `+${fmt(effect.perSecond * n)} auto-cranks/s`;
     case 'none':
       return 'Effect unknown';
   }

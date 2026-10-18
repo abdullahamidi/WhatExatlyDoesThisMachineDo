@@ -21,6 +21,7 @@ import { emptyResourceMap } from '../resources';
 //   rateMult  -> resMult[res] (or allMult) *= factor ^ L
 //   convert   -> convert[res] += amount x L         clickEcho -> echo[res] += seconds x L
 //   offlineHours -> offline cap only (tick.ts offlineCapSeconds); no rate effect here
+//   autoClick -> autoClicks += perSecond x L; folded into perSecond after perClick: perSecond[r] += autoClicks x perClick[r]
 //
 // Per second, in RESOURCE_IDS order (me, ee, pr, rs, xf). A converted resource is fed by its
 // source's per-second rate:
@@ -49,6 +50,7 @@ export function computeRates(
   let allMult = 1;
   const convert = emptyResourceMap();
   const echo = emptyResourceMap();
+  let autoClicks = 0;
 
   for (const id of TECH_IDS) {
     const level = state.techLevels[id];
@@ -79,6 +81,9 @@ export function computeRates(
           break;
         case 'offlineHours':
           break;
+        case 'autoClick':
+          autoClicks += effect.perSecond * level;
+          break;
         case 'none':
           break;
       }
@@ -99,6 +104,11 @@ export function computeRates(
   perClick.me = clickAdd * clickMult;
   for (const r of RESOURCE_IDS) {
     if (r !== 'me') perClick[r] = echo[r] * perSecond[r];
+  }
+
+  // servo auto-cranks: each automatic click yields exactly one manual click (after perClick, so no feedback)
+  if (autoClicks !== 0) {
+    for (const r of RESOURCE_IDS) perSecond[r] += autoClicks * perClick[r];
   }
 
   return { perClick, perSecond };

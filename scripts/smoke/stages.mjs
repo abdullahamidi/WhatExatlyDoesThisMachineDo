@@ -6,8 +6,12 @@ const url = process.argv[2], out = process.argv[3], nframes = +(process.argv[4] 
 const S7 = ['wornMotor', 'gearRatio','gearRatio','gearRatio','reinforcedCrank','motorTuning','motorTuning','motorTuning','motorTuning','motorTuning','flywheel','pistonArray','improvedPistons'];
 const S9 = [...S7, '@blueprint', 'generator', ...Array(5).fill('motorRetrofit'), ...Array(20).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(3).fill('transformer'), 'powerLines'];
 const S10 = [...S9, '@substationBlueprint', 'boiler'];
+const S11 = [...S10, ...Array(3).fill('inductionHeater'), ...Array(20).fill('firebox'), 'steamHammer', 'superheater', ...Array(5).fill('condenser'), 'turbine', 'reliefValves', '@pressureVesselBlueprint'];
+const S12 = [...S11, 'resonatorSpire'];
 // the 16 Era III machine parts (WP9 C3), reported for s10_boiler / s11_era3_full
 const PARTS = ['boiler', 'chimney', 'steamManifold', 'pressureGauge', 'gaugeNeedle', 'fireboxGlow1', 'fireboxGlow2', 'fireboxGlow3', 'inductionHeater', 'superheater', 'reliefValves', 'steamHammer', 'hammerRam', 'condenser', 'turbine', 'turbineRotor'];
+// the 16 Era IV machine parts (WP10 C3), reported for s12_spire / s13_era4_full
+const PARTS4 = ['spireTower', 'spireExciter', 'spireWave', 'coilRing1', 'coilRing2', 'coilRing3', 'coilRing4', 'calliope', 'servoBase', 'servoArm', 'koenigFork', 'emitterDishL', 'emitterDishR', 'dishWavesL', 'dishWavesR', 'crystal'];
 const stages = {
   s0_crank: [],
   s1_gear: ['gearRatio'],
@@ -20,7 +24,9 @@ const stages = {
   s8_generator: [...S7, '@blueprint', 'generator'],
   s9_era2_full: S9,
   s10_boiler: S10,
-  s11_era3_full: [...S10, ...Array(3).fill('inductionHeater'), ...Array(20).fill('firebox'), 'steamHammer', 'superheater', ...Array(5).fill('condenser'), 'turbine', 'reliefValves', '@pressureVesselBlueprint'],
+  s11_era3_full: S11,
+  s12_spire: S12,
+  s13_era4_full: [...S12, ...Array(3).fill('crankServo'), ...Array(25).fill('harmonicCoil'), ...Array(3).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(3).fill('standingWave'), 'crystalLattice', '@harmonicConvergence'],
 };
 const only = process.env.ONLY ? process.env.ONLY.split(',') : Object.keys(stages);
 const b = await chromium.launch();
@@ -63,6 +69,9 @@ for (const name of only) {
   console.log(name, 'plaque', JSON.stringify(await p.$eval('#hud-plaque', e => e.textContent.trim()).catch(() => null)));
   if (name === 's10_boiler' || name === 's11_era3_full') {
     console.log(name, 'parts', JSON.stringify(await p.evaluate((ids) => Object.fromEntries(ids.map(i => [i, window.__wedtmd.componentState(i)?.visible ?? null])), PARTS)));
+  }
+  if (name === 's12_spire' || name === 's13_era4_full') {
+    console.log(name, 'parts4', JSON.stringify(await p.evaluate((ids) => Object.fromEntries(ids.map(i => [i, window.__wedtmd.componentState(i)?.visible ?? null])), PARTS4)));
   }
   for (let f = 0; f < nframes; f++) {
     await p.screenshot({ path: `${out}/${name}-f${String(f).padStart(2,'0')}.png` });
