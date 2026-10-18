@@ -387,6 +387,149 @@ describe('WP6c rotation sheets and sky', () => {
   });
 });
 
+/** WP11 era V contract table: id, file, whole-image size, origin, sheet frame (if any), rotation sheet (if any). */
+const ERA5_ENTRIES: ReadonlyArray<{
+  id: AssetId; file: string; width: number; height: number; origin: { x: number; y: number };
+  frame?: { width: number; height: number; count: number }; rotation?: { file: string; frames: number };
+}> = [
+  { id: 'machine.nullGallery', file: 'machine/era5/null-gallery.png', width: 128, height: 30, origin: { x: 0.5, y: 1 } },
+  { id: 'machine.nullChamber', file: 'machine/era5/null-chamber.png', width: 128, height: 116, origin: { x: 0.5, y: 1 } },
+  { id: 'machine.nullCore', file: 'machine/era5/null-core.png', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, rotation: { file: 'machine/era5/rot/null-core-rot.png', frames: 64 } },
+  { id: 'machine.nullCoreGlint', file: 'machine/era5/null-core-glint.png', width: 64, height: 64, origin: { x: 0.5, y: 0.5 } },
+  { id: 'machine.ring1Back', file: 'machine/era5/ring1-back.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 } },
+  { id: 'machine.ring2Back', file: 'machine/era5/ring2-back.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 } },
+  { id: 'machine.ring3Back', file: 'machine/era5/ring3-back.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 } },
+  { id: 'machine.ring4Back', file: 'machine/era5/ring4-back.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 } },
+  { id: 'machine.ring1Front', file: 'machine/era5/ring1-front.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 } },
+  { id: 'machine.ring2Front', file: 'machine/era5/ring2-front.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 } },
+  { id: 'machine.ring3Front', file: 'machine/era5/ring3-front.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 } },
+  { id: 'machine.ring4Front', file: 'machine/era5/ring4-front.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 } },
+  { id: 'machine.ringBead', file: 'machine/era5/ring-bead.png', width: 5, height: 5, origin: { x: 0.5, y: 0.5 } },
+  { id: 'machine.siphonTube', file: 'machine/era5/siphon-tube.png', width: 12, height: 30, origin: { x: 0.5, y: 1 } },
+  { id: 'machine.siphonArcs1', file: 'machine/era5/siphon-arcs-1.png', width: 512, height: 64, origin: { x: 0.5, y: 0.5 }, frame: { width: 128, height: 64, count: 4 } },
+  { id: 'machine.siphonArcs2', file: 'machine/era5/siphon-arcs-2.png', width: 512, height: 64, origin: { x: 0.5, y: 0.5 }, frame: { width: 128, height: 64, count: 4 } },
+  { id: 'machine.siphonArcs3', file: 'machine/era5/siphon-arcs-3.png', width: 512, height: 64, origin: { x: 0.5, y: 0.5 }, frame: { width: 128, height: 64, count: 4 } },
+  { id: 'machine.graviticAnchor', file: 'machine/era5/gravitic-anchor.png', width: 32, height: 128, origin: { x: 0.5, y: 1 } },
+  { id: 'machine.anchorGlow1', file: 'machine/era5/anchor-glow-1.png', width: 128, height: 128, origin: { x: 0.5, y: 1 }, frame: { width: 32, height: 128, count: 4 } },
+  { id: 'machine.anchorGlow2', file: 'machine/era5/anchor-glow-2.png', width: 128, height: 128, origin: { x: 0.5, y: 1 }, frame: { width: 32, height: 128, count: 4 } },
+  { id: 'machine.anchorGlow3', file: 'machine/era5/anchor-glow-3.png', width: 128, height: 128, origin: { x: 0.5, y: 1 }, frame: { width: 32, height: 128, count: 4 } },
+  { id: 'machine.inversionGhost', file: 'machine/era5/inversion-ghost.png', width: 48, height: 48, origin: { x: 0.5, y: 0.5 }, rotation: { file: 'machine/era5/rot/inversion-ghost-rot.png', frames: 80 } },
+  { id: 'machine.lensLight', file: 'machine/era5/lens-light.png', width: 128, height: 48, origin: { x: 0.5, y: 1 }, frame: { width: 32, height: 48, count: 4 } },
+  { id: 'machine.lensColumn', file: 'machine/era5/lens-column.png', width: 32, height: 48, origin: { x: 0.5, y: 1 } },
+  { id: 'machine.aperture', file: 'machine/era5/aperture.png', width: 384, height: 28, origin: { x: 0.5, y: 1 }, frame: { width: 64, height: 28, count: 6 } },
+  { id: 'machine.namePlate', file: 'machine/era5/name-plate.png', width: 240, height: 11, origin: { x: 0.5, y: 1 }, frame: { width: 40, height: 11, count: 6 } },
+  { id: 'bg.skyViolet', file: 'finale/sky-violet.png', width: 1280, height: 720, origin: { x: 0.5, y: 0.5 } },
+  { id: 'bg.eclipse', file: 'finale/eclipse.png', width: 288, height: 48, origin: { x: 0.5, y: 0.5 }, frame: { width: 48, height: 48, count: 6 } },
+  { id: 'bg.horizonGlow', file: 'finale/horizon-glow.png', width: 1280, height: 720, origin: { x: 0.5, y: 0.5 } },
+  { id: 'fx.beam', file: 'fx/beam.png', width: 64, height: 32, origin: { x: 0.5, y: 1 }, frame: { width: 16, height: 32, count: 4 } },
+];
+
+describe('WP11 era V machine and fx assets', () => {
+  it('appends the 30 era V ids after the era IV ids, in contract order (30 new ids, 98 total)', () => {
+    expect(ASSET_IDS.length).toBe(98);
+    expect(ASSET_IDS.slice(-30)).toEqual(ERA5_ENTRIES.map((e) => e.id));
+  });
+
+  it('has the contract file, whole-image width and height, origin and tileable none for each new id', () => {
+    for (const want of ERA5_ENTRIES) {
+      const entry = ASSET_MANIFEST[want.id];
+      expect(entry.file, want.id).toBe(want.file);
+      expect(entry.width, want.id).toBe(want.width);
+      expect(entry.height, want.id).toBe(want.height);
+      expect(entry.origin, want.id).toEqual(want.origin);
+      expect(entry.tileable, want.id).toBe('none');
+      expect(entry.description.trim().length, want.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('has exactly the contract frame (or none) for each new id', () => {
+    for (const want of ERA5_ENTRIES) {
+      expect(ASSET_MANIFEST[want.id].frame, want.id).toEqual(want.frame);
+    }
+  });
+
+  it('has exactly the contract rotation sheets (null core, inversion ghost) and no others among era V', () => {
+    for (const want of ERA5_ENTRIES) {
+      expect(ASSET_MANIFEST[want.id].rotation, want.id).toEqual(want.rotation);
+    }
+    const files = Object.keys(import.meta.glob('/public/assets/**/*.png'));
+    expect(files).toContain('/public/assets/machine/era5/rot/null-core-rot.png');
+    expect(files).toContain('/public/assets/machine/era5/rot/inversion-ghost-rot.png');
+  });
+
+  it('has a disk file for every era V entry and a unique png path per id', () => {
+    const files = Object.keys(import.meta.glob('/public/assets/**/*.png'));
+    for (const want of ERA5_ENTRIES) {
+      expect(files, want.id).toContain(`/public/assets/${want.file}`);
+    }
+    const paths = ERA5_ENTRIES.map((e) => e.file);
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+
+  it('plans the era V sheet entries as spritesheets with their frame, and each null core / inversion ghost #rot right after its entry', () => {
+    const loads = planAssetLoads();
+    for (const want of ERA5_ENTRIES) {
+      if (want.frame === undefined) continue;
+      const load = loads.find((l) => l.key === want.id);
+      expect(load?.kind, want.id).toBe('spritesheet');
+      expect(load?.frame, want.id).toEqual(want.frame);
+    }
+    const keys = loads.map((l) => l.key);
+    expect(keys[keys.indexOf('machine.nullCore#rot') - 1]).toBe('machine.nullCore');
+    expect(keys[keys.indexOf('machine.inversionGhost#rot') - 1]).toBe('machine.inversionGhost');
+    expect(loads.find((l) => l.key === 'machine.nullCore#rot')).toEqual({
+      key: 'machine.nullCore#rot', url: 'assets/machine/era5/rot/null-core-rot.png', kind: 'spritesheet',
+      frame: { width: 64, height: 64, count: 64 },
+    });
+    expect(loads.find((l) => l.key === 'machine.inversionGhost#rot')).toEqual({
+      key: 'machine.inversionGhost#rot', url: 'assets/machine/era5/rot/inversion-ghost-rot.png', kind: 'spritesheet',
+      frame: { width: 48, height: 48, count: 80 },
+    });
+  });
+
+  it('cuts the siphon arcs 2 sheet into 4 cells of 128x64 at x 0, 128, 256, 384', () => {
+    expect(sheetFrameRects(ASSET_MANIFEST['machine.siphonArcs2'])).toEqual([
+      { x: 0, y: 0, width: 128, height: 64 },
+      { x: 128, y: 0, width: 128, height: 64 },
+      { x: 256, y: 0, width: 128, height: 64 },
+      { x: 384, y: 0, width: 128, height: 64 },
+    ]);
+  });
+
+  it('cuts the aperture into 6 cells of 64x28 at x 0..320 step 64', () => {
+    const rects = sheetFrameRects(ASSET_MANIFEST['machine.aperture']);
+    expect(rects.length).toBe(6);
+    rects.forEach((r, i) => {
+      expect(r).toEqual({ x: i * 64, y: 0, width: 64, height: 28 });
+    });
+  });
+
+  it('cuts the name plate into 6 cells of 40x11 at x 0..200 step 40', () => {
+    const rects = sheetFrameRects(ASSET_MANIFEST['machine.namePlate']);
+    expect(rects.length).toBe(6);
+    rects.forEach((r, i) => {
+      expect(r).toEqual({ x: i * 40, y: 0, width: 40, height: 11 });
+    });
+  });
+
+  it('cuts the eclipse into 6 cells of 48x48 at x 0..240 step 48', () => {
+    const rects = sheetFrameRects(ASSET_MANIFEST['bg.eclipse']);
+    expect(rects.length).toBe(6);
+    rects.forEach((r, i) => {
+      expect(r).toEqual({ x: i * 48, y: 0, width: 48, height: 48 });
+    });
+  });
+
+  it('cuts the aperture beam into 4 cells of 16x32 at x 0, 16, 32, 48', () => {
+    expect(sheetFrameRects(ASSET_MANIFEST['fx.beam'])).toEqual([
+      { x: 0, y: 0, width: 16, height: 32 },
+      { x: 16, y: 0, width: 16, height: 32 },
+      { x: 32, y: 0, width: 16, height: 32 },
+      { x: 48, y: 0, width: 16, height: 32 },
+    ]);
+  });
+});
+
 describe('WP10 era IV machine and fx assets', () => {
   const ERA4_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; height: number; origin: { x: number; y: number } }> = [
     { id: 'machine.spireTower', file: 'machine/era4/spire-tower.png', width: 80, height: 320, origin: { x: 0.5, y: 1 } },

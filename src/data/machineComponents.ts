@@ -135,6 +135,16 @@ export const MACHINE_ASSEMBLY = {
 /** Milestone crystal (Era IV): on the milestone tech the crystal holds frame holdFrame for holdMs; the dish waves restart at frame 0. */
 export const RESONANCE_MILESTONE_FX = { techId: 'harmonicConvergence', crystal: 'crystal', holdFrame: 2, holdMs: 1000, restart: ['dishWavesL', 'dishWavesR'] } as const;
 
+/** Era V containment ring ellipses (art px, tilt in degrees): orbitPoint(ring, phi) draws the bead track. */
+export const RING_GEOMETRY = { 1: { a: 36, b: 7, tiltDeg: -10 }, 2: { a: 42, b: 10, tiltDeg: 16 }, 3: { a: 46, b: 13, tiltDeg: -24 }, 4: { a: 50, b: 18, tiltDeg: 30 } } as const;
+
+/** Inversion ghost: a mirror of the hand crank angle, shown for echoSeconds after a click; alpha steps are hard (no fade). */
+export const INVERSION_GHOST_FX = { component: 'inversionGhost', mirrorOf: 'handCrank', echoSeconds: 3, alphaSteps: [{ untilS: 1.5, alpha: 1 }, { untilS: 2.25, alpha: 0.66 }, { untilS: 3, alpha: 0.33 }] } as const;
+
+/** Exotic milestone (finalAlignment): beads swing to beadPhiDeg (align, then hold), the null core spins x3, the anchor glows hold glowFrame. */
+export const EXOTIC_MILESTONE_FX = { techId: 'finalAlignment', beadPhiDeg: 90, alignMs: 1500, holdMs: 2000, core: 'nullCore', coreSpinMult: 3, coreSpinMs: 2000,
+  anchorGlows: ['anchorGlow1L', 'anchorGlow1R', 'anchorGlow2L', 'anchorGlow2R', 'anchorGlow3L', 'anchorGlow3R'], glowFrame: 2, glowHoldMs: 2000 } as const;
+
 /** Drive-train config: one master angle thetaM drives every driven part. */
 export interface DriveTrainConfig {
   masterSpeed: SpeedCurve;                 // deg/s of thetaM, fed by the COMBINED driver (manual activity + ME/s)
@@ -157,6 +167,8 @@ export const MACHINE_LINK_STYLE = {
   rod: { edge: 0x3e4246, core: 0x7d8286, eye: 0x5a5f63, eyeCentre: 0xa3a6a4, eyeRadius: 2 },
   cap: { size: 4, hi: 0xa3a6a4, body: 0x7d8286, ring: 0x1f2225 },
   cable: { depth: MACHINE_LAYER_DEPTH.front + 1, core: 0x2f5a62, hi: 0x5fa8b4, sagArtPx: 10 },
+  // Era V guy cables: dark wire rope under the anchor sprites (cableStyle 'guy').
+  guy: { depth: MACHINE_LAYER_DEPTH.frame + 5, core: 0x3e4246, under: 0x1f2225 },
   // Era III pipes: steam (bright iron, flanged) and feed water (dark, flanged). Fitting colours are the ART_ERA3 section 4 constants.
   pipe: {
     depth: MACHINE_LAYER_DEPTH.frame + 5,
@@ -198,6 +210,9 @@ export const MACHINE_LINKS: readonly MachineLink[] = [
   { from: { component: 'steamManifold', point: 'outR' }, to: { component: 'spireExciter', point: 'steam' }, kind: 'pipe',
     via: [{ x: 48, y: -176 }, { x: 48, y: -126 }], bore: 4, pipeStyle: 'steam' },
   { from: { component: 'servoArm', point: 'pin' }, to: { component: 'handCrank', point: 'pin' }, kind: 'rod', depth: MACHINE_LAYER_DEPTH.front + 4 },
+  // Era V guy cables: chamber yoke eyes to the gravitic anchor eyes (wire rope, no cyan).
+  { from: { component: 'nullChamber', point: 'eyeL' }, to: { component: 'graviticAnchorL', point: 'eye' }, kind: 'cable', sag: 6, cableStyle: 'guy' },
+  { from: { component: 'nullChamber', point: 'eyeR' }, to: { component: 'graviticAnchorR', point: 'eye' }, kind: 'cable', sag: 6, cableStyle: 'guy' },
 ];
 
 /** Static shadow ellipses / strips drawn under the machine. */
@@ -211,6 +226,9 @@ export const MACHINE_SHADOWS: readonly MachineShadow[] = [
   { component: 'boiler', x: -304, y: 0, width: 128, height: 2 },
   { component: 'steamHammer', x: -358, y: 0, width: 48, height: 2 },
   { component: 'condenser', x: -442, y: 0, width: 80, height: 2 },
+  // Era V: the two gravitic anchor footings.
+  { component: 'graviticAnchorL', x: -536, y: 0, width: 32, height: 2 },
+  { component: 'graviticAnchorR', x: 504, y: 0, width: 32, height: 2 },
 ];
 
 export const MACHINE_SHADOW_STYLE = { color: 0x5f5244, alpha: 0.5, depth: -1 } as const;
