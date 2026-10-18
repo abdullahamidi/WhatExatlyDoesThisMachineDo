@@ -41,6 +41,7 @@ export function normalizeSettings(raw: unknown, base?: SettingsState): SettingsS
     masterVolume: pickVolume(src['masterVolume'], fallback.masterVolume),
     sfxVolume: pickVolume(src['sfxVolume'], fallback.sfxVolume),
     ambientVolume: pickVolume(src['ambientVolume'], fallback.ambientVolume),
+    musicVolume: pickVolume(src['musicVolume'], fallback.musicVolume),
     notation: pickNotation(src['notation'], fallback.notation),
     reducedMotion: pickBoolean(src['reducedMotion'], fallback.reducedMotion),
     screenShake: pickBoolean(src['screenShake'], fallback.screenShake),

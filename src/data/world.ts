@@ -82,4 +82,6 @@ export const DUST_RISING: { techId: TechId; minLevel: number; speedY: [number, n
 export const CRANK_FEEDBACK = { degreesPerClick: 90, tweenMs: 160, shakePx: 1 /* art px */, shakeMs: 60,
   floatRisePx: 40, floatMs: 1100, floatPoolSize: 24, hitRadius: 36 /* art px, crank click area */ } as const;
 export const FLOATING_TEXT = { fontSizePx: 24, strokePx: 4, jitterX: 14, spawnOffsetY: -56, color: '#ffd27a' } as const;   // world px
+/** Poll path of the HUD rebuild (WorldScene): at most one rebuild per HUD_REFRESH_MS. Session events rebuild at once. */
+export const HUD_REFRESH_MS = 100;
 export const CRANK_PULSE = { color: 0xffd27a, radiusArtPx: 20, strokeArtPx: 2, alphaPeak: 0.6, periodMs: 1200 } as const;   // first-click ring on the crank (art px)

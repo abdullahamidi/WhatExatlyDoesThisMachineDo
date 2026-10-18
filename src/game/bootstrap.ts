@@ -13,7 +13,7 @@ import { createModalStack, bindEscapeToStack } from '../ui/modalStack';
 import { createHud } from '../ui/hud';
 import { createToasts, connectNotifications, connectAchievements, connectOfflineNotices, connectCycleNotices } from '../ui/toasts';
 import { connectSystemLog } from '../ui/systemLog';
-import { recoveredMessage, welcomeBackMessage } from '../ui/notificationRules';
+import { achievementMessage, recoveredMessage, welcomeBackMessage } from '../ui/notificationRules';
 import { createTechTree } from '../ui/techTree';
 import { createSystemMenu } from '../ui/systemMenu';
 import type { SystemMenuPanel } from '../ui/systemMenu';
@@ -242,6 +242,11 @@ export function bootstrap(): Phaser.Game {
   if (startup.load.status === 'recovered') toasts.show(recoveredMessage());
   const welcome = welcomeBackMessage(startup.offline);
   if (welcome !== null) toasts.show(welcome);
+  // Achievements the boot catch-up unlocked (WP15 T8): their listener ran before connectAchievements, so no repeat.
+  if (startup.bootAchievements.length > 0) {
+    const bootAchievements = achievementMessage(startup.bootAchievements);
+    if (bootAchievements !== null) toasts.show(bootAchievements);
+  }
   connectNotifications(session, toasts);
   connectAchievements(session, toasts);
   connectCycleNotices(session, toasts);

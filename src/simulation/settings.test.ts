@@ -16,7 +16,7 @@ describe('normalizeSettings defaults', () => {
 
   it('keeps valid values unchanged', () => {
     const valid: SettingsState = {
-      muted: true, masterVolume: 40, sfxVolume: 0, ambientVolume: 75,
+      muted: true, masterVolume: 40, sfxVolume: 0, ambientVolume: 75, musicVolume: 20,
       notation: 'engineering', reducedMotion: true, screenShake: false, statusMarkers: true, uiScale: 150,
       confirmNewCycle: false,
     };
@@ -41,6 +41,7 @@ describe('normalizeSettings per field', () => {
     ['masterVolume', '50'], ['masterVolume', true], ['masterVolume', null],
     ['sfxVolume', '50'], ['sfxVolume', null], ['sfxVolume', []],
     ['ambientVolume', '50'], ['ambientVolume', {}],
+    ['musicVolume', '50'], ['musicVolume', null], ['musicVolume', false],
     ['notation', 1], ['notation', null], ['notation', ['suffix']],
     ['reducedMotion', 'true'], ['reducedMotion', 0],
     ['screenShake', 'false'], ['screenShake', null],
@@ -57,7 +58,7 @@ describe('normalizeSettings per field', () => {
 
   it.each(badTypes)('wrong type for %s (%j) falls back to base value', (field, bad) => {
     const base: SettingsState = {
-      muted: true, masterVolume: 30, sfxVolume: 31, ambientVolume: 32,
+      muted: true, masterVolume: 30, sfxVolume: 31, ambientVolume: 32, musicVolume: 33,
       notation: 'scientific', reducedMotion: true, screenShake: false, statusMarkers: true, uiScale: 125,
       confirmNewCycle: false,
     };
@@ -65,8 +66,8 @@ describe('normalizeSettings per field', () => {
     expect(out[field]).toEqual(base[field]);
   });
 
-  const volumes: Array<['masterVolume' | 'sfxVolume' | 'ambientVolume', number, number]> = [];
-  for (const f of ['masterVolume', 'sfxVolume', 'ambientVolume'] as const) {
+  const volumes: Array<['masterVolume' | 'sfxVolume' | 'ambientVolume' | 'musicVolume', number, number]> = [];
+  for (const f of ['masterVolume', 'sfxVolume', 'ambientVolume', 'musicVolume'] as const) {
     volumes.push(
       [f, 0, 0],
       [f, 100, 100],
@@ -87,13 +88,14 @@ describe('normalizeSettings per field', () => {
     ['masterVolume', NaN],
     ['sfxVolume', NaN],
     ['ambientVolume', NaN],
+    ['musicVolume', NaN],
     ['masterVolume', Infinity],
     ['sfxVolume', -Infinity],
   ] as const)('non-finite volume %s = %d falls back to default', (field, raw) => {
     expect(normalizeSettings({ [field]: raw })[field]).toBe(D[field]);
   });
 
-  it.each(['masterVolume', 'sfxVolume', 'ambientVolume'] as const)(
+  it.each(['masterVolume', 'sfxVolume', 'ambientVolume', 'musicVolume'] as const)(
     'non-finite volume %s uses base when base is given',
     (field) => {
       const base = { ...D, [field]: 33 };
@@ -175,7 +177,7 @@ describe('settings data sanity', () => {
   });
 
   it('default volumes sit inside the volume range', () => {
-    for (const v of [D.masterVolume, D.sfxVolume, D.ambientVolume]) {
+    for (const v of [D.masterVolume, D.sfxVolume, D.ambientVolume, D.musicVolume]) {
       expect(v).toBeGreaterThanOrEqual(VOLUME_RANGE.min);
       expect(v).toBeLessThanOrEqual(VOLUME_RANGE.max);
     }
@@ -195,6 +197,29 @@ describe('settings data sanity', () => {
     expect(D.reducedMotion).toBe(false);
     expect(D.statusMarkers).toBe(false);
     expect(D.muted).toBe(false);
+  });
+
+  it('music volume defaults to 70 and sits inside the volume range', () => {
+    expect(D.musicVolume).toBe(70);
+    expect(D.musicVolume).toBeGreaterThanOrEqual(VOLUME_RANGE.min);
+    expect(D.musicVolume).toBeLessThanOrEqual(VOLUME_RANGE.max);
+  });
+
+  it('v2 save without musicVolume loads with 70 and keeps every other field', () => {
+    const saved: Record<string, unknown> = { ...D, muted: true, sfxVolume: 40 };
+    delete saved['musicVolume'];
+    const wire = JSON.parse(JSON.stringify(saved)) as unknown;
+    const out = normalizeSettings(wire);
+    expect(out.musicVolume).toBe(70);
+    expect(out).toEqual({ ...D, muted: true, sfxVolume: 40 });
+  });
+
+  it('music volume round-trips through JSON and clamps like the other sliders', () => {
+    const wire = JSON.parse(JSON.stringify({ ...D, musicVolume: 35 })) as unknown;
+    expect(normalizeSettings(wire).musicVolume).toBe(35);
+    expect(normalizeSettings({ musicVolume: 250 }).musicVolume).toBe(100);
+    expect(normalizeSettings({ musicVolume: -3 }).musicVolume).toBe(0);
+    expect(normalizeSettings({ musicVolume: NaN }).musicVolume).toBe(70);
   });
 
   it('confirm new cycle is on by default and keeps a valid boolean', () => {

@@ -1,5 +1,6 @@
 import { GameSession } from '../simulation';
 import type { OfflineReport, LoadResult } from '../data/types';
+import type { AchievementId } from '../data/achievements';
 import type { SaveManager } from './saveManager';
 
 /** Everything the host needs after boot: the live session plus what happened while loading. */
@@ -8,6 +9,8 @@ export interface StartupResult {
   load: LoadResult;
   offline: OfflineReport;
   saved: boolean;
+  /** Achievements unlocked by the boot offline catch-up (WP15 T8), in unlock order. Empty on a fresh start. */
+  bootAchievements: AchievementId[];
 }
 
 /**
@@ -31,14 +34,24 @@ export function startSession(
     prestige: load.prestige,
     now: clock,
   });
-  const offline = session.applyOffline(nowMs);
+  // Listener before applyOffline: the boot catch-up can unlock achievements, and nothing else hears them yet.
+  const bootAchievements: AchievementId[] = [];
+  const offAchievements = session.on('achievement', ({ ids }) => {
+    bootAchievements.push(...ids);
+  });
+  let offline: OfflineReport;
+  try {
+    offline = session.applyOffline(nowMs);
+  } finally {
+    offAchievements();
+  }
   if (load.error !== undefined && load.status === 'new') {
-    return { session, load, offline, saved: false };
+    return { session, load, offline, saved: false, bootAchievements };
   }
   const saved = saveManager.save(session.state, session.settings, nowMs, {
     stats: session.stats,
     achievements: session.achievements,
     prestige: session.prestige,
   });
-  return { session, load, offline, saved };
+  return { session, load, offline, saved, bootAchievements };
 }

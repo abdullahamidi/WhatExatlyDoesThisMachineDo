@@ -55,6 +55,7 @@ export type UiScale = 100 | 125 | 150;
 export interface SettingsState {
   muted: boolean;
   masterVolume: number; sfxVolume: number; ambientVolume: number;   // int 0..100, default 100
+  musicVolume: number;                  // int 0..100, default 70 (WP15); missing in old saves -> 70
   notation: NumberNotation;             // default 'suffix'
   reducedMotion: boolean;               // default false
   screenShake: boolean;                 // default true; ignored (off) while reducedMotion

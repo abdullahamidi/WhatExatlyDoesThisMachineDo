@@ -1,5 +1,5 @@
 import './systemMenu.css';
-import { MENU_TABS, MENU_TEXT, SYSTEM_MENU_CONFIG } from '../data/systemMenu';
+import { MENU_REFRESH_MS, MENU_TABS, MENU_TEXT, SYSTEM_MENU_CONFIG } from '../data/systemMenu';
 import { UI_ART } from '../data/achievements';
 import { trapFocus } from './hotkeys';
 import type { ModalStack } from './modalStack';
@@ -39,6 +39,31 @@ export interface SystemMenuDeps {
 }
 
 export interface SystemMenu { open(): void; close(): void; toggle(): void; isOpen(): boolean; destroy(): void }
+
+/** Timer pair the refresh loop needs; injected so tests can use fake timers. */
+export interface IntervalTimers<H> { setInterval(fn: () => void, ms: number): H; clearInterval(handle: H): void }
+
+/** Repeating tick with idempotent start/stop (start while running and stop while stopped do nothing). */
+export interface PeriodicRefresh { start(): void; stop(): void; running(): boolean }
+
+export function createPeriodicRefresh<H>(tick: () => void, everyMs: number, timers: IntervalTimers<H>): PeriodicRefresh {
+  let handle: { value: H } | null = null;
+  return {
+    start(): void {
+      if (handle !== null) return;
+      handle = { value: timers.setInterval(tick, everyMs) };
+    },
+    stop(): void {
+      if (handle === null) return;
+      const current = handle;
+      handle = null;
+      timers.clearInterval(current.value);
+    },
+    running(): boolean {
+      return handle !== null;
+    },
+  };
+}
 
 const MENU_STACK_ID = 'system-menu';
 const RESET_STACK_ID = 'system-reset';
@@ -161,6 +186,12 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
   let activeIndex = 0;
   let disposeFocusTrap: (() => void) | null = null;
   const tabUnbinders: Array<() => void> = [];
+  // Live refresh of the active panel while the menu is open (STATS playtime etc.). Started in open(), stopped in close().
+  const menuRefresh = createPeriodicRefresh(
+    () => tabs[activeIndex]?.handle?.refresh(),
+    MENU_REFRESH_MS,
+    { setInterval: (fn, ms) => window.setInterval(fn, ms), clearInterval: (h) => window.clearInterval(h) },
+  );
 
   const refreshMute = (): void => {
     muteButton.textContent = muteLabel(deps.isMuted());
@@ -283,12 +314,14 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     refreshNewCycle();
     disposeFocusTrap = trapFocus(overlay);
     modals.push(MENU_STACK_ID, close);
+    menuRefresh.start();
     closeButton.focus();
   }
 
   function close(): void {
     if (!isOpenFlag) return;
     isOpenFlag = false;
+    menuRefresh.stop();
     releaseFocusTrap();
     dispatchReset('cancel');
     for (const tab of tabs) tab.handle?.hide?.();
@@ -381,6 +414,7 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
   function destroy(): void {
     if (destroyed) return;
     close();
+    menuRefresh.stop();
     dispatchReset('cancel');
     destroyed = true;
     releaseFocusTrap();

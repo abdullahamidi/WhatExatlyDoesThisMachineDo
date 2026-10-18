@@ -52,6 +52,8 @@ declare global {
       skipFinale(): void;
       finaleSeek(t: number): void;
       displayObjects(): number;
+      uiStats(): { meanMs: number; maxMs: number };
+      perfMarks(): { bootStartMs: number; firstFrameMs: number } | null;
       prestige(): PrestigeState;
       cycleState(): CycleDebugState;
     };
@@ -115,6 +117,16 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
   });
   /** Display list size of the world scene (perf probe). */
   const displayObjects = (): number => game.scene.getScene('World').children.list.length;
+  /** Session update + HUD + tech tree time per frame (WP15), last 120 frames; zeros while the world scene is missing. */
+  const uiStats = (): { meanMs: number; maxMs: number } =>
+    game.scene.getScene<WorldScene>('World')?.getUiStats() ?? { meanMs: 0, maxMs: 0 };
+  /** Performance marks (WP15): boot (first line of main.ts) and the first world-scene update; null when neither exists. */
+  const perfMarks = (): { bootStartMs: number; firstFrameMs: number } | null => {
+    const boot = performance.getEntriesByName('wedtmd:boot')[0];
+    const firstFrame = performance.getEntriesByName('wedtmd:first-frame')[0];
+    if (boot === undefined && firstFrame === undefined) return null;
+    return { bootStartMs: boot?.startTime ?? 0, firstFrameMs: firstFrame?.startTime ?? 0 };
+  };
   window.__wedtmd = {
     session,
     crankClientPoint,
@@ -130,6 +142,8 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     skipFinale,
     finaleSeek,
     displayObjects,
+    uiStats,
+    perfMarks,
     prestige,
     cycleState,
   };

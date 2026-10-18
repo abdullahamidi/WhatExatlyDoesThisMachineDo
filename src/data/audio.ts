@@ -1,6 +1,9 @@
 // Sound tuning. Every audio number lives here; src/audio only reads it.
 // Times are in seconds unless the key ends in Ms. Gains are linear (0..1 scale).
 
+// Ambient beds that bedTrim scales per era (WP15).
+export type BedId = 'hum' | 'gear' | 'mains' | 'boiler' | 'pad' | 'servo' | 'drone' | 'wind';
+
 export const AUDIO = {
   // Master bus: target level, fade time when toggled, and how often the ambient loop updates.
   masterGain: 0.3,
@@ -105,4 +108,19 @@ export const AUDIO = {
     clickMs: 50,
     clickGain: 0.12,
   },
+
+  // Ambient bed trims per era I..V (WP15 D8): older beds recede as later eras arrive. 1 = no change (before the bed exists it is 1).
+  bedTrim: {
+    hum: [1, 0.85, 0.7, 0.6, 0.5],
+    gear: [1, 0.85, 0.7, 0.6, 0.5],
+    mains: [1, 1, 0.8, 0.7, 0.6],
+    boiler: [1, 1, 1, 0.8, 0.7],
+    pad: [1, 1, 1, 1, 0.8],
+    servo: [1, 1, 1, 1, 0.9],
+    drone: [1, 1, 1, 1, 1],
+    wind: [1, 1, 1, 1, 1],
+  } satisfies Record<BedId, readonly [number, number, number, number, number]>,
+
+  // Master limiter (WP15 mix): catches peaks after the master gain. Attack and release in seconds.
+  limiter: { threshold: -10, knee: 6, ratio: 4, attack: 0.005, release: 0.25 },
 } as const;

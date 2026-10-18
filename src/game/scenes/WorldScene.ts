@@ -5,7 +5,7 @@ import type { TechTree } from '../../ui/techTree';
 import type { ModalStack } from '../../ui/modalStack';
 import type { FinaleOverlayHandle } from '../../ui/finale';
 import { buildHudView } from '../../ui/hudView';
-import { APERTURE_BEAM, DUST_RISING, PYLON_FEEDS } from '../../data/world';
+import { APERTURE_BEAM, DUST_RISING, HUD_REFRESH_MS, PYLON_FEEDS } from '../../data/world';
 import { ParallaxBackground } from '../rendering/ParallaxBackground';
 import { PylonLine } from '../rendering/PylonLine';
 import { SteamFx } from '../rendering/SteamFx';
@@ -25,6 +25,34 @@ import { motionPolicy } from '../../simulation';
 
 /** Modal id held on the stack while the new-cycle transition runs (input lock). */
 const CYCLE_MODAL_ID = 'cycle';
+
+/** Frames kept for the uiStats probe (debug hook). */
+const UI_STATS_FRAMES = 120;
+
+/** Ring of the last UI_STATS_FRAMES frame timings (ms). Preallocated: recording a frame allocates nothing. */
+class FrameTimings {
+  private readonly samples = new Float64Array(UI_STATS_FRAMES);
+  private count = 0;
+  private next = 0;
+
+  record(ms: number): void {
+    this.samples[this.next] = ms;
+    this.next = (this.next + 1) % UI_STATS_FRAMES;
+    if (this.count < UI_STATS_FRAMES) this.count += 1;
+  }
+
+  stats(): { meanMs: number; maxMs: number } {
+    if (this.count === 0) return { meanMs: 0, maxMs: 0 };
+    let sum = 0;
+    let max = 0;
+    for (let i = 0; i < this.count; i += 1) {
+      const ms = this.samples[i] ?? 0;
+      sum += ms;
+      if (ms > max) max = ms;
+    }
+    return { meanMs: sum / this.count, maxMs: max };
+  }
+}
 
 /** UI handles WorldScene needs: the HUD / dialogs, the finale overlay, and the late-bound finale skip target and cycle port. */
 export interface WorldUi {
@@ -52,6 +80,10 @@ export class WorldScene extends Phaser.Scene {
   private beam: ApertureBeam | null = null;
   private finale: FinaleDirector | null = null;
   private cycleTransition: CycleTransition | null = null;
+  /** performance.now() of the last HUD rebuild (poll or event); the poll waits HUD_REFRESH_MS after it. */
+  private hudRenderedAtMs = Number.NEGATIVE_INFINITY;
+  private readonly frameTimings = new FrameTimings();
+  private firstFrameMarked = false;
 
   constructor(ctx: GameContext, ui: WorldUi) {
     super('World');
@@ -171,6 +203,21 @@ export class WorldScene extends Phaser.Scene {
       this.disposables.length = 0;
     });
 
+    // HUD refresh (WP15): the poll in update waits HUD_REFRESH_MS between rebuilds, so the events that change what the
+    // player just did rebuild at once (same frame as the crank's +ME text). Unsubscribed on shutdown.
+    const refreshHud = (): void => this.renderHud();
+    const session = this.ctx.session;
+    this.disposables.push(
+      session.on('click', refreshHud),
+      session.on('purchase', refreshHud),
+      session.on('unlock', refreshHud),
+      session.on('prestige', refreshHud),
+      session.on('reset', refreshHud),
+      session.on('cycle', refreshHud),
+      session.on('ending', refreshHud),
+      session.on('settings', refreshHud),
+    );
+
     this.renderHud();
   }
 
@@ -189,9 +236,20 @@ export class WorldScene extends Phaser.Scene {
     return this.cycleTransition;
   }
 
+  /** Mean and max frame time (ms) of session update + HUD + tech tree over the last 120 frames (zeros before the first frame). */
+  getUiStats(): { meanMs: number; maxMs: number } {
+    return this.frameTimings.stats();
+  }
+
   // Required here: Phaser's Scene typings declare update(time, delta), unlike create/preload/init.
   override update(_time: number, delta: number): void {
+    if (!this.firstFrameMarked) {
+      this.firstFrameMarked = true;
+      performance.mark('wedtmd:first-frame');
+    }
+    const sessionStart = performance.now();
     this.ctx.session.update();
+    const sessionEnd = performance.now();
     this.background?.update(this.ctx.session.state.techLevels, delta);
     for (const line of this.pylonLines) line.update(this.cameras.main, this.ctx.session.state.techLevels, delta);
     this.machineView?.update(delta);
@@ -204,8 +262,12 @@ export class WorldScene extends Phaser.Scene {
     this.finale?.update(delta);
     // The cycle transition runs after the director: its peak swaps the run (reset) before the HUD check below.
     this.cycleTransition?.update(delta);
-    if (this.ctx.session.revision !== this.lastRevision) this.renderHud();
+    // Poll path: at most one rebuild per HUD_REFRESH_MS. Events in create() rebuild at once, so nothing the player
+    // just did waits for the poll.
+    const hudStart = performance.now();
+    if (this.ctx.session.revision !== this.lastRevision && hudStart - this.hudRenderedAtMs >= HUD_REFRESH_MS) this.renderHud();
     this.ui.techTree.update();
+    this.frameTimings.record((sessionEnd - sessionStart) + (performance.now() - hudStart));
     // Phaser also handles window-level mouse events, so a DOM overlay alone does not shield the canvas.
     // Gate on any modal dialog open (tech tree, system menu, reset confirm), not just the tech tree.
     this.input.enabled = !this.ui.modals.isOpen();
@@ -237,6 +299,7 @@ export class WorldScene extends Phaser.Scene {
   private renderHud(): void {
     const session = this.ctx.session;
     this.lastRevision = session.revision;
+    this.hudRenderedAtMs = performance.now();
     this.ui.hud.render(buildHudView(session.state, session.rates, session.prestige));
   }
 }

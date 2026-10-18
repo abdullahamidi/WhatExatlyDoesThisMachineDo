@@ -6,6 +6,9 @@ export const SYSTEM_MENU_CONFIG = {
   saveFeedbackMs: 1600,
 } as const;
 
+// While the SYSTEM menu is open, the active tab panel refreshes this often (ms), so live stats (PLAYTIME) advance.
+export const MENU_REFRESH_MS = 1000;
+
 export const MUTE_LABELS = {
   on: 'AUDIO: ON',
   off: 'AUDIO: OFF',

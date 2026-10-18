@@ -206,6 +206,37 @@ describe('startSession', () => {
     expect(deserialize(storage.getItem(SAVE_KEY), t0).prestige).toEqual({ cycle: 1, echoesEarned: 0, perks: [] });
   });
 
+  it('(h) a 2 h offline gap unlocks shortNap at boot and reports it in bootAchievements', () => {
+    const storage = new MemoryStorage();
+    const state = withLevels({}, { lastSimTime: t0 - 2 * HOUR_MS, createdAt: t0 - 3 * HOUR_MS });
+    storage.setItem(SAVE_KEY, serialize(state, { ...DEFAULT_SETTINGS, muted: false }, t0 - 2 * HOUR_MS));
+
+    const result = startSession(new SaveManager(storage), t0, clock);
+    expect(result.offline.elapsedSeconds).toBe(7200);
+    expect(result.bootAchievements).toContain('shortNap');
+    expect(result.session.achievements.unlocked.shortNap).toBe(t0);
+  });
+
+  it('(h2) an achievement already unlocked before boot is not reported again', () => {
+    const storage = new MemoryStorage();
+    const state = withLevels({}, { lastSimTime: t0 - 2 * HOUR_MS, createdAt: t0 - 3 * HOUR_MS });
+    const achievements = { unlocked: { shortNap: t0 - 5000 } };
+    const prestige = { cycle: 1, echoesEarned: 0, perks: [] };
+    storage.setItem(
+      SAVE_KEY,
+      serialize(state, { ...DEFAULT_SETTINGS, muted: false }, t0 - 2 * HOUR_MS, { stats: emptyStats(t0), achievements, prestige }),
+    );
+
+    const result = startSession(new SaveManager(storage), t0, clock);
+    expect(result.bootAchievements).not.toContain('shortNap');
+    expect(result.session.achievements.unlocked.shortNap).toBe(t0 - 5000);
+  });
+
+  it('(h3) a fresh start reports no boot achievements', () => {
+    const result = startSession(new SaveManager(new MemoryStorage()), t0, clock);
+    expect(result.bootAchievements).toEqual([]);
+  });
+
   it('reports saved false when storage refuses writes, without throwing', () => {
     const refusing = {
       getItem: (): string | null => null,
