@@ -14,8 +14,9 @@
 | WP6 | Mechanical correctness + art polish (Art Director audit → drive train, assets, RotSprite) | ✅ done |
 | WP7 | Multi-resource core (ME/EE/PR/RS/XF), save v2 migration, number suffixes to Dc, greedy sim harness | ✅ done |
 | WP8 | Multi-era infra + Era II Electrical (generator, coils, capacitor rack, spark gap, transformer, mast, lit pylons, era tabs, camera auto-frame, plaque) | ✅ done |
-| WP9 | Era III Thermal/Pressure (boiler, chimney, steam hammer, turbine, pipes, FX) | in progress |
-| WP10+ | Eras IV–V, finale, prestige, settings, stats per ROADMAP_FULL | — |
+| WP9 | Era III Thermal/Pressure (boiler, chimney, steam hammer, turbine, pipes, steam/smoke FX, relief valves offline buffer) | ✅ done |
+| WP10 | Era IV Resonance (spire, coils, crystal, dishes, calliope, fork, crank servo autoClick) | in progress |
+| WP11+ | Era V, finale/reveal, prestige (Echoes), settings, stats/achievements per ROADMAP_FULL | — (art ready: ART_ERA5.md) |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -42,7 +43,7 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 908 pass (41 files) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 1072 pass (43 files) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
@@ -50,12 +51,11 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   Generator Blueprint 22:06.
 
 ## Balance (greedy harness, fast profile)
-Era I: blueprint 22:06 · Era II: generator 29:18, substation 60:23 · Era III target: vessel ~112 min.
+Era I: blueprint 22:06 · Era II: generator 29:18, substation 60:23 · Era III (A/B/C): boiler 67:17/80:00/164:30, vessel 112:14/126:01/260:31.
 
 ## Known issues
 - Pylon cables peak slightly at tile seams (art; minor).
 - Audio verified by code review only (no audible check in CI).
-- `fx.steam` sprite exists but no renderer uses it yet.
 - Thin cloud streaks behind the sun (cosmetic, accepted).
 - Some WP6 parts (gears, pulleys, yoke) are hand-pixelled to exact geometry rather than PixelLab output.
 - Phaser chunk >500 KB by nature; warning limit raised rather than removed.
