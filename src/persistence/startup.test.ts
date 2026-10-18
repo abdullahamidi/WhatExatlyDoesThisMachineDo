@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { GameState, TechId } from '../data/types';
 import { OFFLINE_CAP_SECONDS, SAVE_BACKUP_KEY, SAVE_KEY } from '../data/balance';
 import { computeRates } from '../simulation/production/rates';
-import { createInitialState } from '../simulation/state';
+import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
 import { serialize } from './codec';
 import { MemoryStorage, SaveManager } from './saveManager';
 import { startSession } from './startup';
@@ -36,7 +36,7 @@ describe('startSession', () => {
     const state = withLevels({ wornMotor: 1 }, { lastSimTime: t0 - 2 * HOUR_MS, createdAt: t0 - 3 * HOUR_MS });
     const perSecond = computeRates(state).perSecond.me;
     expect(perSecond).toBeGreaterThan(0);
-    storage.setItem(SAVE_KEY, serialize(state, { muted: false }, t0 - 2 * HOUR_MS));
+    storage.setItem(SAVE_KEY, serialize(state, { ...DEFAULT_SETTINGS, muted: false }, t0 - 2 * HOUR_MS));
 
     const first = startSession(mgr, t0, clock);
     expect(first.load.status).toBe('loaded');
@@ -52,7 +52,7 @@ describe('startSession', () => {
     const storage = new MemoryStorage();
     const state = withLevels({ wornMotor: 1 }, { lastSimTime: t0 - 10 * HOUR_MS });
     const perSecond = computeRates(state).perSecond.me;
-    storage.setItem(SAVE_KEY, serialize(state, { muted: false }, t0 - 10 * HOUR_MS));
+    storage.setItem(SAVE_KEY, serialize(state, { ...DEFAULT_SETTINGS, muted: false }, t0 - 10 * HOUR_MS));
 
     const result = startSession(new SaveManager(storage), t0, clock);
     expect(result.offline.elapsedSeconds).toBe(36000);
@@ -64,7 +64,7 @@ describe('startSession', () => {
     const storage = new MemoryStorage();
     const state = withLevels({ wornMotor: 1, reliefValves: 1 }, { lastSimTime: t0 - 14 * HOUR_MS });
     const perSecond = computeRates(state).perSecond.me;
-    storage.setItem(SAVE_KEY, serialize(state, { muted: false }, t0 - 14 * HOUR_MS));
+    storage.setItem(SAVE_KEY, serialize(state, { ...DEFAULT_SETTINGS, muted: false }, t0 - 14 * HOUR_MS));
 
     const result = startSession(new SaveManager(storage), t0, clock);
     expect(result.offline.elapsedSeconds).toBe(50400);
@@ -75,7 +75,7 @@ describe('startSession', () => {
   it('(c3) relief valves: a 10 h gap is not capped (36000 s)', () => {
     const storage = new MemoryStorage();
     const state = withLevels({ wornMotor: 1, reliefValves: 1 }, { lastSimTime: t0 - 10 * HOUR_MS });
-    storage.setItem(SAVE_KEY, serialize(state, { muted: false }, t0 - 10 * HOUR_MS));
+    storage.setItem(SAVE_KEY, serialize(state, { ...DEFAULT_SETTINGS, muted: false }, t0 - 10 * HOUR_MS));
 
     const result = startSession(new SaveManager(storage), t0, clock);
     expect(result.offline.elapsedSeconds).toBe(36000);
@@ -85,7 +85,7 @@ describe('startSession', () => {
   it('(c4) without relief valves a 14 h gap stays capped at 28800 s', () => {
     const storage = new MemoryStorage();
     const state = withLevels({ wornMotor: 1 }, { lastSimTime: t0 - 14 * HOUR_MS });
-    storage.setItem(SAVE_KEY, serialize(state, { muted: false }, t0 - 14 * HOUR_MS));
+    storage.setItem(SAVE_KEY, serialize(state, { ...DEFAULT_SETTINGS, muted: false }, t0 - 14 * HOUR_MS));
 
     const result = startSession(new SaveManager(storage), t0, clock);
     expect(result.offline.elapsedSeconds).toBe(50400);
@@ -106,7 +106,7 @@ describe('startSession', () => {
 
   it('(e) muted setting survives load and the next save', () => {
     const storage = new MemoryStorage();
-    storage.setItem(SAVE_KEY, serialize(createInitialState(t0), { muted: true }, t0));
+    storage.setItem(SAVE_KEY, serialize(createInitialState(t0), { ...DEFAULT_SETTINGS, muted: true }, t0));
 
     const first = startSession(new SaveManager(storage), t0, clock);
     expect(first.session.settings.muted).toBe(true);

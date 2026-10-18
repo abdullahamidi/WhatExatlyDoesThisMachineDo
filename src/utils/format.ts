@@ -1,3 +1,7 @@
+import type { NumberNotation } from '../data/types';
+
+export type { NumberNotation };
+
 export const NUMBER_SUFFIXES: ReadonlyArray<{ value: number; suffix: string }> = [
   { value: 1e3, suffix: 'K' },
   { value: 1e6, suffix: 'M' },
@@ -14,8 +18,16 @@ export const NUMBER_SUFFIXES: ReadonlyArray<{ value: number; suffix: string }> =
 
 export type RoundMode = 'floor' | 'ceil' | 'round';
 
-/** 'suffix' = K..Dc then exponent form; 'scientific' = d.dde<n>; 'engineering' = exponent multiple of 3. */
-export type NumberNotation = 'suffix' | 'scientific' | 'engineering';
+/** Module-level default notation (the player's setting). Read at call time by every formatter. */
+let defaultNotation: NumberNotation = 'suffix';
+
+export function setDefaultNotation(n: NumberNotation): void {
+  defaultNotation = n;
+}
+
+export function getDefaultNotation(): NumberNotation {
+  return defaultNotation;
+}
 
 const EPSILON = 1e-9;
 const EXPONENT_CEILING = '1.00e36';
@@ -88,13 +100,10 @@ function formatMagnitude(a: number, mode: RoundMode, notation: NumberNotation): 
   return formatThousandsAndUp(a, mode, notation);
 }
 
-export function formatNumber(
-  n: number,
-  mode: RoundMode = 'floor',
-  notation: NumberNotation = 'suffix',
-): string {
+/** Explicit `notation` wins; otherwise the default notation set by setDefaultNotation. */
+export function formatNumber(n: number, mode: RoundMode = 'floor', notation?: NumberNotation): string {
   if (!Number.isFinite(n)) return '0';
-  const body = formatMagnitude(Math.abs(n), mode, notation);
+  const body = formatMagnitude(Math.abs(n), mode, notation ?? defaultNotation);
   return n < 0 && body !== '0' ? `-${body}` : body;
 }
 

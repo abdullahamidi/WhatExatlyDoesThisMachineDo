@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel } from './systemMenuModel';
+import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel, nextTab, clampTab } from './systemMenuModel';
 import type { ResetState } from './systemMenuModel';
 import { SYSTEM_MENU_CONFIG } from '../data/systemMenu';
 
@@ -88,5 +88,66 @@ describe('labels', () => {
     expect(resetLabel({ stage: 'armed', armedAt: 0 })).toBe('CONFIRM: ERASE ALL?');
     expect(saveFeedbackLabel(true)).toBe('STATE WRITTEN');
     expect(saveFeedbackLabel(false)).toBe('WRITE FAILED');
+  });
+});
+
+describe('nextTab', () => {
+  it('moves right and left by one', () => {
+    expect(nextTab(0, 4, 'ArrowRight')).toBe(1);
+    expect(nextTab(2, 4, 'ArrowRight')).toBe(3);
+    expect(nextTab(3, 4, 'ArrowLeft')).toBe(2);
+  });
+
+  it('wraps at both ends', () => {
+    expect(nextTab(3, 4, 'ArrowRight')).toBe(0);
+    expect(nextTab(0, 4, 'ArrowLeft')).toBe(3);
+  });
+
+  it('Home goes to the first tab and End to the last', () => {
+    expect(nextTab(2, 4, 'Home')).toBe(0);
+    expect(nextTab(1, 4, 'End')).toBe(3);
+    expect(nextTab(0, 4, 'Home')).toBe(0);
+    expect(nextTab(3, 4, 'End')).toBe(3);
+  });
+
+  it('a single tab stays on itself for every key', () => {
+    for (const key of ['ArrowRight', 'ArrowLeft', 'Home', 'End'] as const) {
+      expect(nextTab(0, 1, key)).toBe(0);
+    }
+  });
+
+  it('no tabs returns 0', () => {
+    expect(nextTab(0, 0, 'ArrowRight')).toBe(0);
+    expect(nextTab(0, 0, 'End')).toBe(0);
+  });
+
+  it('clamps an out-of-range current index before moving', () => {
+    expect(nextTab(9, 4, 'ArrowRight')).toBe(0);
+    expect(nextTab(-3, 4, 'ArrowLeft')).toBe(3);
+    expect(nextTab(Number.NaN, 4, 'ArrowRight')).toBe(1);
+  });
+});
+
+describe('clampTab', () => {
+  it('keeps in-range indexes', () => {
+    expect(clampTab(0, 3)).toBe(0);
+    expect(clampTab(2, 3)).toBe(2);
+  });
+
+  it('clamps below 0 and above count - 1', () => {
+    expect(clampTab(-1, 3)).toBe(0);
+    expect(clampTab(3, 3)).toBe(2);
+    expect(clampTab(100, 3)).toBe(2);
+  });
+
+  it('non-finite index and empty tab lists give 0', () => {
+    expect(clampTab(Number.NaN, 3)).toBe(0);
+    expect(clampTab(Number.POSITIVE_INFINITY, 3)).toBe(0);
+    expect(clampTab(5, 0)).toBe(0);
+  });
+
+  it('single tab always 0', () => {
+    expect(clampTab(0, 1)).toBe(0);
+    expect(clampTab(7, 1)).toBe(0);
   });
 });

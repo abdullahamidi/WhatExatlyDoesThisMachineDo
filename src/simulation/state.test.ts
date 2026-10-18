@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { TECH_IDS, RESOURCE_IDS } from '../data/types';
+import { DEFAULT_SETTINGS_VALUES } from '../data/settings';
 import { createInitialState, DEFAULT_SETTINGS } from './state';
 
 describe('createInitialState', () => {
@@ -38,6 +39,14 @@ describe('createInitialState', () => {
 
 describe('DEFAULT_SETTINGS', () => {
   it('is unmuted by default', () => {
-    expect(DEFAULT_SETTINGS).toEqual({ muted: false });
+    expect(DEFAULT_SETTINGS).toEqual({ ...DEFAULT_SETTINGS, muted: false });
+  });
+
+  it('deep-equals the default settings values', () => {
+    expect(DEFAULT_SETTINGS).toEqual(DEFAULT_SETTINGS_VALUES);
+  });
+
+  it('is a fresh object, not the shared values object', () => {
+    expect(DEFAULT_SETTINGS).not.toBe(DEFAULT_SETTINGS_VALUES);
   });
 });

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { GameState, SettingsState } from '../data/types';
 import { AUTOSAVE_INTERVAL_MS, SAVE_KEY } from '../data/balance';
 import { GameSession } from '../simulation';
-import { createInitialState } from '../simulation/state';
+import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
 import { emptyResourceMap } from '../simulation/resources';
 import { deserialize } from './codec';
 import { MemoryStorage, SaveManager } from './saveManager';
@@ -59,7 +59,7 @@ const withMe = (me: number, muted = false): { state: GameState; settings: Settin
     res: { ...emptyResourceMap(), me },
     lifetime: { ...emptyResourceMap(), me },
   },
-  settings: { muted },
+  settings: { ...DEFAULT_SETTINGS, muted },
 });
 
 function setup(storage: KeyValueStorage = new CountingStorage(), me = 1000) {
@@ -219,7 +219,7 @@ describe('createSaveController', () => {
     ];
     for (const { field, state } of cases) {
       const storage = new CountingStorage();
-      const session = new GameSession({ state, settings: { muted: false }, now: () => t0 });
+      const session = new GameSession({ state, settings: { ...DEFAULT_SETTINGS, muted: false }, now: () => t0 });
       const controller = createSaveController({
         session,
         saveManager: new SaveManager(storage),
@@ -243,7 +243,7 @@ describe('createSaveController', () => {
   it('saveNow() writes again once the counters are finite', () => {
     const storage = new CountingStorage();
     const state = { ...createInitialState(t0), lastSimTime: Number.POSITIVE_INFINITY };
-    const session = new GameSession({ state, settings: { muted: false }, now: () => t0 });
+    const session = new GameSession({ state, settings: { ...DEFAULT_SETTINGS, muted: false }, now: () => t0 });
     const controller = createSaveController({
       session,
       saveManager: new SaveManager(storage),

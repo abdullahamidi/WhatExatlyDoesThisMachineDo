@@ -1,11 +1,21 @@
 import './systemMenu.css';
-import { SYSTEM_MENU_CONFIG } from '../data/systemMenu';
+import { MENU_TABS, MENU_TEXT, SYSTEM_MENU_CONFIG } from '../data/systemMenu';
+import { UI_ART } from '../data/achievements';
+import { trapFocus } from './hotkeys';
 import type { ModalStack } from './modalStack';
-import { muteLabel, reduceReset, resetLabel, saveFeedbackLabel } from './systemMenuModel';
-import type { ResetState } from './systemMenuModel';
+import { clampTab, muteLabel, nextTab, reduceReset, resetLabel, saveFeedbackLabel } from './systemMenuModel';
+import type { ResetState, TabNavKey } from './systemMenuModel';
 
 // SYSTEM menu overlay (DOM). Built once; open/close toggle the is-open class. No Phaser.
 // Esc is handled by the shared modal stack (bindEscapeToStack); this file registers no key listener.
+// Tabs: SYSTEM (always first, built here) + one tab per deps.panels entry. Panels are mounted once
+// into their tabpanel and refreshed when their tab is shown and when the menu opens.
+
+export interface SystemMenuPanel {
+  id: string;
+  label: string;
+  mount(host: HTMLElement): { refresh(): void; destroy(): void };
+}
 
 export interface SystemMenuDeps {
   isMuted(): boolean;
@@ -13,6 +23,7 @@ export interface SystemMenuDeps {
   saveNow(): boolean;
   resetProgress(): void;
   modals: ModalStack;
+  panels?: readonly SystemMenuPanel[];
 }
 
 export interface SystemMenu { open(): void; close(): void; toggle(): void; isOpen(): boolean; destroy(): void }
@@ -23,6 +34,15 @@ const RESET_STACK_ID = 'system-reset';
 type ResetEventType = 'press' | 'cancel' | 'tick';
 
 interface ElementOptions { id?: string; className?: string; text?: string }
+
+interface PanelHandle { refresh(): void; destroy(): void }
+
+interface TabEntry {
+  id: string;
+  button: HTMLButtonElement;
+  pane: HTMLDivElement;
+  handle: PanelHandle | null;
+}
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -35,6 +55,10 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
+function isTabNavKey(key: string): key is TabNavKey {
+  return key === 'ArrowRight' || key === 'ArrowLeft' || key === 'Home' || key === 'End';
+}
+
 export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): SystemMenu {
   const { modals } = deps;
 
@@ -43,13 +67,46 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-labelledby', 'sys-title');
+  // 9-slice art (CSS keeps the plain border when a var is missing).
+  overlay.style.setProperty('--ui-panel', `url(${UI_ART.panel})`);
+  overlay.style.setProperty('--ui-button', `url(${UI_ART.button})`);
+  overlay.style.setProperty('--ui-slice', String(UI_ART.nineSliceBorder));
 
   const panel = createElement('div', { id: 'system-panel' });
-  const title = createElement('h2', { id: 'sys-title', text: 'SYSTEM' });
+  const title = createElement('h2', { id: 'sys-title', text: MENU_TEXT.title });
+
+  const tabList = createElement('div', { id: 'sys-tabs', className: 'sys-tabs' });
+  tabList.setAttribute('role', 'tablist');
+  tabList.setAttribute('aria-labelledby', 'sys-title');
+
+  const body = createElement('div', { id: 'sys-body', className: 'sys-body' });
+
+  const tabs: TabEntry[] = [];
+
+  function addTab(id: string, label: string): TabEntry {
+    const button = createElement('button', { id: `sys-tab-${id}`, className: 'sys-tab', text: label });
+    button.type = 'button';
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-controls', `sys-panel-${id}`);
+    button.setAttribute('aria-selected', 'false');
+    button.tabIndex = -1;
+    const pane = createElement('div', { id: `sys-panel-${id}`, className: 'sys-tabpanel' });
+    pane.setAttribute('role', 'tabpanel');
+    pane.setAttribute('aria-labelledby', button.id);
+    pane.hidden = true;
+    const entry: TabEntry = { id, button, pane, handle: null };
+    tabs.push(entry);
+    tabList.appendChild(button);
+    body.appendChild(pane);
+    return entry;
+  }
+
+  // SYSTEM tab: the original controls (ids and order unchanged) live in its tabpanel.
+  const systemPane = addTab(MENU_TABS.system.id, MENU_TABS.system.label).pane;
 
   const muteButton = createElement('button', { id: 'sys-mute', className: 'sys-btn' });
   muteButton.type = 'button';
-  const saveButton = createElement('button', { id: 'sys-save', className: 'sys-btn', text: 'SAVE STATE' });
+  const saveButton = createElement('button', { id: 'sys-save', className: 'sys-btn', text: MENU_TEXT.save });
   saveButton.type = 'button';
   const resetButton = createElement('button', {
     id: 'sys-reset',
@@ -57,15 +114,23 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     text: resetLabel({ stage: 'idle' }),
   });
   resetButton.type = 'button';
-  const cancelButton = createElement('button', { id: 'sys-reset-cancel', className: 'sys-btn', text: 'CANCEL' });
+  const cancelButton = createElement('button', { id: 'sys-reset-cancel', className: 'sys-btn', text: MENU_TEXT.cancel });
   cancelButton.type = 'button';
   cancelButton.hidden = true;
   const feedbackEl = createElement('div', { id: 'sys-feedback' });
   feedbackEl.setAttribute('aria-live', 'polite');
-  const closeButton = createElement('button', { id: 'sys-close', className: 'sys-btn', text: 'CLOSE [ESC]' });
+  const closeButton = createElement('button', { id: 'sys-close', className: 'sys-btn', text: MENU_TEXT.close });
   closeButton.type = 'button';
 
-  panel.append(title, muteButton, saveButton, resetButton, cancelButton, feedbackEl, closeButton);
+  systemPane.append(muteButton, saveButton, resetButton, cancelButton, feedbackEl);
+
+  // Extra panels: mounted once, each into its own tabpanel.
+  for (const p of deps.panels ?? []) {
+    const tab = addTab(p.id, p.label);
+    tab.handle = p.mount(tab.pane);
+  }
+
+  panel.append(title, tabList, body, closeButton);
   overlay.appendChild(panel);
   root.appendChild(overlay);
 
@@ -76,6 +141,9 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
   let returnFocus: HTMLElement | null = null;
   let feedbackTimer: number | null = null;
   let expiryTimer: number | null = null;
+  let activeIndex = 0;
+  let disposeFocusTrap: (() => void) | null = null;
+  const tabUnbinders: Array<() => void> = [];
 
   const refreshMute = (): void => {
     muteButton.textContent = muteLabel(deps.isMuted());
@@ -145,13 +213,40 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     dispatchReset('cancel');
   }
 
+  // Marks one tab as selected (ARIA, roving tabindex, visibility). Does not refresh anything.
+  function selectTab(index: number): void {
+    activeIndex = clampTab(index, tabs.length);
+    tabs.forEach((tab, i) => {
+      const on = i === activeIndex;
+      tab.button.setAttribute('aria-selected', on ? 'true' : 'false');
+      tab.button.tabIndex = on ? 0 : -1;
+      tab.button.classList.toggle('is-active', on);
+      tab.pane.hidden = !on;
+    });
+  }
+
+  // Selects a tab and refreshes the active panel (SYSTEM has no handle).
+  function activateTab(index: number, focus: boolean): void {
+    selectTab(index);
+    tabs[activeIndex]?.handle?.refresh();
+    if (focus) tabs[activeIndex]?.button.focus();
+  }
+
+  function releaseFocusTrap(): void {
+    const dispose = disposeFocusTrap;
+    disposeFocusTrap = null;
+    if (dispose !== null) dispose();
+  }
+
   function open(): void {
     if (destroyed || isOpenFlag) return;
     const active = document.activeElement;
     returnFocus = active instanceof HTMLElement ? active : null;
     isOpenFlag = true;
     overlay.classList.add('is-open');
+    activateTab(0, false);
     refreshMute();
+    disposeFocusTrap = trapFocus(overlay);
     modals.push(MENU_STACK_ID, close);
     closeButton.focus();
   }
@@ -159,10 +254,12 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
   function close(): void {
     if (!isOpenFlag) return;
     isOpenFlag = false;
+    releaseFocusTrap();
     dispatchReset('cancel');
     clearFeedback();
     overlay.classList.remove('is-open');
     modals.remove(MENU_STACK_ID);
+    selectTab(0);
     const target = returnFocus;
     returnFocus = null;
     if (target !== null && target.isConnected) target.focus();
@@ -197,12 +294,35 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     if (event.target === overlay) close();
   };
 
+  // Tab buttons: click selects; arrows / Home / End move focus and selection (Enter / Space use the native click).
+  function listen<K extends keyof HTMLElementEventMap>(
+    el: HTMLElement,
+    type: K,
+    fn: (event: HTMLElementEventMap[K]) => void,
+  ): void {
+    el.addEventListener(type, fn);
+    tabUnbinders.push(() => el.removeEventListener(type, fn));
+  }
+
+  const onTabKeydown = (event: KeyboardEvent, index: number): void => {
+    const key = event.key;
+    if (!isTabNavKey(key)) return;
+    event.preventDefault();
+    activateTab(nextTab(index, tabs.length, key), true);
+  };
+
+  tabs.forEach((tab, i) => {
+    listen(tab.button, 'click', () => activateTab(i, false));
+    listen(tab.button, 'keydown', (event) => onTabKeydown(event, i));
+  });
+
   muteButton.addEventListener('click', onMute);
   saveButton.addEventListener('click', onSave);
   resetButton.addEventListener('click', onReset);
   cancelButton.addEventListener('click', onCancel);
   closeButton.addEventListener('click', onClose);
   overlay.addEventListener('click', onBackdropClick);
+  selectTab(0);
   refreshMute();
 
   function toggle(): void {
@@ -219,6 +339,9 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     close();
     dispatchReset('cancel');
     destroyed = true;
+    releaseFocusTrap();
+    tabUnbinders.forEach((unbind) => unbind());
+    tabUnbinders.length = 0;
     muteButton.removeEventListener('click', onMute);
     saveButton.removeEventListener('click', onSave);
     resetButton.removeEventListener('click', onReset);
@@ -230,6 +353,7 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
       feedbackTimer = null;
     }
     clearExpiry();
+    for (const tab of tabs) tab.handle?.destroy();
     overlay.remove();
   }
 

@@ -5,7 +5,7 @@ import { OFFLINE_REPORT_THRESHOLD_SECONDS } from '../data/balance';
 import { TECHNOLOGIES } from '../data/technologies';
 import { GameSession } from './GameSession';
 import { costAt } from './economy/cost';
-import { createInitialState } from './state';
+import { createInitialState, DEFAULT_SETTINGS } from './state';
 import { emptyResourceMap } from './resources';
 import * as api from './index';
 
@@ -222,13 +222,13 @@ describe('GameSession', () => {
 
   describe('settings', () => {
     it('defaults to DEFAULT_SETTINGS and accepts initial settings', () => {
-      expect(new GameSession({ state: createInitialState(0), now: () => 0 }).settings).toEqual({ muted: false });
+      expect(new GameSession({ state: createInitialState(0), now: () => 0 }).settings).toEqual({ ...DEFAULT_SETTINGS, muted: false });
       const session = new GameSession({
         state: createInitialState(0),
-        settings: { muted: true },
+        settings: { ...DEFAULT_SETTINGS, muted: true },
         now: () => 0,
       });
-      expect(session.settings).toEqual({ muted: true });
+      expect(session.settings).toEqual({ ...DEFAULT_SETTINGS, muted: true });
     });
 
     it('setMuted updates the flag and emits settings with the new payload', () => {
@@ -243,7 +243,7 @@ describe('GameSession', () => {
     });
 
     it('setMuted with an unchanged value is a no-op', () => {
-      const session = new GameSession({ state: createInitialState(0), settings: { muted: true }, now: () => 0 });
+      const session = new GameSession({ state: createInitialState(0), settings: { ...DEFAULT_SETTINGS, muted: true }, now: () => 0 });
       const before = session.settings;
       const r = session.revision;
       const log = record(session);
@@ -257,7 +257,7 @@ describe('GameSession', () => {
       const session = new GameSession({ state: createInitialState(0), now: () => 0 });
       session.setMuted(true);
       session.reset(100);
-      expect(session.settings).toEqual({ muted: true });
+      expect(session.settings).toEqual({ ...DEFAULT_SETTINGS, muted: true });
     });
   });
 

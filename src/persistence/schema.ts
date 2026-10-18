@@ -179,9 +179,9 @@ function readSettings(input: unknown): Parsed<SettingsState> {
   if (input === undefined) return { ok: true, value: { ...DEFAULT_SETTINGS } };
   if (!isPlainObject(input)) return fail('"settings" must be an object');
   const muted = input['muted'];
-  if (muted === undefined) return { ok: true, value: { muted: DEFAULT_SETTINGS.muted } };
+  if (muted === undefined) return { ok: true, value: { ...DEFAULT_SETTINGS, muted: DEFAULT_SETTINGS.muted } };
   if (typeof muted !== 'boolean') return fail('"settings.muted" must be a boolean');
-  return { ok: true, value: { muted } };
+  return { ok: true, value: { ...DEFAULT_SETTINGS, muted } };
 }
 
 /**

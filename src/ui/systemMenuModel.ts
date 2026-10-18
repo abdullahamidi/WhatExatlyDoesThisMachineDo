@@ -46,3 +46,27 @@ export function resetLabel(s: ResetState): string {
 export function saveFeedbackLabel(ok: boolean): string {
   return ok ? SAVE_LABELS.ok : SAVE_LABELS.failed;
 }
+
+export type TabNavKey = 'ArrowRight' | 'ArrowLeft' | 'Home' | 'End';
+
+/** Clamps a tab index into 0..count-1 (0 when there are no tabs). */
+export function clampTab(index: number, count: number): number {
+  if (count <= 0 || !Number.isFinite(index)) return 0;
+  return Math.min(Math.max(Math.trunc(index), 0), count - 1);
+}
+
+/** Tab index after a navigation key. Arrows wrap; Home / End jump to the ends. */
+export function nextTab(index: number, count: number, key: TabNavKey): number {
+  if (count <= 0) return 0;
+  const i = clampTab(index, count);
+  switch (key) {
+    case 'ArrowRight':
+      return (i + 1) % count;
+    case 'ArrowLeft':
+      return (i - 1 + count) % count;
+    case 'Home':
+      return 0;
+    case 'End':
+      return count - 1;
+  }
+}

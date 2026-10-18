@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { CRANK_FEEDBACK, CRANK_PULSE, DEPTH, PIXEL_SCALE } from '../../data/world';
 import { emptyResourceMap } from '../../simulation';
+import { motionPolicy } from '../../simulation/settings';
 import type { ResourceMap } from '../../data/types';
 import { clickGainText } from '../../ui/hudView';
 import type { GameContext } from '../context';
@@ -19,6 +20,7 @@ export class HandCrank {
   private readonly floatingText: FloatingText;
   private readonly onPointerDown: () => void;
   private readonly unsubscribeClick: () => void;
+  private readonly unsubscribeCrank: () => void;
   /** Resources gained by the latest click, from the session 'click' event. */
   private lastGain: ResourceMap = emptyResourceMap();
   private pulseRing: Phaser.GameObjects.Arc | null = null;
@@ -48,22 +50,30 @@ export class HandCrank {
     }
 
     this.onPointerDown = (): void => {
-      this.ctx.session.click(); // the only state mutation
-      this.floatingText.spawn(this.machine.getComponentWorldPosition('handCrank'), clickGainText(this.lastGain));
-      this.machine.shake();
-      this.stopPulse();
+      this.crank();
     };
     this.zone.on('pointerdown', this.onPointerDown);
+    // Keyboard crank (HOTKEYS via bootstrap): same effect as a pointer click.
+    this.unsubscribeCrank = ctx.commands.crank.on(() => this.crank());
   }
 
   destroy(): void {
     this.stopPulse();
     this.unsubscribeClick();
+    this.unsubscribeCrank();
     // Phaser may already have destroyed the zone (scene teardown); its scene is then unset.
     if (this.zone.scene) {
       this.zone.off('pointerdown', this.onPointerDown);
       this.zone.destroy();
     }
+  }
+
+  /** One crank turn: the pointer path and the keyboard command both come here. */
+  private crank(): void {
+    this.ctx.session.click(); // the only state mutation
+    this.floatingText.spawn(this.machine.getComponentWorldPosition('handCrank'), clickGainText(this.lastGain));
+    if (motionPolicy(this.ctx.session.settings).shake) this.machine.shake();
+    this.stopPulse();
   }
 
   private startPulse(scene: Phaser.Scene, x: number, y: number): void {

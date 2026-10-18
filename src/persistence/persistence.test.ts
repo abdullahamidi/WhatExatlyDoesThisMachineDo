@@ -3,7 +3,7 @@ import { RESOURCE_IDS, TECH_IDS } from '../data/types';
 import type { GameState, ResourceMap, SettingsState, TechId } from '../data/types';
 import { SAVE_BACKUP_KEY, SAVE_KEY } from '../data/balance';
 import { TECHNOLOGIES } from '../data/technologies';
-import { createInitialState } from '../simulation/state';
+import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
 import { emptyResourceMap } from '../simulation/resources';
 import { applyOffline } from '../simulation/production/tick';
 import { computeRates } from '../simulation/production/rates';
@@ -53,7 +53,7 @@ describe('round trip', () => {
       createdAt: 500,
     },
   );
-  const settings: SettingsState = { muted: true };
+  const settings: SettingsState = { ...DEFAULT_SETTINGS, muted: true };
 
   it('deserialize(serialize()) returns the same state and settings', () => {
     const result = deserialize(serialize(state, settings, 2000), 3000);
@@ -89,7 +89,7 @@ describe('deserialize without a save', () => {
     const result = deserialize(null, 5000);
     expect(result.status).toBe('new');
     expect(result.state).toEqual(createInitialState(5000));
-    expect(result.settings).toEqual({ muted: false });
+    expect(result.settings).toEqual({ ...DEFAULT_SETTINGS, muted: false });
     expect(result).not.toHaveProperty('error');
   });
 });
@@ -122,7 +122,7 @@ describe('deserialize recovers from bad data', () => {
     const result = deserialize(input, now);
     expect(result.status).toBe('recovered');
     expect(result.state).toEqual(createInitialState(now));
-    expect(result.settings).toEqual({ muted: false });
+    expect(result.settings).toEqual({ ...DEFAULT_SETTINGS, muted: false });
     expect(typeof result.error).toBe('string');
     expect(result.error?.length).toBeGreaterThan(0);
   });
@@ -147,7 +147,7 @@ describe('deserialize fills missing fields', () => {
     }
     expect(result.state.lastSimTime).toBe(7000);
     expect(result.state.createdAt).toBe(7000);
-    expect(result.settings).toEqual({ muted: false });
+    expect(result.settings).toEqual({ ...DEFAULT_SETTINGS, muted: false });
   });
 
   it('migrates a v1 save with only me into res/lifetime', () => {
@@ -155,7 +155,7 @@ describe('deserialize fills missing fields', () => {
     expect(result.status).toBe('migrated');
     expect(result.state.res.me).toBe(50);
     expect(result.state.lifetime.me).toBe(50);
-    expect(result.settings).toEqual({ muted: false });
+    expect(result.settings).toEqual({ ...DEFAULT_SETTINGS, muted: false });
   });
 });
 
@@ -415,7 +415,7 @@ describe('era III save compatibility (WP9)', () => {
       { gearRatio: 4, wornMotor: 1, substationBlueprint: 1 },
       { res: resources({ me: 5 }), lastSimTime: 1000, createdAt: 500 },
     );
-    const parsed = JSON.parse(serialize(base, { muted: false }, 2000)) as {
+    const parsed = JSON.parse(serialize(base, { ...DEFAULT_SETTINGS, muted: false }, 2000)) as {
       state: { techLevels: Partial<Record<TechId, number>> };
     };
     for (const id of ERA_THREE_IDS) delete parsed.state.techLevels[id];
@@ -437,7 +437,7 @@ describe('era III save compatibility (WP9)', () => {
         createdAt: 500,
       },
     );
-    const result = deserialize(serialize(state, { muted: false }, 2000), 3000);
+    const result = deserialize(serialize(state, { ...DEFAULT_SETTINGS, muted: false }, 2000), 3000);
     expect(result.status).toBe('loaded');
     expect(result.state).toEqual(state);
   });
@@ -448,7 +448,7 @@ describe('era IV save compatibility (WP10)', () => {
 
   it('a v2 save without any era IV keys loads as loaded with every era IV level at 0', () => {
     const base = withLevels({ gearRatio: 2 });
-    const parsed = JSON.parse(serialize(base, { muted: false }, 2000)) as {
+    const parsed = JSON.parse(serialize(base, { ...DEFAULT_SETTINGS, muted: false }, 2000)) as {
       state: { techLevels: Partial<Record<TechId, number>> };
     };
     expect(ERA_FOUR_IDS).toHaveLength(9);
@@ -471,7 +471,7 @@ describe('era IV save compatibility (WP10)', () => {
         createdAt: 500,
       },
     );
-    const result = deserialize(serialize(state, { muted: false }, 2000), 3000);
+    const result = deserialize(serialize(state, { ...DEFAULT_SETTINGS, muted: false }, 2000), 3000);
     expect(result.status).toBe('loaded');
     expect(result.state).toEqual(state);
   });
@@ -491,7 +491,7 @@ describe('era V save compatibility (WP11)', () => {
 
   it('a v2 save without any era V keys loads as loaded with every era V level at 0', () => {
     const base = withLevels({ gearRatio: 2, harmonicConvergence: 1 });
-    const parsed = JSON.parse(serialize(base, { muted: false }, 2000)) as {
+    const parsed = JSON.parse(serialize(base, { ...DEFAULT_SETTINGS, muted: false }, 2000)) as {
       state: { techLevels: Partial<Record<TechId, number>> };
     };
     expect(ERA_FIVE_IDS).toHaveLength(10);
@@ -515,7 +515,7 @@ describe('era V save compatibility (WP11)', () => {
         createdAt: 500,
       },
     );
-    const result = deserialize(serialize(state, { muted: false }, 2000), 3000);
+    const result = deserialize(serialize(state, { ...DEFAULT_SETTINGS, muted: false }, 2000), 3000);
     expect(result.status).toBe('loaded');
     expect(result.state).toEqual(state);
   });
@@ -529,7 +529,7 @@ describe('era V save compatibility (WP11)', () => {
 
   it('a save with primaryFunction at level 1 keeps it (WP12 decides the resume)', () => {
     const state = withLevels({ primaryFunction: 1 }, { res: resources({ xf: 5 }), lastSimTime: 1000, createdAt: 500 });
-    const result = deserialize(serialize(state, { muted: false }, 2000), 3000);
+    const result = deserialize(serialize(state, { ...DEFAULT_SETTINGS, muted: false }, 2000), 3000);
     expect(result.status).toBe('loaded');
     expect(result.state.techLevels.primaryFunction).toBe(1);
   });
@@ -552,7 +552,7 @@ describe('validateEnvelope', () => {
     expect(result.envelope).not.toHaveProperty('junk');
     expect(result.envelope.state).not.toHaveProperty('extra');
     expect(result.envelope.state.res.me).toBe(1);
-    expect(result.envelope.settings).toEqual({ muted: true });
+    expect(result.envelope.settings).toEqual({ ...DEFAULT_SETTINGS, muted: true });
     expect(result.envelope.savedAt).toBe(5);
   });
 
@@ -618,14 +618,14 @@ describe('SaveManager', () => {
   it('save returns true on success', () => {
     const storage = new MemoryStorage();
     const mgr = new SaveManager(storage);
-    expect(mgr.save(createInitialState(0), { muted: false }, 10)).toBe(true);
+    expect(mgr.save(createInitialState(0), { ...DEFAULT_SETTINGS, muted: false }, 10)).toBe(true);
     expect(storage.getItem(SAVE_KEY)).not.toBeNull();
   });
 
   it('save returns false and does not throw when storage refuses the write', () => {
     const mgr = new SaveManager(new FailingStorage());
-    expect(() => mgr.save(createInitialState(0), { muted: false }, 10)).not.toThrow();
-    expect(mgr.save(createInitialState(0), { muted: false }, 10)).toBe(false);
+    expect(() => mgr.save(createInitialState(0), { ...DEFAULT_SETTINGS, muted: false }, 10)).not.toThrow();
+    expect(mgr.save(createInitialState(0), { ...DEFAULT_SETTINGS, muted: false }, 10)).toBe(false);
   });
 
   it('load treats a throwing read as no save and reports an error', () => {
@@ -638,7 +638,7 @@ describe('SaveManager', () => {
 
   it('reset removes the save so the next load is new', () => {
     const mgr = new SaveManager(new MemoryStorage());
-    mgr.save(createInitialState(0), { muted: true }, 10);
+    mgr.save(createInitialState(0), { ...DEFAULT_SETTINGS, muted: true }, 10);
     mgr.reset();
     expect(mgr.load(20).status).toBe('new');
   });
@@ -649,7 +649,7 @@ describe('SaveManager', () => {
 
   it('respects a custom key', () => {
     const storage = new MemoryStorage();
-    new SaveManager(storage, 'other').save(createInitialState(0), { muted: false }, 10);
+    new SaveManager(storage, 'other').save(createInitialState(0), { ...DEFAULT_SETTINGS, muted: false }, 10);
     expect(storage.getItem('other')).not.toBeNull();
     expect(storage.getItem(SAVE_KEY)).toBeNull();
   });

@@ -20,3 +20,16 @@ export const SAVE_LABELS = {
   ok: 'STATE WRITTEN',
   failed: 'WRITE FAILED',
 } as const;
+
+// Fixed menu texts (title and always-visible controls outside the tab panels).
+export const MENU_TEXT = {
+  title: 'SYSTEM',
+  close: 'CLOSE [ESC]',
+  save: 'SAVE STATE',
+  cancel: 'CANCEL',
+} as const;
+
+// Tab bar entries. The SYSTEM tab is always first; deps.panels add tabs after it.
+export const MENU_TABS = {
+  system: { id: 'system', label: 'SYSTEM' },
+} as const;

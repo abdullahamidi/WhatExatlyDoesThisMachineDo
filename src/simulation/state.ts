@@ -1,8 +1,9 @@
 import { TECH_IDS } from '../data/types';
 import type { GameState, SettingsState, TechId } from '../data/types';
 import { emptyResourceMap } from './resources';
+import { normalizeSettings } from './settings';
 
-export const DEFAULT_SETTINGS: SettingsState = { muted: false };
+export const DEFAULT_SETTINGS: SettingsState = normalizeSettings(undefined);
 
 export function createInitialState(nowMs: number): GameState {
   const techLevels = {} as Record<TechId, number>;

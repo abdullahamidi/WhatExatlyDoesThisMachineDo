@@ -1,5 +1,13 @@
-import { describe, it, expect } from 'vitest';
-import { NUMBER_SUFFIXES, formatCost, formatNumber, formatRate, formatDuration } from './format';
+import { describe, it, expect, afterEach } from 'vitest';
+import {
+  NUMBER_SUFFIXES,
+  formatCost,
+  formatNumber,
+  formatRate,
+  formatDuration,
+  getDefaultNotation,
+  setDefaultNotation,
+} from './format';
 
 describe('NUMBER_SUFFIXES', () => {
   it('has eleven strictly ascending entries', () => {
@@ -200,5 +208,62 @@ describe('formatDuration', () => {
     [NaN, '0s'],
   ])('formats %s seconds as %s', (seconds, expected) => {
     expect(formatDuration(seconds)).toBe(expected);
+  });
+});
+
+describe('default notation (setDefaultNotation / getDefaultNotation)', () => {
+  afterEach(() => {
+    setDefaultNotation('suffix');
+  });
+
+  it('starts at suffix', () => {
+    expect(getDefaultNotation()).toBe('suffix');
+  });
+
+  it('round-trips the set value', () => {
+    setDefaultNotation('scientific');
+    expect(getDefaultNotation()).toBe('scientific');
+    setDefaultNotation('engineering');
+    expect(getDefaultNotation()).toBe('engineering');
+  });
+
+  it('makes formatNumber follow the default at call time', () => {
+    expect(formatNumber(1.5e6)).toBe('1.5M');
+    setDefaultNotation('scientific');
+    expect(formatNumber(1.5e6)).toBe('1.50e6');
+    expect(formatNumber(-1500)).toBe('-1.50e3');
+    setDefaultNotation('engineering');
+    expect(formatNumber(1.5e6)).toBe('1.5e6');
+    expect(formatNumber(1500)).toBe('1.5e3');
+  });
+
+  it('keeps values below 1000 identical in every default', () => {
+    setDefaultNotation('scientific');
+    expect(formatNumber(12.7)).toBe('12.7');
+    setDefaultNotation('engineering');
+    expect(formatNumber(999.9)).toBe('999.9');
+  });
+
+  it('lets an explicit notation argument win over the default', () => {
+    setDefaultNotation('scientific');
+    expect(formatNumber(1500, 'floor', 'suffix')).toBe('1.5K');
+    expect(formatNumber(1500, 'floor', 'engineering')).toBe('1.5e3');
+    setDefaultNotation('suffix');
+    expect(formatNumber(1500, 'floor', 'scientific')).toBe('1.50e3');
+  });
+
+  it('makes formatCost and formatRate follow the default', () => {
+    setDefaultNotation('scientific');
+    expect(formatCost(1500)).toBe('1.50e3');
+    expect(formatRate(1500)).toBe('1.50e3/s');
+    setDefaultNotation('engineering');
+    expect(formatCost(1500)).toBe('1.5e3');
+    expect(formatRate(1500)).toBe('1.5e3/s');
+  });
+
+  it('lets formatCost and formatRate take an explicit notation over the default', () => {
+    setDefaultNotation('scientific');
+    expect(formatCost(1500, 'suffix')).toBe('1.5K');
+    expect(formatRate(1500, 'suffix')).toBe('1.5K/s');
   });
 });

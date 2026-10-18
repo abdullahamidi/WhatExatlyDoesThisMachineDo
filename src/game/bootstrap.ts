@@ -35,7 +35,7 @@ export function bootstrap(): Phaser.Game {
 
   const ctx: GameContext = {
     session,
-    commands: { refocus: createSignal(), openTechTree: createSignal(), openSystemMenu: createSignal() },
+    commands: { refocus: createSignal(), openTechTree: createSignal(), openSystemMenu: createSignal(), crank: createSignal() },
     feedback: { purchaseDenied: createSignal<PurchaseFailure>(), partLanded: createSignal<MachineComponentId>() },
     modals,
   };

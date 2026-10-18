@@ -1,3 +1,4 @@
+import type { AchievementId } from './achievements';
 export const TECH_IDS = ['handCrank','gearRatio','reinforcedCrank','flywheel','wornMotor',
   'motorTuning','pistonArray','improvedPistons','generatorBlueprint',
   'generator','copperWinding','motorRetrofit','dynamoCrank','capacitorBank','sparkGap','transformer','powerLines','substationBlueprint',
@@ -44,7 +45,26 @@ export interface GameState {
   lastSimTime: number;                     // epoch ms of last simulated point
   createdAt: number;
 }
-export interface SettingsState { muted: boolean }
+export type NumberNotation = 'suffix' | 'scientific' | 'engineering';
+export type UiScale = 100 | 125 | 150;
+export interface SettingsState {
+  muted: boolean;
+  masterVolume: number; sfxVolume: number; ambientVolume: number;   // int 0..100, default 100
+  notation: NumberNotation;             // default 'suffix'
+  reducedMotion: boolean;               // default false
+  screenShake: boolean;                 // default true; ignored (off) while reducedMotion
+  statusMarkers: boolean;               // default false
+  uiScale: UiScale;                     // default 100
+}
+export interface StatsState {
+  activeSeconds: number; offlineSeconds: number; longestOfflineSeconds: number;
+  clicks: number; purchases: number;
+  lifetime: ResourceMap; maxPerSecond: ResourceMap;
+  cycles: number;                       // 1
+  bestCycleSeconds: number | null;      // null
+  startedAt: number;                    // epoch ms
+}
+export interface AchievementsState { unlocked: Partial<Record<AchievementId, number>> }   // id -> epoch ms
 export interface ProductionRates { perClick: ResourceMap; perSecond: ResourceMap }
 export type TechStatus = 'locked' | 'available' | 'purchased';
 export interface RequirementView { req: Requirement; met: boolean; label: string }

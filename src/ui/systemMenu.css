@@ -36,13 +36,18 @@
 #system-panel {
   position: relative;
   box-sizing: border-box;
-  width: min(420px, 92vw);
+  width: min(640px, 94vw);
+  max-height: 86vh;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 16px 18px;
+  padding: 10px 12px;
   background: var(--iron-2);
   border: 2px solid var(--rust);
+  /* 9-slice panel art (src/data/achievements.ts UI_ART.panel); without the var the plain border above shows. */
+  border-image: var(--ui-panel) var(--ui-slice) fill / 16px;
+  image-rendering: pixelated;
   box-shadow: 0 0 0 2px var(--ink), inset 0 0 18px rgba(0, 0, 0, .6);
 }
 
@@ -61,6 +66,56 @@
   color: var(--amber);
   text-shadow: 0 0 6px rgba(217, 130, 43, .55);
   border-bottom: 1px solid var(--rust-dark);
+}
+
+.sys-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sys-tab {
+  font-family: inherit;
+  font-size: max(12px, 1em);
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: var(--amber-dim);
+  background: var(--iron-2);
+  border: 2px solid var(--rust-dark);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.sys-tab:hover {
+  background: var(--rust-dark);
+  color: var(--haze);
+}
+
+.sys-tab.is-active {
+  background: var(--rust);
+  border-color: var(--rust);
+  color: var(--haze);
+}
+
+.sys-tab:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+/* Scroll region for the active tabpanel; title, tabs and CLOSE stay fixed. */
+.sys-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.sys-tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .sys-btn {
