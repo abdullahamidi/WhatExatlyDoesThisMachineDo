@@ -1,0 +1,339 @@
+/* TECH INDEX overlay. Terminal look shared with the HUD. Dimensions fit 1280x720 without scrolling the panel. */
+
+/* keep in sync with src/data/palette.ts */
+#tech-overlay {
+  --ink:#14110f;
+  --iron:#2b2e31;
+  --iron-2:#1d1f21;
+  --rust:#8c4a2a;
+  --rust-dark:#4e2a1a;
+  --amber:#d9822b;
+  --amber-dim:#a8957a;
+  --haze:#d2bf9c;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  pointer-events: auto;
+  background: rgba(8, 6, 5, .82);
+  align-items: center;
+  justify-content: center;
+  overscroll-behavior: contain;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(11px, 1.3vw, 15px);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--amber);
+}
+
+#tech-overlay.is-open {
+  display: flex;
+}
+
+#tech-overlay [hidden] {
+  display: none !important;
+}
+
+#tech-panel {
+  position: relative;
+  box-sizing: border-box;
+  width: min(1180px, 96vw);
+  max-height: 94vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  overflow: hidden;
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  box-shadow: 0 0 0 2px var(--ink), inset 0 0 18px rgba(0, 0, 0, .6);
+}
+
+#tech-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .22) 0 1px, transparent 1px 3px);
+}
+
+/* ---- header ---- */
+
+.tech-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rust-dark);
+}
+
+#tech-title {
+  margin: 0;
+  font-size: 1.1em;
+  color: var(--amber);
+  text-shadow: 0 0 6px rgba(217, 130, 43, .55);
+}
+
+#tech-me {
+  font-size: 1.2em;
+  font-variant-numeric: tabular-nums;
+  color: var(--haze);
+}
+
+.tech-close-btn,
+#tech-buy {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--amber);
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.tech-close-btn:hover,
+#tech-buy:hover:not([disabled]) {
+  background: var(--rust-dark);
+  color: var(--haze);
+}
+
+.tech-close-btn:focus-visible,
+#tech-buy:focus-visible,
+.tech-node:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+/* ---- graph ---- */
+
+#tech-graph {
+  position: relative;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 46vh;
+  overflow: auto;
+  border: 1px solid var(--rust-dark);
+  background: rgba(0, 0, 0, .25);
+}
+
+.tech-graph-inner {
+  position: relative;
+}
+
+#tech-edges {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+#tech-edges path {
+  fill: none;
+  stroke: var(--rust-dark);
+  stroke-width: 2px;
+}
+
+#tech-edges path.is-met {
+  stroke: var(--amber);
+}
+
+.tech-node {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 10px;
+  overflow: hidden;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  color: var(--amber);
+  background: var(--iron);
+  border: 2px solid var(--rust);
+  cursor: pointer;
+}
+
+.tech-node-name {
+  font-size: .95em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tech-node-level,
+.tech-node-cost {
+  font-size: .8em;
+  color: var(--amber-dim);
+}
+
+.tech-node.is-locked {
+  opacity: .5;
+  border-style: dashed;
+}
+
+.tech-node.is-available {
+  border-color: var(--amber);
+}
+
+.tech-node.is-purchased {
+  background: var(--rust-dark);
+  color: var(--haze);
+}
+
+.tech-node.is-affordable {
+  box-shadow: 0 0 10px rgba(217, 130, 43, .6);
+}
+
+.tech-node.is-selected {
+  outline: 2px solid var(--haze);
+  outline-offset: 2px;
+}
+
+/* Milestones: octagon, amber gradient, no border. Selection uses an inset ring because clip-path hides outlines. */
+.tech-node.is-milestone,
+.tech-node.is-milestone.is-purchased {
+  border: 0;
+  padding: 6px 12px;
+  color: var(--ink);
+  background: linear-gradient(135deg, var(--amber), var(--rust-dark));
+  clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px);
+}
+
+.tech-node.is-milestone .tech-node-level,
+.tech-node.is-milestone .tech-node-cost {
+  color: var(--ink);
+}
+
+.tech-node.is-milestone.is-selected {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--haze);
+}
+
+/* ---- detail ---- */
+
+#tech-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 14px;
+  min-height: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--rust-dark);
+}
+
+.tech-detail-main,
+.tech-detail-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+#tech-detail-name {
+  margin: 0;
+  font-size: 1.2em;
+  color: var(--haze);
+}
+
+.tech-dim {
+  color: var(--amber-dim);
+  font-size: .85em;
+}
+
+#tech-detail-desc,
+#tech-detail-flavor {
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+
+#tech-detail-flavor {
+  color: var(--amber-dim);
+  font-size: .85em;
+}
+
+#tech-req-list {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+#tech-req-list li.is-met {
+  color: var(--amber);
+}
+
+#tech-req-list li.is-unmet {
+  color: var(--amber-dim);
+}
+
+#tech-level {
+  font-size: 1.1em;
+  color: var(--haze);
+}
+
+#tech-effect-current,
+#tech-effect-next {
+  line-height: 1.4;
+}
+
+#tech-effect-next {
+  color: var(--amber-dim);
+}
+
+#tech-cost {
+  font-variant-numeric: tabular-nums;
+}
+
+#tech-shortfall {
+  color: var(--amber-dim);
+  min-height: 1.2em;
+}
+
+#tech-buy {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+#tech-buy[disabled] {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+#tech-buy[data-buy-state="insufficient"] {
+  opacity: .6;
+  border-color: var(--amber-dim);
+  cursor: pointer;
+}
+
+#tech-buy.is-denied {
+  animation: tech-shake 400ms linear;
+}
+
+#tech-feedback {
+  min-height: 1.4em;
+  color: var(--haze);
+}
+
+@keyframes tech-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+@media (max-width: 760px) {
+  #tech-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tech-buy.is-denied {
+    animation: none;
+  }
+}
