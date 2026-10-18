@@ -30,8 +30,15 @@ export function addActivity(value: number, gained: number, tauSeconds: number): 
   return value + gained / tauSeconds; // value + gained / tau
 }
 
-/** Driver value picked from the activity sources: manual, automation, their sum for 'combined', electric (EE/s), or thermal (PR/s). */
-export function driverValue(driver: AnimationDriver, manual: number, automation: number, electric = 0, thermal = 0): number {
+/** Driver value picked from the activity sources: manual, automation, their sum for 'combined', electric (EE/s), thermal (PR/s), or resonance (RS/s). */
+export function driverValue(
+  driver: AnimationDriver,
+  manual: number,
+  automation: number,
+  electric = 0,
+  thermal = 0,
+  resonance = 0,
+): number {
   switch (driver) {
     case 'manual':
       return manual; // manual only
@@ -43,6 +50,8 @@ export function driverValue(driver: AnimationDriver, manual: number, automation:
       return electric; // electric only
     case 'thermal':
       return thermal; // thermal only
+    case 'resonance':
+      return resonance; // resonance only
   }
 }
 

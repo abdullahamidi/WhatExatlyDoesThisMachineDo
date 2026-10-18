@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { emitterRate, stepEmitter, burstDelaySeconds, puffState } from './steamFx';
+import { emitterRate, stepEmitter, burstDelaySeconds, puffState, burstPoints } from './steamFx';
 import type { PuffFx } from './steamFx';
+import type { Vec2 } from '../../data/machineComponents';
 
 // Local literals shaped like the data contract (no runtime import of src/data/steamFx).
 const CHIMNEY_RATE = { kind: 'rate', base: 0.4, perLog: 0.3, min: 0.4, max: 2 } as const;
@@ -127,6 +128,42 @@ describe('burstDelaySeconds', () => {
     for (let i = 0; i < 20; i++) {
       expect(burstDelaySeconds(i, 7.5, 7.5)).toBe(7.5);
     }
+  });
+});
+
+describe('burstPoints', () => {
+  const a: Vec2 = { x: -72, y: -193 };
+  const b: Vec2 = { x: -44, y: -193 };
+  const c: Vec2 = { x: -16, y: -194 };
+  const P: readonly Vec2[] = [a, b, c];
+
+  it('uses every point in turn for a null single point', () => {
+    expect(burstPoints(P, 3, null)).toEqual([a, b, c]);
+    expect(burstPoints(P, 6, null)).toEqual([a, b, c, a, b, c]);
+  });
+
+  it('puts every puff on one point for a single index', () => {
+    expect(burstPoints(P, 2, 1)).toEqual([b, b]);
+  });
+
+  it('normalises the single index modulo the point count', () => {
+    expect(burstPoints(P, 2, 4)).toEqual([b, b]);
+    expect(burstPoints(P, 2, -1)).toEqual([c, c]);
+  });
+
+  it('gives nothing for no points or a count of zero or less', () => {
+    expect(burstPoints([], 3, null)).toEqual([]);
+    expect(burstPoints([], 3, 0)).toEqual([]);
+    expect(burstPoints(P, 0, null)).toEqual([]);
+    expect(burstPoints(P, -2, 1)).toEqual([]);
+  });
+
+  it('returns the same point objects as the input', () => {
+    const out = burstPoints(P, 3, null);
+    expect(out[0]).toBe(a);
+    expect(out[1]).toBe(b);
+    expect(out[2]).toBe(c);
+    expect(burstPoints(P, 2, 2)[0]).toBe(c);
   });
 });
 

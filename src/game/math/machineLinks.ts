@@ -47,6 +47,31 @@ export function resolveConnectionPoint(
   return { x: base.x + off.x, y: base.y + off.y }; // pivot + offset
 }
 
+/** Rotation by deg (clockwise on screen) of p about the origin: exact 0 / +-1 sin and cos at multiples of 90 deg. */
+export function rotatePoint(p: Vec2, deg: number): Vec2 {
+  if (!Number.isFinite(deg) || !Number.isFinite(p.x) || !Number.isFinite(p.y)) {
+    return { x: noNegativeZero(p.x), y: noNegativeZero(p.y) }; // unrotated
+  }
+  const d = ((deg % 360) + 360) % 360; // [0, 360)
+  let c: number; // cos
+  let s: number; // sin
+  if (d % 90 === 0) {
+    const quarter = d / 90; // 0..3
+    c = quarter === 0 ? 1 : quarter === 2 ? -1 : 0; // exact cos at quarter turns
+    s = quarter === 1 ? 1 : quarter === 3 ? -1 : 0; // exact sin at quarter turns
+  } else {
+    c = Math.cos((d * Math.PI) / 180);
+    s = Math.sin((d * Math.PI) / 180);
+  }
+  return { x: noNegativeZero(p.x * c - p.y * s), y: noNegativeZero(p.x * s + p.y * c) }; // x' = x c - y s, y' = x s + y c
+}
+
+/** End of a pin-to-pin rod: attach + rotatePoint(pinAt, deg). */
+export function pinEnd(attach: Vec2, pinAt: Vec2, deg: number): Vec2 {
+  const r = rotatePoint(pinAt, deg); // pin offset after the rotation
+  return { x: noNegativeZero(attach.x + r.x), y: noNegativeZero(attach.y + r.y) };
+}
+
 /**
  * Open belt around two pulleys (a, ra) and (b, rb) with external tangents.
  * d = |b - a|; phi = atan2(b - a); beta = asin((ra - rb) / d) (signed).

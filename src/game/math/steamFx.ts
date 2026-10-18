@@ -1,4 +1,5 @@
 import type { EmitterMode } from '../../data/steamFx';
+import type { Vec2 } from '../../data/machineComponents';
 
 /** Puff timing as the renderer reads it; STEAM_FX satisfies this structurally. */
 export interface PuffFx {
@@ -61,6 +62,30 @@ export function burstDelaySeconds(index: number, minS: number, maxS: number): nu
   const f = Math.sin(index * 12.9898 + 78.233) * 43758.5453;
   const h = f - Math.floor(f); // [0, 1)
   return minS + (maxS - minS) * h;
+}
+
+/**
+ * Spawn points of one burst of `count` puffs. single null: puff i at points[i % n] (every point used).
+ * single k: all `count` puffs at points[k mod n] (round robin, one point per burst). No points or count <= 0 gives [].
+ * The returned entries are the input point objects themselves.
+ */
+export function burstPoints(points: readonly Vec2[], count: number, single: number | null): Vec2[] {
+  const n = points.length; // number of spawn points
+  if (n === 0 || !(count > 0) || !Number.isFinite(count)) return [];
+  const total = Math.floor(count); // whole puffs in the burst
+  const out: Vec2[] = [];
+  if (single === null) {
+    for (let i = 0; i < total; i++) {
+      const p = points[i % n];
+      if (p !== undefined) out.push(p); // puff i at point i % n
+    }
+    return out;
+  }
+  const whole = Number.isFinite(single) ? Math.floor(single) : 0; // whole index, finite
+  const p = points[((whole % n) + n) % n]; // index normalised into [0, n)
+  if (p === undefined) return [];
+  for (let i = 0; i < total; i++) out.push(p);
+  return out;
 }
 
 /**

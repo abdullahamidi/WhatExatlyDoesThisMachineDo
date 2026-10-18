@@ -3,6 +3,8 @@ import type { MachineComponentDefinition, SocketId, Vec2 } from '../../data/mach
 import {
   connectionOffset,
   resolveConnectionPoint,
+  rotatePoint,
+  pinEnd,
   beltPath,
   rasterLine,
   rasterArc,
@@ -99,6 +101,73 @@ describe('resolveConnectionPoint', () => {
 
   it('returns null for an unknown point id', () => {
     expect(resolveConnectionPoint(literalDef(false), 'nope')).toBeNull();
+  });
+});
+
+describe('rotatePoint', () => {
+  it('turns the pin offset by quarter turns exactly, clockwise on screen', () => {
+    const pin: Vec2 = { x: 0, y: -19 };
+    expect(rotatePoint(pin, 0)).toEqual({ x: 0, y: -19 });
+    expect(rotatePoint(pin, 90)).toEqual({ x: 19, y: 0 });
+    expect(rotatePoint(pin, 180)).toEqual({ x: 0, y: 19 });
+    expect(rotatePoint(pin, 270)).toEqual({ x: -19, y: 0 });
+    expect(rotatePoint(pin, 360)).toEqual({ x: 0, y: -19 });
+    expect(rotatePoint(pin, -90)).toEqual({ x: -19, y: 0 });
+  });
+
+  it('never returns negative zero', () => {
+    for (const deg of [0, 90, 180, 270, 360, -90, -180, -270, 45, 135]) {
+      const r = rotatePoint({ x: 0, y: 0 }, deg);
+      expect(Object.is(r.x, -0)).toBe(false);
+      expect(Object.is(r.y, -0)).toBe(false);
+      const q = rotatePoint({ x: 0, y: -19 }, deg);
+      expect(Object.is(q.x, -0)).toBe(false);
+      expect(Object.is(q.y, -0)).toBe(false);
+    }
+  });
+
+  it('rotates by 45 degrees with the trigonometric values', () => {
+    const r = rotatePoint({ x: 0, y: -19 }, 45);
+    expect(r.x).toBeCloseTo(13.4350288, 6);
+    expect(r.y).toBeCloseTo(-13.4350288, 6);
+  });
+
+  it('keeps the length at any angle', () => {
+    const r = rotatePoint({ x: 0, y: -19 }, 33);
+    expect(Math.hypot(r.x, r.y)).toBeCloseTo(19, 9);
+  });
+
+  it('leaves the point unchanged for a non-finite angle or coordinate', () => {
+    expect(rotatePoint({ x: 3, y: -4 }, Number.NaN)).toEqual({ x: 3, y: -4 });
+    expect(rotatePoint({ x: 3, y: -4 }, Number.POSITIVE_INFINITY)).toEqual({ x: 3, y: -4 });
+  });
+});
+
+describe('pinEnd', () => {
+  it('adds the rotated pin offset to the attachment', () => {
+    expect(pinEnd({ x: 0, y: -24 }, { x: 0, y: -19 }, 90)).toEqual({ x: 19, y: -24 });
+    expect(pinEnd({ x: 0, y: -24 }, { x: 0, y: -19 }, 0)).toEqual({ x: 0, y: -43 });
+  });
+
+  it('keeps servo and crank pins on one rod of length 32 at every equal angle', () => {
+    const pin: Vec2 = { x: 0, y: -19 };
+    const servoHub: Vec2 = { x: 0, y: -24 };
+    const crankHub: Vec2 = { x: 0, y: -56 };
+    for (const d of [0, 45, 90, 135, 180, 270]) {
+      const a = pinEnd(servoHub, pin, d);
+      const b = pinEnd(crankHub, pin, d);
+      expect(a.x).toBeCloseTo(b.x, 9);
+      expect(a.y - b.y).toBeCloseTo(32, 9);
+      expect(Math.hypot(a.x - servoHub.x, a.y - servoHub.y)).toBeCloseTo(19, 9);
+    }
+  });
+
+  it('keeps the servo pin at or below y -5 over a full sweep', () => {
+    const pin: Vec2 = { x: 0, y: -19 };
+    const servoHub: Vec2 = { x: 0, y: -24 };
+    for (let d = 0; d <= 360; d += 5) {
+      expect(pinEnd(servoHub, pin, d).y).toBeLessThanOrEqual(-5 + 1e-9);
+    }
   });
 });
 

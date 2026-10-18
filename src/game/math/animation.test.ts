@@ -208,6 +208,22 @@ describe('driverValue thermal', () => {
   });
 });
 
+describe('driverValue resonance', () => {
+  it('picks the resonance value for the resonance driver', () => {
+    expect(driverValue('resonance', 2, 3, 7, 9, 11)).toBe(11);
+    expect(driverValue('resonance', 1, 2)).toBe(0);
+  });
+
+  it('leaves the other drivers unchanged with the resonance argument present', () => {
+    expect(driverValue('thermal', 2, 3, 7, 9)).toBe(9);
+    expect(driverValue('thermal', 2, 3, 7, 9, 11)).toBe(9);
+    expect(driverValue('electric', 2, 3, 7, 9, 11)).toBe(7);
+    expect(driverValue('combined', 2, 3, 7, 9, 11)).toBe(5);
+    expect(driverValue('manual', 2, 3, 7, 9, 11)).toBe(2);
+    expect(driverValue('automation', 2, 3, 7, 9, 11)).toBe(3);
+  });
+});
+
 describe('reciprocateOffset', () => {
   it('is 0 at the strike and -stroke at the top of travel', () => {
     expect(reciprocateOffset(180, 1, 14, 0)).toBe(0);
