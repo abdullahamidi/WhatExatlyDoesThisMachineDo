@@ -8,7 +8,14 @@ export const MACHINE_COMPONENT_IDS = ['supportFrame', 'bearingM', 'bearingP', 'g
   'boiler', 'chimney', 'steamManifold', 'pressureGauge', 'gaugeNeedle', 'fireboxGlow1', 'fireboxGlow2', 'fireboxGlow3',
   'inductionHeater', 'superheater', 'reliefValves', 'steamHammer', 'hammerRam', 'condenser', 'turbine', 'turbineRotor',
   'spireTower', 'spireExciter', 'spireWave', 'coilRing1', 'coilRing2', 'coilRing3', 'coilRing4', 'calliope',
-  'servoBase', 'servoArm', 'koenigFork', 'emitterDishL', 'emitterDishR', 'dishWavesL', 'dishWavesR', 'crystal'] as const;
+  'servoBase', 'servoArm', 'koenigFork', 'emitterDishL', 'emitterDishR', 'dishWavesL', 'dishWavesR', 'crystal',
+  // Era V (WP11): gallery, chamber, core, rings, siphons, guy anchors, inversion ghost, lens, aperture, name plate.
+  'nullGallery', 'nullChamber', 'nullCore', 'nullCoreGlint', 'ring1Back', 'ring2Back', 'ring3Back', 'ring4Back',
+  'ring1Front', 'ring2Front', 'ring3Front', 'ring4Front', 'ring1Bead', 'ring2Bead', 'ring3Bead', 'ring4Bead',
+  'siphonTube1L', 'siphonTube1R', 'siphonTube2L', 'siphonTube2R', 'siphonTube3L', 'siphonTube3R',
+  'siphonArcs1', 'siphonArcs2', 'siphonArcs3', 'graviticAnchorL', 'graviticAnchorR',
+  'anchorGlow1L', 'anchorGlow1R', 'anchorGlow2L', 'anchorGlow2R', 'anchorGlow3L', 'anchorGlow3R',
+  'inversionGhost', 'lensLight', 'lensColumn', 'aperture', 'namePlate'] as const;
 export type MachineComponentId = typeof MACHINE_COMPONENT_IDS[number];
 
 export const SOCKET_IDS = ['mainHub', 'crankHub', 'flywheelHub', 'flywheelBase', 'motorMount', 'motorBase', 'motorPulleyHub', 'pistonBed', 'yokePin',
@@ -16,7 +23,10 @@ export const SOCKET_IDS = ['mainHub', 'crankHub', 'flywheelHub', 'flywheelBase',
   'boilerBase', 'chimneyBase', 'superheaterSeat', 'reliefSeat', 'gaugeSeat', 'fireDoor', 'heaterSeat', 'hammerBase', 'hammerTup',
   'condenserBase', 'turbineBase', 'turbineHub', 'manifoldSeat',
   'spireBase', 'spireRod', 'coilRing1', 'coilRing2', 'coilRing3', 'coilRing4', 'dishL', 'dishR', 'dishWavesL', 'dishWavesR',
-  'crystalSeat', 'calliopeSeat', 'forkBase', 'servoBase', 'servoHub'] as const;
+  'crystalSeat', 'calliopeSeat', 'forkBase', 'servoBase', 'servoHub',
+  // Era V sockets (WP11): gallery / chamber / core hub / lens / aperture, siphon pairs, siphon arcs, anchors, name plate.
+  'galleryBase', 'chamberBase', 'coreHub', 'lensBase', 'apertureBase', 'siphon1L', 'siphon1R', 'siphon2L', 'siphon2R',
+  'siphon3L', 'siphon3R', 'siphonArcs', 'anchorL', 'anchorR', 'plateSeat'] as const;
 export type SocketId = typeof SOCKET_IDS[number];
 
 export interface Vec2 { x: number; y: number }
@@ -26,8 +36,8 @@ export type MachineLayer = 'back' | 'frame' | 'mid' | 'front';
 /** Draw depth of each machine layer (relative to the machine container). */
 export const MACHINE_LAYER_DEPTH: Record<MachineLayer, number> = { back: 0, frame: 10, mid: 20, front: 30 };
 
-/** manual: click activity; automation: ME/s; combined: manual + automation; electric: EE/s (rates.perSecond.ee); thermal: PR/s (rates.perSecond.pr); resonance: RS/s (rates.perSecond.rs). */
-export type AnimationDriver = 'manual' | 'automation' | 'combined' | 'electric' | 'thermal' | 'resonance';
+/** manual: click activity; automation: ME/s; combined: manual + automation; electric: EE/s (rates.perSecond.ee); thermal: PR/s (rates.perSecond.pr); resonance: RS/s (rates.perSecond.rs); exotic: XF/s (rates.perSecond.xf). */
+export type AnimationDriver = 'manual' | 'automation' | 'combined' | 'electric' | 'thermal' | 'resonance' | 'exotic';
 
 export interface SpeedCurve { base: number; gain: number; min: number; max: number }
 
@@ -36,10 +46,16 @@ export type ComponentAnimation =
   | { kind: 'driven'; ratio: number; phaseDeg: number }          // angle = partAngle(thetaM, ratio, phaseDeg)
   | { kind: 'slider' }                                           // pistonYoke only: position from sliderCrank
   | { kind: 'vibrate'; driver: AnimationDriver; amplitude: number; speed: SpeedCurve }   // unchanged from today
-  | { kind: 'frames'; frames: number; maxHz: number; driver: AnimationDriver }         // frame cycle, advances at up to maxHz while driver > 0
+  | { kind: 'frames'; frames: number; maxHz: number; driver: AnimationDriver; frameOffset?: number }   // frame cycle, advances at up to maxHz while driver > 0; frame = (cycle + frameOffset) % frames
   | { kind: 'reciprocate'; ratio: number; strokeArtPx: number; phaseDeg: number }      // sprite y offset = -(stroke/2)(1 + cos(ratio * thetaM + phase)); 0 = strike
   | { kind: 'spin'; driver: AnimationDriver; speed: SpeedCurve }                       // own angle += speed(driver)*dt, not tied to thetaM; RotSprite frames
-  | { kind: 'gauge'; driver: AnimationDriver; frames: number; minLog: number; maxLog: number; tauSeconds: number };  // frames sheet, no rotation
+  | { kind: 'gauge'; driver: AnimationDriver; frames: number; minLog: number; maxLog: number; tauSeconds: number }  // frames sheet, no rotation
+  // Era V: a bead on a ring ellipse (RING_GEOMETRY); phi advances by dir * speed(exotic) * speedScale * dt; in front (sin phi >= 0) it draws on frontLayer / frontBias.
+  | { kind: 'orbit'; ring: 1 | 2 | 3 | 4; phi0Deg: number; dir: 1 | -1; speed: SpeedCurve; speedScale: number; frontLayer: MachineLayer; frontBias: number }
+  // Era V: frame 0 until the gate holds, then 0 -> frames-1 once and hold the last frame (gate already true at load = last frame).
+  | { kind: 'latch'; techId: TechId; minLevel: number; frames: number; fps: number }
+  // Era V: frame = number of gates met (clamped); endingFrame is unused until WP12 (finale).
+  | { kind: 'stage'; frames: number; gates: readonly (readonly [TechId, number])[]; endingFrame: number };
 
 /** radius: belt pulley radius, art px. cable: wire attachment point (no radius). pipe: steam / water port (no radius). */
 export interface ConnectionPoint { id: string; at: Vec2; kind: 'belt' | 'pin' | 'cable' | 'pipe'; radius?: number }
@@ -64,10 +80,12 @@ export interface MachineLink {
   kind: 'belt' | 'rod' | 'cable' | 'pipe'; sag?: number;
   // pipe only: via = ABSOLUTE machine-local corners; depth (pipe and rod) overrides the default draw depth
   via?: Vec2[]; bore?: 4 | 2; depth?: number; pipeStyle?: 'steam' | 'water';
+  // cable only: 'power' (default, cyan) or 'guy' (dark wire rope, era V guy cables)
+  cableStyle?: 'power' | 'guy';
 }
 
-/** Machine-local art px bounding box of the whole machine. */
-export const MACHINE_BOUNDS = { left: -448, right: 448, top: -470, bottom: 8 };
+/** Machine-local art px bounding box of the whole machine (RT 1120 x 624; aperture box rows -610..-583 need top -616). */
+export const MACHINE_BOUNDS = { left: -560, right: 560, top: -616, bottom: 8 };
 
 /** Machine-local art px positions of every socket. */
 export const MACHINE_SOCKETS: Record<SocketId, Vec2> = {
@@ -86,6 +104,11 @@ export const MACHINE_SOCKETS: Record<SocketId, Vec2> = {
   coilRing3: { x: 64, y: -274 }, coilRing4: { x: 64, y: -330 }, dishL: { x: 35, y: -360 }, dishR: { x: 93, y: -360 },
   dishWavesL: { x: -5, y: -360 }, dishWavesR: { x: 133, y: -360 }, crystalSeat: { x: 64, y: -418 }, calliopeSeat: { x: -44, y: -178 },
   forkBase: { x: 16, y: -110 }, servoBase: { x: 0, y: -14 }, servoHub: { x: 0, y: -24 },
+  // Era V seats: gallery / chamber / core hub / lens / aperture, siphon pairs, siphon arcs, anchors, name plate.
+  galleryBase: { x: 64, y: -395 }, chamberBase: { x: 64, y: -418 }, coreHub: { x: 64, y: -490 }, lensBase: { x: 64, y: -534 },
+  apertureBase: { x: 64, y: -582 }, siphon1L: { x: 30, y: -418 }, siphon1R: { x: 98, y: -418 }, siphon2L: { x: 18, y: -418 },
+  siphon2R: { x: 110, y: -418 }, siphon3L: { x: 42, y: -418 }, siphon3R: { x: 86, y: -418 }, siphonArcs: { x: 64, y: -468 },
+  anchorL: { x: -520, y: 0 }, anchorR: { x: 520, y: 0 }, plateSeat: { x: 64, y: -96 },
 };
 
 /** Motion: manual activity decay, frame clamp and rest threshold (compares the DRIVER value, not speed). */

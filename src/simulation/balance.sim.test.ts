@@ -9,11 +9,12 @@ import type { GreedyResult } from './sim/greedy';
 
 // Deterministic greedy-player simulation. Proves the pacing targets of the retuned tech table
 // (docs/plan/WP5.md), that era I is unchanged by the multi-resource economy (WP7), that the
-// era II (Electrical) pacing targets hold (WP8), that the era III (Thermal) targets hold (WP9)
-// and that the era IV (Resonance) targets hold (WP10). No clock, no randomness, no rendering.
+// era II (Electrical) pacing targets hold (WP8), that the era III (Thermal) targets hold (WP9),
+// that the era IV (Resonance) targets hold (WP10) and that the era V (Unknown Flux) targets hold
+// (WP11). No clock, no randomness, no rendering.
 // Re-run: npx vitest run src/simulation/balance.sim.test.ts
 
-const MAIN_SECONDS = 12600;
+const MAIN_SECONDS = 17400;
 const CLICKS_PER_SECOND = 4;
 
 function eraOneOptions(buyIntervalSeconds: number) {
@@ -22,12 +23,13 @@ function eraOneOptions(buyIntervalSeconds: number) {
 
 // Profiles. A = main greedy run; B = slow buyer; C = casual clicker (no offline progress).
 const PROFILE_A = eraOneOptions(1);
-const PROFILE_B = { seconds: 13800, clicksPerSecond: CLICKS_PER_SECOND, stepSeconds: 1, buyIntervalSeconds: 30 };
-const PROFILE_C = { seconds: 23400, clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30 };
+const PROFILE_B = { seconds: 18000, clicksPerSecond: CLICKS_PER_SECOND, stepSeconds: 1, buyIntervalSeconds: 30 };
+const PROFILE_C = { seconds: 28800, clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30 };
 
 const ERA_TWO_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 2);
 const ERA_THREE_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 3);
 const ERA_FOUR_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 4);
+const ERA_FIVE_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 5);
 
 // Prefix of run A used by the determinism checks (a 3600 s run must match A's first hour exactly).
 const PREFIX_SECONDS = 3600;
@@ -262,6 +264,59 @@ describe('era IV pacing targets (WP10 Resonance)', () => {
   });
 
   it('maxValue is finite and below the design ceiling for A, B and C (era IV)', () => {
+    for (const run of [a, b, c]) {
+      expect(Number.isFinite(run.maxValue)).toBe(true);
+      expect(run.maxValue).toBeLessThan(DESIGN_MAX_VALUE);
+    }
+  });
+});
+
+describe('era V pacing targets (WP11 Unknown Flux)', () => {
+  it('A: nullChamber reached within 900 s of harmonicConvergence', () => {
+    expect(a.firstAt.nullChamber).toBeLessThanOrEqual(a.firstAt.harmonicConvergence + 900);
+  });
+
+  it('A: primaryFunction reached at 230-290 min (13800-17400 s)', () => {
+    expect(a.firstAt.primaryFunction).toBeGreaterThanOrEqual(13800);
+    expect(a.firstAt.primaryFunction).toBeLessThanOrEqual(17400);
+  });
+
+  it('A: primaryFunction comes 3600-6600 s after harmonicConvergence', () => {
+    const span = a.firstAt.primaryFunction - a.firstAt.harmonicConvergence;
+    expect(span).toBeGreaterThanOrEqual(3600);
+    expect(span).toBeLessThanOrEqual(6600);
+  });
+
+  it('A: finalAlignment is reached before primaryFunction', () => {
+    expect(a.firstAt.finalAlignment).toBeLessThan(a.firstAt.primaryFunction);
+  });
+
+  it('A: every era-V tech is reached', () => {
+    for (const id of ERA_FIVE_IDS) {
+      expect(Number.isFinite(a.firstAt[id])).toBe(true);
+    }
+  });
+
+  it('B: primaryFunction reached by 18000 s', () => {
+    expect(b.firstAt.primaryFunction).toBeLessThanOrEqual(18000);
+  });
+
+  it('C: primaryFunction reached by 28800 s (8 h casual budget, no offline)', () => {
+    expect(c.firstAt.primaryFunction).toBeLessThanOrEqual(28800);
+  });
+
+  it('no purchase gap longer than 1200 s between harmonicConvergence and primaryFunction (A, B, C)', () => {
+    for (const run of [a, b, c]) {
+      const gap = maxPurchaseGap(
+        run.purchases,
+        run.firstAt.harmonicConvergence,
+        run.firstAt.primaryFunction,
+      );
+      expect(gap).toBeLessThanOrEqual(1200);
+    }
+  });
+
+  it('maxValue is finite and below the design ceiling for A, B and C (era V)', () => {
     for (const run of [a, b, c]) {
       expect(Number.isFinite(run.maxValue)).toBe(true);
       expect(run.maxValue).toBeLessThan(DESIGN_MAX_VALUE);

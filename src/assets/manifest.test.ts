@@ -334,13 +334,15 @@ describe('WP6c rotation sheets and sky', () => {
     'machine.pulleyGenerator',
     'machine.turbineRotor',
     'machine.servoArm',
+    'machine.nullCore',
+    'machine.inversionGhost',
   ];
 
   it('has a disk file for the sky entry', () => {
     expect(ASSET_MANIFEST['bg.sky'].file).not.toBeNull();
   });
 
-  it('gives exactly the twelve machine ids (ten WP6 + WP8, the era III turbine rotor, the era IV servo arm) a rotation sheet', () => {
+  it('gives exactly the fourteen machine ids (ten WP6 + WP8, the era III turbine rotor, the era IV servo arm, the era V null core and inversion ghost) a rotation sheet', () => {
     const withRotation = ASSET_IDS.filter((id) => ASSET_MANIFEST[id].rotation !== undefined);
     expect(withRotation.slice().sort()).toEqual([...ROTATION_IDS].sort());
   });
@@ -371,7 +373,7 @@ describe('WP6c rotation sheets and sky', () => {
         frame: { width: entry.width, height: entry.height, count: rotation.frames },
       });
       expect(
-        load?.url.startsWith('assets/machine/rot/') || load?.url.startsWith('assets/machine/era2/rot/') || load?.url.startsWith('assets/machine/era3/rot/') || load?.url.startsWith('assets/machine/era4/rot/'),
+        load?.url.startsWith('assets/machine/rot/') || load?.url.startsWith('assets/machine/era2/rot/') || load?.url.startsWith('assets/machine/era3/rot/') || load?.url.startsWith('assets/machine/era4/rot/') || load?.url.startsWith('assets/machine/era5/rot/'),
         id,
       ).toBe(true);
     }
@@ -403,9 +405,10 @@ describe('WP10 era IV machine and fx assets', () => {
     { id: 'machine.crystal', file: 'machine/era4/crystal.png', width: 128, height: 48, origin: { x: 0.5, y: 1 } },
   ];
 
-  it('appends the 14 era IV ids after fx.smoke, in contract order', () => {
-    expect(ASSET_IDS.length).toBe(ASSET_IDS.indexOf('fx.smoke') + 1 + 14);
-    expect(ASSET_IDS.slice(ASSET_IDS.indexOf('fx.smoke') + 1)).toEqual(ERA4_ENTRIES.map((e) => e.id));
+  it('appends the 14 era IV ids after fx.smoke, in contract order (era V ids follow them)', () => {
+    const start = ASSET_IDS.indexOf('fx.smoke') + 1;
+    expect(ASSET_IDS.slice(start, start + 14)).toEqual(ERA4_ENTRIES.map((e) => e.id));
+    expect(ASSET_IDS.slice(start + 14, start + 14 + 30)).toEqual(ERA5_ENTRIES.map((e) => e.id));
   });
 
   it('has the contract file, width, height, origin and tileable none for each new id', () => {

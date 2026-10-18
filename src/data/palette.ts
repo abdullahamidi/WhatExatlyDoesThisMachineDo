@@ -4,6 +4,9 @@ export const PALETTE = {
   cyanDark: 0x2f5a62, cyan: 0x5fa8b4, cyanLight: 0xbff0ec,
   emberDark: 0x6a2418, ember: 0xb8402a, steam: 0xe8e0cc,
   verdigrisDark: 0x3f5e52, verdigris: 0x7fae96, verdigrisLight: 0xcfe8d6,
+  // Era V: violet sky, eclipse dusk tones
+  violetDark: 0x24162f, violet: 0x54367a, violetLight: 0x9a6ad0, violetPale: 0xe0c8ff,
+  dusk0: 0x2b2236, dusk1: 0x3e3049, dusk2: 0x5b4a5f, dusk3: 0x7d6a72,
 } as const;
 export type PaletteKey = keyof typeof PALETTE;
 
@@ -29,4 +32,12 @@ export const PALETTE_CSS: Record<PaletteKey, string> = {
   verdigrisDark: css(PALETTE.verdigrisDark),
   verdigris: css(PALETTE.verdigris),
   verdigrisLight: css(PALETTE.verdigrisLight),
+  violetDark: css(PALETTE.violetDark),
+  violet: css(PALETTE.violet),
+  violetLight: css(PALETTE.violetLight),
+  violetPale: css(PALETTE.violetPale),
+  dusk0: css(PALETTE.dusk0),
+  dusk1: css(PALETTE.dusk1),
+  dusk2: css(PALETTE.dusk2),
+  dusk3: css(PALETTE.dusk3),
 };

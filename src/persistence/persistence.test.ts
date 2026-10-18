@@ -486,6 +486,55 @@ describe('era IV save compatibility (WP10)', () => {
   });
 });
 
+describe('era V save compatibility (WP11)', () => {
+  const ERA_FIVE_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 5);
+
+  it('a v2 save without any era V keys loads as loaded with every era V level at 0', () => {
+    const base = withLevels({ gearRatio: 2, harmonicConvergence: 1 });
+    const parsed = JSON.parse(serialize(base, { muted: false }, 2000)) as {
+      state: { techLevels: Partial<Record<TechId, number>> };
+    };
+    expect(ERA_FIVE_IDS).toHaveLength(10);
+    for (const id of ERA_FIVE_IDS) delete parsed.state.techLevels[id];
+
+    const result = deserialize(JSON.stringify(parsed), 3000);
+    expect(result.status).toBe('loaded');
+    for (const id of ERA_FIVE_IDS) expect(result.state.techLevels[id]).toBe(0);
+    expect(result.state.techLevels.gearRatio).toBe(2);
+    expect(result.state.techLevels.harmonicConvergence).toBe(1);
+  });
+
+  it('a round trip with era V levels and Unknown Flux set is lossless', () => {
+    const state = withLevels(
+      { nullChamber: 1, containmentRing: 12, resonantSiphon: 3, graviticAnchor: 4, finalAlignment: 1, primaryFunction: 1 },
+      {
+        res: resources({ rs: 42.5, xf: 1234.75 }),
+        lifetime: resources({ rs: 10000000, xf: 200000000 }),
+        totalClicks: 11,
+        lastSimTime: 1000,
+        createdAt: 500,
+      },
+    );
+    const result = deserialize(serialize(state, { muted: false }, 2000), 3000);
+    expect(result.status).toBe('loaded');
+    expect(result.state).toEqual(state);
+  });
+
+  it('the v1 fixture still migrates and SAVE_VERSION stays at 2 (era V adds no version bump)', () => {
+    expect(SAVE_VERSION).toBe(2);
+    const result = deserialize(JSON.stringify(v1Save), 5);
+    expect(result.status).toBe('migrated');
+    for (const id of ERA_FIVE_IDS) expect(result.state.techLevels[id]).toBe(0);
+  });
+
+  it('a save with primaryFunction at level 1 keeps it (WP12 decides the resume)', () => {
+    const state = withLevels({ primaryFunction: 1 }, { res: resources({ xf: 5 }), lastSimTime: 1000, createdAt: 500 });
+    const result = deserialize(serialize(state, { muted: false }, 2000), 3000);
+    expect(result.status).toBe('loaded');
+    expect(result.state.techLevels.primaryFunction).toBe(1);
+  });
+});
+
 describe('validateEnvelope', () => {
   it('rejects non-objects, unmigrated and future versions', () => {
     expect(validateEnvelope(null, 1).ok).toBe(false);

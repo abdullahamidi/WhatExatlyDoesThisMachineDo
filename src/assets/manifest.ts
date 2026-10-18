@@ -316,6 +316,141 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     frame: { width: 32, height: 48, count: 4 },
     description: 'Four-frame quartz crystal sheet seated in the crown, one glow level per frame.',
   },
+  // Era V: null chamber, containment rings, siphons, gravitic anchors, inversion ghost, lens, aperture, name plate (delivered PNGs under machine/era5/).
+  'machine.nullGallery': {
+    id: 'machine.nullGallery', file: 'machine/era5/null-gallery.png', width: 128, height: 30, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Low gallery rail under the null chamber, a bare steel ledge with a pale edge.',
+  },
+  'machine.nullChamber': {
+    id: 'machine.nullChamber', file: 'machine/era5/null-chamber.png', width: 128, height: 116, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Null chamber: a riveted lantern housing on the spire with two yoke eyes on its flanks.',
+  },
+  'machine.nullCore': {
+    id: 'machine.nullCore', file: 'machine/era5/null-core.png', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    rotation: { file: 'machine/era5/rot/null-core-rot.png', frames: 64 },
+    description: 'Null core seen face-on: a dark sphere with a faint rim, turned by the exotic flux.',
+  },
+  'machine.nullCoreGlint': {
+    id: 'machine.nullCoreGlint', file: 'machine/era5/null-core-glint.png', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Specular glint laid over the null core, a single pale highlight on the sphere.',
+  },
+  'machine.ring1Back': {
+    id: 'machine.ring1Back', file: 'machine/era5/ring1-back.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'First containment ring, back half: the arc that passes behind the core.',
+  },
+  'machine.ring2Back': {
+    id: 'machine.ring2Back', file: 'machine/era5/ring2-back.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Second containment ring, back half: the arc that passes behind the core.',
+  },
+  'machine.ring3Back': {
+    id: 'machine.ring3Back', file: 'machine/era5/ring3-back.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Third containment ring, back half: the arc that passes behind the core.',
+  },
+  'machine.ring4Back': {
+    id: 'machine.ring4Back', file: 'machine/era5/ring4-back.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Fourth containment ring, back half: the outermost arc that passes behind the core.',
+  },
+  'machine.ring1Front': {
+    id: 'machine.ring1Front', file: 'machine/era5/ring1-front.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'First containment ring, front half: the arc that crosses in front of the core.',
+  },
+  'machine.ring2Front': {
+    id: 'machine.ring2Front', file: 'machine/era5/ring2-front.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Second containment ring, front half: the arc that crosses in front of the core.',
+  },
+  'machine.ring3Front': {
+    id: 'machine.ring3Front', file: 'machine/era5/ring3-front.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Third containment ring, front half: the arc that crosses in front of the core.',
+  },
+  'machine.ring4Front': {
+    id: 'machine.ring4Front', file: 'machine/era5/ring4-front.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Fourth containment ring, front half: the outermost arc that crosses in front of the core.',
+  },
+  'machine.ringBead': {
+    id: 'machine.ringBead', file: 'machine/era5/ring-bead.png', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Five-pixel bead that rides a containment ring.',
+  },
+  'machine.siphonTube': {
+    id: 'machine.siphonTube', file: 'machine/era5/siphon-tube.png', width: 12, height: 30, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Narrow glass siphon tube standing on the gallery, one of six in pairs.',
+  },
+  'machine.siphonArcs1': {
+    id: 'machine.siphonArcs1', file: 'machine/era5/siphon-arcs-1.png', width: 512, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 128, height: 64, count: 4 },
+    description: 'Four-frame resonance arc sheet for the first siphon pair, arcs flickering between the tubes.',
+  },
+  'machine.siphonArcs2': {
+    id: 'machine.siphonArcs2', file: 'machine/era5/siphon-arcs-2.png', width: 512, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 128, height: 64, count: 4 },
+    description: 'Four-frame resonance arc sheet for the second siphon pair, arcs flickering between the tubes.',
+  },
+  'machine.siphonArcs3': {
+    id: 'machine.siphonArcs3', file: 'machine/era5/siphon-arcs-3.png', width: 512, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 128, height: 64, count: 4 },
+    description: 'Four-frame resonance arc sheet for the third siphon pair, arcs flickering between the tubes.',
+  },
+  'machine.graviticAnchor': {
+    id: 'machine.graviticAnchor', file: 'machine/era5/gravitic-anchor.png', width: 32, height: 128, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Gravitic anchor pile driven into the sand, with a guy eye at its head.',
+  },
+  'machine.anchorGlow1': {
+    id: 'machine.anchorGlow1', file: 'machine/era5/anchor-glow-1.png', width: 128, height: 128, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 32, height: 128, count: 4 },
+    description: 'Four-frame glow sheet for the first gravitic anchor stage, a faint halo along the pile.',
+  },
+  'machine.anchorGlow2': {
+    id: 'machine.anchorGlow2', file: 'machine/era5/anchor-glow-2.png', width: 128, height: 128, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 32, height: 128, count: 4 },
+    description: 'Four-frame glow sheet for the second gravitic anchor stage, a brighter halo along the pile.',
+  },
+  'machine.anchorGlow3': {
+    id: 'machine.anchorGlow3', file: 'machine/era5/anchor-glow-3.png', width: 128, height: 128, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 32, height: 128, count: 4 },
+    description: 'Four-frame glow sheet for the third gravitic anchor stage, the strongest halo along the pile.',
+  },
+  'machine.inversionGhost': {
+    id: 'machine.inversionGhost', file: 'machine/era5/inversion-ghost.png', width: 48, height: 48, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    rotation: { file: 'machine/era5/rot/inversion-ghost-rot.png', frames: 80 },
+    description: 'Inversion ghost: a faint mirrored copy of the hand crank that trails the real crank.',
+  },
+  'machine.lensLight': {
+    id: 'machine.lensLight', file: 'machine/era5/lens-light.png', width: 128, height: 48, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 32, height: 48, count: 4 },
+    description: 'Four-frame lens light sheet: a pale beam source at the lens base, flickering per frame.',
+  },
+  'machine.lensColumn': {
+    id: 'machine.lensColumn', file: 'machine/era5/lens-column.png', width: 32, height: 48, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Lens column: a tall glass tube that gathers the core into one line.',
+  },
+  'machine.aperture': {
+    id: 'machine.aperture', file: 'machine/era5/aperture.png', width: 384, height: 28, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 64, height: 28, count: 6 },
+    description: 'Six-frame aperture sheet: a crown shutter that opens one leaf per frame toward the sky.',
+  },
+  'machine.namePlate': {
+    id: 'machine.namePlate', file: 'machine/era5/name-plate.png', width: 240, height: 11, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 40, height: 11, count: 6 },
+    description: 'Six-frame name plate on the girder: the stamped label lights one more stage per frame.',
+  },
+  // Era V finale backdrops and the aperture beam (delivered PNGs under finale/ and fx/).
+  'bg.skyViolet': {
+    id: 'bg.skyViolet', file: 'finale/sky-violet.png', width: 1280, height: 720, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Violet night sky in hard stepped strata, screen-fixed, faded in as the null tech stages arrive.',
+  },
+  'bg.eclipse': {
+    id: 'bg.eclipse', file: 'finale/eclipse.png', width: 288, height: 48, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 48, height: 48, count: 6 },
+    description: 'Six-frame eclipse sheet: a dark disc with a ring that grows across the sky, frame 0 is the baked sun.',
+  },
+  'bg.horizonGlow': {
+    id: 'bg.horizonGlow', file: 'finale/horizon-glow.png', width: 1280, height: 720, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Soft glow along the horizon on every side, screen-fixed, brightening with the horizon field.',
+  },
+  'fx.beam': {
+    id: 'fx.beam', file: 'fx/beam.png', width: 64, height: 32, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 16, height: 32, count: 4 },
+    description: 'Four-frame aperture beam tile: a pale vertical shaft of light, one 16-px slice per frame.',
+  },
 };
 
 export interface AssetLoad {

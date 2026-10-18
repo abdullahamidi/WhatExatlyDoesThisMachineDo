@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_PULSE, CAMERA, DEPTH, PARALLAX_FADE_MS, PYLON_LINE, PYLON_FEEDS, MACHINE_ANCHOR, PIXEL_SCALE, DUST, DUST_RISING, PATTERN_ORIGIN_X } from './world';
+import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_PULSE, CAMERA, DEPTH, PARALLAX_FADE_MS, PYLON_LINE, PYLON_FEEDS, MACHINE_ANCHOR, PIXEL_SCALE, DUST, DUST_RISING, PATTERN_ORIGIN_X, VIEW, ECLIPSE, APERTURE_BEAM } from './world';
 import type { ParallaxLayerDef } from './world';
 import { TOAST_CONFIG } from './notifications';
-import { MACHINE_BOUNDS, MACHINE_COMPONENTS } from './machineComponents';
+import { MACHINE_BOUNDS, MACHINE_COMPONENTS, MACHINE_SOCKETS } from './machineComponents';
 import { TECH_IDS } from './types';
+import { ASSET_MANIFEST } from '../assets/manifest';
 
 function layer(id: string): ParallaxLayerDef {
   const found = PARALLAX_LAYERS.find((l) => l.id === id);
@@ -47,8 +48,10 @@ describe('PARALLAX_LAYERS haze', () => {
 });
 
 describe('PARALLAX_LAYERS Era II pylons', () => {
-  it('pylonsLit is the last layer and is gated on powerLines level 1', () => {
-    expect(PARALLAX_LAYERS[PARALLAX_LAYERS.length - 1]?.id).toBe('pylonsLit');
+  it('pylonsLit is the last Era II layer (only the Era V sky layers follow it) and is gated on powerLines level 1', () => {
+    const ids = PARALLAX_LAYERS.map((l) => l.id);
+    expect(ids.indexOf('pylonsLit')).toBe(ids.indexOf('pylons') + 1);
+    expect(ids.slice(ids.indexOf('pylonsLit') + 1)).toEqual(['skyViolet', 'horizonGlow']);
     expect(layer('pylonsLit').visibleWhen).toEqual({ techId: 'powerLines', minLevel: 1 });
   });
 
@@ -226,6 +229,108 @@ describe('GROUND_SHADE', () => {
 
   it('haze height is positive', () => {
     expect(GROUND_SHADE.haze.height).toBeGreaterThan(0);
+  });
+});
+
+describe('WP11 sky layers (C3)', () => {
+  it('the five pre-WP11 layers keep their ids and numbers', () => {
+    const pick = (l: ParallaxLayerDef) => ({ id: l.id, assetId: l.assetId, scrollFactor: l.scrollFactor, bottomY: l.bottomY, depth: l.depth, alpha: l.alpha, underfill: l.underfill, tint: l.tint, visibleWhen: l.visibleWhen });
+    expect(PARALLAX_LAYERS.slice(0, 5).map(pick)).toEqual([
+      { id: 'sky', assetId: 'bg.sky', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background, alpha: 1, underfill: null, tint: undefined, visibleWhen: undefined },
+      { id: 'mountains', assetId: 'bg.mountains', scrollFactor: 0.15, bottomY: GROUND_Y + 200, depth: DEPTH.background + 10, alpha: 0.45, underfill: 0x5a5f63, tint: undefined, visibleWhen: undefined },
+      { id: 'skyline', assetId: 'bg.skyline', scrollFactor: 0.3, bottomY: GROUND_Y + 200, depth: DEPTH.background + 20, alpha: 0.4, underfill: 0x2b2e31, tint: undefined, visibleWhen: undefined },
+      { id: 'pylons', assetId: 'bg.pylons', scrollFactor: 0.55, bottomY: GROUND_Y + 200, depth: DEPTH.background + 30, alpha: 0.45, underfill: null, tint: 0xb8a98f, visibleWhen: undefined },
+      { id: 'pylonsLit', assetId: 'bg.pylonsLit', scrollFactor: 0.55, bottomY: GROUND_Y + 200, depth: DEPTH.background + 31, alpha: 0.7, underfill: null, tint: undefined, visibleWhen: { techId: 'powerLines', minLevel: 1 } },
+    ]);
+  });
+
+  it('skyViolet is a screen-fixed full-view layer at background + 1 with the four violet stages', () => {
+    expect(layer('skyViolet')).toEqual({
+      id: 'skyViolet', assetId: 'bg.skyViolet', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 1, alpha: 1, underfill: null,
+      alphaStages: [{ techId: 'nullChamber', minLevel: 1, alpha: 0.25 }, { techId: 'lensArray', minLevel: 1, alpha: 0.5 }, { techId: 'horizonField', minLevel: 5, alpha: 0.75 }, { techId: 'skyAperture', minLevel: 1, alpha: 1 }],
+    });
+  });
+
+  it('horizonGlow is a screen-fixed full-view layer at background + 3 with the three horizon stages', () => {
+    expect(layer('horizonGlow')).toEqual({
+      id: 'horizonGlow', assetId: 'bg.horizonGlow', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 3, alpha: 1, underfill: null,
+      alphaStages: [{ techId: 'horizonField', minLevel: 1, alpha: 0.35 }, { techId: 'horizonField', minLevel: 10, alpha: 0.55 }, { techId: 'horizonField', minLevel: 20, alpha: 0.75 }],
+    });
+  });
+
+  it('alpha stages are non-decreasing within each layer, use known techs, and are never combined with visibleWhen', () => {
+    for (const l of PARALLAX_LAYERS) {
+      if (l.alphaStages === undefined) continue;
+      expect(l.visibleWhen, l.id).toBeUndefined();
+      let prev = 0;
+      for (const s of l.alphaStages) {
+        expect(TECH_IDS, l.id).toContain(s.techId);
+        expect(s.alpha, l.id).toBeGreaterThanOrEqual(prev);
+        expect(s.alpha, l.id).toBeLessThanOrEqual(1);
+        prev = s.alpha;
+      }
+    }
+  });
+
+  it('only the two Era V sky layers carry alpha stages', () => {
+    const withStages = PARALLAX_LAYERS.filter((l) => l.alphaStages !== undefined).map((l) => l.id);
+    expect(withStages).toEqual(['skyViolet', 'horizonGlow']);
+  });
+
+  it('ECLIPSE is the bg.eclipse sprite at background + 2 with ordered stage frames inside the sheet', () => {
+    expect(ECLIPSE.assetId).toBe('bg.eclipse');
+    expect(ECLIPSE.depth).toBe(DEPTH.background + 2);
+    expect(ECLIPSE.stages).toEqual([
+      { techId: 'nullChamber', minLevel: 1, frame: 1 },
+      { techId: 'lensArray', minLevel: 1, frame: 2 },
+      { techId: 'horizonField', minLevel: 5, frame: 3 },
+      { techId: 'skyAperture', minLevel: 1, frame: 5 },
+    ]);
+    expect(ECLIPSE.diamond).toEqual({ techId: 'skyAperture', frame: 4, ms: 1200 });
+    const frames = ECLIPSE.stages.map((s) => s.frame);
+    for (let i = 1; i < frames.length; i++) expect(frames[i]).toBeGreaterThan(frames[i - 1] as number);
+    const count = ASSET_MANIFEST['bg.eclipse'].frame?.count ?? 0;
+    expect(count).toBeGreaterThan(Math.max(...frames));
+    expect(count).toBeGreaterThan(ECLIPSE.diamond.frame);
+    for (const s of ECLIPSE.stages) expect(TECH_IDS).toContain(s.techId);
+  });
+
+  it('ECLIPSE sky position lies inside the 1280 x 720 sky', () => {
+    expect(ECLIPSE.skyPx.x).toBeGreaterThanOrEqual(0);
+    expect(ECLIPSE.skyPx.x).toBeLessThanOrEqual(VIEW.width);
+    expect(ECLIPSE.skyPx.y).toBeGreaterThanOrEqual(0);
+    expect(ECLIPSE.skyPx.y).toBeLessThanOrEqual(VIEW.height);
+  });
+
+  it('sky depths are ordered skyViolet (+1) < eclipse (+2) < horizonGlow (+3) < mountains (+10)', () => {
+    expect(layer('skyViolet').depth).toBe(DEPTH.background + 1);
+    expect(ECLIPSE.depth).toBe(DEPTH.background + 2);
+    expect(layer('horizonGlow').depth).toBe(DEPTH.background + 3);
+    expect(layer('mountains').depth).toBe(DEPTH.background + 10);
+    expect(layer('skyViolet').depth).toBeLessThan(ECLIPSE.depth);
+    expect(ECLIPSE.depth).toBeLessThan(layer('horizonGlow').depth);
+    expect(layer('horizonGlow').depth).toBeLessThan(layer('mountains').depth);
+  });
+});
+
+describe('WP11 aperture beam (C3)', () => {
+  it('APERTURE_BEAM is the fx.beam tile on the aperture part with the pinned numbers', () => {
+    expect(APERTURE_BEAM).toEqual({ assetId: 'fx.beam', component: 'aperture', minLatchFrame: 3, artX: 64, footArtY: -588, fps: 8, alpha: 0.85, depth: DEPTH.machine + 1 });
+  });
+
+  it('its component is an existing machine component', () => {
+    expect(Object.keys(MACHINE_COMPONENTS)).toContain(APERTURE_BEAM.component);
+  });
+
+  it('artX equals the apertureBase socket x and the foot sits above the ground line', () => {
+    expect(APERTURE_BEAM.artX).toBe(MACHINE_SOCKETS.apertureBase.x);
+    expect(APERTURE_BEAM.footArtY).toBeLessThan(0);
+  });
+
+  it('the minimum latch frame is a valid frame of the aperture sheet', () => {
+    const count = ASSET_MANIFEST['machine.aperture'].frame?.count ?? 0;
+    expect(APERTURE_BEAM.minLatchFrame).toBeGreaterThanOrEqual(0);
+    expect(APERTURE_BEAM.minLatchFrame).toBeLessThan(count);
   });
 });
 
