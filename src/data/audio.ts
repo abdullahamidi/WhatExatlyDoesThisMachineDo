@@ -40,4 +40,13 @@ export const AUDIO = {
 
   // Relay click on a purchase of an Era II tech: two short square clicks.
   relay: { hz: 1200, ms: 18, gapMs: 55, gain: 0.35 },
+
+  // Boiler roar (Era III): lowpassed noise bed; gain rises with PR/s on a log curve up to maxPerSecond. Owned boiler only.
+  boiler: { lowpassHz: 160, minGain: 0.03, maxGain: 0.14, refPerSecond: 1, maxPerSecond: 100000 },
+
+  // Steam hiss on an Era III purchase: one highpassed noise burst.
+  hiss: { ms: 260, gain: 0.3, highpassHz: 2600 },
+
+  // Milestone whistle: two sines together, attack then decay. Starts after the sting; techId is the milestone that triggers it.
+  whistle: { hzA: 880, hzB: 1175, ms: 1100, attackMs: 90, gain: 0.2, techId: 'pressureVesselBlueprint' },
 } as const;

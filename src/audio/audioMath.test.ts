@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AUDIO } from '../data/audio';
-import { activityLevel, arcRate, gearTickRate, humFrequency, humGain, mainsGain, masterTarget } from './audioMath';
+import { activityLevel, arcRate, boilerGain, gearTickRate, humFrequency, humGain, mainsGain, masterTarget } from './audioMath';
 
 const SAMPLE_INPUTS = [0, -5, NaN, Infinity, 1e12, 0.001, 1];
 
@@ -193,6 +193,39 @@ describe('arcRate', () => {
     const list = [0.001, 1, 10, 100, 1000, 5000, 1e6];
     for (let i = 1; i < list.length; i++) {
       expect(arcRate(list[i]!, true)).toBeGreaterThanOrEqual(arcRate(list[i - 1]!, true));
+    }
+  });
+});
+
+describe('boilerGain', () => {
+  it('is 0 when the boiler is not owned, even with huge PR/s', () => {
+    expect(boilerGain(1e12, false)).toBe(0);
+    expect(boilerGain(Infinity, false)).toBe(0);
+  });
+
+  it('is 0 for pr 0, negative and NaN, even when owned', () => {
+    expect(boilerGain(0, true)).toBe(0);
+    expect(boilerGain(-5, true)).toBe(0);
+    expect(boilerGain(NaN, true)).toBe(0);
+  });
+
+  it('is positive for pr 1 when owned', () => {
+    expect(boilerGain(1, true)).toBeGreaterThan(0);
+  });
+
+  it('stays within [minGain, maxGain] for pr > 0, including huge values', () => {
+    for (const pr of [0.001, 1, 10, 1000, 1e12, Infinity]) {
+      const g = boilerGain(pr, true);
+      expect(g).toBeGreaterThanOrEqual(AUDIO.boiler.minGain);
+      expect(g).toBeLessThanOrEqual(AUDIO.boiler.maxGain);
+    }
+    expect(boilerGain(1e12, true)).toBeCloseTo(AUDIO.boiler.maxGain, 9);
+  });
+
+  it('is monotonic non-decreasing', () => {
+    const list = [0, 0.001, 1, 10, 100, 1000, 5000, 1e6, 1e12];
+    for (let i = 1; i < list.length; i++) {
+      expect(boilerGain(list[i]!, true)).toBeGreaterThanOrEqual(boilerGain(list[i - 1]!, true));
     }
   });
 });

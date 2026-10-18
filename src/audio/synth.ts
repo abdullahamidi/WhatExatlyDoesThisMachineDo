@@ -29,6 +29,9 @@ export interface Synth {
   setMains(gain: number): void; // AUDIO.mains 50 Hz + 100 Hz pair through a lowpass; gain 0 = silent
   scheduleArcs(perSecond: number): void; // AUDIO.arc crackle bursts; 0 clears/resets the schedule; capped at arc.maxRate
   playRelay(): void; // AUDIO.relay two square clicks (Era II purchase)
+  setBoiler(gain: number): void; // AUDIO.boiler looped noise -> lowpass -> gain; gain 0 = silent
+  playHiss(): void; // AUDIO.hiss one highpassed noise burst (Era III purchase)
+  playWhistle(delaySeconds?: number): void; // AUDIO.whistle two sines with attack and decay (milestone)
   suspend(): void; // context.suspend().catch(noop)
   resume(): void; // context.resume().catch(noop)
   isRunning(): boolean; // context.state === 'running'; false once closed or if the state cannot be read
@@ -61,6 +64,12 @@ interface WindNodes {
 interface MainsNodes {
   fundamental: OscillatorNode;
   harmonic: OscillatorNode;
+  gain: GainNode;
+}
+
+interface BoilerNodes {
+  source: AudioBufferSourceNode;
+  filter: BiquadFilterNode;
   gain: GainNode;
 }
 
@@ -233,6 +242,75 @@ function playArc(context: AudioContext, out: AudioNode, noise: AudioBuffer, star
   src.stop(startAt + decay + STOP_PAD_S);
 }
 
+/** Boiler roar: one persistent looped noise source through a lowpass, then the level gain. */
+function ensureBoiler(context: AudioContext, out: AudioNode, cache: BoilerNodes | null, noise: AudioBuffer): BoilerNodes {
+  if (cache) return cache;
+  const source = context.createBufferSource();
+  source.buffer = noise;
+  source.loop = true;
+  const filter = context.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = AUDIO.boiler.lowpassHz;
+  const gain = context.createGain();
+  gain.gain.value = 0;
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(out);
+  source.start();
+  return { source, filter, gain };
+}
+
+/** One steam hiss: a short noise burst through a throwaway high-pass. Nodes are released when it ends. */
+function playHissBurst(context: AudioContext, out: AudioNode, noise: AudioBuffer, startAt: number): void {
+  const h = AUDIO.hiss;
+  const decay = h.ms / 1000;
+  const src = context.createBufferSource();
+  const env = context.createGain();
+  const hp = context.createBiquadFilter();
+  src.buffer = noise;
+  hp.type = 'highpass';
+  hp.frequency.value = h.highpassHz;
+  env.gain.setValueAtTime(h.gain, startAt);
+  env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, startAt + decay);
+  src.connect(env);
+  env.connect(hp);
+  hp.connect(out);
+  src.onended = () => {
+    src.disconnect();
+    env.disconnect();
+    hp.disconnect();
+  };
+  const offset = Math.random() * Math.max(0, noise.duration - decay);
+  src.start(startAt, offset);
+  src.stop(startAt + decay + STOP_PAD_S);
+}
+
+/** Milestone whistle: two sines sounding together through one envelope (linear attack, exponential decay). */
+function playWhistleTone(context: AudioContext, out: AudioNode, startAt: number): void {
+  const w = AUDIO.whistle;
+  const decay = w.ms / 1000;
+  const attack = w.attackMs / 1000;
+  const env = context.createGain();
+  env.gain.setValueAtTime(ENVELOPE_FLOOR, startAt);
+  env.gain.linearRampToValueAtTime(w.gain, startAt + attack);
+  env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, startAt + decay);
+  env.connect(out);
+  let live = 2;
+  for (const hz of [w.hzA, w.hzB]) {
+    const osc = context.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = hz;
+    osc.connect(env);
+    osc.onended = () => {
+      osc.disconnect();
+      live -= 1;
+      if (live === 0) env.disconnect();
+    };
+    osc.start(startAt);
+    osc.stop(startAt + decay + STOP_PAD_S);
+  }
+}
+
 export function createSynth(context: AudioContext): Synth {
   const master = openMaster(context);
   let closed = false;
@@ -242,6 +320,7 @@ export function createSynth(context: AudioContext): Synth {
   let hum: HumNodes | null = null;
   let wind: WindNodes | null = null;
   let mains: MainsNodes | null = null;
+  let boiler: BoilerNodes | null = null;
   const warned = new Set<string>();
 
   function warnOnce(name: string, err: unknown): void {
@@ -444,6 +523,28 @@ export function createSynth(context: AudioContext): Synth {
       });
     },
 
+    setBoiler(gain: number): void {
+      run('setBoiler', (out) => {
+        const amp = Number.isFinite(gain) && gain > 0 ? gain : 0;
+        if (boiler === null && amp === 0) return; // silent and never started: no nodes needed
+        boiler = ensureBoiler(context, out, boiler, getNoise());
+        boiler.gain.gain.setTargetAtTime(amp, context.currentTime, PARAM_TIME_CONSTANT_S);
+      });
+    },
+
+    playHiss(): void {
+      run('playHiss', (out) => {
+        playHissBurst(context, out, getNoise(), context.currentTime);
+      });
+    },
+
+    playWhistle(delaySeconds = 0): void {
+      run('playWhistle', (out) => {
+        const delay = Number.isFinite(delaySeconds) && delaySeconds > 0 ? delaySeconds : 0;
+        playWhistleTone(context, out, context.currentTime + delay);
+      });
+    },
+
     suspend(): void {
       run('suspend', () => {
         context.suspend().catch(() => undefined);
@@ -475,6 +576,10 @@ export function createSynth(context: AudioContext): Synth {
         wind?.lfo.stop();
         mains?.fundamental.stop();
         mains?.harmonic.stop();
+        boiler?.source.stop();
+        boiler?.source.disconnect();
+        boiler?.filter.disconnect();
+        boiler?.gain.disconnect();
       } catch (err) {
         warnOnce('close', err);
       }

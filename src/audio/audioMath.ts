@@ -62,6 +62,13 @@ export function arcRate(eePerSecond: number, sparkOwned: boolean, cfg: typeof AU
   return clampRange(lerp(cfg.minRate, cfg.maxRate, level), cfg.minRate, cfg.maxRate);
 }
 
+/** Boiler roar gain (Era III): 0 unless the boiler is owned and pr > 0 (or NaN -> 0), else lerp(minGain, maxGain, level). */
+export function boilerGain(prPerSecond: number, boilerOwned: boolean, cfg: typeof AUDIO.boiler = AUDIO.boiler): number {
+  if (!boilerOwned || !(prPerSecond > 0)) return 0;
+  const level = activityLevel(prPerSecond, cfg.refPerSecond, cfg.maxPerSecond);
+  return clampRange(lerp(cfg.minGain, cfg.maxGain, level), cfg.minGain, cfg.maxGain);
+}
+
 /** Master target: 0 when muted or locked, else base (default AUDIO.masterGain). */
 export function masterTarget(muted: boolean, unlocked: boolean, base: number = AUDIO.masterGain): number {
   return muted || !unlocked ? 0 : base;

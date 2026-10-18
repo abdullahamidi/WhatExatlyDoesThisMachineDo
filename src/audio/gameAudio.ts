@@ -8,7 +8,7 @@ import { AUDIO } from '../data/audio';
 import { TECHNOLOGIES } from '../data/technologies';
 import type { GameFeedback } from '../game/context';
 import type { GameSession } from '../simulation';
-import { arcRate, gearTickRate, humFrequency, humGain, mainsGain, masterTarget } from './audioMath';
+import { arcRate, boilerGain, gearTickRate, humFrequency, humGain, mainsGain, masterTarget } from './audioMath';
 import { createSynth } from './synth';
 import type { Synth } from './synth';
 
@@ -89,24 +89,27 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     if (!muted && isVisible()) s.resume();
   }
 
-  /** Update loop: hum and gear ticks follow the current ME/s; mains and arcs follow EE/s. Muted keeps the hum pitch and drops only its gain. */
+  /** Update loop: hum and gear ticks follow the current ME/s; mains and arcs follow EE/s; the boiler roar follows PR/s. Muted keeps the hum pitch and drops only its gain. */
   function tick(): void {
     try {
       const s = synth;
       if (!s) return;
       const ps = session.rates.perSecond.me;
       const ee = session.rates.perSecond.ee;
+      const pr = session.rates.perSecond.pr;
       if (session.settings.muted) {
         s.setHum(humFrequency(ps), 0);
         s.scheduleGearTicks(0);
         s.setMains(0);
         s.scheduleArcs(0);
+        s.setBoiler(0);
         return;
       }
       s.setHum(humFrequency(ps), humGain(ps));
       s.scheduleGearTicks(gearTickRate(ps));
       s.setMains(mainsGain(ee));
       s.scheduleArcs(arcRate(ee, session.state.techLevels.sparkGap >= 1));
+      s.setBoiler(boilerGain(pr, session.state.techLevels.boiler >= 1));
     } catch (error) {
       warnOnce('update', error);
     }
@@ -170,14 +173,26 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
         try {
           const s = synth;
           if (s && !session.settings.muted) {
-            if (TECHNOLOGIES[id].era >= 2) s.playRelay();
+            const era = TECHNOLOGIES[id].era;
+            if (era >= 3) s.playHiss();
+            else if (era === 2) s.playRelay();
             else s.playPurchase();
           }
         } catch (error) {
           warnOnce('purchase', error);
         }
       }),
-      session.on('milestone', oneShot('milestone', (s) => s.playSting())),
+      session.on('milestone', ({ id }) => {
+        try {
+          const s = synth;
+          if (s && !session.settings.muted) {
+            s.playSting();
+            if (id === AUDIO.whistle.techId) s.playWhistle((AUDIO.sting.notesHz.length * AUDIO.sting.noteMs) / 1000);
+          }
+        } catch (error) {
+          warnOnce('milestone', error);
+        }
+      }),
       feedback.partLanded.on(oneShot('partLanded', (s) => s.playClunk())),
       feedback.purchaseDenied.on(oneShot('purchaseDenied', (s) => s.playDeny())),
       session.on('settings', (settings) => {
