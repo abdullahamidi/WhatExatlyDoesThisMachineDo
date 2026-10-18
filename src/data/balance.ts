@@ -14,3 +14,9 @@ export const SAVE_BACKUP_KEY = 'wedtmd.save.corrupt';
 
 /** Largest simulated time step applied by a single update, in seconds. */
 export const MAX_UPDATE_SECONDS = OFFLINE_CAP_SECONDS;
+
+/**
+ * Gaps between updates longer than this, in seconds, are treated as offline time and reported
+ * (e.g. a tab resuming after being hidden), instead of being advanced silently.
+ */
+export const OFFLINE_REPORT_THRESHOLD_SECONDS = 60;

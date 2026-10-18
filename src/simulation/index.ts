@@ -1,6 +1,6 @@
 // Public surface of the simulation layer. Pure modules only: no Phaser, no DOM, no persistence.
 export { GameSession } from './GameSession';
-export type { GameSessionOptions } from './GameSession';
+export type { GameSessionOptions, ReadonlyGameState } from './GameSession';
 export { TypedEmitter } from './events';
 export type { Listener, SessionEvents } from './events';
 export { DEFAULT_SETTINGS, createInitialState } from './state';

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { TECH_IDS } from '../data/types';
 import type { GameState, SettingsState, TechId } from '../data/types';
 import { SAVE_BACKUP_KEY, SAVE_KEY } from '../data/balance';
+import { TECHNOLOGIES } from '../data/technologies';
 import { createInitialState } from '../simulation/state';
 import { MIGRATIONS, SAVE_VERSION, migrate, validateEnvelope } from './schema';
 import type { Migration } from './schema';
@@ -221,6 +222,28 @@ describe('validateEnvelope', () => {
     expect(result.envelope.state).not.toHaveProperty('extra');
     expect(result.envelope.settings).toEqual({ muted: true });
     expect(result.envelope.savedAt).toBe(5);
+  });
+
+  it('keeps any level of a repeatable whose maxLevel is null (unlimited)', () => {
+    const techs = {
+      ...TECHNOLOGIES,
+      gearRatio: { ...TECHNOLOGIES.gearRatio, maxLevel: null },
+    };
+    const input = { version: 1, savedAt: 1, state: { me: 0, techLevels: { gearRatio: 40 } }, settings: { muted: false } };
+    const result = validateEnvelope(input, 1, techs);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.envelope.state.techLevels.gearRatio).toBe(40);
+  });
+
+  it('still clamps a repeatable that has a numeric maxLevel', () => {
+    const result = validateEnvelope(
+      { version: 1, savedAt: 1, state: { me: 0, techLevels: { gearRatio: 40 } } },
+      1,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.envelope.state.techLevels.gearRatio).toBe(TECHNOLOGIES.gearRatio.maxLevel);
   });
 });
 

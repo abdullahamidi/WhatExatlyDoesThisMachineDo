@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { GameState, TechId } from '../data/types';
+import { OFFLINE_REPORT_THRESHOLD_SECONDS } from '../data/balance';
 import { GameSession } from './GameSession';
 import { createInitialState } from './state';
 import * as api from './index';
@@ -18,6 +19,7 @@ const record = (session: GameSession): string[] => {
   session.on('milestone', (p) => log.push(`milestone:${p.id}`));
   session.on('offline', (p) => log.push(`offline:${p.gained}`));
   session.on('reset', () => log.push('reset'));
+  session.on('settings', (p) => log.push(`settings:${p.muted}`));
   return log;
 };
 
@@ -52,6 +54,7 @@ describe('GameSession', () => {
   describe('update', () => {
     it('advances automation by the elapsed time and moves lastSimTime', () => {
       const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
+      session.applyOffline(0);
       session.update(5000);
       expect(session.state.me).toBeCloseTo(5, 9);
       expect(session.state.lastSimTime).toBe(5000);
@@ -59,10 +62,63 @@ describe('GameSession', () => {
       expect(session.state.me).toBeCloseTo(5, 9);
     });
 
-    it('clamps the step to the maximum update length', () => {
+    it('routes a first update through offline progress, capped at the offline limit', () => {
       const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
+      const log = record(session);
       session.update(36_000_000);
       expect(session.state.me).toBeCloseTo(28800, 9);
+      expect(session.state.lastSimTime).toBe(36_000_000);
+      expect(log).toEqual(['offline:28800']);
+    });
+
+    it('advances normally for a gap equal to the offline threshold, without an offline event', () => {
+      const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
+      session.applyOffline(0);
+      const log = record(session);
+      session.update(OFFLINE_REPORT_THRESHOLD_SECONDS * 1000);
+      expect(session.state.me).toBeCloseTo(OFFLINE_REPORT_THRESHOLD_SECONDS, 9);
+      expect(session.state.lastSimTime).toBe(OFFLINE_REPORT_THRESHOLD_SECONDS * 1000);
+      expect(log).toEqual([]);
+    });
+
+    it('a first update of 2 hours emits offline with perSecond x 7200 (never silent)', () => {
+      const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
+      const perSecond = session.rates.perSecond;
+      const log = record(session);
+      const twoHours = 2 * 3600 * 1000;
+      session.update(twoHours);
+      expect(log).toEqual([`offline:${perSecond * 7200}`]);
+      expect(session.state.me).toBeCloseTo(perSecond * 7200, 9);
+    });
+
+    it('after applyOffline, a 0.5 s update advances normally with no offline event', () => {
+      const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
+      session.applyOffline(0);
+      const log = record(session);
+      session.update(500);
+      expect(session.state.me).toBeCloseTo(0.5, 9);
+      expect(log).toEqual([]);
+    });
+
+    it('a 5-minute gap after normal updates emits offline and credits the gap', () => {
+      const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
+      session.applyOffline(0);
+      session.update(1000);
+      session.update(2000);
+      const log = record(session);
+      session.update(2000 + 300_000);
+      expect(log).toEqual(['offline:300']);
+      expect(session.state.me).toBeCloseTo(302, 9);
+    });
+
+    it('does not double-count: applyOffline(t) then update(t) adds nothing', () => {
+      const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
+      session.applyOffline(10_000);
+      const before = session.state.me;
+      const log = record(session);
+      session.update(10_000);
+      expect(session.state.me).toBe(before);
+      expect(log).toEqual([]);
     });
 
     it('credits nothing when the clock went backwards but still moves lastSimTime', () => {
@@ -92,6 +148,91 @@ describe('GameSession', () => {
       t = 4000;
       session.update();
       expect(session.state.me).toBeCloseTo(4, 9);
+    });
+  });
+
+  describe('revision', () => {
+    it('bumps on click, update with elapsed time, and purchase', () => {
+      const session = new GameSession({ state: withLevels({}, { me: 10, lastSimTime: 0 }), now: () => 0 });
+      session.applyOffline(0);
+
+      let r = session.revision;
+      session.click();
+      expect(session.revision).toBeGreaterThan(r);
+
+      r = session.revision;
+      session.update(1000);
+      expect(session.revision).toBeGreaterThan(r);
+
+      r = session.revision;
+      expect(session.purchase('gearRatio').ok).toBe(true);
+      expect(session.revision).toBeGreaterThan(r);
+    });
+
+    it('does not bump on an update with zero elapsed time', () => {
+      const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
+      session.applyOffline(5000);
+      const r = session.revision;
+      session.update(5000);
+      expect(session.revision).toBe(r);
+    });
+
+    it('does not bump on a failed purchase', () => {
+      const session = new GameSession({ state: createInitialState(0), now: () => 0 });
+      const r = session.revision;
+      session.purchase('gearRatio');
+      expect(session.revision).toBe(r);
+    });
+
+    it('bumps on a settings change and on reset', () => {
+      const session = new GameSession({ state: createInitialState(0), now: () => 0 });
+      let r = session.revision;
+      session.setMuted(true);
+      expect(session.revision).toBeGreaterThan(r);
+      r = session.revision;
+      session.reset(10);
+      expect(session.revision).toBeGreaterThan(r);
+    });
+  });
+
+  describe('settings', () => {
+    it('defaults to DEFAULT_SETTINGS and accepts initial settings', () => {
+      expect(new GameSession({ state: createInitialState(0), now: () => 0 }).settings).toEqual({ muted: false });
+      const session = new GameSession({
+        state: createInitialState(0),
+        settings: { muted: true },
+        now: () => 0,
+      });
+      expect(session.settings).toEqual({ muted: true });
+    });
+
+    it('setMuted updates the flag and emits settings with the new payload', () => {
+      const session = new GameSession({ state: createInitialState(0), now: () => 0 });
+      const log = record(session);
+      session.setMuted(true);
+      expect(session.settings.muted).toBe(true);
+      expect(log).toEqual(['settings:true']);
+      session.setMuted(false);
+      expect(session.settings.muted).toBe(false);
+      expect(log).toEqual(['settings:true', 'settings:false']);
+    });
+
+    it('setMuted with an unchanged value is a no-op', () => {
+      const session = new GameSession({ state: createInitialState(0), settings: { muted: true }, now: () => 0 });
+      const before = session.settings;
+      const r = session.revision;
+      const log = record(session);
+      session.setMuted(true);
+      expect(session.settings).toBe(before);
+      expect(session.revision).toBe(r);
+      expect(log).toEqual([]);
+    });
+
+    it('reset keeps the settings', () => {
+      const session = new GameSession({ state: createInitialState(0), now: () => 0 });
+      session.setMuted(true);
+      session.reset(100);
+      expect(session.settings).toEqual({ muted: true });
     });
   });
 
@@ -202,6 +343,7 @@ describe('GameSession', () => {
         ),
         now: () => 0,
       });
+      session.applyOffline(0);
       const log = record(session);
       const result = session.purchase('flywheel');
       expect(result).toMatchObject({ ok: true, cost: 150 });
@@ -259,6 +401,15 @@ describe('GameSession', () => {
       expect(session.state.lastSimTime).toBe(5000);
       expect(session.rates.perClick).toBe(1);
       expect(log).toEqual(['reset']);
+    });
+
+    it('treats the fresh state as offline-applied: the next update is a normal step', () => {
+      const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
+      session.reset(5000);
+      const log = record(session);
+      session.update(5500);
+      expect(log).toEqual([]);
+      expect(session.state.me).toBe(0);
     });
   });
 

@@ -1,4 +1,4 @@
-import type { OfflineReport, TechId } from '../data/types';
+import type { OfflineReport, SettingsState, TechId } from '../data/types';
 
 /** Payloads of every event a GameSession emits. */
 export interface SessionEvents {
@@ -8,6 +8,7 @@ export interface SessionEvents {
   milestone: { id: TechId };
   offline: OfflineReport;
   reset: Record<string, never>;
+  settings: SettingsState;           // emitted only when the muted flag actually changes
 }
 
 export type Listener<K extends keyof SessionEvents> = (payload: SessionEvents[K]) => void;

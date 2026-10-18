@@ -48,6 +48,11 @@ export function formatNumber(n: number, mode: RoundMode = 'floor'): string {
   return n < 0 && body !== '0' ? `-${body}` : body;
 }
 
+/** Formats a price. Prices round up so a displayed price is never lower than the charged price. */
+export function formatCost(n: number): string {
+  return formatNumber(n, 'ceil');
+}
+
 export function formatRate(n: number): string {
   return `${formatNumber(n)}/s`;
 }

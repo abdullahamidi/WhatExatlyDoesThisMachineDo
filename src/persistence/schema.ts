@@ -1,5 +1,5 @@
 import { TECH_IDS } from '../data/types';
-import type { GameState, SaveEnvelope, SettingsState, TechId } from '../data/types';
+import type { GameState, SaveEnvelope, SettingsState, TechDefinition, TechId } from '../data/types';
 import { TECHNOLOGIES } from '../data/technologies';
 import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
 
@@ -72,7 +72,10 @@ export function migrate(
   return { ok: true, data: current, migrated };
 }
 
-function readTechLevels(input: unknown): Parsed<Record<TechId, number>> {
+function readTechLevels(
+  input: unknown,
+  techs: Readonly<Record<TechId, TechDefinition>>,
+): Parsed<Record<TechId, number>> {
   const defaults = createInitialState(0).techLevels;
   if (input === undefined) return { ok: true, value: { ...defaults } };
   if (!isPlainObject(input)) return fail('"techLevels" must be an object');
@@ -84,15 +87,20 @@ function readTechLevels(input: unknown): Parsed<Record<TechId, number>> {
       continue;
     }
     if (!isFiniteNumber(raw)) return fail(`"techLevels.${id}" must be a finite number`);
-    const def = TECHNOLOGIES[id];
-    const max = def.kind === 'repeatable' ? (def.maxLevel ?? 1) : 1;
+    const def = techs[id];
+    // A repeatable with no maxLevel (null) is unlimited; every other kind is owned or not.
+    const max = def.kind === 'repeatable' ? (def.maxLevel ?? Number.MAX_SAFE_INTEGER) : 1;
     levels[id] = Math.min(max, Math.max(0, Math.floor(raw)));
   }
   levels.handCrank = 1;
   return { ok: true, value: levels };
 }
 
-function readState(input: unknown, nowMs: number): Parsed<GameState> {
+function readState(
+  input: unknown,
+  nowMs: number,
+  techs: Readonly<Record<TechId, TechDefinition>>,
+): Parsed<GameState> {
   if (!isPlainObject(input)) return fail('"state" must be an object');
   const me = readNumber(input, 'me', 0, 0);
   if (!me.ok) return me;
@@ -104,7 +112,7 @@ function readState(input: unknown, nowMs: number): Parsed<GameState> {
   if (!lastSimTime.ok) return lastSimTime;
   const createdAt = readNumber(input, 'createdAt', nowMs);
   if (!createdAt.ok) return createdAt;
-  const techLevels = readTechLevels(input['techLevels']);
+  const techLevels = readTechLevels(input['techLevels'], techs);
   if (!techLevels.ok) return techLevels;
   return {
     ok: true,
@@ -131,10 +139,12 @@ function readSettings(input: unknown): Parsed<SettingsState> {
 /**
  * Lenient normaliser for a (migrated) save envelope. Missing optional fields take defaults;
  * present fields of the wrong type are errors. The result contains only known fields.
+ * `techs` supplies the technology definitions used to clamp levels (injectable for tests).
  */
 export function validateEnvelope(
   input: unknown,
   nowMs: number,
+  techs: Readonly<Record<TechId, TechDefinition>> = TECHNOLOGIES,
 ): { ok: true; envelope: SaveEnvelope } | { ok: false; error: string } {
   if (!isPlainObject(input)) return fail('Save is not an object');
   if (input['version'] !== SAVE_VERSION) {
@@ -142,7 +152,7 @@ export function validateEnvelope(
   }
   const savedAt = readNumber(input, 'savedAt', nowMs);
   if (!savedAt.ok) return savedAt;
-  const state = readState(input['state'], nowMs);
+  const state = readState(input['state'], nowMs, techs);
   if (!state.ok) return state;
   const settings = readSettings(input['settings']);
   if (!settings.ok) return settings;

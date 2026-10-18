@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { NUMBER_SUFFIXES, formatNumber, formatRate, formatDuration } from './format';
+import { NUMBER_SUFFIXES, formatCost, formatNumber, formatRate, formatDuration } from './format';
 
 describe('NUMBER_SUFFIXES', () => {
   it('has four strictly ascending entries', () => {
@@ -68,6 +68,13 @@ describe('formatNumber negatives', () => {
 describe('formatNumber invalid input', () => {
   it.each([NaN, Infinity, -Infinity])('formats %s as "0"', (n) => {
     expect(formatNumber(n)).toBe('0');
+  });
+});
+
+describe('formatCost', () => {
+  it('rounds prices up', () => {
+    expect(formatCost(1015)).toBe('1.02K');
+    expect(formatCost(10)).toBe('10');
   });
 });
 

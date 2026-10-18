@@ -21,7 +21,7 @@ Plans/assignments: `docs/plan/WP*.md`.
   milestones, `GameSession` facade with typed events), `src/persistence` (versioned codec,
   validation/recovery, `SaveManager`), `src/utils/format`. 198+ unit tests.
   Validated by EM (typecheck/test/build/purity greps) and approved by Opus reviewer.
-- WP1 review follow-ups (in progress): unlimited-maxLevel save clamp fix, `GameSession.revision`, settings
+- WP1 review follow-ups (done, 215 tests): unlimited-maxLevel save clamp fix, `GameSession.revision`, settings
   ownership (`settings`, `setMuted`), offline-never-silent `update()`, readonly snapshots, `formatCost`.
 
 ## Remaining tasks
