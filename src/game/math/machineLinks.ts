@@ -109,6 +109,32 @@ export function rasterLine(p: Vec2, q: Vec2): Vec2[] {
   return out;
 }
 
+/** Sagging cable from a to b: samples y(t) = a.y + (b.y - a.y) t + 4 sag t (1 - t) once per integer x, joined with rasterLine. */
+export function rasterCable(a: Vec2, b: Vec2, sag: number): Vec2[] {
+  if (![a.x, a.y, b.x, b.y, sag].every((v) => Number.isFinite(v))) return [];
+  const pa: Vec2 = { x: noNegativeZero(Math.round(a.x)), y: noNegativeZero(Math.round(a.y)) }; // start pixel
+  const pb: Vec2 = { x: noNegativeZero(Math.round(b.x)), y: noNegativeZero(Math.round(b.y)) }; // end pixel
+  if (a.x === b.x || pa.x === pb.x) return rasterLine(a, b); // vertical cable: plain line
+  const step = pb.x > pa.x ? 1 : -1; // walk x from a towards b
+  const out: Vec2[] = [pa];
+  let prev = pa;
+  for (let x = pa.x + step; ; x += step) {
+    const isEnd = x === pb.x;
+    let p: Vec2;
+    if (isEnd) {
+      p = pb; // exact end pixel
+    } else {
+      const t = (x - a.x) / (b.x - a.x); // curve parameter at this column
+      const y = a.y + (b.y - a.y) * t + 4 * sag * t * (1 - t); // sagging curve
+      p = { x: noNegativeZero(x), y: noNegativeZero(Math.round(y)) };
+    }
+    for (const q of rasterLine(prev, p).slice(1)) out.push(q); // first point is prev, already emitted
+    prev = p;
+    if (isEnd) break;
+  }
+  return out;
+}
+
 /** Pixels of an arc: n = max(1, ceil(|sweep| * radius / 0.5)) samples, rounded, consecutive duplicates dropped. */
 export function rasterArc(arc: Arc): Vec2[] {
   const { centre, radius, startRad, sweepRad } = arc;

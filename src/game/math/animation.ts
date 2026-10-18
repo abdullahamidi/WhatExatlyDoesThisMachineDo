@@ -30,8 +30,8 @@ export function addActivity(value: number, gained: number, tauSeconds: number): 
   return value + gained / tauSeconds; // value + gained / tau
 }
 
-/** Driver value picked from the activity sources: manual, automation, or their sum for 'combined'. */
-export function driverValue(driver: AnimationDriver, manual: number, automation: number): number {
+/** Driver value picked from the activity sources: manual, automation, their sum for 'combined', or electric (EE/s). */
+export function driverValue(driver: AnimationDriver, manual: number, automation: number, electric = 0): number {
   switch (driver) {
     case 'manual':
       return manual; // manual only
@@ -39,7 +39,19 @@ export function driverValue(driver: AnimationDriver, manual: number, automation:
       return automation; // automation only
     case 'combined':
       return manual + automation; // sum of both
+    case 'electric':
+      return electric; // electric only
   }
+}
+
+/**
+ * Frame of a frame-cycle part at time t: floor(t * maxHz) % frames while active. 0 when inactive, frames < 2,
+ * maxHz <= 0, or t negative / non-finite.
+ */
+export function framesIndex(t: number, frames: number, maxHz: number, active: boolean): number {
+  if (!active || !Number.isFinite(frames) || frames < 2) return 0;
+  if (!Number.isFinite(maxHz) || maxHz <= 0 || !(t >= 0) || !Number.isFinite(t)) return 0;
+  return Math.floor(t * maxHz) % frames; // whole steps of maxHz, wrapped to the frame count
 }
 
 /** Frame time in seconds: deltaMs / 1000 capped at maxSeconds; NaN, negative or zero input gives 0. */

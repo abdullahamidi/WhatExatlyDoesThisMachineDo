@@ -28,7 +28,7 @@ function between(lo: number, hi: number): number {
  * Layout lives on the outer `container`; the inner `parts` container holds the sprites, links and contact shadows and is the only thing shaken.
  * Render modes (`MACHINE_RENDER.mode`):
  *  - `renderTexture`: `parts` is off the display list and is drawn once per frame into a RenderTexture on the art-pixel grid
- *    (RT pixel (200,200) is machine (0,0)); the RT is the only machine image on the display list, scaled by `container`.
+ *    (RT pixel (-MACHINE_BOUNDS.left, -MACHINE_BOUNDS.top) is machine (0,0)); the RT is the only machine image on the display list, scaled by `container`.
  *  - `direct`: `parts` sits under `container` and Phaser draws the sprites itself.
  * Newly unlocked parts fly in (assembly tween) and puff dust on landing; motion, links and shadows are driven per frame by `update`.
  */

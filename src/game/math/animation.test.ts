@@ -8,6 +8,7 @@ import {
   clampFrameSeconds,
   advancePhase,
   vibrateOffset,
+  framesIndex,
 } from './animation';
 
 const CURVE: SpeedCurve = { base: 90, gain: 0.5, min: 30, max: 360 };
@@ -94,6 +95,51 @@ describe('driverValue', () => {
     expect(driverValue('manual', 2, 3)).toBe(2);
     expect(driverValue('automation', 2, 3)).toBe(3);
     expect(driverValue('combined', 2, 3)).toBe(5);
+  });
+
+  it('picks the electric value for the electric driver, and 3-arg calls stay valid', () => {
+    expect(driverValue('electric', 2, 3, 7)).toBe(7);
+    expect(driverValue('electric', 2, 3)).toBe(0);
+    expect(driverValue('manual', 2, 3, 7)).toBe(2);
+    expect(driverValue('automation', 2, 3, 7)).toBe(3);
+    expect(driverValue('combined', 2, 3, 7)).toBe(5);
+  });
+});
+
+describe('framesIndex', () => {
+  it('stays on frame 0 while inactive', () => {
+    expect(framesIndex(0.5, 4, 3, false)).toBe(0);
+    expect(framesIndex(1.0, 4, 3, false)).toBe(0);
+  });
+
+  it('stays on frame 0 for a single frame sheet', () => {
+    expect(framesIndex(1.0, 1, 3, true)).toBe(0);
+  });
+
+  it('returns 0 for negative, NaN and infinite time', () => {
+    expect(framesIndex(-0.5, 4, 3, true)).toBe(0);
+    expect(framesIndex(Number.NaN, 4, 3, true)).toBe(0);
+    expect(framesIndex(Number.POSITIVE_INFINITY, 4, 3, true)).toBe(0);
+  });
+
+  it('advances at maxHz and wraps the frame count', () => {
+    expect(framesIndex(0, 4, 3, true)).toBe(0);
+    expect(framesIndex(0.34, 4, 3, true)).toBe(1);
+    expect(framesIndex(0.67, 4, 3, true)).toBe(2);
+    expect(framesIndex(1.0, 4, 3, true)).toBe(3);
+    expect(framesIndex(1.34, 4, 3, true)).toBe(0);
+  });
+
+  it('changes index at most ceil(seconds * maxHz) times over 10 s', () => {
+    const dt = 0.01;
+    let changes = 0;
+    let prev = framesIndex(0, 4, 3, true);
+    for (let step = 1; step < 1000; step++) {
+      const cur = framesIndex(step * dt, 4, 3, true);
+      if (cur !== prev) changes++;
+      prev = cur;
+    }
+    expect(changes).toBeLessThanOrEqual(Math.ceil(10 * 3));
   });
 });
 

@@ -10,6 +10,7 @@ import {
   clampFrameSeconds,
   decayActivity,
   driverValue,
+  framesIndex,
   vibrateOffset,
 } from '../math/animation';
 import { addClickImpulse, partAngle, rotationFrame, sliderCrank, stepMaster } from '../math/driveTrain';
@@ -68,6 +69,8 @@ export class MachineAnimator {
   private gearsActive = false;
   private manual = 0;
   private lastDegPerSec = 0;
+  /** Seconds of clamped frame time since the last reset: the clock of frame-cycle parts. */
+  private elapsed = 0;
   private readonly unsubscribeClick: () => void;
   private readonly unsubscribeReset: () => void;
 
@@ -101,6 +104,7 @@ export class MachineAnimator {
       this.gearsActive = false;
       this.manual = 0;
       this.lastDegPerSec = 0;
+      this.elapsed = 0;
       this.phases.clear();
       // Stale angles must not snap in later: every driven part goes back to angle 0.
       for (const id of MACHINE_COMPONENT_IDS) {
@@ -114,8 +118,11 @@ export class MachineAnimator {
   /** Advances the master angle and places every active part by one frame. */
   update(deltaMs: number, isActive: (id: MachineComponentId) => boolean): void {
     const dt = clampFrameSeconds(deltaMs, MACHINE_MOTION.maxFrameSeconds);
+    this.elapsed += dt; // frame-cycle clock
+    const me = this.session.rates.perSecond.me;
+    const ee = this.session.rates.perSecond.ee;
     this.manual = decayActivity(this.manual, dt, MACHINE_MOTION.manualTauSeconds); // activity fades when idle
-    const dv = driverValue('combined', this.manual, this.session.rates.perSecond.me);
+    const dv = driverValue('combined', this.manual, me);
     const degPerSec = dv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(DRIVE_TRAIN.masterSpeed, dv); // rest below threshold
     this.syncGearing(isActive('gearSmall'));
     this.master = stepMaster(this.master, degPerSec, DRIVE_TRAIN.masterDirection, dt, DRIVE_TRAIN.clickTauSeconds);
@@ -146,7 +153,7 @@ export class MachineAnimator {
           break;
         }
         case 'vibrate': {
-          const vdv = driverValue(anim.driver, this.manual, this.session.rates.perSecond.me);
+          const vdv = driverValue(anim.driver, this.manual, me, ee);
           const speed = vdv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, vdv); // rest below threshold
           const base = resolveAttachment(MACHINE_COMPONENTS[id]);
           if (speed === 0) {
@@ -157,6 +164,12 @@ export class MachineAnimator {
           this.phases.set(id, phase);
           const o = vibrateOffset(phase, anim.amplitude);
           sprite.setPosition(base.x + o.x, base.y + o.y);
+          break;
+        }
+        case 'frames': {
+          // Frame cycle: advances at up to maxHz while the driver is above rest, holds frame 0 otherwise.
+          const fdv = driverValue(anim.driver, this.manual, me, ee);
+          sprite.setFrame(framesIndex(this.elapsed, anim.frames, anim.maxHz, fdv >= MACHINE_MOTION.restThreshold));
           break;
         }
       }
@@ -189,9 +202,9 @@ export class MachineAnimator {
     return { masterDeg: this.master.deg, degPerSec: this.lastDegPerSec };
   }
 
-  /** Current driver inputs: manual activity and automation rate (ME/s). */
-  getDriverValues(): { manual: number; automation: number } {
-    return { manual: this.manual, automation: this.session.rates.perSecond.me };
+  /** Current driver inputs: manual activity, automation rate (ME/s) and electric rate (EE/s). */
+  getDriverValues(): { manual: number; automation: number; electric: number } {
+    return { manual: this.manual, automation: this.session.rates.perSecond.me, electric: this.session.rates.perSecond.ee };
   }
 
   /** Removes the session subscriptions. */

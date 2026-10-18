@@ -3,7 +3,7 @@ import { DRIVE_TRAIN, MACHINE_COMPONENTS, MACHINE_COMPONENT_IDS, MACHINE_LINKS, 
 import type { MachineComponentId, Vec2 } from '../../data/machineComponents';
 import { partAngle, sliderCrank } from '../math/driveTrain';
 import { resolveAttachment } from '../math/machineLayout';
-import { beltTravel, coalesceRuns, pointsAlongBelt, rasterBelt, rasterLine } from '../math/machineLinks';
+import { beltTravel, coalesceRuns, pointsAlongBelt, rasterBelt, rasterCable, rasterLine } from '../math/machineLinks';
 
 /** Key quantisation: belt endpoints are compared at 1/KEY_SCALE art px so sub-pixel noise does not redraw. */
 const KEY_SCALE = 100;
@@ -24,6 +24,9 @@ interface BeltPlan { key: string; a: Vec2; b: Vec2; ra: number; rb: number; dash
 /** Rod ready to rasterise: pin and eye in whole pixels. */
 interface RodPlan { pin: Vec2; eye: Vec2 }
 
+/** Cable ready to rasterise: both ends in whole pixels, sag in art px. */
+interface CablePlan { a: Vec2; b: Vec2; sag: number }
+
 /**
  * Geometry of one draw, built from integers only. Each part has its own key: equal key means equal pixels for that part.
  * The belt key excludes the dash shift, so a moving belt only re-plots its dash pass.
@@ -32,10 +35,12 @@ interface LinkPlan {
   belts: BeltPlan[];
   rods: RodPlan[];
   caps: Vec2[];
+  cables: CablePlan[];
   beltKey: string;
   dashKey: string;
   rodKey: string;
   capKey: string;
+  cableKey: string;
 }
 
 /** Rastered belt loops with their coalesced runs; inner pixels feed the dash pass. */
@@ -100,6 +105,8 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
   const beltKeyParts: string[] = [];
   const dashKeyParts: string[] = [];
   const rodKeyParts: string[] = [];
+  const cables: CablePlan[] = [];
+  const cableKeyParts: string[] = [];
 
   for (const link of MACHINE_LINKS) {
     const fromLive = ctx.isLive(link.from.component);
@@ -123,7 +130,7 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
       belts.push({ key, a: qa, b: qb, ra, rb, dashShift });
       beltKeyParts.push(`b${key}`);
       dashKeyParts.push(`${dashShift}`);
-    } else {
+    } else if (link.kind === 'rod') {
       const crankAnim = MACHINE_COMPONENTS[link.from.component].animation;
       const hub = ctx.pointOf(link.from.component, link.from.point);
       const eye = ctx.pointOf(link.to.component, link.to.point);
@@ -136,6 +143,18 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
       const eyeAt = roundPoint(eye);
       rods.push({ pin, eye: eyeAt });
       rodKeyParts.push(`r${pin.x},${pin.y};${eyeAt.x},${eyeAt.y}`);
+    } else if (link.kind === 'cable') {
+      const a = ctx.pointOf(link.from.component, link.from.point);
+      const b = ctx.pointOf(link.to.component, link.to.point);
+      if (!fromLive || !toLive || a === null || b === null) {
+        cableKeyParts.push('c-'); // hidden or assembling end: no cable
+        continue;
+      }
+      const qa = roundPoint(a);
+      const qb = roundPoint(b);
+      const sag = link.sag ?? MACHINE_LINK_STYLE.cable.sagArtPx;
+      cables.push({ a: qa, b: qb, sag });
+      cableKeyParts.push(`c${qa.x},${qa.y};${qb.x},${qb.y};${sag}`);
     }
   }
 
@@ -158,10 +177,12 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
     belts,
     rods,
     caps,
+    cables,
     beltKey: beltKeyParts.join('|'),
     dashKey: dashKeyParts.join('|'),
     rodKey: rodKeyParts.join('|'),
     capKey: capKeyParts.join('|'),
+    cableKey: cableKeyParts.join('|'),
   };
 }
 
@@ -172,11 +193,14 @@ export class MachineLinks {
   private readonly dashes: Phaser.GameObjects.Graphics;
   private readonly rods: Phaser.GameObjects.Graphics;
   private readonly caps: Phaser.GameObjects.Graphics;
+  /** Sagging cables (Era II wiring), above the rods. */
+  private readonly cables: Phaser.GameObjects.Graphics;
   /** Keys of the last drawn parts; null until the first draw. Equal key means that Graphics is already correct. */
   private beltKey: string | null = null;
   private dashKey: string | null = null;
   private rodKey: string | null = null;
   private capKey: string | null = null;
+  private cableKey: string | null = null;
   /** Rastered belt loops by belt key; rebuilt from the current plan each draw so it never grows past the live belts. */
   private rasterCache = new Map<string, BeltRaster>();
 
@@ -185,10 +209,12 @@ export class MachineLinks {
     this.dashes = scene.make.graphics({}, false).setDepth(MACHINE_LINK_STYLE.beltDepth);
     this.rods = scene.make.graphics({}, false).setDepth(MACHINE_LINK_STYLE.rodDepth);
     this.caps = scene.make.graphics({}, false).setDepth(MACHINE_LINK_STYLE.capDepth);
+    this.cables = scene.make.graphics({}, false).setDepth(MACHINE_LINK_STYLE.cable.depth);
     parent.add(this.belts);
     parent.add(this.dashes);
     parent.add(this.rods);
     parent.add(this.caps);
+    parent.add(this.cables);
   }
 
   /** Redraws each part only when its own key changed; skips all Graphics work otherwise. */
@@ -223,17 +249,23 @@ export class MachineLinks {
       this.caps.clear();
       this.drawCaps(plan.caps);
     }
+    if (plan.cableKey !== this.cableKey) {
+      this.cableKey = plan.cableKey;
+      this.cables.clear();
+      this.drawCables(plan.cables);
+    }
   }
 
   /** Destroys the Graphics objects; safe to call twice. */
   destroy(): void {
-    for (const g of [this.belts, this.dashes, this.rods, this.caps]) {
+    for (const g of [this.belts, this.dashes, this.rods, this.caps, this.cables]) {
       if (g.scene) g.destroy(); // Phaser clears scene on destroy
     }
     this.beltKey = null;
     this.dashKey = null;
     this.rodKey = null;
     this.capKey = null;
+    this.cableKey = null;
     this.rasterCache = new Map();
   }
 
@@ -295,6 +327,38 @@ export class MachineLinks {
       this.plot(this.caps, style.ring, ring);
       this.plot(this.caps, style.body, body);
       this.plot(this.caps, style.hi, [{ x: x0 + 1, y: y0 + 1 }]);
+    }
+  }
+
+  /**
+   * Cables: sagging core line, a highlight pixel directly above each even-x core pixel (not itself core), and a 2x2
+   * highlight dot on each end.
+   */
+  private drawCables(cables: readonly CablePlan[]): void {
+    const style = MACHINE_LINK_STYLE.cable;
+    for (const { a, b, sag } of cables) {
+      const core = rasterCable(a, b, sag);
+      const coreKeys = new Set(core.map((p) => `${p.x},${p.y}`));
+      const hi: Vec2[] = [];
+      const hiKeys = new Set<string>();
+      for (const p of core) {
+        if (p.x % 2 !== 0) continue; // even x only (-0 counts as even)
+        const above: Vec2 = { x: p.x, y: p.y - 1 };
+        const k = `${above.x},${above.y}`;
+        if (coreKeys.has(k) || hiKeys.has(k)) continue;
+        hiKeys.add(k);
+        hi.push(above);
+      }
+      this.plot(this.cables, style.core, core);
+      this.plot(this.cables, style.hi, hi);
+      for (const e of [a, b]) {
+        this.plot(this.cables, style.hi, [
+          { x: e.x, y: e.y },
+          { x: e.x + 1, y: e.y },
+          { x: e.x, y: e.y + 1 },
+          { x: e.x + 1, y: e.y + 1 },
+        ]);
+      }
     }
   }
 

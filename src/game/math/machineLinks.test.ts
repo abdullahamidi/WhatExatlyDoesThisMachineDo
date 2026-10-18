@@ -8,6 +8,7 @@ import {
   rasterArc,
   rasterBeltLoop,
   rasterBelt,
+  rasterCable,
   pointsAlongBelt,
   beltTravel,
   coalesceRuns,
@@ -230,6 +231,72 @@ describe('rasterLine', () => {
 
   it('returns no points for non-finite input', () => {
     expect(rasterLine({ x: Number.NaN, y: 0 }, { x: 1, y: 1 })).toEqual([]);
+  });
+});
+
+describe('rasterCable', () => {
+  /** Highest y of the pixels in column x, or null when the column is empty. */
+  function maxYAt(pts: Vec2[], x: number): number | null {
+    const ys = pts.filter((p) => p.x === x).map((p) => p.y);
+    return ys.length === 0 ? null : Math.max(...ys);
+  }
+
+  it('starts and ends on the rounded end points with a sag below the line', () => {
+    const pts = rasterCable({ x: 0, y: 0 }, { x: 20, y: 0 }, 10);
+    expect(pts[0]).toEqual({ x: 0, y: 0 });
+    expect(pts[pts.length - 1]).toEqual({ x: 20, y: 0 });
+    // the curve bottoms out at y = 10 around the middle; the mid column must be on that lowest row
+    expect(Math.max(...pts.map((p) => p.y))).toBe(10);
+    expect(maxYAt(pts, 10)).toBe(10);
+  });
+
+  it('is symmetric about the middle column', () => {
+    const pts = rasterCable({ x: 0, y: 0 }, { x: 20, y: 0 }, 10);
+    for (let x = 0; x <= 20; x++) {
+      // Bresenham breaks ties on the steep ends one way only, so mirrored columns may differ by one px
+      expect(Math.abs((maxYAt(pts, x) ?? 0) - (maxYAt(pts, 20 - x) ?? 0))).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('has no gaps: consecutive points differ by at most 1 in x and in y', () => {
+    const pts = rasterCable({ x: 0, y: 0 }, { x: 20, y: 0 }, 10);
+    for (let i = 1; i < pts.length; i++) {
+      const p = pts[i - 1];
+      const q = pts[i];
+      if (p === undefined || q === undefined) throw new Error('index out of range');
+      expect(Math.abs(q.x - p.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(q.y - p.y)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('equals rasterLine when the sag is 0', () => {
+    expect(rasterCable({ x: 0, y: 0 }, { x: 20, y: 0 }, 0)).toEqual(rasterLine({ x: 0, y: 0 }, { x: 20, y: 0 }));
+    expect(rasterCable({ x: 0, y: 0 }, { x: 4, y: 4 }, 0)).toEqual(rasterLine({ x: 0, y: 0 }, { x: 4, y: 4 }));
+  });
+
+  it('equals rasterLine when both ends share a column', () => {
+    expect(rasterCable({ x: 3, y: 0 }, { x: 3, y: 8 }, 5)).toEqual(rasterLine({ x: 3, y: 0 }, { x: 3, y: 8 }));
+  });
+
+  it('still starts at a when a is right of b', () => {
+    const pts = rasterCable({ x: 20, y: 0 }, { x: 0, y: 0 }, 10);
+    expect(pts[0]).toEqual({ x: 20, y: 0 });
+    expect(pts[pts.length - 1]).toEqual({ x: 0, y: 0 });
+    expect(maxYAt(pts, 10)).toBe(10);
+  });
+
+  it('returns no points for non-finite input', () => {
+    expect(rasterCable({ x: Number.NaN, y: 0 }, { x: 20, y: 0 }, 10)).toEqual([]);
+    expect(rasterCable({ x: 0, y: 0 }, { x: 20, y: 0 }, Number.NaN)).toEqual([]);
+  });
+
+  it('puts the lowest column at round(midY + sag) on a sloped cable', () => {
+    // midY = (0 + 20) / 2 = 10; the sag adds sag at t = 0.5, so the mid column sits at round(10 + 10) = 20
+    const expected = Math.round(10 + 10);
+    const pts = rasterCable({ x: 0, y: 0 }, { x: 20, y: 20 }, 10);
+    expect(pts[0]).toEqual({ x: 0, y: 0 });
+    expect(pts[pts.length - 1]).toEqual({ x: 20, y: 20 });
+    expect(maxYAt(pts, 10)).toBe(expected);
   });
 });
 
