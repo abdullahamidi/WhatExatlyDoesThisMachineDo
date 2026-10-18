@@ -1,9 +1,9 @@
 import './techTree.css';
-import type { TechId } from '../data/types';
+import type { TechId, TechView } from '../data/types';
 import type { GameContext } from '../game/context';
 import type { GameSession } from '../simulation';
-import { buildTechTreeView, defaultSelection, purchaseFailureText } from './techTreeView';
-import type { TechDetailView, TechNodeView, TechTreeView } from './techTreeView';
+import { buildEraTabs, buildTechTreeView, defaultSelection, purchaseFailureText, reachedEras } from './techTreeView';
+import type { EraTabView, TechDetailView, TechNodeView, TechTreeView } from './techTreeView';
 
 // TECH INDEX overlay (DOM). Built once; update() patches only what changed. No Phaser.
 
@@ -76,7 +76,8 @@ function nodeClassOf(node: TechNodeView): string {
 }
 
 /** Cheap change key: equal strings mean nothing the overlay shows has changed. */
-function stampOf(view: TechTreeView): string {
+function stampOf(view: TechTreeView, tabs: readonly EraTabView[]): string {
+  const eras = tabs.map((t) => `${t.era}:${t.label}:${t.reached ? 1 : 0}:${t.selected ? 1 : 0}`).join(';');
   const nodes = view.nodes.map((n) => `${n.id}:${n.status}:${n.levelText}:${n.affordable}:${n.selected}`).join(';');
   const edges = view.edges.map((e) => `${e.key}:${e.met}`).join(';');
   const d = view.detail;
@@ -86,7 +87,7 @@ function stampOf(view: TechTreeView): string {
       d.id, d.buyState, d.shortfallText ?? '', d.costText ?? '', d.levelText, d.statusLabel,
       d.currentEffect, d.nextEffect ?? '', d.requirements.map((r) => (r.met ? '1' : '0')).join(','),
     ].join('|');
-  return [view.meText, nodes, edges, detail].join('#');
+  return [view.headerText, eras, nodes, edges, detail].join('#');
 }
 
 export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
@@ -108,7 +109,12 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   closeButton.type = 'button';
   header.append(title, meEl, closeButton);
 
+  const tabList = createElement('div', { id: 'tech-tabs', className: 'tech-tabs' });
+  tabList.setAttribute('role', 'tablist');
+  tabList.setAttribute('aria-label', 'Eras');
+
   const graph = createElement('div', { id: 'tech-graph' });
+  graph.setAttribute('role', 'tabpanel');
   const inner = createElement('div', { className: 'tech-graph-inner' });
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.id = 'tech-edges';
@@ -139,11 +145,12 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   side.append(levelEl, effectCurrentEl, effectNextEl, costEl, shortfallEl, buyButton, feedbackEl);
   detailEl.append(main, side);
 
-  panel.append(header, graph, detailEl);
+  panel.append(header, tabList, graph, detailEl);
   overlay.appendChild(panel);
   root.appendChild(overlay);
 
   // ---- keyed element caches ----
+  const tabRefs = new Map<number, HTMLButtonElement>();
   const nodeRefs = new Map<TechId, NodeRefs>();
   const edgeRefs = new Map<string, SVGPathElement>();
   const reqItems: HTMLLIElement[] = [];
@@ -152,6 +159,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   let isOpenFlag = false;
   let destroyed = false;
   let selected: TechId | null = null;
+  let selectedEra = 1;
   let dirty = true;
   let lastStamp = '';
   let returnFocus: HTMLElement | null = null;
@@ -159,6 +167,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   // Inputs the cached view was built from; update() rebuilds only when they change or the cache is old.
   let builtLevels: object | null = null;
   let builtSelected: TechId | null = null;
+  let builtEra = 0;
   let builtAt = Number.NEGATIVE_INFINITY;
   // What the detail panel showed on the last render; feedback text is stale once either changes.
   let renderedSelected: TechId | null = null;
@@ -178,6 +187,29 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
       buyButton.classList.remove('is-denied');
     }, DENIED_FLASH_MS);
   };
+
+  const viewsOfEra = (era: number): TechView[] =>
+    session.getAllTechViews().filter((view) => view.def.era === era);
+
+  const ensureTab = (era: number): HTMLButtonElement => {
+    const existing = tabRefs.get(era);
+    if (existing !== undefined) return existing;
+    const button = createElement('button', { className: 'tech-tab', id: `tech-tab-${era}` });
+    button.type = 'button';
+    button.setAttribute('role', 'tab');
+    button.setAttribute('data-era', String(era));
+    button.setAttribute('aria-controls', 'tech-graph');
+    tabList.appendChild(button);
+    tabRefs.set(era, button);
+    return button;
+  };
+
+  /** Tabs in era order that the player can currently open. */
+  const enabledTabs = (): HTMLButtonElement[] =>
+    [...tabRefs.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([, button]) => button)
+      .filter((button) => !button.disabled);
 
   const ensureNode = (id: TechId): NodeRefs => {
     const existing = nodeRefs.get(id);
@@ -205,17 +237,36 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     return path;
   };
 
+  const renderTabs = (tabs: readonly EraTabView[]): void => {
+    for (const tab of tabs) {
+      const button = ensureTab(tab.era);
+      patch.text(button, tab.label);
+      patch.attr(button, 'aria-selected', tab.selected ? 'true' : 'false');
+      patch.attr(button, 'tabindex', tab.selected ? '0' : '-1');
+      patch.disabled(button, !tab.reached);
+    }
+    patch.attr(graph, 'aria-labelledby', `tech-tab-${selectedEra}`);
+  };
+
   const renderEdges = (view: TechTreeView): void => {
+    const inView = new Set<string>(view.edges.map((e) => e.key));
     for (const edge of view.edges) {
       const path = ensureEdge(edge.key);
+      patch.attr(path, 'display', 'inline');
       patch.attr(path, 'class', edge.met ? 'tech-edge is-met' : 'tech-edge');
       patch.attr(path, 'd', edge.d);
+    }
+    // Edges of the other era stay in the DOM, hidden.
+    for (const [key, path] of edgeRefs) {
+      if (!inView.has(key)) patch.attr(path, 'display', 'none');
     }
   };
 
   const renderNodes = (view: TechTreeView): void => {
+    const inView = new Set<TechId>(view.nodes.map((n) => n.id));
     for (const node of view.nodes) {
       const refs = ensureNode(node.id);
+      patch.hidden(refs.button, false);
       patch.text(refs.name, node.name);
       patch.text(refs.level, node.levelText);
       patch.text(refs.cost, node.costText ?? '');
@@ -224,6 +275,10 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
       patch.px(refs.button, 'top', node.y);
       patch.px(refs.button, 'width', node.width);
       patch.px(refs.button, 'height', node.height);
+    }
+    // Nodes of the other era stay in the DOM, hidden.
+    for (const [id, refs] of nodeRefs) {
+      if (!inView.has(id)) patch.hidden(refs.button, true);
     }
   };
 
@@ -265,12 +320,13 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     patch.attr(buyButton, 'data-buy-state', d.buyState);
   };
 
-  const render = (view: TechTreeView): void => {
+  const render = (view: TechTreeView, tabs: readonly EraTabView[]): void => {
     const buyState = view.detail?.buyState ?? null;
     if (selected !== renderedSelected || buyState !== renderedBuyState) setFeedback('');
     renderedSelected = selected;
     renderedBuyState = buyState;
-    patch.text(meEl, `${view.meText} ME`);
+    renderTabs(tabs);
+    patch.text(meEl, view.headerText);
     patch.px(inner, 'width', view.width);
     patch.px(inner, 'height', view.height);
     patch.attr(svg, 'width', String(view.width));
@@ -280,22 +336,31 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     renderDetail(view.detail);
   };
 
-  const buildView = (): TechTreeView =>
-    buildTechTreeView(session.getAllTechViews(), session.state.res, selected);
+  const buildView = (): { view: TechTreeView; tabs: EraTabView[] } => {
+    const all = session.getAllTechViews();
+    const tabs = buildEraTabs(all, session.state.res, selectedEra);
+    const view = buildTechTreeView(viewsOfEra(selectedEra), session.state.res, selected, selectedEra);
+    return { view, tabs };
+  };
 
   function update(): void {
     if (destroyed || !isOpenFlag) return;
     const now = performance.now();
     const levels = session.state.techLevels;
-    const due = dirty || levels !== builtLevels || selected !== builtSelected || now - builtAt >= REBUILD_INTERVAL_MS;
+    const due = dirty
+      || levels !== builtLevels
+      || selected !== builtSelected
+      || selectedEra !== builtEra
+      || now - builtAt >= REBUILD_INTERVAL_MS;
     if (!due) return;
-    const view = buildView();
+    const { view, tabs } = buildView();
     builtLevels = levels;
     builtSelected = selected;
+    builtEra = selectedEra;
     builtAt = now;
-    const stamp = stampOf(view);
+    const stamp = stampOf(view, tabs);
     if (!dirty && stamp === lastStamp) return;
-    render(view);
+    render(view, tabs);
     dirty = false;
     lastStamp = stamp;
   }
@@ -304,7 +369,12 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     if (destroyed || isOpenFlag) return;
     const active = document.activeElement;
     returnFocus = active instanceof HTMLElement ? active : null;
-    if (selected === null) selected = defaultSelection(session.getAllTechViews());
+    const all = session.getAllTechViews();
+    selectedEra = Math.max(...reachedEras(all));
+    const selectedView = selected === null ? undefined : all.find((view) => view.id === selected);
+    if (selectedView === undefined || selectedView.def.era !== selectedEra) {
+      selected = defaultSelection(viewsOfEra(selectedEra));
+    }
     isOpenFlag = true;
     overlay.classList.add('is-open');
     modals.push('tech-tree', close);
@@ -328,6 +398,48 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
 
   const onBackdropClick = (event: Event): void => {
     if (event.target === overlay) close();
+  };
+
+  /** Opens an era tab (ignored while the era is still signal-locked). */
+  const selectEra = (era: number): void => {
+    if (!reachedEras(session.getAllTechViews()).includes(era)) return;
+    selectedEra = era;
+    selected = defaultSelection(viewsOfEra(era));
+    setFeedback('');
+    dirty = true;
+    update();
+  };
+
+  const onTabClick = (event: Event): void => {
+    if (!isOpenFlag) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const tab = target.closest('.tech-tab');
+    if (tab === null) return;
+    for (const [era, button] of tabRefs) {
+      if (button === tab) selectEra(era);
+    }
+  };
+
+  /** Roving focus over the enabled tabs: arrows wrap, Home/End jump. Enter/Space are native clicks. */
+  const onTabKeydown = (event: KeyboardEvent): void => {
+    if (!isOpenFlag) return;
+    const enabled = enabledTabs();
+    const count = enabled.length;
+    if (count === 0) return;
+    const target = event.target instanceof Element ? event.target.closest('.tech-tab') : null;
+    const index = Math.max(0, enabled.findIndex((button) => button === target));
+    let next: HTMLButtonElement | undefined;
+    switch (event.key) {
+      case 'ArrowRight': next = enabled[(index + 1) % count]; break;
+      case 'ArrowLeft': next = enabled[(index - 1 + count) % count]; break;
+      case 'Home': next = enabled[0]; break;
+      case 'End': next = enabled[count - 1]; break;
+      default: return;
+    }
+    if (next === undefined) return;
+    event.preventDefault();
+    next.focus();
   };
 
   const onGraphClick = (event: Event): void => {
@@ -368,7 +480,8 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     session.on('purchase', () => { dirty = true; }),
     session.on('unlock', () => { dirty = true; }),
     session.on('reset', () => {
-      selected = isOpenFlag ? defaultSelection(session.getAllTechViews()) : null;
+      selectedEra = 1;
+      selected = isOpenFlag ? defaultSelection(viewsOfEra(1)) : null;
       setFeedback('');
       dirty = true;
     }),
@@ -377,6 +490,8 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
 
   closeButton.addEventListener('click', onClose);
   overlay.addEventListener('click', onBackdropClick);
+  tabList.addEventListener('click', onTabClick);
+  tabList.addEventListener('keydown', onTabKeydown);
   graph.addEventListener('click', onGraphClick);
   buyButton.addEventListener('click', onBuy);
 
@@ -391,6 +506,8 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     for (const unsubscribe of unsubscribes) unsubscribe();
     closeButton.removeEventListener('click', onClose);
     overlay.removeEventListener('click', onBackdropClick);
+    tabList.removeEventListener('click', onTabClick);
+    tabList.removeEventListener('keydown', onTabKeydown);
     graph.removeEventListener('click', onGraphClick);
     buyButton.removeEventListener('click', onBuy);
     if (deniedTimer !== null) {
@@ -398,6 +515,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
       deniedTimer = null;
     }
     overlay.remove();
+    tabRefs.clear();
     nodeRefs.clear();
     edgeRefs.clear();
     reqItems.length = 0;

@@ -106,6 +106,46 @@
   outline-offset: 2px;
 }
 
+/* ---- era tabs ---- */
+
+.tech-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tech-tab {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--amber-dim);
+  background: var(--iron-2);
+  border: 2px solid var(--rust-dark);
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.tech-tab:hover:not([disabled]):not([aria-selected="true"]) {
+  background: var(--rust-dark);
+  color: var(--haze);
+}
+
+.tech-tab[aria-selected="true"] {
+  color: var(--ink);
+  background: var(--amber);
+  border-color: var(--amber);
+}
+
+.tech-tab:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.tech-tab:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
 /* ---- graph ---- */
 
 #tech-graph {

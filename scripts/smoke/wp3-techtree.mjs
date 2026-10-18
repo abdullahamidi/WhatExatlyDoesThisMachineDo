@@ -43,6 +43,29 @@ const me0 = await txt('#hud-me'); await page.waitForTimeout(3000); ok('8_auto', 
 await page.screenshot({ path: out + '/w3-03-machine.png' });
 // fast-forward: give lots of ME and buy most of the tree to see full machine
 await page.evaluate(() => { const s = window.__wedtmd.session; if (s && s.debugGrant) s.debugGrant(1e6); });
+// era tabs: era II still signal-locked at this point
+await page.click('#hud-tech'); await page.waitForTimeout(200);
+ok('9_tabs', await page.$$eval('.tech-tab', bs => bs.map(b => ({ text: b.textContent.trim(), selected: b.getAttribute('aria-selected') === 'true', disabled: b.disabled }))));
+ok('9_header', await txt('#tech-me'));
+await page.focus('#tech-tab-1'); await page.keyboard.press('ArrowRight');
+ok('9_arrow', await page.evaluate(() => document.activeElement && document.activeElement.id));
+await page.keyboard.press('Escape'); await page.waitForTimeout(250);
+// fast-forward to era II (stages.mjs s7 recipe)
+await crank(45);
+res['9_buys'] = await page.evaluate((buys) => {
+  const s = window.__wedtmd.session; const o = []; let t = Date.now();
+  for (const id of buys) {
+    if (s.state.techLevels.wornMotor) { t += 8 * 3600 * 1000; s.update(t); }
+    o.push(id + ':' + s.purchase(id).ok);
+  }
+  for (let i = 0; i < 5 && s.state.techLevels.generatorBlueprint !== 1; i++) { t += 8 * 3600 * 1000; s.update(t); }
+  return o.concat(['generatorBlueprint:' + s.state.techLevels.generatorBlueprint]);
+}, ['wornMotor', 'gearRatio', 'gearRatio', 'gearRatio', 'reinforcedCrank', 'motorTuning', 'motorTuning', 'motorTuning', 'motorTuning', 'motorTuning', 'flywheel', 'pistonArray', 'improvedPistons']);
+await page.click('#hud-tech'); await page.waitForTimeout(200);
+ok('10_tabs', { tabs: await page.$$eval('.tech-tab', bs => bs.map(b => ({ text: b.textContent.trim(), selected: b.getAttribute('aria-selected') === 'true', disabled: b.disabled }))), me: await txt('#tech-me') });
+ok('10_nodes', await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length));
+await page.focus('#tech-tab-2'); await page.keyboard.press('ArrowLeft'); await page.keyboard.press('Enter'); await page.waitForTimeout(150);
+ok('10_back', { tabs: await page.$$eval('.tech-tab', bs => bs.map(b => b.getAttribute('aria-selected'))), nodes: await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length), me: await txt('#tech-me') });
 res.errors = errors; res.failed = failed;
 console.log(JSON.stringify(res, null, 1));
 await browser.close();
