@@ -71,7 +71,7 @@ describe('PARALLAX_LAYERS Era II pylons', () => {
 
 describe('camera auto-frame and pylon line', () => {
   it('auto-frame is on with a 48 px margin', () => {
-    expect(CAMERA.fitMarginPx).toBe(48);
+    expect(CAMERA.fitMarginPx).toBe(72);
     expect(CAMERA.autoFrame).toBe(true);
   });
 

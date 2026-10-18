@@ -36,13 +36,13 @@ the right X-brace of the frame; every crank stroke runs the belt → roller → 
 strap on the worn motor (feedback EE → ME).
 Two belts share the hub pulley: crank belt wraps its right side, generator belt its left side → together a ring around the pulley = a
 double-groove pulley seen end-on (correct for open belts, R2).
-Belt (with CR1): C = 85.1, β = 2.7°, wrap 174.6° on the r8 pulley (≥ 120° rule), 185.4° on the hub; lowest belt row −13, 2 rows clear of the plinth.
+Belt (CR1, superseded by the in-game review): hub (268,−25): C = 122.0, β = 1.9°, wrap 176.2° on the r8 pulley (≥ 120° rule), 183.8° on the hub; lowest belt row ≈ −17, 2 rows clear of the generator sole bar (−14). Belt is in front of the left pole shoe (belt depth 25 > generator), pulley coaxial on the armature.
 
 ## 4. Components (files under `public/assets/`, all delivered)
 | component | file | size | origin → socket | art geometry (local px = canvas px) |
 |---|---|---|---|---|
 | generatorPlinth | machine/era2/generator-plinth.png | 104×10 | .5,1 → (264,0) | cast bedplate: rail slot rows 1..3 with tension screw, end lug x94..98, hex head x99..102; foot strip rows 7..9; bottom row on ground. World x 212..316, top row −10 |
-| generator | machine/era2/generator.png | 96×64 | .5,.5 → (264,−42) | Mary Ann, canvas rows 5..63; sole bar rows 60..63 sits on plinth top (bottom row = world −11). Shaft stub rows 49..53, centre corner (12,52.5) = world (228,−21.5). Terminals (aqua insulators, top row 5, wire tie corner (35,6)/(68,6)) = world (251,−68)/(284,−68). Base coils = factory winding (dark enamel copper). Workbench score 98.1 |
+| generator | machine/era2/generator.png | 96×64 | .5,.5 → (264,−42) | Mary Ann seen **end-on** (R1, in-game review 2026-10-18): yoke + field coils rows 5..39 unchanged; pole shoes rows 40..58 (left x 26..45, right mirror x 58..77, feet flare, bolts (28,56)/(75,56)) embrace an end-on armature about corner (52,49) = world (268,−25): copper slot ring r 8..9.5, ink outline r 9.5..10.5, air gap r 10.5..11.5, bore face r 11.5..12.5; zinc spacer rows 57..58; foot row 59; sole bar rows 60..63 shortened to x 22..81 (bottom row = world −11 on the plinth). Terminals unchanged: world (251,−68)/(284,−68). Old side-on drum + stub shaft + pedestals removed (shaft lay in the picture plane under a face-on pulley = R1 break, and the armature axis ran through both pole shoes) |
 | generatorPulley | machine/era2/pulley-generator.png + rot/pulley-generator-rot.png | 20×20, sheet 180×180 (9×9, 80 f, 4.5°/f) | .5,.5 → hub | disc r8 about corner (10,10), crowned rim, recessed web, 4 diagonal ribs + rim fleck (rotation cue). Frame k = source rotated clockwise k·4.5° (make_rot.py). Same N as the crank group (|ratio| 1.75) |
 | coilStage1/2/3 | machine/era2/coils-1/2/3.png | 64×40 | .5,.5 → (264,−42) | two coils, inner x 14..23 / 47..56, rows 13..25 (stage 3: bulged x 12..25 / 45..58, brass bands rows 16/22, `#f0a848` glints). 1 = clean mid copper, 2 = bright copper, 3 = heavy winding. Stage n fully covers n−1 and the base winding |
 | motorRetrofitKit | machine/era2/motor-retrofit.png | 32×16 | .5,.5 → motorMount + (0,−24) **CR3** | terminal box x10..21 rows 8..15 (row 15 on housing top −43), aqua lead-in bushing x14..17 rows 5..7 (wire tie corner (16,5) = world (−140,−54)), conduit gland x7..9, copper bonding strap x22..27 |
@@ -86,3 +86,19 @@ widened by uniform column repeat into the plinth, right-end screw redrawn (remov
 Evidence (scratch `/tmp/claude-0/-home-user-WhatExatlyDoesThisMachineDo/0b9fa637-9555-52ff-9a39-17f862f1fdae/scratchpad/era2/`):
 `mock_era2_full_3x.png` (all parts, CR1–CR3 + CR6 cables), `mock_era2_contract_links_only_3x.png`, `mock_era2_contract_asis_3x.png` (§C3 numbers),
 `stages_coils_spark.png` (coil stages 0–3, spark frames 0–3), `crop_generator_6x.png`, `crop_dynamo_10x.png`, `crop_right_4x.png`.
+
+## 8. In-game review (2026-10-18, build 3246d87 + review fixes) — what changed
+- Generator redrawn end-on (see §4 row). `generatorHub` (228,−22) → **(268,−25)** in `src/data/machineComponents.ts` (+ CR1 pin in
+  `machineComponents.test.ts`). npm test 908/908 green. Evidence: scratch `rev2/s2/a_s8.png`, `rev2/s2_gen_3x.png`, `rev2/s2_full_gen_3x.png`
+  (before: `rev2/s/a_s8.png`, `rev2/gen_src_8x.png`).
+- CSS: `.tech-node-name` wraps to 2 lines (milestone names, no ellipsis); `#tech-graph` thin rust scrollbar; toasts `text-wrap: balance`
+  (no one-word orphan lines); toast stack drops behind the TECH INDEX backdrop while it is open (a SYS LOG toast covered CLOSE [ESC]).
+
+## In-game review — code fixes
+Evidence base (scratch): `/tmp/claude-0/-home-user-WhatExatlyDoesThisMachineDo/0b9fa637-9555-52ff-9a39-17f862f1fdae/scratchpad/` + the `rev2/...` paths below.
+| # | sev | file | change | why / evidence |
+|---|---|---|---|---|
+| F1 | high | `src/ui/techTreeView.ts` `TECH_TREE_LAYOUT` | `nodeWidth: 176 → 160`, `colGap: 48 → 28` (rest unchanged) | Era II has 6 columns (generator → … → power lines → substation; prerequisite chain is 6 deep, data cannot fold it). Graph scrollWidth 1336 vs clientWidth 1142 at 1280×720: **Substation Blueprint node is clipped off the right edge**, two edges run into the border, no visible scrollbar (overlay scrollbars). New width 40 + 6·160 + 5·28 = 1140 ≤ 1142; era I 952. Longest non-milestone names (REINFORCED CRANK, IMPROVED PISTONS, 16 ch) fit 136 px inner width; milestone names wrap via the shipped CSS. Tests use the constants → stay green. Evidence: `rev2/s/k_tree_era2.png` (bug), `rev2/tree_sim160.png` (simulated fix, edges stale in the sim only) |
+| F2 | low | `src/data/world.ts` `CAMERA.fitMarginPx` + pin `src/data/world.test.ts:73-74` | `48 → 72` (Director: decision-5 number, pinned, so not changed here) | From capacitor rack to transformer (zoom-1 stages) the default view still "fits", machine sits off-centre: left margin 165 px, right 65 px, rack crowds the toast column (`rev2/s/d_spark.png`). With 72 the default view stops fitting and `fitView` recentres at zoom 1 (bounds 1050 + 144 ≤ 1280). Full era II stays zoom 0.75 (1232 + 144 > 1280) |
+| F3 | info | — | none | Zoom 0.75 = 1.5 screen px per art px (half-integer grid by design): alternating 1/2 px columns, most visible on 1 px cables and the mast lattice. Accepted; only fix would be preferring integer art scale (zoom 0.5/1.0) in `fitView` |
+| F4 | info | ART_ERA3 pass | none | ART_ERA3.md line 6 cites "generator hub −22" as baseline; now (268,−25). Only matters if an era III part attaches to the generator pulley/hub |

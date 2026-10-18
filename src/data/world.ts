@@ -8,7 +8,7 @@ export const PIXEL_SCALE = 2;                                   // art px -> wor
 export const MACHINE_ANCHOR = { x: 1280, y: GROUND_Y } as const;
 export const CAMERA = { focus: { x: 1280, y: GROUND_Y - 160 }, defaultZoom: 1, maxZoom: 2,
   wheelZoomFactor: 1.1, wheelStepCooldownMs: 80, dragThresholdPx: 4, refocusMs: 450,
-  fitMarginPx: 48, autoFrame: true } as const;   // minZoom is derived: minZoomToFit(VIEW, WORLD) === 0.5; fitMarginPx: world px kept clear around the machine when auto-framing
+  fitMarginPx: 72, autoFrame: true } as const;   // minZoom is derived: minZoomToFit(VIEW, WORLD) === 0.5; fitMarginPx: world px kept clear around the machine when auto-framing
 export const DEPTH = { background: -100, ground: 0, machine: 100, dust: 200, floatingText: 300 } as const;
 export const PARALLAX_BOTTOM_MARGIN = 200;                      // world px the non-sky layer textures extend below the ground line (hidden behind the ground)
 export const PARALLAX_FADE_MS = 1500;                           // ms for a parallax layer to fade in or out when its visibility changes

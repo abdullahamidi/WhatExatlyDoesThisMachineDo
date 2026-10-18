@@ -63,7 +63,7 @@ describe('techTreeView', () => {
     });
 
     it('computes the canvas size from the tree extents', () => {
-      expect(view.width).toBe(1112);
+      expect(view.width).toBe(952);
       expect(view.height).toBe(300);
       expect(view.width).toBe(
         TECH_TREE_LAYOUT.padding * 2 + 5 * TECH_TREE_LAYOUT.nodeWidth + 4 * TECH_TREE_LAYOUT.colGap,

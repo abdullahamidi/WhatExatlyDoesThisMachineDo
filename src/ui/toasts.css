@@ -58,6 +58,12 @@
   opacity: 0;
 }
 
+.toast-title,
+.toast-body {
+  /* no one-word orphan lines in the right-aligned stack */
+  text-wrap: balance;
+}
+
 .toast-title {
   color: var(--amber);
   text-shadow: 0 0 6px rgba(217, 130, 43, .55);
@@ -114,4 +120,10 @@
   .toast--milestone {
     animation: none;
   }
+}
+
+/* TECH INDEX is wider than the free column: while it is open the stack drops behind its backdrop so no toast covers
+   CLOSE [ESC] or the era tabs (purchases inside the tree report in #tech-feedback). */
+body:has(#tech-overlay.is-open) #toast-stack {
+  z-index: 90;
 }

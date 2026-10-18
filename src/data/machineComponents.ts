@@ -58,7 +58,7 @@ export const MACHINE_SOCKETS: Record<SocketId, Vec2> = {
   mainHub: { x: -44, y: -56 }, crankHub: { x: 0, y: -56 }, flywheelHub: { x: 150, y: -56 }, flywheelBase: { x: 150, y: 0 },
   motorMount: { x: -140, y: -27 }, motorBase: { x: -140, y: 0 }, motorPulleyHub: { x: -114, y: -31 }, pistonBed: { x: -44, y: -110 },
   yokePin: { x: -44, y: -125 },
-  generatorBase: { x: 264, y: 0 }, generatorMount: { x: 264, y: -42 }, generatorHub: { x: 228, y: -22 }, dynamoMount: { x: 70, y: -36 },
+  generatorBase: { x: 264, y: 0 }, generatorMount: { x: 264, y: -42 }, generatorHub: { x: 268, y: -25 }, dynamoMount: { x: 70, y: -36 },
   rackBase: { x: 340, y: 0 }, sparkMount: { x: 340, y: -53 }, transformerBase: { x: 396, y: 0 }, mastBase: { x: 436, y: 0 },
 };
 

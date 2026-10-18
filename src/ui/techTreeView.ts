@@ -5,7 +5,7 @@ import type { PurchaseFailure, ResourceId, ResourceMap, TechId, TechStatus, Tech
 
 // Pure view model for the TECH INDEX overlay. No DOM, no Phaser.
 
-export const TECH_TREE_LAYOUT = { nodeWidth: 176, nodeHeight: 68, colGap: 48, rowGap: 28, padding: 20 } as const;
+export const TECH_TREE_LAYOUT = { nodeWidth: 160, nodeHeight: 68, colGap: 28, rowGap: 28, padding: 20 } as const;
 
 export type TechKindLabel = 'ORIGIN' | 'UNLOCK' | 'REPEATABLE' | 'MILESTONE';
 export type BuyState = 'buy' | 'insufficient' | 'locked' | 'maxed' | 'owned' | 'automatic';

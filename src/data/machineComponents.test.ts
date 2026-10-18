@@ -678,7 +678,7 @@ describe('era II machine data', () => {
   });
 
   it('generator hub and spark mount sit at the CR1 and CR2 positions', () => {
-    expect(MACHINE_SOCKETS.generatorHub).toEqual({ x: 228, y: -22 });
+    expect(MACHINE_SOCKETS.generatorHub).toEqual({ x: 268, y: -25 });
     expect(MACHINE_SOCKETS.sparkMount).toEqual({ x: 340, y: -53 });
   });
 

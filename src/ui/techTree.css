@@ -156,6 +156,9 @@
   overflow: auto;
   border: 1px solid var(--rust-dark);
   background: rgba(0, 0, 0, .25);
+  /* if an era is wider than the panel, the overflow shows as a thin terminal scrollbar, not a browser-white bar */
+  scrollbar-width: thin;
+  scrollbar-color: var(--rust) rgba(0, 0, 0, .35);
 }
 
 .tech-graph-inner {
@@ -204,9 +207,13 @@
   font-size: .88em;
   letter-spacing: 0;
   font-weight: 700;
-  white-space: nowrap;
+  line-height: 1.15;
+  /* long milestone names wrap to two lines instead of ellipsizing (they carry no cost line) */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .tech-node-level,
