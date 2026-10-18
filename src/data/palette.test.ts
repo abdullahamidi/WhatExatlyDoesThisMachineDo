@@ -14,6 +14,15 @@ describe('PALETTE_CSS', () => {
     expect(PALETTE_CSS.ink).toBe('#14110f');
   });
 
+  it('has the three cyan keys for the Era II wiring', () => {
+    expect(PALETTE_CSS.cyanDark).toBe('#2f5a62');
+    expect(PALETTE_CSS.cyan).toBe('#5fa8b4');
+    expect(PALETTE_CSS.cyanLight).toBe('#bff0ec');
+    expect(PALETTE.cyanDark).toBe(0x2f5a62);
+    expect(PALETTE.cyan).toBe(0x5fa8b4);
+    expect(PALETTE.cyanLight).toBe(0xbff0ec);
+  });
+
   it('has the same keys as PALETTE', () => {
     expect(Object.keys(PALETTE_CSS).sort()).toEqual(Object.keys(PALETTE).sort());
   });

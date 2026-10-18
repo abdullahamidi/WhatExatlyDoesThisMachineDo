@@ -57,6 +57,9 @@ function contains(box: { left: number; right: number; top: number; bottom: numbe
 /** Bearings and the flywheel pedestal are the only supports of driven parts. */
 const SUPPORTS: readonly MachineComponentId[] = ['bearingM', 'bearingP', 'flywheelPedestal'];
 
+/** Driven parts carried by another box instead of a support: the motor pulley and the generator pulley (on the generator hub). */
+const SUPPORT_EXEMPT: ReadonlySet<MachineComponentId> = new Set<MachineComponentId>(['motorPulley', 'generatorPulley']);
+
 /** True when tech a requires tech b, directly or transitively. */
 function dependsOn(a: TechId, b: TechId, seen: Set<TechId> = new Set<TechId>()): boolean {
   for (const req of TECHNOLOGIES[a].requires) {
@@ -100,6 +103,185 @@ function hasVisibleSupport(def: MachineComponentDefinition, visible: ReadonlySet
   return SUPPORTS.some((s) => visible.has(s) && contains(boundsOf(MACHINE_COMPONENTS[s]), p));
 }
 
+/** Era II unlock steps in order; copperWinding is set to each coil stage level in turn (1, 10, 20). */
+const ERA_TWO_STEPS: readonly (readonly [TechId, number])[] = [
+  ['generator', 1], ['copperWinding', 1], ['copperWinding', 10], ['copperWinding', 20],
+  ['motorRetrofit', 1], ['dynamoCrank', 1], ['capacitorBank', 1], ['sparkGap', 1], ['transformer', 1], ['powerLines', 1],
+];
+
+/** All era-I techs at their stage levels, then the first n era-II steps applied. */
+function levelsEraTwo(n: number): Record<TechId, number> {
+  const levels = levelsForPrefix(UNLOCK_ORDER.length);
+  for (const [id, level] of ERA_TWO_STEPS.slice(0, n)) levels[id] = level;
+  return levels;
+}
+
+/** Era-I component definitions exactly as they were before WP8 (git HEAD). flywheelPulley here has no belt2. */
+const ERA_ONE_SNAPSHOT: Readonly<Record<string, MachineComponentDefinition>> = {
+  // Support: frame art and the two bearing plates (audit role: static frame, bolted to steel).
+  supportFrame: {
+    id: 'supportFrame', techId: 'handCrank', minLevel: 1,
+    assetId: 'machine.frame', attach: { socket: null, offset: { x: 0, y: 0 } },
+    size: { width: 200, height: 110 }, origin: { x: 0.5, y: 1 },
+    layer: 'frame', animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  bearingM: {
+    id: 'bearingM', techId: 'gearRatio', minLevel: 1, alsoVisibleWith: [{ techId: 'wornMotor', minLevel: 1 }],
+    assetId: 'machine.bearingPlate', attach: { socket: 'mainHub', offset: { x: 0, y: 0 } },
+    size: { width: 16, height: 16 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'frame', depthBias: 1,
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  bearingP: {
+    id: 'bearingP', techId: 'handCrank', minLevel: 1,
+    assetId: 'machine.bearingPlate', attach: { socket: 'crankHub', offset: { x: 0, y: 0 } },
+    size: { width: 16, height: 16 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'frame', depthBias: 1,
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  // Main drive: large gear and main pulley / crank disc on the main hub (audit role: main shaft M, theta M).
+  gearLarge: {
+    id: 'gearLarge', techId: 'gearRatio', minLevel: 1,
+    assetId: 'machine.gearLarge', attach: { socket: 'mainHub', offset: { x: 0, y: 0 } },
+    size: { width: 64, height: 64 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid',
+    animation: { kind: 'driven', ratio: 1, phaseDeg: 0 },
+    connections: [],
+    effects: [],
+  },
+  mainShaft: {
+    id: 'mainShaft', techId: 'gearRatio', minLevel: 1, alsoVisibleWith: [{ techId: 'wornMotor', minLevel: 1 }],
+    assetId: 'machine.pulleyMain', attach: { socket: 'mainHub', offset: { x: 0, y: 0 } },
+    size: { width: 24, height: 24 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 2,
+    animation: { kind: 'driven', ratio: 1, phaseDeg: 0 },
+    connections: [
+      { id: 'belt', at: { x: 0, y: 0 }, kind: 'belt', radius: 10 },
+      { id: 'pin', at: { x: 0, y: 0 }, kind: 'pin', radius: 5 },
+    ],
+    effects: [],
+  },
+  // Crank train: pinion gear, crank pulley and hand crank on the crank hub (audit role: pinion P, crank pulley).
+  gearSmall: {
+    id: 'gearSmall', techId: 'gearRatio', minLevel: 1,
+    assetId: 'machine.gearSmall', attach: { socket: 'crankHub', offset: { x: 0, y: 0 } },
+    size: { width: 40, height: 40 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 1,
+    animation: { kind: 'driven', ratio: -1.75, phaseDeg: 22.5 },
+    connections: [],
+    effects: [],
+  },
+  crankPulley: {
+    id: 'crankPulley', techId: 'flywheel', minLevel: 1,
+    assetId: 'machine.pulleyCrank', attach: { socket: 'crankHub', offset: { x: 0, y: 0 } },
+    size: { width: 32, height: 32 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 2,
+    animation: { kind: 'driven', ratio: -1.75, phaseDeg: 0 },
+    connections: [{ id: 'belt', at: { x: 0, y: 0 }, kind: 'belt', radius: 8 }],   // r8 < pinion root r11: belt rides inside the teeth
+    effects: [],
+  },
+  handCrank: {
+    id: 'handCrank', techId: 'handCrank', minLevel: 1,
+    assetId: 'machine.crank', attach: { socket: 'crankHub', offset: { x: 0, y: 0 } },
+    size: { width: 48, height: 48 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'front',
+    animation: { kind: 'driven', ratio: -1.75, phaseDeg: 0 },
+    connections: [],
+    effects: [],
+  },
+  // Reinforced crank: strap and boss flange over the hand crank, same driven angle; axle cap (front+2) stays on top.
+  crankBrace: {
+    id: 'crankBrace', techId: 'reinforcedCrank', minLevel: 1,
+    assetId: 'machine.crankBrace', attach: { socket: 'crankHub', offset: { x: 0, y: 0 } },
+    size: { width: 48, height: 48 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'front', depthBias: 1,
+    animation: { kind: 'driven', ratio: -1.75, phaseDeg: 0 },
+    connections: [],
+    effects: [],
+  },
+  // Flywheel: pedestal (back), wheel and hub pulley on the flywheel hub (audit role: flywheel F).
+  flywheelPedestal: {
+    id: 'flywheelPedestal', techId: 'flywheel', minLevel: 1,
+    assetId: 'machine.pedestal', attach: { socket: 'flywheelBase', offset: { x: 0, y: 0 } },
+    size: { width: 48, height: 64 }, origin: { x: 0.5, y: 1 },
+    layer: 'back', depthBias: 21,   // near-side stand: in front of the flywheel (20), behind the overhung hub pulley (23) and belt (25)
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  flywheel: {
+    id: 'flywheel', techId: 'flywheel', minLevel: 1,
+    assetId: 'machine.flywheel', attach: { socket: 'flywheelHub', offset: { x: 0, y: 0 } },
+    size: { width: 96, height: 96 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid',
+    animation: { kind: 'driven', ratio: -1.1666666667, phaseDeg: 0 },
+    connections: [],
+    effects: [{ kind: 'glow', driver: 'automation', threshold: 10, intensity: 0.4 }],
+  },
+  flywheelPulley: {
+    id: 'flywheelPulley', techId: 'flywheel', minLevel: 1,
+    assetId: 'machine.pulleyFlywheel', attach: { socket: 'flywheelHub', offset: { x: 0, y: 0 } },
+    size: { width: 28, height: 28 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 3,
+    animation: { kind: 'driven', ratio: -1.1666666667, phaseDeg: 0 },   // -1.75 * 8 / 12
+    connections: [{ id: 'belt', at: { x: 0, y: 0 }, kind: 'belt', radius: 12 }],
+    effects: [],
+  },
+  // Motor: plinth (mid, under the motor), worn motor body and its pulley (audit role: motor, motor pulley).
+  motorPlinth: {
+    id: 'motorPlinth', techId: 'wornMotor', minLevel: 1,
+    assetId: 'machine.motorPlinth', attach: { socket: 'motorBase', offset: { x: 0, y: 0 } },
+    size: { width: 48, height: 10 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid',
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  wornMotor: {
+    id: 'wornMotor', techId: 'wornMotor', minLevel: 1,
+    assetId: 'machine.motor', attach: { socket: 'motorMount', offset: { x: 0, y: 0 } },
+    size: { width: 64, height: 48 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 1,
+    animation: { kind: 'vibrate', driver: 'automation', amplitude: 1, speed: { base: 8, gain: 0.3, min: 2, max: 20 } },
+    connections: [],
+    effects: [{ kind: 'vibrate', driver: 'automation', threshold: 1, intensity: 0.5 }],
+  },
+  motorPulley: {
+    id: 'motorPulley', techId: 'wornMotor', minLevel: 1,
+    assetId: 'machine.pulleyMotor', attach: { socket: 'motorPulleyHub', offset: { x: 0, y: 0 } },
+    size: { width: 12, height: 12 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 2,
+    animation: { kind: 'driven', ratio: 2, phaseDeg: 0 },
+    connections: [{ id: 'belt', at: { x: 0, y: 0 }, kind: 'belt', radius: 5 }],
+    effects: [],
+  },
+  // Piston array: yoke (slider, moved by the rod) and the static block (audit role: conrod, yoke, plungers).
+  pistonYoke: {
+    id: 'pistonYoke', techId: 'pistonArray', minLevel: 1,
+    assetId: 'machine.pistonYoke', attach: { socket: 'yokePin', offset: { x: 0, y: 0 } },
+    size: { width: 80, height: 16 }, origin: { x: 0.5, y: 0.75 },
+    layer: 'back',
+    animation: { kind: 'slider' },
+    connections: [{ id: 'eye', at: { x: 0, y: 0 }, kind: 'pin', radius: 2 }],
+    effects: [],
+  },
+  pistonArray: {
+    id: 'pistonArray', techId: 'pistonArray', minLevel: 1,
+    assetId: 'machine.pistonBlock', attach: { socket: 'pistonBed', offset: { x: 0, y: 0 } },
+    size: { width: 96, height: 58 }, origin: { x: 0.5, y: 1 },
+    layer: 'back', depthBias: 1,
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [{ kind: 'steam', driver: 'automation', threshold: 5, intensity: 0.6 }],
+  },
+};
+
 describe('machine component ids', () => {
   it('are unique and match the component table keys', () => {
     expect(new Set(MACHINE_COMPONENT_IDS).size).toBe(MACHINE_COMPONENT_IDS.length);
@@ -116,12 +298,14 @@ describe('machine component ids', () => {
     expect(MACHINE_COMPONENT_IDS).toEqual([
       'supportFrame', 'bearingM', 'bearingP', 'gearLarge', 'mainShaft', 'gearSmall', 'crankPulley', 'handCrank', 'crankBrace',
       'flywheelPedestal', 'flywheel', 'flywheelPulley', 'motorPlinth', 'wornMotor', 'motorPulley', 'pistonYoke', 'pistonArray',
+      'generatorPlinth', 'generator', 'generatorPulley', 'coilStage1', 'coilStage2', 'coilStage3', 'motorRetrofitKit', 'crankDynamo',
+      'capacitorRack', 'sparkGap', 'transformer', 'cableMast',
     ]);
   });
 
-  it('has 17 components and 9 sockets', () => {
-    expect(MACHINE_COMPONENT_IDS.length).toBe(17);
-    expect(SOCKET_IDS.length).toBe(9);
+  it('has 29 components and 17 sockets', () => {
+    expect(MACHINE_COMPONENT_IDS.length).toBe(29);
+    expect(SOCKET_IDS.length).toBe(17);
   });
 });
 
@@ -238,9 +422,9 @@ describe('machine links and connection points', () => {
     }
   });
 
-  it('belt links connect two belt points and rod links connect two pin points', () => {
+  it('belt links connect two belt points, rod links two pin points and cable links two cable points', () => {
     for (const link of MACHINE_LINKS) {
-      const expected = link.kind === 'belt' ? 'belt' : 'pin';
+      const expected = link.kind === 'belt' ? 'belt' : link.kind === 'rod' ? 'pin' : 'cable';
       expect(pointOf(link.from.component, link.from.point)?.kind).toBe(expected);
       expect(pointOf(link.to.component, link.to.point)?.kind).toBe(expected);
     }
@@ -340,10 +524,10 @@ describe('rod data', () => {
 });
 
 describe('support and unlock coherence', () => {
-  it('at the full stage every driven component sits on a support, except motorPulley', () => {
+  it('at the full stage every driven component sits on a support, except motorPulley and generatorPulley', () => {
     const all = new Set<MachineComponentId>(MACHINE_COMPONENT_IDS);
     for (const def of COMPONENTS) {
-      if (def.animation.kind !== 'driven' || def.id === 'motorPulley') continue;
+      if (def.animation.kind !== 'driven' || SUPPORT_EXEMPT.has(def.id)) continue;
       expect(hasVisibleSupport(def, all)).toBe(true);
     }
   });
@@ -368,7 +552,7 @@ describe('support and unlock coherence', () => {
       const visible = visibleAt(levels);
       if (visible.has('pistonYoke')) expect(visible.has('mainShaft')).toBe(true);
       for (const def of COMPONENTS) {
-        if (!visible.has(def.id) || def.animation.kind !== 'driven' || def.id === 'motorPulley') continue;
+        if (!visible.has(def.id) || def.animation.kind !== 'driven' || SUPPORT_EXEMPT.has(def.id)) continue;
         expect(hasVisibleSupport(def, visible)).toBe(true);
       }
     }
@@ -418,5 +602,175 @@ describe('machine motion, assembly and link style constants', () => {
 
   it('render mode is the render texture', () => {
     expect(MACHINE_RENDER.mode).toBe('renderTexture');
+  });
+});
+
+describe('era I component definitions are unchanged by WP8', () => {
+  it('the snapshot covers exactly the 17 era-I ids', () => {
+    expect(Object.keys(ERA_ONE_SNAPSHOT).sort()).toEqual(MACHINE_COMPONENT_IDS.slice(0, 17).slice().sort());
+  });
+
+  it('each era-I definition deep-equals the pre-WP8 snapshot', () => {
+    for (const id of MACHINE_COMPONENT_IDS.slice(0, 17)) {
+      const actual = MACHINE_COMPONENTS[id];
+      const comparable = id === 'flywheelPulley'
+        ? { ...actual, connections: actual.connections.filter((c) => c.id !== 'belt2') }
+        : actual;
+      expect(comparable, id).toEqual(ERA_ONE_SNAPSHOT[id]);
+    }
+  });
+
+  it('flywheelPulley gains only the belt2 connection (second belt, radius 12)', () => {
+    expect(MACHINE_COMPONENTS.flywheelPulley.connections).toEqual([
+      { id: 'belt', at: { x: 0, y: 0 }, kind: 'belt', radius: 12 },
+      { id: 'belt2', at: { x: 0, y: 0 }, kind: 'belt', radius: 12 },
+    ]);
+  });
+});
+
+describe('era II machine data', () => {
+  it('the generator set, coil stages and dynamo use their contract techs and levels', () => {
+    expect(MACHINE_COMPONENTS.generatorPlinth.techId).toBe('generator');
+    expect(MACHINE_COMPONENTS.generator.techId).toBe('generator');
+    expect(MACHINE_COMPONENTS.generatorPulley.techId).toBe('generator');
+    expect(MACHINE_COMPONENTS.coilStage1).toMatchObject({ techId: 'copperWinding', minLevel: 1 });
+    expect(MACHINE_COMPONENTS.coilStage2).toMatchObject({ techId: 'copperWinding', minLevel: 10 });
+    expect(MACHINE_COMPONENTS.coilStage3).toMatchObject({ techId: 'copperWinding', minLevel: 20 });
+    expect(MACHINE_COMPONENTS.crankDynamo.techId).toBe('dynamoCrank');
+    expect(MACHINE_COMPONENTS.motorRetrofitKit.techId).toBe('motorRetrofit');
+    expect(MACHINE_COMPONENTS.capacitorRack.techId).toBe('capacitorBank');
+    expect(MACHINE_COMPONENTS.sparkGap.techId).toBe('sparkGap');
+    expect(MACHINE_COMPONENTS.transformer.techId).toBe('transformer');
+    expect(MACHINE_COMPONENTS.cableMast.techId).toBe('powerLines');
+  });
+
+  it('generator animation is none, so the generator stays attached (CR4)', () => {
+    expect(MACHINE_COMPONENTS.generator.animation).toEqual({ kind: 'none' });
+  });
+
+  it('generatorPulley is driven at ratio -1.75 and belt-linked at radius 8', () => {
+    expect(MACHINE_COMPONENTS.generatorPulley.animation).toEqual({ kind: 'driven', ratio: -1.75, phaseDeg: 0 });
+    expect(pointOf('generatorPulley', 'belt')).toEqual({ id: 'belt', at: { x: 0, y: 0 }, kind: 'belt', radius: 8 });
+  });
+
+  it('sparkGap animation is a four-frame electric cycle at no more than 3 Hz', () => {
+    const anim = MACHINE_COMPONENTS.sparkGap.animation;
+    expect(anim.kind).toBe('frames');
+    if (anim.kind !== 'frames') return;
+    expect(anim.frames).toBe(4);
+    expect(anim.maxHz).toBeGreaterThan(0);
+    expect(anim.maxHz).toBeLessThanOrEqual(3);
+    expect(anim.driver).toBe('electric');
+  });
+
+  it('coil stages have identical size, origin and attach', () => {
+    const stages = [MACHINE_COMPONENTS.coilStage1, MACHINE_COMPONENTS.coilStage2, MACHINE_COMPONENTS.coilStage3];
+    for (const s of stages) {
+      expect(s.size).toEqual(stages[0]?.size);
+      expect(s.origin).toEqual(stages[0]?.origin);
+      expect(s.attach).toEqual(stages[0]?.attach);
+    }
+  });
+
+  it('generatorPulley is carried by the generator bounding box', () => {
+    const p = centreOf(MACHINE_COMPONENTS.generatorPulley);
+    expect(contains(boundsOf(MACHINE_COMPONENTS.generator), p)).toBe(true);
+  });
+
+  it('generator hub and spark mount sit at the CR1 and CR2 positions', () => {
+    expect(MACHINE_SOCKETS.generatorHub).toEqual({ x: 228, y: -22 });
+    expect(MACHINE_SOCKETS.sparkMount).toEqual({ x: 340, y: -53 });
+  });
+
+  it('spark gap stands on the rack top plate and sits inside the rack width', () => {
+    const spark = boundsOf(MACHINE_COMPONENTS.sparkGap);
+    const rack = boundsOf(MACHINE_COMPONENTS.capacitorRack);
+    expect(spark.bottom).toBe(-53);
+    expect(spark.left).toBe(324);
+    expect(spark.right).toBe(356);
+    expect(spark.left).toBeGreaterThanOrEqual(rack.left);
+    expect(spark.right).toBeLessThanOrEqual(rack.right);
+  });
+
+  it('motor retrofit kit sits on the motor housing and inside the worn motor width', () => {
+    const kit = boundsOf(MACHINE_COMPONENTS.motorRetrofitKit);
+    const motor = boundsOf(MACHINE_COMPONENTS.wornMotor);
+    expect(kit.bottom).toBe(-43);
+    expect(kit.left).toBeGreaterThanOrEqual(motor.left);
+    expect(kit.right).toBeLessThanOrEqual(motor.right);
+  });
+
+  it('exactly three cable links join two cable points, the CR6 ones carry sag 4 and 3', () => {
+    const cables = MACHINE_LINKS.filter((l) => l.kind === 'cable');
+    expect(cables.length).toBe(3);
+    expect(cables).toEqual([
+      { from: { component: 'generator', point: 'termR' }, to: { component: 'capacitorRack', point: 'lugL' }, kind: 'cable', sag: 4 },
+      { from: { component: 'capacitorRack', point: 'lugR' }, to: { component: 'transformer', point: 'primary' }, kind: 'cable', sag: 3 },
+      { from: { component: 'transformer', point: 'bushing' }, to: { component: 'cableMast', point: 'top' }, kind: 'cable' },
+    ]);
+    for (const link of cables) {
+      expect(pointOf(link.from.component, link.from.point)?.kind).toBe('cable');
+      expect(pointOf(link.to.component, link.to.point)?.kind).toBe('cable');
+    }
+  });
+
+  it('the era-II belt joins flywheelPulley.belt2 to generatorPulley.belt', () => {
+    const belts = MACHINE_LINKS.filter((l) => l.kind === 'belt' && l.from.component === 'flywheelPulley');
+    expect(belts).toEqual([{ from: { component: 'flywheelPulley', point: 'belt2' }, to: { component: 'generatorPulley', point: 'belt' }, kind: 'belt' }]);
+  });
+
+  it('the era-II sockets are all used and every era-II component lies inside MACHINE_BOUNDS', () => {
+    const era2 = MACHINE_COMPONENT_IDS.slice(17).map((id) => MACHINE_COMPONENTS[id]);
+    for (const def of era2) {
+      const b = boundsOf(def);
+      expect(b.left).toBeGreaterThanOrEqual(MACHINE_BOUNDS.left);
+      expect(b.right).toBeLessThanOrEqual(MACHINE_BOUNDS.right);
+      expect(b.top).toBeGreaterThanOrEqual(MACHINE_BOUNDS.top);
+      expect(b.bottom).toBeLessThanOrEqual(MACHINE_BOUNDS.bottom);
+    }
+    const used = new Set(COMPONENTS.map((def) => def.attach.socket));
+    for (const id of SOCKET_IDS.slice(9)) expect(used.has(id), id).toBe(true);
+  });
+});
+
+describe('era II prefixes', () => {
+  const STEPS = ERA_TWO_STEPS.length;
+
+  it('every era-II component is visible at the full stage', () => {
+    const visible = visibleAt(levelsEraTwo(STEPS));
+    for (const id of MACHINE_COMPONENT_IDS) expect(visible.has(id), id).toBe(true);
+  });
+
+  it('generatorPulley visible implies flywheelPulley visible', () => {
+    expect(visibleAt(levelsEraTwo(1)).has('generatorPulley')).toBe(true);
+    for (let n = 0; n <= STEPS; n++) {
+      const visible = visibleAt(levelsEraTwo(n));
+      if (visible.has('generatorPulley')) expect(visible.has('flywheelPulley')).toBe(true);
+    }
+  });
+
+  it('coilStage3 implies coilStage2 implies coilStage1', () => {
+    expect(visibleAt(levelsEraTwo(2)).has('coilStage1')).toBe(true);
+    for (let n = 0; n <= STEPS; n++) {
+      const visible = visibleAt(levelsEraTwo(n));
+      if (visible.has('coilStage3')) expect(visible.has('coilStage2')).toBe(true);
+      if (visible.has('coilStage2')) expect(visible.has('coilStage1')).toBe(true);
+    }
+  });
+
+  it('cableMast implies transformer', () => {
+    expect(visibleAt(levelsEraTwo(STEPS)).has('cableMast')).toBe(true);
+    for (let n = 0; n <= STEPS; n++) {
+      const visible = visibleAt(levelsEraTwo(n));
+      if (visible.has('cableMast')) expect(visible.has('transformer')).toBe(true);
+    }
+  });
+
+  it('motorRetrofitKit implies wornMotor', () => {
+    expect(visibleAt(levelsEraTwo(5)).has('motorRetrofitKit')).toBe(true);
+    for (let n = 0; n <= STEPS; n++) {
+      const visible = visibleAt(levelsEraTwo(n));
+      if (visible.has('motorRetrofitKit')) expect(visible.has('wornMotor')).toBe(true);
+    }
   });
 });

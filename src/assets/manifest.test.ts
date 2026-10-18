@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ASSET_IDS } from './assetIds';
 import type { AssetId } from './assetIds';
-import { ASSET_MANIFEST, planAssetLoads, resolveAssetUrl, missingTextureIds } from './manifest';
+import { ASSET_MANIFEST, planAssetLoads, resolveAssetUrl, missingTextureIds, sheetFrameRects } from './manifest';
 import type { AssetEntry } from './manifest';
 import { MACHINE_COMPONENT_IDS, MACHINE_COMPONENTS } from '../data/machineComponents';
 
@@ -46,11 +46,14 @@ describe('ASSET_MANIFEST', () => {
     }
   });
 
-  it('gives every machine component the size of its manifest entry', () => {
+  it('gives every machine component the size of its manifest entry (the frame size for sheets)', () => {
     for (const id of MACHINE_COMPONENT_IDS) {
       const def = MACHINE_COMPONENTS[id];
       const entry = ASSET_MANIFEST[def.assetId];
-      expect(def.size).toEqual({ width: entry.width, height: entry.height });
+      const dims = entry.frame !== undefined
+        ? { width: entry.frame.width, height: entry.frame.height }
+        : { width: entry.width, height: entry.height };
+      expect(def.size).toEqual(dims);
     }
   });
 });
@@ -94,6 +97,77 @@ describe('WP6 machine assets', () => {
   });
 });
 
+describe('WP8 era II machine assets', () => {
+  const ERA2_ENTRIES: ReadonlyArray<{ id: AssetId; width: number; height: number; origin: { x: number; y: number } }> = [
+    { id: 'machine.generatorPlinth', width: 104, height: 10, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.generator', width: 96, height: 64, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.pulleyGenerator', width: 20, height: 20, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.coils1', width: 64, height: 40, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.coils2', width: 64, height: 40, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.coils3', width: 64, height: 40, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.motorRetrofit', width: 32, height: 16, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.dynamo', width: 24, height: 24, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.capacitorRack', width: 48, height: 64, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.sparkGap', width: 128, height: 48, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.transformer', width: 64, height: 64, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.cableMast', width: 16, height: 112, origin: { x: 0.5, y: 1 } },
+  ];
+
+  it('has the contract width, height and origin for each of the 12 era II machine ids', () => {
+    expect(ERA2_ENTRIES.length).toBe(12);
+    for (const want of ERA2_ENTRIES) {
+      const entry = ASSET_MANIFEST[want.id];
+      expect(entry.width, want.id).toBe(want.width);
+      expect(entry.height, want.id).toBe(want.height);
+      expect(entry.origin, want.id).toEqual(want.origin);
+      expect(entry.tileable, want.id).toBe('none');
+      expect(entry.file, want.id).not.toBeNull();
+    }
+  });
+
+  it('points the era II machine entries at their delivered files under machine/era2/', () => {
+    for (const want of ERA2_ENTRIES) {
+      expect(ASSET_MANIFEST[want.id].file?.startsWith('machine/era2/'), want.id).toBe(true);
+    }
+  });
+
+  it('has the spark gap sheet as 4 frames of 32x48 in a 128x48 image', () => {
+    const entry = ASSET_MANIFEST['machine.sparkGap'];
+    expect(entry.frame).toEqual({ width: 32, height: 48, count: 4 });
+    expect(sheetFrameRects(entry)).toEqual([
+      { x: 0, y: 0, width: 32, height: 48 },
+      { x: 32, y: 0, width: 32, height: 48 },
+      { x: 64, y: 0, width: 32, height: 48 },
+      { x: 96, y: 0, width: 32, height: 48 },
+    ]);
+  });
+
+  it('has the lit pylons overlay as a tileable power-of-two image', () => {
+    const entry = ASSET_MANIFEST['bg.pylonsLit'];
+    expect(entry.file).toBe('bg/pylons-lit.png');
+    expect(entry.tileable).toBe('x');
+    expect(entry.width & (entry.width - 1)).toBe(0);
+    expect(entry.width).toBe(256);
+    expect(entry.height).toBe(256);
+  });
+});
+
+describe('sheetFrameRects', () => {
+  it('returns no rects for an entry without a frame', () => {
+    expect(sheetFrameRects(ASSET_MANIFEST['machine.crank'])).toEqual([]);
+  });
+
+  it('wraps row-major by the number of columns', () => {
+    const entry: AssetEntry = { ...ASSET_MANIFEST['machine.crank'], width: 64, height: 64, frame: { width: 32, height: 32, count: 4 } };
+    expect(sheetFrameRects(entry)).toEqual([
+      { x: 0, y: 0, width: 32, height: 32 },
+      { x: 32, y: 0, width: 32, height: 32 },
+      { x: 0, y: 32, width: 32, height: 32 },
+      { x: 32, y: 32, width: 32, height: 32 },
+    ]);
+  });
+});
+
 describe('resolveAssetUrl', () => {
   const base: AssetEntry = ASSET_MANIFEST['machine.crank'];
 
@@ -117,8 +191,8 @@ function withoutRotation(entry: AssetEntry): AssetEntry {
 }
 
 describe('planAssetLoads', () => {
-  it('loads exactly the file-backed entries of the real manifest as images', () => {
-    const fileBacked = ASSET_IDS.filter((id) => ASSET_MANIFEST[id].file !== null);
+  it('loads exactly the file-backed entries of the real manifest as images (spritesheets excluded)', () => {
+    const fileBacked = ASSET_IDS.filter((id) => ASSET_MANIFEST[id].file !== null && ASSET_MANIFEST[id].frame === undefined);
     const images = planAssetLoads().filter((l) => l.kind === 'image');
     expect(images.map((l) => l.key)).toEqual(fileBacked);
   });
@@ -171,13 +245,14 @@ describe('WP6c rotation sheets and sky', () => {
     'machine.pulleyCrank',
     'machine.pulleyFlywheel',
     'machine.pulleyMotor',
+    'machine.pulleyGenerator',
   ];
 
   it('has a disk file for the sky entry', () => {
     expect(ASSET_MANIFEST['bg.sky'].file).not.toBeNull();
   });
 
-  it('gives exactly the nine machine ids a rotation sheet', () => {
+  it('gives exactly the ten machine ids a rotation sheet', () => {
     const withRotation = ASSET_IDS.filter((id) => ASSET_MANIFEST[id].rotation !== undefined);
     expect(withRotation.slice().sort()).toEqual([...ROTATION_IDS].sort());
   });
@@ -207,7 +282,7 @@ describe('WP6c rotation sheets and sky', () => {
         kind: 'spritesheet',
         frame: { width: entry.width, height: entry.height, count: rotation.frames },
       });
-      expect(load?.url.startsWith('assets/machine/rot/'), id).toBe(true);
+      expect(load?.url.startsWith('assets/machine/rot/') || load?.url.startsWith('assets/machine/era2/rot/'), id).toBe(true);
     }
   });
 

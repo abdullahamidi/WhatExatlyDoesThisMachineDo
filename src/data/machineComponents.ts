@@ -2,10 +2,13 @@ import type { TechId } from './types';
 import type { AssetId } from '../assets/assetIds';
 
 export const MACHINE_COMPONENT_IDS = ['supportFrame', 'bearingM', 'bearingP', 'gearLarge', 'mainShaft', 'gearSmall', 'crankPulley', 'handCrank', 'crankBrace',
-  'flywheelPedestal', 'flywheel', 'flywheelPulley', 'motorPlinth', 'wornMotor', 'motorPulley', 'pistonYoke', 'pistonArray'] as const;
+  'flywheelPedestal', 'flywheel', 'flywheelPulley', 'motorPlinth', 'wornMotor', 'motorPulley', 'pistonYoke', 'pistonArray',
+  'generatorPlinth', 'generator', 'generatorPulley', 'coilStage1', 'coilStage2', 'coilStage3', 'motorRetrofitKit', 'crankDynamo',
+  'capacitorRack', 'sparkGap', 'transformer', 'cableMast'] as const;
 export type MachineComponentId = typeof MACHINE_COMPONENT_IDS[number];
 
-export const SOCKET_IDS = ['mainHub', 'crankHub', 'flywheelHub', 'flywheelBase', 'motorMount', 'motorBase', 'motorPulleyHub', 'pistonBed', 'yokePin'] as const;
+export const SOCKET_IDS = ['mainHub', 'crankHub', 'flywheelHub', 'flywheelBase', 'motorMount', 'motorBase', 'motorPulleyHub', 'pistonBed', 'yokePin',
+  'generatorBase', 'generatorMount', 'generatorHub', 'dynamoMount', 'rackBase', 'sparkMount', 'transformerBase', 'mastBase'] as const;
 export type SocketId = typeof SOCKET_IDS[number];
 
 export interface Vec2 { x: number; y: number }
@@ -15,8 +18,8 @@ export type MachineLayer = 'back' | 'frame' | 'mid' | 'front';
 /** Draw depth of each machine layer (relative to the machine container). */
 export const MACHINE_LAYER_DEPTH: Record<MachineLayer, number> = { back: 0, frame: 10, mid: 20, front: 30 };
 
-/** manual: click activity; automation: ME/s; combined: manual + automation. */
-export type AnimationDriver = 'manual' | 'automation' | 'combined';
+/** manual: click activity; automation: ME/s; combined: manual + automation; electric: EE/s (rates.perSecond.ee). */
+export type AnimationDriver = 'manual' | 'automation' | 'combined' | 'electric';
 
 export interface SpeedCurve { base: number; gain: number; min: number; max: number }
 
@@ -24,10 +27,11 @@ export type ComponentAnimation =
   | { kind: 'none' }
   | { kind: 'driven'; ratio: number; phaseDeg: number }          // angle = partAngle(thetaM, ratio, phaseDeg)
   | { kind: 'slider' }                                           // pistonYoke only: position from sliderCrank
-  | { kind: 'vibrate'; driver: AnimationDriver; amplitude: number; speed: SpeedCurve };   // unchanged from today
+  | { kind: 'vibrate'; driver: AnimationDriver; amplitude: number; speed: SpeedCurve }   // unchanged from today
+  | { kind: 'frames'; frames: number; maxHz: number; driver: AnimationDriver };         // frame cycle, advances at up to maxHz while driver > 0
 
-/** radius: belt pulley radius, art px. */
-export interface ConnectionPoint { id: string; at: Vec2; kind: 'belt' | 'pin'; radius?: number }
+/** radius: belt pulley radius, art px. cable: wire attachment point (no radius). */
+export interface ConnectionPoint { id: string; at: Vec2; kind: 'belt' | 'pin' | 'cable'; radius?: number }
 
 export interface ProductionEffect { kind: 'vibrate' | 'glow' | 'dust' | 'steam'; driver: AnimationDriver; threshold: number; intensity: number }
 
@@ -43,17 +47,19 @@ export interface MachineComponentDefinition {
   flipX?: boolean;                                               // mirror sprite and connection x
 }
 
-/** belt joins two belt points; rod joins two pin points. */
-export interface MachineLink { from: { component: MachineComponentId; point: string }; to: { component: MachineComponentId; point: string }; kind: 'belt' | 'rod' }
+/** belt joins two belt points; rod joins two pin points; cable joins two cable points (sag: art px, default MACHINE_LINK_STYLE.cable.sagArtPx). */
+export interface MachineLink { from: { component: MachineComponentId; point: string }; to: { component: MachineComponentId; point: string }; kind: 'belt' | 'rod' | 'cable'; sag?: number }
 
 /** Machine-local art px bounding box of the whole machine. */
-export const MACHINE_BOUNDS = { left: -200, right: 200, top: -200, bottom: 8 };
+export const MACHINE_BOUNDS = { left: -200, right: 448, top: -200, bottom: 8 };
 
 /** Machine-local art px positions of every socket. */
 export const MACHINE_SOCKETS: Record<SocketId, Vec2> = {
   mainHub: { x: -44, y: -56 }, crankHub: { x: 0, y: -56 }, flywheelHub: { x: 150, y: -56 }, flywheelBase: { x: 150, y: 0 },
   motorMount: { x: -140, y: -27 }, motorBase: { x: -140, y: 0 }, motorPulleyHub: { x: -114, y: -31 }, pistonBed: { x: -44, y: -110 },
   yokePin: { x: -44, y: -125 },
+  generatorBase: { x: 264, y: 0 }, generatorMount: { x: 264, y: -42 }, generatorHub: { x: 228, y: -22 }, dynamoMount: { x: 70, y: -36 },
+  rackBase: { x: 340, y: 0 }, sparkMount: { x: 340, y: -53 }, transformerBase: { x: 396, y: 0 }, mastBase: { x: 436, y: 0 },
 };
 
 /** Motion: manual activity decay, frame clamp and rest threshold (compares the DRIVER value, not speed). */
@@ -98,13 +104,18 @@ export const MACHINE_LINK_STYLE = {
   belt: { outer: 0x2e1a12, inner: 0x6e3a22, dash: 0x8c4a2a, dashSpacing: 8, dashLength: 2 },
   rod: { edge: 0x3e4246, core: 0x7d8286, eye: 0x5a5f63, eyeCentre: 0xa3a6a4, eyeRadius: 2 },
   cap: { size: 4, hi: 0xa3a6a4, body: 0x7d8286, ring: 0x1f2225 },
+  cable: { depth: MACHINE_LAYER_DEPTH.front + 1, core: 0x2f5a62, hi: 0x5fa8b4, sagArtPx: 10 },
 } as const;
 
-/** Drive-train links between components. */
+/** Drive-train and wiring links between components. */
 export const MACHINE_LINKS: readonly MachineLink[] = [
   { from: { component: 'motorPulley', point: 'belt' }, to: { component: 'mainShaft', point: 'belt' }, kind: 'belt' },
   { from: { component: 'crankPulley', point: 'belt' }, to: { component: 'flywheelPulley', point: 'belt' }, kind: 'belt' },
   { from: { component: 'mainShaft', point: 'pin' }, to: { component: 'pistonYoke', point: 'eye' }, kind: 'rod' },
+  { from: { component: 'flywheelPulley', point: 'belt2' }, to: { component: 'generatorPulley', point: 'belt' }, kind: 'belt' },
+  { from: { component: 'generator', point: 'termR' }, to: { component: 'capacitorRack', point: 'lugL' }, kind: 'cable', sag: 4 },
+  { from: { component: 'capacitorRack', point: 'lugR' }, to: { component: 'transformer', point: 'primary' }, kind: 'cable', sag: 3 },
+  { from: { component: 'transformer', point: 'bushing' }, to: { component: 'cableMast', point: 'top' }, kind: 'cable' },
 ];
 
 /** Static shadow ellipses / strips drawn under the machine. */
@@ -235,7 +246,10 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     size: { width: 28, height: 28 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 3,
     animation: { kind: 'driven', ratio: -1.1666666667, phaseDeg: 0 },   // -1.75 * 8 / 12
-    connections: [{ id: 'belt', at: { x: 0, y: 0 }, kind: 'belt', radius: 12 }],
+    connections: [
+      { id: 'belt', at: { x: 0, y: 0 }, kind: 'belt', radius: 12 },
+      { id: 'belt2', at: { x: 0, y: 0 }, kind: 'belt', radius: 12 },   // second drive: belt to the generator pulley (Era II)
+    ],
     effects: [],
   },
   // Motor: plinth (mid, under the motor), worn motor body and its pulley (audit role: motor, motor pulley).
@@ -284,5 +298,127 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     animation: { kind: 'none' },
     connections: [],
     effects: [{ kind: 'steam', driver: 'automation', threshold: 5, intensity: 0.6 }],
+  },
+  // Generator set (Era II): static plinth, coil frame and generator body; the belt pulley on the generator hub turns from the flywheel belt.
+  generatorPlinth: {
+    id: 'generatorPlinth', techId: 'generator', minLevel: 1,
+    assetId: 'machine.generatorPlinth', attach: { socket: 'generatorBase', offset: { x: 0, y: 0 } },
+    size: { width: 104, height: 10 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid',
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  generator: {
+    id: 'generator', techId: 'generator', minLevel: 1,
+    assetId: 'machine.generator', attach: { socket: 'generatorMount', offset: { x: 0, y: 0 } },
+    size: { width: 96, height: 64 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 1,
+    animation: { kind: 'none' },   // CR4: no vibrate, so the shaft, pulley, belt and cable stay attached
+    connections: [{ id: 'termR', at: { x: 20, y: -26 }, kind: 'cable' }],
+    effects: [],
+  },
+  generatorPulley: {
+    id: 'generatorPulley', techId: 'generator', minLevel: 1,
+    assetId: 'machine.pulleyGenerator', attach: { socket: 'generatorHub', offset: { x: 0, y: 0 } },
+    size: { width: 20, height: 20 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 5,
+    animation: { kind: 'driven', ratio: -1.75, phaseDeg: 0 },   // 8 * 1.75 = 14 = flywheel belt speed (12 * 1.1667)
+    connections: [{ id: 'belt', at: { x: 0, y: 0 }, kind: 'belt', radius: 8 }],
+    effects: [],
+  },
+  // Coil stages: each later stage replaces the lower one with the same box (copperWinding levels 1 / 10 / 20).
+  coilStage1: {
+    id: 'coilStage1', techId: 'copperWinding', minLevel: 1,
+    assetId: 'machine.coils1', attach: { socket: 'generatorMount', offset: { x: 0, y: 0 } },
+    size: { width: 64, height: 40 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 2,
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  coilStage2: {
+    id: 'coilStage2', techId: 'copperWinding', minLevel: 10,
+    assetId: 'machine.coils2', attach: { socket: 'generatorMount', offset: { x: 0, y: 0 } },
+    size: { width: 64, height: 40 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 3,
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  coilStage3: {
+    id: 'coilStage3', techId: 'copperWinding', minLevel: 20,
+    assetId: 'machine.coils3', attach: { socket: 'generatorMount', offset: { x: 0, y: 0 } },
+    size: { width: 64, height: 40 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 4,
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  // Motor retrofit kit: bolted on top of the worn motor (CR3 offset), shakes with the automation driver.
+  motorRetrofitKit: {
+    id: 'motorRetrofitKit', techId: 'motorRetrofit', minLevel: 1,
+    assetId: 'machine.motorRetrofit', attach: { socket: 'motorMount', offset: { x: 0, y: -24 } },
+    size: { width: 32, height: 16 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 3,
+    animation: { kind: 'vibrate', driver: 'automation', amplitude: 1, speed: { base: 8, gain: 0.3, min: 2, max: 20 } },
+    connections: [],
+    effects: [],
+  },
+  // Dynamo on the hand crank side: a small frame part that shakes with clicks.
+  crankDynamo: {
+    id: 'crankDynamo', techId: 'dynamoCrank', minLevel: 1,
+    assetId: 'machine.dynamo', attach: { socket: 'dynamoMount', offset: { x: 0, y: 0 } },
+    size: { width: 24, height: 24 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'frame', depthBias: 2,
+    animation: { kind: 'vibrate', driver: 'manual', amplitude: 1, speed: { base: 8, gain: 0.3, min: 2, max: 20 } },
+    connections: [],
+    effects: [],
+  },
+  // Capacitor rack: static, glows with electric activity; two lugs carry the cables.
+  capacitorRack: {
+    id: 'capacitorRack', techId: 'capacitorBank', minLevel: 1,
+    assetId: 'machine.capacitorRack', attach: { socket: 'rackBase', offset: { x: 0, y: 0 } },
+    size: { width: 48, height: 64 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid',
+    animation: { kind: 'none' },
+    connections: [
+      { id: 'lugL', at: { x: -17, y: -38 }, kind: 'cable' },
+      { id: 'lugR', at: { x: 17, y: -38 }, kind: 'cable' },
+    ],
+    effects: [{ kind: 'glow', driver: 'electric', threshold: 1, intensity: 0.5 }],
+  },
+  // Spark gap: four-frame discharge sheet, flickers at up to 3 Hz while EE flows.
+  sparkGap: {
+    id: 'sparkGap', techId: 'sparkGap', minLevel: 1,
+    assetId: 'machine.sparkGap', attach: { socket: 'sparkMount', offset: { x: 0, y: 0 } },
+    size: { width: 32, height: 48 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid', depthBias: 6,
+    animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'electric' },
+    connections: [],
+    effects: [],
+  },
+  // Transformer: primary and bushing lugs carry the cables; hums with EE flow.
+  transformer: {
+    id: 'transformer', techId: 'transformer', minLevel: 1,
+    assetId: 'machine.transformer', attach: { socket: 'transformerBase', offset: { x: 0, y: 0 } },
+    size: { width: 64, height: 64 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid',
+    animation: { kind: 'vibrate', driver: 'electric', amplitude: 0.5, speed: { base: 6, gain: 0.3, min: 2, max: 12 } },
+    connections: [
+      { id: 'primary', at: { x: -12, y: -60 }, kind: 'cable' },
+      { id: 'bushing', at: { x: 16, y: -60 }, kind: 'cable' },
+    ],
+    effects: [],
+  },
+  // Cable mast: back layer, carries the line from the transformer up to the pylons.
+  cableMast: {
+    id: 'cableMast', techId: 'powerLines', minLevel: 1,
+    assetId: 'machine.cableMast', attach: { socket: 'mastBase', offset: { x: 0, y: 0 } },
+    size: { width: 16, height: 112 }, origin: { x: 0.5, y: 1 },
+    layer: 'back',
+    animation: { kind: 'none' },
+    connections: [{ id: 'top', at: { x: 0, y: -108 }, kind: 'cable' }],
+    effects: [],
   },
 };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_PULSE } from './world';
+import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_PULSE, CAMERA, DEPTH, PARALLAX_FADE_MS, PYLON_LINE } from './world';
 import type { ParallaxLayerDef } from './world';
 import { TOAST_CONFIG } from './notifications';
 
@@ -41,6 +41,54 @@ describe('PARALLAX_LAYERS haze', () => {
   it('layer ids are unique', () => {
     const ids = PARALLAX_LAYERS.map((l) => l.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('PARALLAX_LAYERS Era II pylons', () => {
+  it('pylonsLit is the last layer and is gated on powerLines level 1', () => {
+    expect(PARALLAX_LAYERS[PARALLAX_LAYERS.length - 1]?.id).toBe('pylonsLit');
+    expect(layer('pylonsLit').visibleWhen).toEqual({ techId: 'powerLines', minLevel: 1 });
+  });
+
+  it('pylonsLit has no tint, alpha 0.7 and depth background + 31', () => {
+    expect(layer('pylonsLit').tint).toBeUndefined();
+    expect(layer('pylonsLit').alpha).toBe(0.7);
+    expect(layer('pylonsLit').depth).toBe(DEPTH.background + 31);
+  });
+
+  it('pylonsLit shares scrollFactor and bottomY with pylons', () => {
+    expect(layer('pylonsLit').scrollFactor).toBe(layer('pylons').scrollFactor);
+    expect(layer('pylonsLit').bottomY).toBe(layer('pylons').bottomY);
+  });
+
+  it('only pylonsLit has visibleWhen among the existing layers', () => {
+    for (const l of PARALLAX_LAYERS) {
+      if (l.id === 'pylonsLit') continue;
+      expect(l.visibleWhen).toBeUndefined();
+    }
+  });
+});
+
+describe('camera auto-frame and pylon line', () => {
+  it('auto-frame is on with a 48 px margin', () => {
+    expect(CAMERA.fitMarginPx).toBe(48);
+    expect(CAMERA.autoFrame).toBe(true);
+  });
+
+  it('parallax fade lasts 1500 ms', () => {
+    expect(PARALLAX_FADE_MS).toBe(1500);
+  });
+
+  it('pylon line has four anchors inside the 256 px art, positive sag and a visible thickness', () => {
+    expect(PYLON_LINE.anchorsArt.length).toBe(4);
+    for (const a of PYLON_LINE.anchorsArt) {
+      expect(a.x).toBeGreaterThanOrEqual(0);
+      expect(a.x).toBeLessThanOrEqual(256);
+      expect(a.y).toBeGreaterThanOrEqual(0);
+      expect(a.y).toBeLessThanOrEqual(256);
+    }
+    expect(PYLON_LINE.sagFraction).toBeGreaterThan(0);
+    expect(PYLON_LINE.thicknessPx).toBeGreaterThanOrEqual(1);
   });
 });
 

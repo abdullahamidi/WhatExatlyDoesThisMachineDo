@@ -1,6 +1,7 @@
 export const PALETTE = {
   sand: 0xc9b28a, dirtyBeige: 0xa8957a, rust: 0x8c4a2a, rustDark: 0x4e2a1a, industrialGray: 0x5a5f63,
   grayDark: 0x2b2e31, mutedOrange: 0xd9822b, skyTop: 0x7a7468, skyHaze: 0xd2bf9c, ink: 0x14110f,
+  cyanDark: 0x2f5a62, cyan: 0x5fa8b4, cyanLight: 0xbff0ec,
 } as const;
 export type PaletteKey = keyof typeof PALETTE;
 
@@ -17,4 +18,7 @@ export const PALETTE_CSS: Record<PaletteKey, string> = {
   skyTop: css(PALETTE.skyTop),
   skyHaze: css(PALETTE.skyHaze),
   ink: css(PALETTE.ink),
+  cyanDark: css(PALETTE.cyanDark),
+  cyan: css(PALETTE.cyan),
+  cyanLight: css(PALETTE.cyanLight),
 };

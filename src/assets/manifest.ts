@@ -31,6 +31,10 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     id: 'bg.pylons', file: 'bg/pylons.png', width: 256, height: 256, origin: { x: 0, y: 1 }, tileable: 'x',
     description: 'Rusted pylons with sagging wires; tiles horizontally, period = width, ground line at y=156.',
   },
+  'bg.pylonsLit': {
+    id: 'bg.pylonsLit', file: 'bg/pylons-lit.png', width: 256, height: 256, origin: { x: 0, y: 1 }, tileable: 'x',
+    description: 'Pylons with their wires lit; the same tiling as bg.pylons, shown once the power lines are running.',
+  },
   'terrain.ground': {
     id: 'terrain.ground', file: 'terrain/ground.png', width: 256, height: 128, origin: { x: 0, y: 0 }, tileable: 'xy',
     description: 'Cracked sand ground tile that tiles in both directions.',
@@ -116,6 +120,56 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     id: 'fx.steam', file: 'fx/steam.png', width: 16, height: 16, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     description: 'Steam puff particle released by working pistons.',
   },
+  'machine.generatorPlinth': {
+    id: 'machine.generatorPlinth', file: 'machine/era2/generator-plinth.png', width: 104, height: 10, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Cast bedplate with a tension-screw slot that the generator set stands on.',
+  },
+  'machine.generator': {
+    id: 'machine.generator', file: 'machine/era2/generator.png', width: 96, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Generator body with a coil housing, a shaft end and a cable terminal on the right.',
+  },
+  'machine.pulleyGenerator': {
+    id: 'machine.pulleyGenerator', file: 'machine/era2/pulley-generator.png', width: 20, height: 20, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    rotation: { file: 'machine/era2/rot/pulley-generator-rot.png', frames: 80 },
+    description: 'Generator belt pulley seen face-on, with a rim, spokes and a hub.',
+  },
+  'machine.coils1': {
+    id: 'machine.coils1', file: 'machine/era2/coils-1.png', width: 64, height: 40, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'First coil stage: a single winding of copper wire around the generator frame.',
+  },
+  'machine.coils2': {
+    id: 'machine.coils2', file: 'machine/era2/coils-2.png', width: 64, height: 40, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Second coil stage: a denser copper winding that covers the first stage.',
+  },
+  'machine.coils3': {
+    id: 'machine.coils3', file: 'machine/era2/coils-3.png', width: 64, height: 40, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Third coil stage: a heavy copper winding that covers the lower stages.',
+  },
+  'machine.motorRetrofit': {
+    id: 'machine.motorRetrofit', file: 'machine/era2/motor-retrofit.png', width: 32, height: 16, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Retrofit control box with a wired terminal strip, bolted on top of the worn motor.',
+  },
+  'machine.dynamo': {
+    id: 'machine.dynamo', file: 'machine/era2/dynamo.png', width: 24, height: 24, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Small friction dynamo: a housing with a roller that rides the underside of the crank belt, clamped to the frame.',
+  },
+  'machine.capacitorRack': {
+    id: 'machine.capacitorRack', file: 'machine/era2/capacitor-rack.png', width: 48, height: 64, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Rack of capacitor cans on a steel frame with two lugs on the top plate.',
+  },
+  'machine.sparkGap': {
+    id: 'machine.sparkGap', file: 'machine/era2/spark-gap.png', width: 128, height: 48, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 32, height: 48, count: 4 },
+    description: 'Four-frame spark gap sheet: two electrodes with a flickering discharge between them.',
+  },
+  'machine.transformer': {
+    id: 'machine.transformer', file: 'machine/era2/transformer.png', width: 64, height: 64, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Transformer tank with a primary and a bushing lug on its top.',
+  },
+  'machine.cableMast': {
+    id: 'machine.cableMast', file: 'machine/era2/cable-mast.png', width: 16, height: 112, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Tall steel mast with a cable head at the top that carries the line to the pylons.',
+  },
 };
 
 export interface AssetLoad {
@@ -157,6 +211,21 @@ export function planAssetLoads(
     }
   }
   return loads;
+}
+
+/**
+ * Cell rectangles of a spritesheet entry, row-major, cols = floor(width / frame.width); [] without `frame`.
+ * Only the first `frame.count` cells are returned.
+ */
+export function sheetFrameRects(entry: AssetEntry): Array<{ x: number; y: number; width: number; height: number }> {
+  if (entry.frame === undefined) return [];
+  const { width, height, count } = entry.frame;
+  const cols = Math.floor(entry.width / width);
+  const rects: Array<{ x: number; y: number; width: number; height: number }> = [];
+  for (let i = 0; i < count; i++) {
+    rects.push({ x: (i % cols) * width, y: Math.floor(i / cols) * height, width, height });
+  }
+  return rects;
 }
 
 /** Returns the ids for which has(id) is false, in the order given. */
