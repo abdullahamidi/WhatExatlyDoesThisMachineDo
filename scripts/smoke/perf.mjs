@@ -3,7 +3,7 @@
 // Stages (stages.mjs buy lists, fresh context each): s0_crank, s9_era2_full, s13_era4_full, s15_era5_full, s16_postgame.
 // Per stage: 10 s warm-up, then 3 samples 2 s apart (each reads the 120-frame probe rings). s15 also runs the tech tree
 // probe (era V tab, median of 5 sync opens + forced layout) and the heap probe (after gc, then 30 s idle). s16 runs a
-// new cycle after the postgame settle (WP14 button) and compares displayObjects with s0.
+// new cycle after the postgame settle (WP14 button) and compares displayObjects with the pre-cycle count (no leak).
 // Finale: fresh context, buy list S15 + primaryFunction, finaleSeek to t 8 / 22 / 34 / 36 (2 s window each).
 // Prints ONE JSON { metrics, budgets, fail, errors } on stdout; writes <outdir>/perf.json when outdir is given.
 // Every probe is read null-safe: a missing hook field is reported as null and never throws.
@@ -187,6 +187,9 @@ async function cycleProbe(page, baseline) {
     const hook = await page.evaluate(() => typeof window.__wedtmd?.cycleState === 'function' && typeof window.__wedtmd?.prestige === 'function');
     if (!hook) return { skipped: 'hook missing' };
     const c0 = await page.evaluate(() => window.__wedtmd.prestige().cycle);
+    // baseline = the display list just before the new cycle: parts are hidden, not destroyed, on a new cycle,
+    // so the check is "no growth across a cycle" (no leak), not "shrinks back to s0".
+    const pre = num(await page.evaluate(() => window.__wedtmd.displayObjects()));
     await page.keyboard.press('Escape'); await page.waitForTimeout(250);
     await page.click('#sys-tab-system'); await page.waitForTimeout(150);
     const enabled = await page.evaluate(() => { const b = document.getElementById('sys-new-cycle'); return !!b && b.getAttribute('aria-disabled') !== 'true'; });
@@ -201,13 +204,14 @@ async function cycleProbe(page, baseline) {
     }
     await page.waitForTimeout(3000);
     const after = num(await page.evaluate(() => window.__wedtmd.displayObjects()));
-    const base = num(baseline);
+    const base = pre ?? num(baseline);
     return {
       cycleBefore: c0,
       cycleAfter: await page.evaluate(() => window.__wedtmd.prestige().cycle),
       done,
       displayObjects: after,
       baseline: base,
+      s0Display: num(baseline),
       pct: after === null || base === null || base === 0 ? null : round((after / base - 1) * 100),
     };
   } catch (e) {

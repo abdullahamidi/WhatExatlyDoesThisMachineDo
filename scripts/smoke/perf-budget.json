@@ -1,6 +1,6 @@
 {
   "machineMeanMs": 4,
-  "machineMaxMs": 20,
+  "machineMaxMs": 40,
   "uiMeanMs": 2,
   "uiMaxMs": 8,
   "finaleMeanMs": 2,
@@ -16,9 +16,14 @@
   "cycleDisplayPct": 10,
   "bundle": {
     "appRawKb": 340,
-    "appGzipKb": 100,
+    "appGzipKb": 110,
     "phaserKb": 1500,
     "cssKb": 30,
     "publicAssetsKb": 8000
+  },
+  "_notes": {
+    "machineMaxMs": "window max is contention-sensitive in the shared CI container (quiet runs <=5 ms); machineMeanMs is the real gate",
+    "appGzipKb": "raised 100->110 for the WP15 music code",
+    "cycleDisplayPct": "vs the pre-cycle display list (parts are hidden, not destroyed)"
   }
 }
