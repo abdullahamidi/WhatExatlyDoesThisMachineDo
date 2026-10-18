@@ -18,16 +18,23 @@ import { ApertureBeam } from '../rendering/ApertureBeam';
 import { RestoredGround } from '../rendering/RestoredGround';
 import { FinaleFx } from '../rendering/FinaleFx';
 import { FinaleDirector } from '../rendering/FinaleDirector';
+import { CycleTransition } from '../rendering/CycleTransition';
 import { MachineView } from '../entities/MachineView';
 import { HandCrank } from '../entities/HandCrank';
+import { motionPolicy } from '../../simulation';
 
-/** UI handles WorldScene needs: the HUD / dialogs, the finale overlay and the late-bound finale skip target. */
+/** Modal id held on the stack while the new-cycle transition runs (input lock). */
+const CYCLE_MODAL_ID = 'cycle';
+
+/** UI handles WorldScene needs: the HUD / dialogs, the finale overlay, and the late-bound finale skip target and cycle port. */
 export interface WorldUi {
   hud: Hud;
   techTree: TechTree;
   modals: ModalStack;
   finaleOverlay: FinaleOverlayHandle;
   finaleLink: { skip: () => void };
+  /** New-cycle transition port: WorldScene points `play` at its CycleTransition; before that (or after teardown) it runs both callbacks at once. */
+  cycleLink: { play(onPeak: () => void, onDone: () => void): void };
 }
 
 // Builds the wasteland, machine and camera; reads session state each frame and pushes it to the HUD.
@@ -44,6 +51,7 @@ export class WorldScene extends Phaser.Scene {
   private eclipse: Eclipse | null = null;
   private beam: ApertureBeam | null = null;
   private finale: FinaleDirector | null = null;
+  private cycleTransition: CycleTransition | null = null;
 
   constructor(ctx: GameContext, ui: WorldUi) {
     super('World');
@@ -97,10 +105,19 @@ export class WorldScene extends Phaser.Scene {
     });
     this.finale = finale;
     this.ui.finaleLink.skip = () => finale.skip();
+    // New-cycle transition (WP14): after the director, so the white sits above the finale FX. Created here, disposed first.
+    const cycleTransition = new CycleTransition(this);
+    this.cycleTransition = cycleTransition;
+    this.ui.cycleLink.play = (onPeak, onDone) => this.playCycleTransition(onPeak, onDone);
 
     // The finale director drives the renderers below, so it is disposed first; the crank uses the machine
-    // and the floating text, so it goes before them.
+    // and the floating text, so it goes before them. The cycle transition goes before the director: a running
+    // transition fires its pending peak (the cycle swap, a 'reset' the director handles) while the director still exists.
     this.disposables.push(
+      () => {
+        this.cycleTransition = null;
+        cycleTransition.destroy();
+      },
       () => {
         this.finale = null;
         this.ui.finaleLink.skip = () => undefined;
@@ -167,6 +184,11 @@ export class WorldScene extends Phaser.Scene {
     return this.finale;
   }
 
+  /** The new-cycle transition, or null before `create` and after its teardown. */
+  getCycleTransition(): CycleTransition | null {
+    return this.cycleTransition;
+  }
+
   // Required here: Phaser's Scene typings declare update(time, delta), unlike create/preload/init.
   override update(_time: number, delta: number): void {
     this.ctx.session.update();
@@ -180,6 +202,8 @@ export class WorldScene extends Phaser.Scene {
     this.dust?.setRising(this.ctx.session.state.techLevels[DUST_RISING.techId] >= DUST_RISING.minLevel);
     // Finale last: it overrides what the renderers above just drew (phase 'none' only pushes the neutral frame once).
     this.finale?.update(delta);
+    // The cycle transition runs after the director: its peak swaps the run (reset) before the HUD check below.
+    this.cycleTransition?.update(delta);
     if (this.ctx.session.revision !== this.lastRevision) this.renderHud();
     this.ui.techTree.update();
     // Phaser also handles window-level mouse events, so a DOM overlay alone does not shield the canvas.
@@ -187,9 +211,32 @@ export class WorldScene extends Phaser.Scene {
     this.input.enabled = !this.ui.modals.isOpen();
   }
 
+  /**
+   * Runs the white transition. A 'cycle' modal is held on the stack while it plays (input lock): Esc cannot drop it
+   * (the close fn re-pushes it while the transition is still running). Reduced motion comes from settings, read here.
+   */
+  private playCycleTransition(onPeak: () => void, onDone: () => void): void {
+    const transition = this.cycleTransition;
+    if (transition === null) {
+      onPeak();
+      onDone();
+      return;
+    }
+    const hold = (): void => {
+      if (transition.isActive()) this.ui.modals.push(CYCLE_MODAL_ID, hold);
+    };
+    const reduced = !motionPolicy(this.ctx.session.settings).flashes;
+    // play() first: it may finish a previous transition (that one removes the modal), so the lock is pushed after it.
+    transition.play(reduced, onPeak, () => {
+      this.ui.modals.remove(CYCLE_MODAL_ID);
+      onDone();
+    });
+    if (transition.isActive()) this.ui.modals.push(CYCLE_MODAL_ID, hold);
+  }
+
   private renderHud(): void {
     const session = this.ctx.session;
     this.lastRevision = session.revision;
-    this.ui.hud.render(buildHudView(session.state, session.rates));
+    this.ui.hud.render(buildHudView(session.state, session.rates, session.prestige));
   }
 }
