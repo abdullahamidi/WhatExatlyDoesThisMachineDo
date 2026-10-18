@@ -7,6 +7,8 @@ import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
 import { emptyResourceMap } from '../simulation/resources';
 import { applyOffline } from '../simulation/production/tick';
 import { computeRates } from '../simulation/production/rates';
+import { deriveStats, emptyStats } from '../simulation/stats';
+import type { AchievementsState, StatsState } from '../data/types';
 import { MIGRATIONS, SAVE_VERSION, migrate, migrateV1ToV2, validateEnvelope } from './schema';
 import type { Migration } from './schema';
 import { deserialize, serialize } from './codec';
@@ -55,16 +57,28 @@ describe('round trip', () => {
   );
   const settings: SettingsState = { ...DEFAULT_SETTINGS, muted: true };
 
-  it('deserialize(serialize()) returns the same state and settings', () => {
+  it('deserialize(serialize()) returns the same state and settings (stats derived when absent)', () => {
     const result = deserialize(serialize(state, settings, 2000), 3000);
-    expect(result).toEqual({ state, settings, status: 'loaded' });
+    expect(result).toEqual({
+      state,
+      settings,
+      stats: deriveStats(state, 3000),
+      achievements: { unlocked: {} },
+      status: 'loaded',
+    });
     expect(result).not.toHaveProperty('error');
   });
 
-  it('SaveManager save then load returns the same state and settings', () => {
+  it('SaveManager save then load returns the same state and settings (stats derived when absent)', () => {
     const mgr = new SaveManager(new MemoryStorage());
     expect(mgr.save(state, settings, 2000)).toBe(true);
-    expect(mgr.load(3000)).toEqual({ state, settings, status: 'loaded' });
+    expect(mgr.load(3000)).toEqual({
+      state,
+      settings,
+      stats: deriveStats(state, 3000),
+      achievements: { unlocked: {} },
+      status: 'loaded',
+    });
   });
 
   it('v2 round trip is lossless for non-zero ee/rs and lifetime above res', () => {
@@ -110,7 +124,6 @@ describe('deserialize recovers from bad data', () => {
     ['null res.me (NaN)', raw({ res: { me: null } })],
     ['infinite res.me', '{"version":2,"state":{"res":{"me":1e999}}}'],
     ['future version', JSON.stringify({ version: 999, savedAt: 1, state: createInitialState(1), settings: { muted: false } })],
-    ['bad settings.muted', raw(createInitialState(1), { settings: { muted: 'yes' } })],
     ['bad techLevels entry', raw({ res: { me: 1 }, techLevels: { gearRatio: 'x' } })],
     ['no state object', JSON.stringify({ version: 2 })],
     ['no state object (v1)', JSON.stringify({ version: 1 })],
@@ -125,6 +138,109 @@ describe('deserialize recovers from bad data', () => {
     expect(result.settings).toEqual({ ...DEFAULT_SETTINGS, muted: false });
     expect(typeof result.error).toBe('string');
     expect(result.error?.length).toBeGreaterThan(0);
+  });
+});
+
+describe('settings never fail a save (WP12)', () => {
+  const badSettings: Array<[string, unknown]> = [
+    ['muted as a string', { muted: 'yes' }],
+    ['volume as a string', { masterVolume: 'loud' }],
+    ['unknown notation', { notation: 'bogus' }],
+    ['unknown uiScale', { uiScale: 999 }],
+    ['settings is null', null],
+    ['settings is an array', [1, 2]],
+    ['settings is a number', 7],
+  ];
+
+  it.each(badSettings)('%s -> loaded with default settings', (_name, settings) => {
+    const result = deserialize(raw(createInitialState(1), { settings }), 9000);
+    expect(result.status).toBe('loaded');
+    expect(result).not.toHaveProperty('error');
+    expect(result.settings).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('keeps the valid fields next to an invalid one', () => {
+    const result = deserialize(
+      raw(createInitialState(1), { settings: { muted: true, masterVolume: 40, notation: 'bogus' } }),
+      9000,
+    );
+    expect(result.status).toBe('loaded');
+    expect(result.settings).toEqual({ ...DEFAULT_SETTINGS, muted: true, masterVolume: 40 });
+  });
+});
+
+describe('stats and achievements in the envelope (WP12)', () => {
+  const state = withLevels(
+    { gearRatio: 3 },
+    {
+      res: resources({ me: 40 }),
+      lifetime: resources({ me: 400, ee: 2 }),
+      totalClicks: 12,
+      lastSimTime: 1000,
+      createdAt: 500,
+    },
+  );
+  const stats: StatsState = {
+    activeSeconds: 3600.5,
+    offlineSeconds: 7200,
+    longestOfflineSeconds: 7200,
+    clicks: 12,
+    purchases: 3,
+    lifetime: resources({ me: 400, ee: 2 }),
+    maxPerSecond: resources({ me: 1.5 }),
+    cycles: 1,
+    bestCycleSeconds: null,
+    startedAt: 500,
+  };
+  const achievements: AchievementsState = { unlocked: { firstTurn: 1234, steadyHand: 5678 } };
+
+  it('serialize with meta round trips stats and achievements losslessly', () => {
+    const result = deserialize(serialize(state, DEFAULT_SETTINGS, 2000, { stats, achievements }), 3000);
+    expect(result.status).toBe('loaded');
+    expect(result.stats).toEqual(stats);
+    expect(result.achievements).toEqual(achievements);
+    expect(result.state).toEqual(state);
+  });
+
+  it('serialize without meta keeps the pre-WP12 key set', () => {
+    const parsed = JSON.parse(serialize(state, DEFAULT_SETTINGS, 2000)) as Record<string, unknown>;
+    expect(Object.keys(parsed)).toEqual(['version', 'savedAt', 'state', 'settings']);
+  });
+
+  it('serialize with meta appends stats and achievements after settings', () => {
+    const parsed = JSON.parse(serialize(state, DEFAULT_SETTINGS, 2000, { stats, achievements })) as Record<string, unknown>;
+    expect(Object.keys(parsed)).toEqual(['version', 'savedAt', 'state', 'settings', 'stats', 'achievements']);
+  });
+
+  it('a v2 save without stats derives them from the state and has no achievements', () => {
+    const result = deserialize(serialize(state, DEFAULT_SETTINGS, 2000), 3000);
+    expect(result.stats).toEqual(deriveStats(state, 3000));
+    expect(result.stats.clicks).toBe(12);
+    expect(result.achievements).toEqual({ unlocked: {} });
+  });
+
+  it('a new game and a recovered save fill fresh stats and empty achievements', () => {
+    const fresh = deserialize(null, 4000);
+    expect(fresh.stats).toEqual(emptyStats(4000));
+    expect(fresh.achievements).toEqual({ unlocked: {} });
+
+    const recovered = deserialize('{broken', 4000);
+    expect(recovered.status).toBe('recovered');
+    expect(recovered.stats).toEqual(emptyStats(4000));
+    expect(recovered.achievements).toEqual({ unlocked: {} });
+  });
+
+  it('bad stats fields never recover: each invalid field takes its derived value', () => {
+    const result = deserialize(
+      raw(state, { stats: { clicks: -3, activeSeconds: 'x', purchases: 4, lifetime: { me: 'y', ee: 5 } } }),
+      3000,
+    );
+    expect(result.status).toBe('loaded');
+    expect(result.stats.clicks).toBe(state.totalClicks);
+    expect(result.stats.activeSeconds).toBe(0);
+    expect(result.stats.purchases).toBe(4);
+    expect(result.stats.lifetime.me).toBe(state.lifetime.me);
+    expect(result.stats.lifetime.ee).toBe(5);
   });
 });
 

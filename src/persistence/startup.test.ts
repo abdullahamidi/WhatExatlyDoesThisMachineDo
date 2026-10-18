@@ -3,7 +3,8 @@ import type { GameState, TechId } from '../data/types';
 import { OFFLINE_CAP_SECONDS, SAVE_BACKUP_KEY, SAVE_KEY } from '../data/balance';
 import { computeRates } from '../simulation/production/rates';
 import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
-import { serialize } from './codec';
+import { emptyStats } from '../simulation/stats';
+import { deserialize, serialize } from './codec';
 import { MemoryStorage, SaveManager } from './saveManager';
 import { startSession } from './startup';
 import v1Save from './fixtures/v1-save.json';
@@ -168,6 +169,25 @@ describe('startSession', () => {
     expect(result.saved).toBe(false);
     expect(writes).toBe(0);
     expect(result.session.state.res.me).toBe(0);
+  });
+
+  it('(f) stats and achievements reach the session and are written back by the boot save', () => {
+    const storage = new MemoryStorage();
+    const state = withLevels({}, { lastSimTime: t0, createdAt: t0 - HOUR_MS });
+    const stats = { ...emptyStats(t0), clicks: 42, purchases: 5, activeSeconds: 120 };
+    const achievements = { unlocked: { firstTurn: t0 - 1000 } };
+    storage.setItem(SAVE_KEY, serialize(state, { ...DEFAULT_SETTINGS, muted: false }, t0, { stats, achievements }));
+
+    const result = startSession(new SaveManager(storage), t0, clock);
+    expect(result.saved).toBe(true);
+    expect(result.session.stats.clicks).toBe(42);
+    expect(result.session.stats.purchases).toBe(5);
+    expect(result.session.stats.activeSeconds).toBe(120);
+    expect(result.session.achievements.unlocked.firstTurn).toBe(t0 - 1000);
+
+    const written = deserialize(storage.getItem(SAVE_KEY), t0);
+    expect(written.stats.clicks).toBe(42);
+    expect(written.achievements.unlocked.firstTurn).toBe(t0 - 1000);
   });
 
   it('reports saved false when storage refuses writes, without throwing', () => {

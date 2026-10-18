@@ -1,6 +1,8 @@
 import type { GameSession } from '../simulation';
-import { AUTOSAVE_INTERVAL_MS } from '../data/balance';
+import { AUTOSAVE_INTERVAL_MS, SAVE_PREIMPORT_KEY } from '../data/balance';
 import { RESOURCE_IDS } from '../data/types';
+import { serialize } from './codec';
+import { encodeSave, parseImport } from './exchange';
 import type { SaveManager } from './saveManager';
 
 /** Minimal timer abstraction so the controller can be tested without real timers. */
@@ -10,14 +12,22 @@ export interface Scheduler {
 }
 
 export interface SaveController {
-  /** Writes the current state and settings. Returns the write result; never throws. */
+  /** Writes the current state, settings, stats and achievements. Returns the write result; never throws. */
   saveNow(): boolean;
   /** Erases the save, starts a fresh session (settings kept) and writes the fresh state. */
   resetProgress(): void;
-  /** Starts autosave and event-driven saves. Idempotent. */
+  /** Starts autosave and event-driven saves. Idempotent. Does nothing after a successful import. */
   start(): void;
   /** Stops autosave and event-driven saves. Idempotent; start() works again afterwards. */
   dispose(): void;
+  /** The current save as an export string (base64 of the save JSON). */
+  exportString(): string;
+  /**
+   * Imports a save export string. Invalid text leaves storage untouched. A valid one backs up the
+   * current save, writes the imported progress with the CURRENT settings, then suspends all saving.
+   * The caller must reload the page afterwards.
+   */
+  importString(text: string): { ok: true } | { ok: false; error: string };
   readonly lastSaveOk: boolean | null;
 }
 
@@ -27,8 +37,9 @@ const defaultScheduler: Scheduler = {
 };
 
 /**
- * Owns all writes to the save after boot: the periodic autosave, saves on purchase, milestone and
- * mute changes, the manual save and the reset. Holds no economy state of its own.
+ * Owns all writes to the save after boot: the periodic autosave, saves on purchase, milestone,
+ * achievement and settings changes, the manual save, the reset and the player import.
+ * Holds no economy state of its own.
  */
 export function createSaveController(o: {
   session: GameSession;
@@ -44,6 +55,7 @@ export function createSaveController(o: {
 
   let lastSaveOk: boolean | null = null;
   let running = false;
+  let suspended = false;
   let timer: unknown = undefined;
   let unsubscribers: Array<() => void> = [];
   let warnedNonFinite = false;
@@ -55,7 +67,10 @@ export function createSaveController(o: {
     return RESOURCE_IDS.some((id) => !Number.isFinite(s.res[id]) || !Number.isFinite(s.lifetime[id]));
   };
 
+  const meta = () => ({ stats: session.stats, achievements: session.achievements });
+
   const saveNow = (): boolean => {
+    if (suspended) return false;
     try {
       if (hasNonFiniteCounter()) {
         if (!warnedNonFinite) {
@@ -65,11 +80,20 @@ export function createSaveController(o: {
         lastSaveOk = false;
         return lastSaveOk;
       }
-      lastSaveOk = saveManager.save(session.state, session.settings, now());
+      lastSaveOk = saveManager.save(session.state, session.settings, now(), meta());
     } catch {
       lastSaveOk = false;
     }
     return lastSaveOk;
+  };
+
+  const dispose = (): void => {
+    if (!running) return;
+    running = false;
+    scheduler.clearInterval(timer);
+    timer = undefined;
+    for (const off of unsubscribers) off();
+    unsubscribers = [];
   };
 
   return {
@@ -82,7 +106,7 @@ export function createSaveController(o: {
     },
 
     start(): void {
-      if (running) return;
+      if (running || suspended) return;
       running = true;
       timer = scheduler.setInterval(() => {
         saveNow();
@@ -97,16 +121,34 @@ export function createSaveController(o: {
         session.on('settings', () => {
           saveNow();
         }),
+        session.on('achievement', () => {
+          saveNow();
+        }),
       ];
     },
 
-    dispose(): void {
-      if (!running) return;
-      running = false;
-      scheduler.clearInterval(timer);
-      timer = undefined;
-      for (const off of unsubscribers) off();
-      unsubscribers = [];
+    dispose,
+
+    exportString(): string {
+      return encodeSave(serialize(session.state, session.settings, now(), meta()));
+    },
+
+    importString(text: string): { ok: true } | { ok: false; error: string } {
+      const parsed = parseImport(text, now());
+      if (!parsed.ok) return { ok: false, error: parsed.error };
+
+      saveManager.backup(SAVE_PREIMPORT_KEY);
+      const { envelope } = parsed;
+      const written = saveManager.save(envelope.state, session.settings, envelope.savedAt, {
+        stats: envelope.stats,
+        achievements: envelope.achievements,
+      });
+      lastSaveOk = written;
+      if (!written) return { ok: false, error: 'Could not write the imported save.' };
+
+      suspended = true;
+      dispose();
+      return { ok: true };
     },
 
     get lastSaveOk(): boolean | null {

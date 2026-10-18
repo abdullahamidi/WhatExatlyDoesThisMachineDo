@@ -12,6 +12,9 @@ export const SAVE_KEY = 'wedtmd.save';
 /** localStorage key where a corrupt save is backed up before recovery. */
 export const SAVE_BACKUP_KEY = 'wedtmd.save.corrupt';
 
+/** localStorage key where the current save is copied before a player import overwrites it. */
+export const SAVE_PREIMPORT_KEY = 'wedtmd.save.preimport';
+
 /** Largest simulated time step applied by a single update, in seconds. */
 export const MAX_UPDATE_SECONDS = OFFLINE_CAP_SECONDS;
 

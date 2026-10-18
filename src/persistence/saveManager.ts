@@ -1,7 +1,9 @@
 import type { GameState, LoadResult, SettingsState } from '../data/types';
 import { SAVE_BACKUP_KEY, SAVE_KEY } from '../data/balance';
 import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
+import { emptyStats } from '../simulation/stats';
 import { deserialize, serialize } from './codec';
+import type { SaveMeta } from './codec';
 
 export interface KeyValueStorage {
   getItem(key: string): string | null;
@@ -48,6 +50,8 @@ export class SaveManager {
       return {
         state: createInitialState(nowMs),
         settings: { ...DEFAULT_SETTINGS },
+        stats: emptyStats(nowMs),
+        achievements: { unlocked: {} },
         status: 'new',
         error: `Could not read save: ${errorMessage(e)}`,
       };
@@ -65,9 +69,21 @@ export class SaveManager {
   }
 
   /** Returns true when the save was written, false when storage refused it. */
-  save(state: GameState, settings: SettingsState, nowMs: number): boolean {
+  save(state: GameState, settings: SettingsState, nowMs: number, meta?: SaveMeta): boolean {
     try {
-      this.storage.setItem(this.key, serialize(state, settings, nowMs));
+      this.storage.setItem(this.key, serialize(state, settings, nowMs, meta));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Copies the current raw save text to `key`. Returns false when there is no save or storage refuses. */
+  backup(key: string): boolean {
+    try {
+      const raw = this.storage.getItem(this.key);
+      if (raw === null) return false;
+      this.storage.setItem(key, raw);
       return true;
     } catch {
       return false;

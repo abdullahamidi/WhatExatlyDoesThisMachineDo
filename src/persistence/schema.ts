@@ -1,8 +1,21 @@
 import { RESOURCE_IDS, TECH_IDS } from '../data/types';
-import type { GameState, ResourceMap, SaveEnvelope, SettingsState, TechDefinition, TechId } from '../data/types';
+import type {
+  AchievementsState,
+  GameState,
+  ResourceMap,
+  SaveEnvelope,
+  SettingsState,
+  StatsState,
+  TechDefinition,
+  TechId,
+} from '../data/types';
+import { ACHIEVEMENT_IDS } from '../data/achievements';
+import type { AchievementId } from '../data/achievements';
 import { TECHNOLOGIES } from '../data/technologies';
-import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
+import { createInitialState } from '../simulation/state';
+import { normalizeSettings } from '../simulation/settings';
 import { emptyResourceMap } from '../simulation/resources';
+import { deriveStats } from '../simulation/stats';
 
 /** Current save schema version. v2 stores per-resource maps (`state.res`, `state.lifetime`). */
 export const SAVE_VERSION = 2;
@@ -175,18 +188,83 @@ function readState(
   };
 }
 
-function readSettings(input: unknown): Parsed<SettingsState> {
-  if (input === undefined) return { ok: true, value: { ...DEFAULT_SETTINGS } };
-  if (!isPlainObject(input)) return fail('"settings" must be an object');
-  const muted = input['muted'];
-  if (muted === undefined) return { ok: true, value: { ...DEFAULT_SETTINGS, muted: DEFAULT_SETTINGS.muted } };
-  if (typeof muted !== 'boolean') return fail('"settings.muted" must be a boolean');
-  return { ok: true, value: { ...DEFAULT_SETTINGS, muted } };
+/** Settings never fail a save: unknown or wrong-typed fields fall back to their defaults (see normalizeSettings). */
+function readSettings(input: unknown): SettingsState {
+  return normalizeSettings(input);
+}
+
+/** Reads a non-negative finite number, or returns the fallback (derived value). */
+function readNonNegative(source: Plain, key: string, fallback: number): number {
+  const value = source[key];
+  return isFiniteNumber(value) && value >= 0 ? value : fallback;
+}
+
+/** Best cycle time: null is a valid value (no cycle finished yet); anything else must be a finite number >= 0. */
+function readBestCycle(source: Plain, fallback: number | null): number | null {
+  const value = source['bestCycleSeconds'];
+  if (value === null) return null;
+  return isFiniteNumber(value) && value >= 0 ? value : fallback;
+}
+
+/** Reads a non-negative count, floored to an integer, or returns the fallback. */
+function readCount(source: Plain, key: string, fallback: number): number {
+  const value = source[key];
+  return isFiniteNumber(value) && value >= 0 ? Math.floor(value) : fallback;
+}
+
+/** Reads a per-resource stats map key by key; a missing or invalid entry takes the fallback value. */
+function readStatsMap(source: Plain, key: 'lifetime' | 'maxPerSecond', fallback: Readonly<ResourceMap>): ResourceMap {
+  const raw = source[key];
+  const map = isPlainObject(raw) ? raw : {};
+  const out = emptyResourceMap();
+  for (const id of RESOURCE_IDS) {
+    const value = map[id];
+    out[id] = isFiniteNumber(value) && value >= 0 ? value : fallback[id];
+  }
+  return out;
+}
+
+/**
+ * Lenient reader for the lifetime stats block. Cosmetic data never fails a save: a missing block
+ * derives every value from the game state; each invalid field (non-finite, negative, wrong type)
+ * takes its derived value. Never throws; returns a new object.
+ */
+export function readStats(input: unknown, state: GameState, nowMs: number): StatsState {
+  const derived = deriveStats(state, nowMs);
+  if (!isPlainObject(input)) return derived;
+  return {
+    activeSeconds: readNonNegative(input, 'activeSeconds', derived.activeSeconds),
+    offlineSeconds: readNonNegative(input, 'offlineSeconds', derived.offlineSeconds),
+    longestOfflineSeconds: readNonNegative(input, 'longestOfflineSeconds', derived.longestOfflineSeconds),
+    clicks: readCount(input, 'clicks', derived.clicks),
+    purchases: readCount(input, 'purchases', derived.purchases),
+    lifetime: readStatsMap(input, 'lifetime', derived.lifetime),
+    maxPerSecond: readStatsMap(input, 'maxPerSecond', derived.maxPerSecond),
+    cycles: readCount(input, 'cycles', derived.cycles),
+    bestCycleSeconds: readBestCycle(input, derived.bestCycleSeconds),
+    startedAt: readNonNegative(input, 'startedAt', derived.startedAt),
+  };
+}
+
+/**
+ * Lenient reader for the achievements block (`{ unlocked: { id: epochMs } }`). Unknown ids and
+ * non-finite or negative timestamps are dropped; a missing block means no achievements.
+ */
+export function readAchievements(input: unknown): AchievementsState {
+  const unlocked: Partial<Record<AchievementId, number>> = {};
+  if (!isPlainObject(input) || !isPlainObject(input['unlocked'])) return { unlocked };
+  const raw = input['unlocked'];
+  for (const id of ACHIEVEMENT_IDS) {
+    const at = raw[id];
+    if (isFiniteNumber(at) && at >= 0) unlocked[id] = at;
+  }
+  return { unlocked };
 }
 
 /**
  * Lenient normaliser for a (migrated) save envelope. Missing optional fields take defaults;
- * present fields of the wrong type are errors. The result contains only known fields.
+ * present core fields (version, savedAt, state) of the wrong type are errors. Settings, stats and
+ * achievements never fail a save. The result contains only known fields and always has all of them.
  * `techs` supplies the technology definitions used to clamp levels (injectable for tests).
  */
 export function validateEnvelope(
@@ -203,14 +281,17 @@ export function validateEnvelope(
   const state = readState(input['state'], nowMs, techs);
   if (!state.ok) return state;
   const settings = readSettings(input['settings']);
-  if (!settings.ok) return settings;
+  const stats = readStats(input['stats'], state.value, nowMs);
+  const achievements = readAchievements(input['achievements']);
   return {
     ok: true,
     envelope: {
       version: SAVE_VERSION,
       savedAt: savedAt.value,
       state: state.value,
-      settings: settings.value,
+      settings,
+      stats,
+      achievements,
     },
   };
 }

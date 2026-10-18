@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { GameState, SettingsState } from '../data/types';
-import { AUTOSAVE_INTERVAL_MS, SAVE_KEY } from '../data/balance';
+import { AUTOSAVE_INTERVAL_MS, SAVE_KEY, SAVE_PREIMPORT_KEY } from '../data/balance';
 import { GameSession } from '../simulation';
 import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
 import { emptyResourceMap } from '../simulation/resources';
 import { deserialize } from './codec';
+import { encodeSave } from './exchange';
 import { MemoryStorage, SaveManager } from './saveManager';
 import type { KeyValueStorage } from './saveManager';
 import { createSaveController } from './saveController';
@@ -78,6 +79,112 @@ const storedSave = (storage: KeyValueStorage) => {
   return raw === null ? null : deserialize(raw, t0);
 };
 
+describe('stats, achievements and export / import (WP12)', () => {
+  it('saveNow writes the session stats and achievements', () => {
+    const { session, controller, storage } = setup();
+    session.click();
+    expect(controller.saveNow()).toBe(true);
+
+    const saved = storedSave(storage);
+    expect(saved?.stats.clicks).toBe(1);
+    expect(saved?.achievements.unlocked.firstTurn).toBe(t0);
+  });
+
+  it("an 'achievement' event writes a save; a click that unlocks nothing does not", () => {
+    const { session, controller, storage } = setup();
+    controller.start();
+
+    const before = writesOf(storage);
+    session.click(); // firstTurn unlocks on the first click
+    expect(writesOf(storage) - before).toBe(1);
+
+    const again = writesOf(storage);
+    session.click(); // steadyHand needs 100 clicks: nothing new
+    expect(writesOf(storage)).toBe(again);
+  });
+
+  it('exportString then importString restores state, stats and achievements; settings stay the current ones', () => {
+    const source = setup(new MemoryStorage(), 5000);
+    source.session.setMuted(true);
+    expect(source.session.purchase('gearRatio').ok).toBe(true);
+    source.session.click();
+    const text = source.controller.exportString();
+
+    const target = setup(new MemoryStorage(), 10);
+    expect(target.controller.importString(text)).toEqual({ ok: true });
+
+    const saved = storedSave(target.storage);
+    expect(saved?.status).toBe('loaded');
+    expect(saved?.state).toEqual(source.session.state);
+    expect(saved?.stats).toEqual(source.session.stats);
+    expect(saved?.achievements).toEqual(source.session.achievements);
+    expect(saved?.settings.muted).toBe(false);
+  });
+
+  it('an invalid import returns an error and leaves storage byte-identical', () => {
+    const { controller, storage } = setup(new MemoryStorage(), 1000);
+    controller.saveNow();
+    const before = storage.getItem(SAVE_KEY);
+    const badTexts = [
+      '',
+      '   ',
+      'not a save!!',
+      'AAA',
+      '{"version":2,',
+      encodeSave('[]'),
+      encodeSave('{"version":2'),
+      encodeSave(JSON.stringify({ version: 3, savedAt: 1, state: {} })),
+      encodeSave(JSON.stringify({ version: 2, savedAt: 1, state: { res: { me: -5 } } })),
+    ];
+    for (const text of badTexts) {
+      const result = controller.importString(text);
+      expect(result.ok, text).toBe(false);
+      if (result.ok) continue;
+      expect(result.error.length, text).toBeGreaterThan(0);
+      expect(result.error.length, text).toBeLessThanOrEqual(80);
+    }
+    expect(storage.getItem(SAVE_KEY)).toBe(before);
+    expect(storage.getItem(SAVE_PREIMPORT_KEY)).toBeNull();
+    expect(controller.lastSaveOk).toBe(true);
+  });
+
+  it('a valid import backs up the previous save, then suspends every save path', () => {
+    const source = setup(new MemoryStorage(), 9000);
+    expect(source.session.purchase('gearRatio').ok).toBe(true);
+    const text = source.controller.exportString();
+
+    const target = setup();
+    target.controller.saveNow();
+    const previous = target.storage.getItem(SAVE_KEY);
+    target.controller.start();
+
+    expect(target.controller.importString(text)).toEqual({ ok: true });
+    expect(target.storage.getItem(SAVE_PREIMPORT_KEY)).toBe(previous);
+    expect(target.scheduler.active).toHaveLength(0);
+
+    const writesAfterImport = writesOf(target.storage);
+    const imported = target.storage.getItem(SAVE_KEY);
+    expect(target.controller.saveNow()).toBe(false);
+    target.session.setMuted(true);
+    target.session.click();
+    target.controller.start();
+    expect(writesOf(target.storage)).toBe(writesAfterImport);
+    expect(target.storage.getItem(SAVE_KEY)).toBe(imported);
+    expect(target.scheduler.active).toHaveLength(0);
+    expect(target.controller.lastSaveOk).toBe(true);
+  });
+
+  it('a refused write during import reports an error', () => {
+    const source = setup(new MemoryStorage(), 9000);
+    const text = source.controller.exportString();
+
+    const target = setup(new FailingWriteStorage());
+    const result = target.controller.importString(text);
+    expect(result.ok).toBe(false);
+    expect(target.controller.lastSaveOk).toBe(false);
+  });
+});
+
 describe('createSaveController', () => {
   it('start() registers one interval at AUTOSAVE_INTERVAL_MS and the tick writes a save', () => {
     const { scheduler, controller, storage } = setup();
@@ -135,7 +242,9 @@ describe('createSaveController', () => {
     const before = writesOf(storage);
     session.click();
     expect(session.state.techLevels.generatorBlueprint).toBe(1);
-    expect(writesOf(storage) - before).toBe(1);
+    // Milestone save, plus one achievement save: this click also unlocks firstTurn and blueprint.
+    expect(writesOf(storage) - before).toBe(2);
+    expect(session.achievements.unlocked.firstTurn).toBe(t0);
   });
 
   it("setMuted(true) writes a save with muted kept", () => {

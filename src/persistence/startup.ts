@@ -23,11 +23,20 @@ export function startSession(
   clock: () => number = () => Date.now(),
 ): StartupResult {
   const load = saveManager.load(nowMs);
-  const session = new GameSession({ state: load.state, settings: load.settings, now: clock });
+  const session = new GameSession({
+    state: load.state,
+    settings: load.settings,
+    stats: load.stats,
+    achievements: load.achievements,
+    now: clock,
+  });
   const offline = session.applyOffline(nowMs);
   if (load.error !== undefined && load.status === 'new') {
     return { session, load, offline, saved: false };
   }
-  const saved = saveManager.save(session.state, session.settings, nowMs);
+  const saved = saveManager.save(session.state, session.settings, nowMs, {
+    stats: session.stats,
+    achievements: session.achievements,
+  });
   return { session, load, offline, saved };
 }

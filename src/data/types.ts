@@ -78,6 +78,6 @@ export type PurchaseResult =
   | { ok: true; state: GameState; cost: number; newLevel: number }
   | { ok: false; reason: PurchaseFailure };
 export interface OfflineReport { elapsedSeconds: number; cappedSeconds: number; gained: ResourceMap }
-export interface SaveEnvelope { version: number; savedAt: number; state: GameState; settings: SettingsState }
+export interface SaveEnvelope { version: number; savedAt: number; state: GameState; settings: SettingsState; stats: StatsState; achievements: AchievementsState }
 export type LoadStatus = 'new' | 'loaded' | 'migrated' | 'recovered';
-export interface LoadResult { state: GameState; settings: SettingsState; status: LoadStatus; error?: string }
+export interface LoadResult { state: GameState; settings: SettingsState; stats: StatsState; achievements: AchievementsState; status: LoadStatus; error?: string }
