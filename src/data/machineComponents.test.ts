@@ -1084,3 +1084,237 @@ describe('era III prefixes', () => {
     }
   });
 });
+
+/** Era-IV component ids: the 16 appended after the era-III block (contract C3). */
+const ERA_FOUR_COMPONENT_IDS: readonly MachineComponentId[] = MACHINE_COMPONENT_IDS.slice(45);
+
+/** Unlock steps of era IV in order; harmonicCoil is set to each coil ring level in turn (1, 8, 16, 25). */
+const ERA_FOUR_STEPS: readonly (readonly [TechId, number])[] = [
+  ['resonatorSpire', 1], ['harmonicCoil', 1], ['harmonicCoil', 8], ['harmonicCoil', 16], ['harmonicCoil', 25],
+  ['pressureResonator', 1], ['crankServo', 1], ['echoCrank', 1], ['phaseLock', 1], ['standingWave', 1], ['crystalLattice', 1],
+];
+
+/** All era-I to era-III techs at their stage levels, then the first n era-IV steps applied. */
+function levelsForEra4(n: number): Record<TechId, number> {
+  const levels = levelsForEra3(ERA_THREE_STEPS.length);
+  for (const [id, level] of ERA_FOUR_STEPS.slice(0, n)) levels[id] = level;
+  return levels;
+}
+
+/** One era-IV row of the WP10 component table (contract C3). Optional fields undefined = omitted. */
+interface EraFourRow {
+  id: MachineComponentId; techId: TechId; minLevel: number; assetId: AssetId; width: number; height: number;
+  origin: Vec2; socket: SocketId; layer: MachineLayer; depthBias?: number; flipX?: boolean;
+  animation: ComponentAnimation; connections: ConnectionPoint[];
+}
+
+const ERA_FOUR_TABLE: readonly EraFourRow[] = [
+  { id: 'spireTower', techId: 'resonatorSpire', minLevel: 1, assetId: 'machine.spireTower', width: 80, height: 320, origin: { x: 0.5, y: 1 }, socket: 'spireBase', layer: 'mid', animation: { kind: 'none' }, connections: [] },
+  { id: 'spireExciter', techId: 'resonatorSpire', minLevel: 1, assetId: 'machine.spireExciter', width: 24, height: 32, origin: { x: 0.5, y: 1 }, socket: 'spireBase', layer: 'mid', depthBias: 2, animation: { kind: 'none' }, connections: [{ id: 'steam', at: { x: -12, y: -16 }, kind: 'pipe' }] },
+  { id: 'spireWave', techId: 'standingWave', minLevel: 1, assetId: 'machine.spireWave', width: 16, height: 270, origin: { x: 0.5, y: 1 }, socket: 'spireRod', layer: 'mid', depthBias: 1, animation: { kind: 'frames', frames: 8, maxHz: 12, driver: 'resonance' }, connections: [] },
+  { id: 'coilRing1', techId: 'harmonicCoil', minLevel: 1, assetId: 'machine.coilRing1', width: 62, height: 8, origin: { x: 0.5, y: 0.5 }, socket: 'coilRing1', layer: 'mid', depthBias: 3, animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' }, connections: [] },
+  { id: 'coilRing2', techId: 'harmonicCoil', minLevel: 8, assetId: 'machine.coilRing2', width: 48, height: 8, origin: { x: 0.5, y: 0.5 }, socket: 'coilRing2', layer: 'mid', depthBias: 3, animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' }, connections: [] },
+  { id: 'coilRing3', techId: 'harmonicCoil', minLevel: 16, assetId: 'machine.coilRing3', width: 36, height: 8, origin: { x: 0.5, y: 0.5 }, socket: 'coilRing3', layer: 'mid', depthBias: 3, animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' }, connections: [] },
+  { id: 'coilRing4', techId: 'harmonicCoil', minLevel: 25, assetId: 'machine.coilRing4', width: 30, height: 8, origin: { x: 0.5, y: 0.5 }, socket: 'coilRing4', layer: 'mid', depthBias: 3, animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' }, connections: [] },
+  { id: 'calliope', techId: 'pressureResonator', minLevel: 1, assetId: 'machine.calliope', width: 72, height: 40, origin: { x: 0.5, y: 1 }, socket: 'calliopeSeat', layer: 'back', depthBias: 3, animation: { kind: 'none' }, connections: [] },
+  { id: 'servoBase', techId: 'crankServo', minLevel: 1, assetId: 'machine.servoBase', width: 28, height: 20, origin: { x: 0.5, y: 1 }, socket: 'servoBase', layer: 'mid', depthBias: 3, animation: { kind: 'none' }, connections: [] },
+  { id: 'servoArm', techId: 'crankServo', minLevel: 1, assetId: 'machine.servoArm', width: 48, height: 48, origin: { x: 0.5, y: 0.5 }, socket: 'servoHub', layer: 'front', depthBias: 3, animation: { kind: 'driven', ratio: -1.75, phaseDeg: 0 }, connections: [{ id: 'pin', at: { x: 0, y: -19 }, kind: 'pin' }] },
+  { id: 'koenigFork', techId: 'echoCrank', minLevel: 1, assetId: 'machine.koenigFork', width: 22, height: 44, origin: { x: 0.5, y: 1 }, socket: 'forkBase', layer: 'mid', animation: { kind: 'frames', frames: 4, maxHz: 12, driver: 'manual' }, connections: [] },
+  { id: 'emitterDishL', techId: 'phaseLock', minLevel: 1, assetId: 'machine.emitterDish', width: 40, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'dishL', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
+  { id: 'emitterDishR', techId: 'phaseLock', minLevel: 1, assetId: 'machine.emitterDish', width: 40, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'dishR', layer: 'mid', depthBias: 4, flipX: true, animation: { kind: 'none' }, connections: [] },
+  { id: 'dishWavesL', techId: 'phaseLock', minLevel: 1, assetId: 'machine.dishWaves', width: 40, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'dishWavesL', layer: 'mid', depthBias: 4, animation: { kind: 'frames', frames: 6, maxHz: 8, driver: 'resonance' }, connections: [] },
+  { id: 'dishWavesR', techId: 'phaseLock', minLevel: 1, assetId: 'machine.dishWaves', width: 40, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'dishWavesR', layer: 'mid', depthBias: 4, flipX: true, animation: { kind: 'frames', frames: 6, maxHz: 8, driver: 'resonance' }, connections: [] },
+  { id: 'crystal', techId: 'crystalLattice', minLevel: 1, assetId: 'machine.crystal', width: 32, height: 48, origin: { x: 0.5, y: 1 }, socket: 'crystalSeat', layer: 'mid', depthBias: 4, animation: { kind: 'frames', frames: 4, maxHz: 4, driver: 'resonance' }, connections: [] },
+];
+
+describe('era IV machine data', () => {
+  it('the 16 era-IV components follow the contract table (tech, level, asset, size, origin, socket, layer, bias, flip, animation, connections)', () => {
+    expect(ERA_FOUR_TABLE.length).toBe(16);
+    expect(ERA_FOUR_COMPONENT_IDS).toEqual(ERA_FOUR_TABLE.map((r) => r.id));
+    for (const row of ERA_FOUR_TABLE) {
+      const def = MACHINE_COMPONENTS[row.id];
+      expect(def.techId, row.id).toBe(row.techId);
+      expect(def.minLevel, row.id).toBe(row.minLevel);
+      expect(def.assetId, row.id).toBe(row.assetId);
+      expect(def.size, row.id).toEqual({ width: row.width, height: row.height });
+      expect(def.origin, row.id).toEqual(row.origin);
+      expect(def.attach, row.id).toEqual({ socket: row.socket, offset: { x: 0, y: 0 } });
+      expect(def.layer, row.id).toBe(row.layer);
+      expect(def.depthBias, row.id).toBe(row.depthBias);
+      expect(def.flipX, row.id).toBe(row.flipX);
+      expect(def.animation, row.id).toEqual(row.animation);
+      expect(def.connections, row.id).toEqual(row.connections);
+      expect(def.effects, row.id).toEqual([]);
+      expect(def.alsoVisibleWith, row.id).toBeUndefined();
+    }
+  });
+
+  it('the era-IV sockets sit at the contract coordinates; the right dish and dish waves mirror the left ones', () => {
+    expect(MACHINE_SOCKETS.spireBase).toEqual({ x: 64, y: -110 });
+    expect(MACHINE_SOCKETS.spireRod).toEqual({ x: 64, y: -142 });
+    expect(MACHINE_SOCKETS.coilRing1).toEqual({ x: 64, y: -157 });
+    expect(MACHINE_SOCKETS.coilRing2).toEqual({ x: 64, y: -223 });
+    expect(MACHINE_SOCKETS.coilRing3).toEqual({ x: 64, y: -274 });
+    expect(MACHINE_SOCKETS.coilRing4).toEqual({ x: 64, y: -330 });
+    expect(MACHINE_SOCKETS.dishL).toEqual({ x: 35, y: -360 });
+    expect(MACHINE_SOCKETS.dishR).toEqual({ x: 93, y: -360 });
+    expect(MACHINE_SOCKETS.dishWavesL).toEqual({ x: -5, y: -360 });
+    expect(MACHINE_SOCKETS.dishWavesR).toEqual({ x: 133, y: -360 });
+    expect(MACHINE_SOCKETS.crystalSeat).toEqual({ x: 64, y: -418 });
+    expect(MACHINE_SOCKETS.calliopeSeat).toEqual({ x: -44, y: -178 });
+    expect(MACHINE_SOCKETS.forkBase).toEqual({ x: 16, y: -110 });
+    expect(MACHINE_SOCKETS.servoBase).toEqual({ x: 0, y: -14 });
+    expect(MACHINE_SOCKETS.servoHub).toEqual({ x: 0, y: -24 });
+    expect(MACHINE_SOCKETS.dishR.x).toBe(128 - MACHINE_SOCKETS.dishL.x);
+    expect(MACHINE_SOCKETS.dishR.y).toBe(MACHINE_SOCKETS.dishL.y);
+    expect(MACHINE_SOCKETS.dishWavesR.x).toBe(128 - MACHINE_SOCKETS.dishWavesL.x);
+    expect(MACHINE_SOCKETS.dishWavesR.y).toBe(MACHINE_SOCKETS.dishWavesL.y);
+  });
+
+  it('coil rings: harmonicCoil levels 1 / 8 / 16 / 25, widths 62 / 48 / 36 / 30, all 8 px tall', () => {
+    const rings = [MACHINE_COMPONENTS.coilRing1, MACHINE_COMPONENTS.coilRing2, MACHINE_COMPONENTS.coilRing3, MACHINE_COMPONENTS.coilRing4];
+    expect(rings.map((r) => r.minLevel)).toEqual([1, 8, 16, 25]);
+    expect(rings.map((r) => r.size.width)).toEqual([62, 48, 36, 30]);
+    for (const r of rings) {
+      expect(r.techId).toBe('harmonicCoil');
+      expect(r.size.height).toBe(8);
+    }
+  });
+
+  it('every era-IV frames part draws as many frames as its manifest entry', () => {
+    for (const id of ERA_FOUR_COMPONENT_IDS) {
+      const anim = MACHINE_COMPONENTS[id].animation;
+      if (anim.kind !== 'frames') continue;
+      expect(ASSET_MANIFEST[MACHINE_COMPONENTS[id].assetId].frame?.count, id).toBe(anim.frames);
+    }
+  });
+
+  it('every resonance-driven part is a frames part', () => {
+    for (const def of COMPONENTS) {
+      const anim = def.animation;
+      if ('driver' in anim && anim.driver === 'resonance') expect(anim.kind, def.id).toBe('frames');
+    }
+  });
+
+  it('the servo arm animates exactly like the hand crank it couples to', () => {
+    expect(MACHINE_COMPONENTS.servoArm.animation).toEqual(MACHINE_COMPONENTS.handCrank.animation);
+  });
+
+  it('the servo arm sits on the servo base', () => {
+    expect(contains(boundsOf(MACHINE_COMPONENTS.servoBase), centreOf(MACHINE_COMPONENTS.servoArm))).toBe(true);
+  });
+
+  it('steamManifold equals its era-III definition plus the outR pipe point', () => {
+    expect(MACHINE_COMPONENTS.steamManifold).toEqual({
+      id: 'steamManifold', techId: 'boiler', minLevel: 1,
+      assetId: 'machine.steamManifold', attach: { socket: 'manifoldSeat', offset: { x: 0, y: 0 } },
+      size: { width: 96, height: 14 }, origin: { x: 0.5, y: 1 },
+      layer: 'back', depthBias: 2,
+      animation: { kind: 'none' },
+      connections: [
+        { id: 'steam', at: { x: -48, y: -8 }, kind: 'pipe' },
+        { id: 'outR', at: { x: 33, y: -8 }, kind: 'pipe' },
+      ],
+      effects: [],
+    });
+  });
+
+  it('handCrank equals its era-I definition plus the pin connection only', () => {
+    expect(MACHINE_COMPONENTS.handCrank).toEqual({
+      id: 'handCrank', techId: 'handCrank', minLevel: 1,
+      assetId: 'machine.crank', attach: { socket: 'crankHub', offset: { x: 0, y: 0 } },
+      size: { width: 48, height: 48 }, origin: { x: 0.5, y: 0.5 },
+      layer: 'front',
+      animation: { kind: 'driven', ratio: -1.75, phaseDeg: 0 },
+      connections: [{ id: 'pin', at: { x: 0, y: -19 }, kind: 'pin' }],
+      effects: [],
+    });
+  });
+
+  it('the milestone crystal FX: crystal holds frame 2 for 1 s on harmonicConvergence, the dish waves restart', () => {
+    expect(RESONANCE_MILESTONE_FX).toEqual({ techId: 'harmonicConvergence', crystal: 'crystal', holdFrame: 2, holdMs: 1000, restart: ['dishWavesL', 'dishWavesR'] });
+    expect(TECH_IDS).toContain(RESONANCE_MILESTONE_FX.techId);
+    const crystal = MACHINE_COMPONENTS[RESONANCE_MILESTONE_FX.crystal];
+    expect(crystal.animation.kind).toBe('frames');
+    if (crystal.animation.kind !== 'frames') return;
+    expect(RESONANCE_MILESTONE_FX.holdFrame).toBeLessThan(crystal.animation.frames);
+    for (const id of RESONANCE_MILESTONE_FX.restart) expect(MACHINE_COMPONENTS[id].animation.kind, id).toBe('frames');
+  });
+
+  it('the era-IV machine has 14 links in total, and P4 joins the manifold outlet to the spire exciter', () => {
+    expect(MACHINE_LINKS.length).toBe(14);
+    const p4 = MACHINE_LINKS.filter((l) => l.kind === 'pipe' && l.from.component === 'steamManifold');
+    expect(p4).toEqual([PIPE_P4_EXPECTED]);
+    expect(pointPosition('steamManifold', 'outR')).toEqual({ x: -11, y: -176 });
+    expect(pointPosition('spireExciter', 'steam')).toEqual({ x: 52, y: -126 });
+    expect(MACHINE_LINK_STYLE.pipe.steam.prof.length).toBe(4);
+  });
+
+  it('R1 pin-to-pin rod joins the servo arm pin to the hand crank pin at depth front + 4 and both ends are driven', () => {
+    const r1 = MACHINE_LINKS.filter((l) => l.kind === 'rod' && l.from.component === 'servoArm');
+    expect(r1).toEqual([{ from: { component: 'servoArm', point: 'pin' }, to: { component: 'handCrank', point: 'pin' }, kind: 'rod', depth: MACHINE_LAYER_DEPTH.front + 4 }]);
+    const arm = pointOf('servoArm', 'pin');
+    const crank = pointOf('handCrank', 'pin');
+    expect(arm?.kind).toBe('pin');
+    expect(crank?.kind).toBe('pin');
+    expect(arm?.radius).toBeUndefined();
+    expect(crank?.radius).toBeUndefined();
+    expect(drivenRatio('servoArm')).toBe(drivenRatio('handCrank'));
+    expect(drivenRatio('servoArm')).toBe(-1.75);
+    const armAnim = MACHINE_COMPONENTS.servoArm.animation;
+    const crankAnim = MACHINE_COMPONENTS.handCrank.animation;
+    expect(armAnim).toEqual({ kind: 'driven', ratio: -1.75, phaseDeg: 0 });
+    expect(crankAnim).toEqual({ kind: 'driven', ratio: -1.75, phaseDeg: 0 });
+    expect(Math.hypot(arm?.at.x ?? NaN, arm?.at.y ?? NaN)).toBeCloseTo(19, 9);
+    expect(Math.hypot(crank?.at.x ?? NaN, crank?.at.y ?? NaN)).toBeCloseTo(19, 9);
+    const a = pointPosition('servoArm', 'pin');
+    const b = pointPosition('handCrank', 'pin');
+    expect(a).toEqual({ x: 0, y: -43 });
+    expect(b).toEqual({ x: 0, y: -75 });
+    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeCloseTo(32, 9);
+  });
+});
+
+describe('era IV prefixes', () => {
+  const STEPS = ERA_FOUR_STEPS.length;
+
+  it('every component is visible at the full stage', () => {
+    const visible = visibleAt(levelsForEra4(STEPS));
+    for (const id of MACHINE_COMPONENT_IDS) expect(visible.has(id), id).toBe(true);
+  });
+
+  it('no era-IV component is visible before resonatorSpire', () => {
+    const visible = visibleAt(levelsForEra4(0));
+    for (const id of ERA_FOUR_COMPONENT_IDS) expect(visible.has(id), id).toBe(false);
+  });
+
+  it('each era-IV part appears at its unlock step (1 spire, 2 coil 1, 3 coil 8, 4 coil 16, 5 coil 25, 6 pressure resonator, 7 crank servo, 8 echo crank, 9 phase lock, 10 standing wave, 11 crystal lattice)', () => {
+    const unlockStep: [MachineComponentId, number][] = [
+      ['spireTower', 1], ['spireExciter', 1], ['coilRing1', 2], ['coilRing2', 3], ['coilRing3', 4], ['coilRing4', 5], ['calliope', 6],
+      ['servoBase', 7], ['servoArm', 7], ['koenigFork', 8], ['emitterDishL', 9], ['emitterDishR', 9], ['dishWavesL', 9], ['dishWavesR', 9],
+      ['spireWave', 10], ['crystal', 11],
+    ];
+    expect(unlockStep.map(([id]) => id).sort()).toEqual([...ERA_FOUR_COMPONENT_IDS].sort());
+    for (const [id, step] of unlockStep) {
+      expect(visibleAt(levelsForEra4(step - 1)).has(id), `${id} before step ${step}`).toBe(false);
+      expect(visibleAt(levelsForEra4(step)).has(id), `${id} at step ${step}`).toBe(true);
+    }
+  });
+
+  it('coilRing4 implies coilRing3 implies coilRing2 implies coilRing1, and spireWave implies spireTower', () => {
+    for (let n = 0; n <= STEPS; n++) {
+      const visible = visibleAt(levelsForEra4(n));
+      if (visible.has('coilRing4')) expect(visible.has('coilRing3')).toBe(true);
+      if (visible.has('coilRing3')) expect(visible.has('coilRing2')).toBe(true);
+      if (visible.has('coilRing2')) expect(visible.has('coilRing1')).toBe(true);
+      if (visible.has('spireWave')) expect(visible.has('spireTower')).toBe(true);
+    }
+  });
+
+  it('servoArm implies servoBase', () => {
+    for (let n = 0; n <= STEPS; n++) {
+      const visible = visibleAt(levelsForEra4(n));
+      if (visible.has('servoArm')) expect(visible.has('servoBase')).toBe(true);
+    }
+  });
+});
