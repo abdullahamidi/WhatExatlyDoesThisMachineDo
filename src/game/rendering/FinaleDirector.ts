@@ -2,10 +2,10 @@ import type Phaser from 'phaser';
 import type { GameSession } from '../../simulation';
 import { motionPolicy } from '../../simulation/settings';
 import type { EndingPhase } from '../../data/types';
-import { FINALE_BOOST, FINALE_PLATE } from '../../data/finale';
+import { FINALE_BOOST, FINALE_CLOCK, FINALE_PLATE } from '../../data/finale';
 import type { FinaleBeat } from '../../data/finale';
 import { MACHINE_COMPONENTS } from '../../data/machineComponents';
-import { beatsBetween, choiceStartS, finaleEndS, finaleFrame } from '../math/finale';
+import { beatsBetween, finaleEndS, finaleFrame } from '../math/finale';
 import type { CameraPose, FinaleFrame, FinaleShot } from '../math/finale';
 import { buildFinaleOverlay } from '../../ui/finaleView';
 import type { FinaleOverlayHandle } from '../../ui/finale';
@@ -24,9 +24,6 @@ import type { MachineView } from '../entities/MachineView';
 // finale renderer, the camera override and the overlay. It owns no economy state: it reads the session and calls
 // only finishEndingSequence() (sequence -> choice). KEEP and new-cycle are wired in bootstrap.
 
-/** Frame clock cap: a hidden tab pauses the film instead of jumping it. */
-// TODO(WP13 data): move to src/data/finale.ts (FINALE_CLOCK.maxFrameMs) — owned by T2, not this file.
-const MAX_FRAME_MS = 250;
 /** Rolling window of update() costs for the perf probe (same window as MachineView). */
 const COST_SAMPLE_COUNT = 120;
 const PLATE_ID = MACHINE_COMPONENTS.namePlate.id;
@@ -94,7 +91,7 @@ export class FinaleDirector {
   update(deltaMs: number): void {
     if (this.destroyed) return;
     const started = performance.now();
-    const dtMs = Number.isFinite(deltaMs) ? Math.min(Math.max(deltaMs, 0), MAX_FRAME_MS) : 0;
+    const dtMs = Number.isFinite(deltaMs) ? Math.min(Math.max(deltaMs, 0), FINALE_CLOCK.maxFrameMs) : 0;
     if (this.phase() === 'sequence') this.moveTo(this.t + dtMs / 1000);
     this.present(dtMs);
     this.recordCost(performance.now() - started);
@@ -177,13 +174,13 @@ export class FinaleDirector {
     this.present(0);
   }
 
-  /** Moves the clock; during the sequence fires the crossed beats and finishes at choiceStartS. */
+  /** Moves the clock; during the sequence fires the crossed beats and finishes at finaleEndS. */
   private moveTo(next: number): void {
     const prev = this.t;
     this.t = next;
     if (this.phase() !== 'sequence') return;
     for (const beat of beatsBetween(prev, next)) this.fireBeat(beat);
-    if (next >= choiceStartS()) this.deps.session.finishEndingSequence();
+    if (next >= finaleEndS()) this.deps.session.finishEndingSequence(); // after the last line types and the buttons appear
   }
 
   private fireBeat(beat: FinaleBeat): void {

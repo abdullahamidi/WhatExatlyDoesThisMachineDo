@@ -17,6 +17,7 @@ export const FINALE_VIEWS = { full: { artX: 0, artY: -300, zoom: 0.5 }, crown: {
 export const FINALE_CAMERA = [{ atS: 0, durS: 2, to: 'full' }, { atS: 10, durS: 3, to: 'crown' }, { atS: 16, durS: 3, to: 'full' }] as const;
 export const FINALE_SHOTS = { s1: 2, s2: 10, s3: 19.3, s4: 49.3 } as const;   // S0 = 0; S5 = choiceStartS() (derived, ART_ERA5 §7)
 export const FINALE_HUD = { fadeMs: 1000 } as const;
+export const FINALE_CLOCK = { maxFrameMs: 250 } as const;   // finale clock step clamp (tab stalls do not skip beats)
 export const FINALE_BOOST = { startS: 2, rampS: 6, releaseS: 49.3, releaseRampS: 4,
   holdFrames: { anchorGlow1L: 2, anchorGlow1R: 2, anchorGlow2L: 2, anchorGlow2R: 2, anchorGlow3L: 2, anchorGlow3R: 2, lensLight: 3 } satisfies Partial<Record<MachineComponentId, number>>,
   calliope: { atS: 4, emitter: 'calliope', count: 6 } } as const;
