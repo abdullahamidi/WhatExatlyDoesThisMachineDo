@@ -41,6 +41,7 @@ describe('visibleMachineBounds', () => {
       ...MACHINE_COMPONENTS,
       supportFrame: { ...MACHINE_COMPONENTS.supportFrame, minLevel: 99 },
       bearingP: { ...MACHINE_COMPONENTS.bearingP, minLevel: 99 },
+      namePlate: { ...MACHINE_COMPONENTS.namePlate, minLevel: 99 },
     };
     expect(visibleMachineBounds(initial, only)).toEqual(componentBounds(MACHINE_COMPONENTS.handCrank));
     expect(visibleMachineBounds(initial, only)).toEqual({ left: -24, right: 24, top: -80, bottom: -32 });

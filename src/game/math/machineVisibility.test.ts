@@ -10,9 +10,9 @@ function levelsWith(overrides: Partial<Record<TechId, number>> = {}): Record<Tec
 }
 
 describe('visibleComponentIds', () => {
-  it('shows the frame, one bearing and the hand crank at the start', () => {
+  it('shows the frame, one bearing, the hand crank and the name plate at the start', () => {
     const levels = createInitialState(0).techLevels;
-    expect(visibleComponentIds(levels)).toEqual(new Set<MachineComponentId>(['supportFrame', 'bearingP', 'handCrank']));
+    expect(visibleComponentIds(levels)).toEqual(new Set<MachineComponentId>(['supportFrame', 'bearingP', 'handCrank', 'namePlate']));
   });
 
   it('adds the bearing, main shaft, large gear and small gear once gear ratio is installed', () => {
@@ -21,7 +21,7 @@ describe('visibleComponentIds', () => {
     for (const id of ['bearingM', 'mainShaft', 'gearLarge', 'gearSmall'] as const) {
       expect(visible.has(id)).toBe(true);
     }
-    expect(visible.size).toBe(7);
+    expect(visible.size).toBe(8);   // start set (4 incl. name plate) + bearingM, mainShaft, gearLarge, gearSmall
   });
 
   it('returns a fresh set each call', () => {
@@ -33,10 +33,10 @@ describe('visibleComponentIds', () => {
 });
 
 describe('visibility per stage', () => {
-  it('stage 0 shows exactly the frame, bearing P and hand crank', () => {
+  it('stage 0 shows exactly the frame, bearing P, hand crank and name plate', () => {
     const visible = visibleComponentIds(levelsWith());
-    expect(visible.size).toBe(3);
-    expect([...visible].sort()).toEqual(['bearingP', 'handCrank', 'supportFrame']);
+    expect(visible.size).toBe(4);
+    expect([...visible].sort()).toEqual(['bearingP', 'handCrank', 'namePlate', 'supportFrame']);
   });
 
   it('gear ratio adds the gear train and main shaft, but not the crank brace', () => {

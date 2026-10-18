@@ -1335,3 +1335,422 @@ describe('era IV prefixes', () => {
     }
   });
 });
+
+/** Ids of the era-V ring, siphon and glow parts, built from the digit and the side (contract C3 naming). */
+function ringId(part: 'Back' | 'Front' | 'Bead', k: number): MachineComponentId { return `ring${k}${part}` as MachineComponentId; }
+function siphonTubeId(k: number, side: 'L' | 'R'): MachineComponentId { return `siphonTube${k}${side}` as MachineComponentId; }
+function anchorGlowId(k: number, side: 'L' | 'R'): MachineComponentId { return `anchorGlow${k}${side}` as MachineComponentId; }
+
+/** Era-V unlock steps applied on top of the full era I-IV stage: every era-V gate tech and level (contract C1). */
+const ERA_FIVE_FULL: readonly (readonly [TechId, number])[] = [
+  ['nullChamber', 1], ['containmentRing', 25], ['resonantSiphon', 20], ['graviticAnchor', 10], ['inversionCrank', 1],
+  ['lensArray', 1], ['horizonField', 20], ['skyAperture', 1], ['finalAlignment', 1], ['primaryFunction', 1],
+];
+
+/** All era-I to era-IV techs at their full stage levels, then the given era-V (tech, level) overrides. */
+function levelsForEra5(steps: readonly (readonly [TechId, number])[]): Record<TechId, number> {
+  const levels = levelsForEra4(ERA_FOUR_STEPS.length);
+  for (const [id, level] of steps) levels[id] = level;
+  return levels;
+}
+
+/** One era-V row of the WP11 component table (contract C3). Optional fields undefined = omitted. */
+interface EraFiveRow {
+  id: MachineComponentId; techId: TechId; minLevel: number; assetId: AssetId; width: number; height: number;
+  origin: Vec2; socket: SocketId; layer: MachineLayer; depthBias?: number;
+  animation: ComponentAnimation; connections: ConnectionPoint[];
+}
+
+const SIPHON_ARC_SPEED = { base: 20, gain: 25, min: 20, max: 180 } as const;
+
+const ERA_FIVE_TABLE: readonly EraFiveRow[] = [
+  { id: 'nullGallery', techId: 'nullChamber', minLevel: 1, assetId: 'machine.nullGallery', width: 128, height: 30, origin: { x: 0.5, y: 1 }, socket: 'galleryBase', layer: 'mid', depthBias: 3, animation: { kind: 'none' }, connections: [] },
+  { id: 'nullChamber', techId: 'nullChamber', minLevel: 1, assetId: 'machine.nullChamber', width: 128, height: 116, origin: { x: 0.5, y: 1 }, socket: 'chamberBase', layer: 'mid', depthBias: 5, animation: { kind: 'none' },
+    connections: [{ id: 'eyeL', at: { x: -62.5, y: -109.5 }, kind: 'cable' }, { id: 'eyeR', at: { x: 62.5, y: -109.5 }, kind: 'cable' }] },
+  { id: 'nullCore', techId: 'nullChamber', minLevel: 1, assetId: 'machine.nullCore', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 7, animation: { kind: 'spin', driver: 'exotic', speed: { base: 6, gain: 30, min: 6, max: 240 } }, connections: [] },
+  { id: 'nullCoreGlint', techId: 'nullChamber', minLevel: 1, assetId: 'machine.nullCoreGlint', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 8, animation: { kind: 'none' }, connections: [] },
+  { id: 'ring1Back', techId: 'containmentRing', minLevel: 1, assetId: 'machine.ring1Back', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6, animation: { kind: 'none' }, connections: [] },
+  { id: 'ring2Back', techId: 'containmentRing', minLevel: 8, assetId: 'machine.ring2Back', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6, animation: { kind: 'none' }, connections: [] },
+  { id: 'ring3Back', techId: 'containmentRing', minLevel: 16, assetId: 'machine.ring3Back', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6, animation: { kind: 'none' }, connections: [] },
+  { id: 'ring4Back', techId: 'containmentRing', minLevel: 25, assetId: 'machine.ring4Back', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6, animation: { kind: 'none' }, connections: [] },
+  { id: 'ring1Front', techId: 'containmentRing', minLevel: 1, assetId: 'machine.ring1Front', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 9, animation: { kind: 'none' }, connections: [] },
+  { id: 'ring2Front', techId: 'containmentRing', minLevel: 8, assetId: 'machine.ring2Front', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 9, animation: { kind: 'none' }, connections: [] },
+  { id: 'ring3Front', techId: 'containmentRing', minLevel: 16, assetId: 'machine.ring3Front', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 9, animation: { kind: 'none' }, connections: [] },
+  { id: 'ring4Front', techId: 'containmentRing', minLevel: 25, assetId: 'machine.ring4Front', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 9, animation: { kind: 'none' }, connections: [] },
+  { id: 'ring1Bead', techId: 'containmentRing', minLevel: 1, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
+    animation: { kind: 'orbit', ring: 1, phi0Deg: 0, dir: 1, speed: SIPHON_ARC_SPEED, speedScale: 1, frontLayer: 'front', frontBias: 0 }, connections: [] },
+  { id: 'ring2Bead', techId: 'containmentRing', minLevel: 8, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
+    animation: { kind: 'orbit', ring: 2, phi0Deg: 97, dir: -1, speed: SIPHON_ARC_SPEED, speedScale: 1.25, frontLayer: 'front', frontBias: 0 }, connections: [] },
+  { id: 'ring3Bead', techId: 'containmentRing', minLevel: 16, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
+    animation: { kind: 'orbit', ring: 3, phi0Deg: 194, dir: 1, speed: SIPHON_ARC_SPEED, speedScale: 1.5, frontLayer: 'front', frontBias: 0 }, connections: [] },
+  { id: 'ring4Bead', techId: 'containmentRing', minLevel: 25, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
+    animation: { kind: 'orbit', ring: 4, phi0Deg: 291, dir: -1, speed: SIPHON_ARC_SPEED, speedScale: 1.75, frontLayer: 'front', frontBias: 0 }, connections: [] },
+  { id: 'siphonTube1L', techId: 'resonantSiphon', minLevel: 1, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon1L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
+  { id: 'siphonTube1R', techId: 'resonantSiphon', minLevel: 1, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon1R', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
+  { id: 'siphonTube2L', techId: 'resonantSiphon', minLevel: 10, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon2L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
+  { id: 'siphonTube2R', techId: 'resonantSiphon', minLevel: 10, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon2R', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
+  { id: 'siphonTube3L', techId: 'resonantSiphon', minLevel: 20, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon3L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
+  { id: 'siphonTube3R', techId: 'resonantSiphon', minLevel: 20, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon3R', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
+  { id: 'siphonArcs1', techId: 'resonantSiphon', minLevel: 1, assetId: 'machine.siphonArcs1', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
+    animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 0 }, connections: [] },
+  { id: 'siphonArcs2', techId: 'resonantSiphon', minLevel: 10, assetId: 'machine.siphonArcs2', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
+    animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 1 }, connections: [] },
+  { id: 'siphonArcs3', techId: 'resonantSiphon', minLevel: 20, assetId: 'machine.siphonArcs3', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
+    animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 2 }, connections: [] },
+  { id: 'graviticAnchorL', techId: 'graviticAnchor', minLevel: 1, assetId: 'machine.graviticAnchor', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorL', layer: 'mid', depthBias: 0,
+    animation: { kind: 'none' }, connections: [{ id: 'eye', at: { x: 0, y: -121 }, kind: 'cable' }] },
+  { id: 'graviticAnchorR', techId: 'graviticAnchor', minLevel: 1, assetId: 'machine.graviticAnchor', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorR', layer: 'mid', depthBias: 0,
+    animation: { kind: 'none' }, connections: [{ id: 'eye', at: { x: 0, y: -121 }, kind: 'cable' }] },
+  { id: 'anchorGlow1L', techId: 'graviticAnchor', minLevel: 1, assetId: 'machine.anchorGlow1', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorL', layer: 'mid', depthBias: 1,
+    animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
+  { id: 'anchorGlow1R', techId: 'graviticAnchor', minLevel: 1, assetId: 'machine.anchorGlow1', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorR', layer: 'mid', depthBias: 1,
+    animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
+  { id: 'anchorGlow2L', techId: 'graviticAnchor', minLevel: 5, assetId: 'machine.anchorGlow2', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorL', layer: 'mid', depthBias: 1,
+    animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
+  { id: 'anchorGlow2R', techId: 'graviticAnchor', minLevel: 5, assetId: 'machine.anchorGlow2', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorR', layer: 'mid', depthBias: 1,
+    animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
+  { id: 'anchorGlow3L', techId: 'graviticAnchor', minLevel: 10, assetId: 'machine.anchorGlow3', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorL', layer: 'mid', depthBias: 1,
+    animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
+  { id: 'anchorGlow3R', techId: 'graviticAnchor', minLevel: 10, assetId: 'machine.anchorGlow3', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorR', layer: 'mid', depthBias: 1,
+    animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
+  { id: 'inversionGhost', techId: 'inversionCrank', minLevel: 1, assetId: 'machine.inversionGhost', width: 48, height: 48, origin: { x: 0.5, y: 0.5 }, socket: 'crankHub', layer: 'mid', depthBias: 9,
+    animation: { kind: 'driven', ratio: 1.75, phaseDeg: 0 }, connections: [] },
+  { id: 'lensLight', techId: 'lensArray', minLevel: 1, assetId: 'machine.lensLight', width: 32, height: 48, origin: { x: 0.5, y: 1 }, socket: 'lensBase', layer: 'mid', depthBias: 1,
+    animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
+  { id: 'lensColumn', techId: 'lensArray', minLevel: 1, assetId: 'machine.lensColumn', width: 32, height: 48, origin: { x: 0.5, y: 1 }, socket: 'lensBase', layer: 'mid', depthBias: 3, animation: { kind: 'none' }, connections: [] },
+  { id: 'aperture', techId: 'lensArray', minLevel: 1, assetId: 'machine.aperture', width: 64, height: 28, origin: { x: 0.5, y: 1 }, socket: 'apertureBase', layer: 'mid', depthBias: 3,
+    animation: { kind: 'latch', techId: 'skyAperture', minLevel: 1, frames: 6, fps: 5 }, connections: [] },
+  { id: 'namePlate', techId: 'handCrank', minLevel: 1, assetId: 'machine.namePlate', width: 40, height: 11, origin: { x: 0.5, y: 1 }, socket: 'plateSeat', layer: 'frame', depthBias: 2,
+    animation: { kind: 'stage', frames: 6, gates: [['generator', 1], ['boiler', 1], ['resonatorSpire', 1], ['nullChamber', 1]], endingFrame: 5 }, connections: [] },
+];
+
+/** Era-V sockets (contract C3 coordinates). */
+const ERA_FIVE_SOCKETS: Readonly<Record<string, Vec2>> = {
+  galleryBase: { x: 64, y: -395 }, chamberBase: { x: 64, y: -418 }, coreHub: { x: 64, y: -490 }, lensBase: { x: 64, y: -534 },
+  apertureBase: { x: 64, y: -582 }, siphon1L: { x: 30, y: -418 }, siphon1R: { x: 98, y: -418 }, siphon2L: { x: 18, y: -418 },
+  siphon2R: { x: 110, y: -418 }, siphon3L: { x: 42, y: -418 }, siphon3R: { x: 86, y: -418 }, siphonArcs: { x: 64, y: -468 },
+  anchorL: { x: -520, y: 0 }, anchorR: { x: 520, y: 0 }, plateSeat: { x: 64, y: -96 },
+};
+
+describe('era V machine data (WP11)', () => {
+  it('the 38 era-V components follow the contract table (tech, level, asset, size, origin, socket, layer, bias, animation, connections)', () => {
+    expect(ERA_FIVE_TABLE.length).toBe(38);
+    expect(ERA_FIVE_COMPONENT_IDS).toEqual(ERA_FIVE_TABLE.map((r) => r.id));
+    expect(new Set(ERA_FIVE_COMPONENT_IDS).size).toBe(38);
+    for (const row of ERA_FIVE_TABLE) {
+      const def = MACHINE_COMPONENTS[row.id];
+      expect(def.techId, row.id).toBe(row.techId);
+      expect(def.minLevel, row.id).toBe(row.minLevel);
+      expect(def.assetId, row.id).toBe(row.assetId);
+      expect(def.size, row.id).toEqual({ width: row.width, height: row.height });
+      expect(def.origin, row.id).toEqual(row.origin);
+      expect(def.attach, row.id).toEqual({ socket: row.socket, offset: { x: 0, y: 0 } });
+      expect(def.layer, row.id).toBe(row.layer);
+      expect(def.depthBias, row.id).toBe(row.depthBias);
+      expect(def.animation, row.id).toEqual(row.animation);
+      expect(def.connections, row.id).toEqual(row.connections);
+      expect(def.effects, row.id).toEqual([]);
+      expect(def.alsoVisibleWith, row.id).toBeUndefined();
+      expect(def.flipX, row.id).toBeUndefined();
+    }
+  });
+
+  it('the era-V sockets sit at the contract coordinates (15 appended seats)', () => {
+    expect(SOCKET_IDS.slice(45)).toEqual(Object.keys(ERA_FIVE_SOCKETS));
+    for (const [id, at] of Object.entries(ERA_FIVE_SOCKETS)) {
+      expect(MACHINE_SOCKETS[id as SocketId], id).toEqual(at);
+    }
+  });
+
+  it('ring back and front halves share size, socket and gate; each bead has its ring gate and sits on the core hub', () => {
+    const gates = [1, 8, 16, 25];
+    [1, 2, 3, 4].forEach((k, i) => {
+      const back = MACHINE_COMPONENTS[ringId('Back', k)];
+      const front = MACHINE_COMPONENTS[ringId('Front', k)];
+      const bead = MACHINE_COMPONENTS[ringId('Bead', k)];
+      expect(back.minLevel, `ring${k}`).toBe(gates[i]);
+      expect(front.size).toEqual(back.size);
+      expect(front.attach).toEqual(back.attach);
+      expect(front.minLevel).toBe(back.minLevel);
+      expect(bead.minLevel).toBe(back.minLevel);
+      expect(bead.techId).toBe(back.techId);
+      expect(bead.attach.socket).toBe('coreHub');
+    });
+  });
+
+  it('bead orbit data: ring equals the id digit, phi0 / direction / speedScale per table, in front on the front layer', () => {
+    const beads = [[1, 0, 1, 1], [2, 97, -1, 1.25], [3, 194, 1, 1.5], [4, 291, -1, 1.75]] as const;
+    for (const [k, phi0, dir, scale] of beads) {
+      const anim = MACHINE_COMPONENTS[ringId('Bead', k)].animation;
+      expect(anim).toEqual({ kind: 'orbit', ring: k, phi0Deg: phi0, dir, speed: { base: 20, gain: 25, min: 20, max: 180 }, speedScale: scale, frontLayer: 'front', frontBias: 0 });
+      if (anim.kind !== 'orbit') continue;
+      expect(anim.ring).toBe(k);
+    }
+  });
+
+  it('RING_GEOMETRY ellipse extents match the bead tracks and fit inside the 112x72 ring sprite box', () => {
+    const expected: Record<1 | 2 | 3 | 4, readonly [number, number]> = { 1: [35.5, 9.3], 2: [40.6, 15], 3: [42.4, 22.1], 4: [44.2, 29.5] };
+    for (const k of [1, 2, 3, 4] as const) {
+      const g = RING_GEOMETRY[k];
+      const t = (g.tiltDeg * Math.PI) / 180;
+      const ext = {
+        x: Math.sqrt(g.a * g.a * Math.cos(t) ** 2 + g.b * g.b * Math.sin(t) ** 2),
+        y: Math.sqrt(g.a * g.a * Math.sin(t) ** 2 + g.b * g.b * Math.cos(t) ** 2),
+      };
+      expect(Math.abs(ext.x - expected[k][0]), `ring${k} x`).toBeLessThanOrEqual(0.5);
+      expect(Math.abs(ext.y - expected[k][1]), `ring${k} y`).toBeLessThanOrEqual(0.5);
+      expect(ext.x).toBeLessThanOrEqual(112 / 2);
+      expect(ext.y).toBeLessThanOrEqual(72 / 2);
+    }
+  });
+
+  it('anchor glows come in stages at graviticAnchor 1 / 5 / 10 on both sides, with 4 exotic frames at up to 3 Hz', () => {
+    const gates = [1, 5, 10];
+    [1, 2, 3].forEach((k, i) => {
+      for (const side of ['L', 'R'] as const) {
+        const def = MACHINE_COMPONENTS[anchorGlowId(k, side)];
+        expect(def.minLevel, def.id).toBe(gates[i]);
+        expect(def.techId, def.id).toBe('graviticAnchor');
+        expect(def.animation, def.id).toEqual({ kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' });
+      }
+    });
+  });
+
+  it('siphon pairs mirror about x 64 (L + R = 128), share tech and stage level, and the arcs take the stage frame offset', () => {
+    const pairs: readonly (readonly [SocketId, SocketId])[] = [['siphon1L', 'siphon1R'], ['siphon2L', 'siphon2R'], ['siphon3L', 'siphon3R']];
+    const levels = [1, 10, 20];
+    pairs.forEach(([l, r], i) => {
+      expect(MACHINE_SOCKETS[l].x + MACHINE_SOCKETS[r].x, `pair ${i + 1}`).toBe(128);
+      expect(MACHINE_SOCKETS[l].y).toBe(MACHINE_SOCKETS[r].y);
+      const k = i + 1;
+      const tubeL = MACHINE_COMPONENTS[siphonTubeId(k, 'L')];
+      const tubeR = MACHINE_COMPONENTS[siphonTubeId(k, 'R')];
+      expect(tubeL.attach.socket).toBe(l);
+      expect(tubeR.attach.socket).toBe(r);
+      expect(tubeL.minLevel).toBe(levels[i]);
+      expect(tubeR.minLevel).toBe(levels[i]);
+      const arcs = MACHINE_COMPONENTS[`siphonArcs${k}` as MachineComponentId];
+      expect(arcs.minLevel).toBe(levels[i]);
+      expect(arcs.animation).toEqual({ kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: i });
+    });
+  });
+
+  it('guy cables: each joins two cable points with cableStyle guy and sag 6, its endpoints are hidden until their own tech is owned', () => {
+    const guys = MACHINE_LINKS.filter((l) => l.cableStyle === 'guy');
+    expect(guys.length).toBe(2);
+    for (const link of guys) {
+      expect(link.kind).toBe('cable');
+      expect(link.sag).toBe(6);
+      expect(pointOf(link.from.component, link.from.point)?.kind).toBe('cable');
+      expect(pointOf(link.to.component, link.to.point)?.kind).toBe('cable');
+      for (const end of [link.from, link.to]) {
+        const def = MACHINE_COMPONENTS[end.component];
+        expect(visibleAt(levelsForEra5([])).has(end.component), end.component).toBe(false);
+        expect(visibleAt(levelsForEra5([[def.techId, def.minLevel]])).has(end.component), end.component).toBe(true);
+      }
+    }
+    const power = MACHINE_LINKS.filter((l) => l.kind === 'cable' && l.cableStyle === undefined);
+    expect(power.length).toBe(4);
+  });
+
+  it('MACHINE_LINK_STYLE.guy is the dark wire rope and sits below every chamber and anchor part (the sprites cover the cable ends)', () => {
+    expect(MACHINE_LINK_STYLE.guy).toEqual({ depth: MACHINE_LAYER_DEPTH.frame + 5, core: 0x3e4246, under: 0x1f2225 });
+    for (const def of COMPONENTS) {
+      if (def.techId !== 'nullChamber' && def.techId !== 'graviticAnchor') continue;
+      expect(MACHINE_LINK_STYLE.guy.depth, def.id).toBeLessThan(depthOf(def));
+    }
+  });
+
+  it('cable styles appear on cable links only', () => {
+    for (const link of MACHINE_LINKS) {
+      if (link.cableStyle !== undefined) expect(link.kind).toBe('cable');
+    }
+  });
+
+  it('era-V shadows are the two anchor footings, 32 px wide, on the ground line', () => {
+    expect(MACHINE_SHADOWS.slice(7)).toEqual([
+      { component: 'graviticAnchorL', x: -536, y: 0, width: 32, height: 2 },
+      { component: 'graviticAnchorR', x: 504, y: 0, width: 32, height: 2 },
+    ]);
+  });
+
+  it('the name plate sits inside the support frame box, so no era I-IV level set changes its visible bounds', () => {
+    const plate = boundsOf(MACHINE_COMPONENTS.namePlate);
+    const frame = boundsOf(MACHINE_COMPONENTS.supportFrame);
+    expect(plate.left).toBeGreaterThanOrEqual(frame.left);
+    expect(plate.right).toBeLessThanOrEqual(frame.right);
+    expect(plate.top).toBeGreaterThanOrEqual(frame.top);
+    expect(plate.bottom).toBeLessThanOrEqual(frame.bottom);
+    const withoutPlate = Object.fromEntries(Object.entries(MACHINE_COMPONENTS).filter(([id]) => id !== 'namePlate')) as Record<MachineComponentId, MachineComponentDefinition>;
+    const sets: Record<TechId, number>[] = [];
+    for (let n = 0; n <= UNLOCK_ORDER.length; n++) sets.push(levelsForPrefix(n));
+    for (let n = 0; n <= ERA_TWO_STEPS.length; n++) sets.push(levelsEraTwo(n));
+    for (let n = 0; n <= ERA_THREE_STEPS.length; n++) sets.push(levelsForEra3(n));
+    for (let n = 0; n <= ERA_FOUR_STEPS.length; n++) sets.push(levelsForEra4(n));
+    for (const levels of sets) {
+      expect(visibleMachineBounds(levels)).toEqual(visibleMachineBounds(levels, withoutPlate));
+    }
+  });
+
+  it('every frames, latch and stage part draws as many frames as its manifest entry, and the sheet width is frame width x count', () => {
+    for (const id of ERA_FIVE_COMPONENT_IDS) {
+      const def = MACHINE_COMPONENTS[id];
+      const anim = def.animation;
+      if (anim.kind !== 'frames' && anim.kind !== 'latch' && anim.kind !== 'stage') continue;
+      const entry = ASSET_MANIFEST[def.assetId];
+      expect(entry.frame?.count, id).toBe(anim.frames);
+      expect(entry.width, id).toBe((entry.frame?.width ?? NaN) * anim.frames);
+    }
+  });
+
+  it('every era-V part driven by the exotic driver is an era-V part (XF/s feeds only this wing)', () => {
+    for (const def of COMPONENTS) {
+      const anim = def.animation;
+      if ('driver' in anim && anim.driver === 'exotic') expect(ERA_FIVE_COMPONENT_IDS, def.id).toContain(def.id);
+    }
+  });
+
+  it('the null core spins on the exotic driver; the aperture latches on skyAperture; the name plate stage has 4 gates and an ending frame inside its sheet', () => {
+    expect(MACHINE_COMPONENTS.nullCore.animation).toEqual({ kind: 'spin', driver: 'exotic', speed: { base: 6, gain: 30, min: 6, max: 240 } });
+    expect(MACHINE_COMPONENTS.aperture.animation).toEqual({ kind: 'latch', techId: 'skyAperture', minLevel: 1, frames: 6, fps: 5 });
+    const plate = MACHINE_COMPONENTS.namePlate.animation;
+    expect(plate.kind).toBe('stage');
+    if (plate.kind !== 'stage') return;
+    expect(plate.gates.map(([t]) => t)).toEqual(['generator', 'boiler', 'resonatorSpire', 'nullChamber']);
+    expect(plate.endingFrame).toBeLessThan(plate.frames);
+    expect(plate.gates.length).toBeLessThan(plate.frames);
+  });
+
+  it('a lone era-V part sheet with no frame offset keeps frameOffset undefined (only the siphon arcs stagger)', () => {
+    for (const id of ERA_FIVE_COMPONENT_IDS) {
+      const anim = MACHINE_COMPONENTS[id].animation;
+      if (anim.kind !== 'frames') continue;
+      if (id.startsWith('siphonArcs')) expect(anim.frameOffset, id).toBeDefined();
+      else expect(anim.frameOffset, id).toBeUndefined();
+    }
+  });
+
+  it('INVERSION_GHOST_FX: the ghost is the mirror of the hand crank (ratio -(-1.75) = 1.75, phase 0), echo steps end at echoSeconds', () => {
+    expect(MACHINE_COMPONENT_IDS).toContain(INVERSION_GHOST_FX.component);
+    expect(MACHINE_COMPONENT_IDS).toContain(INVERSION_GHOST_FX.mirrorOf);
+    const mirror = drivenRatio(INVERSION_GHOST_FX.mirrorOf);
+    expect(mirror).toBe(-1.75);
+    expect(MACHINE_COMPONENTS[INVERSION_GHOST_FX.component].animation).toEqual({ kind: 'driven', ratio: -(mirror ?? NaN), phaseDeg: 0 });
+    const steps = INVERSION_GHOST_FX.alphaSteps;
+    expect(steps[steps.length - 1]?.untilS).toBe(INVERSION_GHOST_FX.echoSeconds);
+    expect(INVERSION_GHOST_FX.echoSeconds).toBe(3);
+  });
+
+  it('EXOTIC_MILESTONE_FX: finalAlignment is a milestone, the core is the null core, the six anchor glows are frames parts with glowFrame inside the sheet', () => {
+    expect(TECHNOLOGIES[EXOTIC_MILESTONE_FX.techId].kind).toBe('milestone');
+    expect(EXOTIC_MILESTONE_FX.core).toBe('nullCore');
+    expect(MACHINE_COMPONENTS[EXOTIC_MILESTONE_FX.core].animation.kind).toBe('spin');
+    expect(EXOTIC_MILESTONE_FX.anchorGlows.length).toBe(6);
+    for (const id of EXOTIC_MILESTONE_FX.anchorGlows) {
+      const anim = MACHINE_COMPONENTS[id].animation;
+      expect(anim.kind, id).toBe('frames');
+      if (anim.kind !== 'frames') continue;
+      expect(EXOTIC_MILESTONE_FX.glowFrame, id).toBeLessThan(anim.frames);
+    }
+  });
+
+  it('coverage: every unlock tech has a component (techId, alsoVisibleWith, latch or stage gate); the ending tech primaryFunction is the only exemption', () => {
+    const referenced = new Set<TechId>();
+    for (const def of COMPONENTS) {
+      for (const t of techsOf(def)) referenced.add(t);
+      if (def.animation.kind === 'latch') referenced.add(def.animation.techId);
+      if (def.animation.kind === 'stage') for (const [t] of def.animation.gates) referenced.add(t);
+    }
+    const exempt: TechId[] = [];
+    for (const id of TECH_IDS) {
+      const def = TECHNOLOGIES[id];
+      if (def.kind !== 'unlock') continue;
+      if (def.effects.some((e) => e.type === 'ending')) { exempt.push(id); continue; }
+      expect(referenced.has(id), id).toBe(true);
+    }
+    expect(exempt).toEqual(['primaryFunction']);
+  });
+
+  it('era-V visibility: nothing of era V is visible at the start except the name plate', () => {
+    const start = visibleAt(levelsForPrefix(1));
+    for (const id of ERA_FIVE_COMPONENT_IDS) expect(start.has(id), id).toBe(id === 'namePlate');
+  });
+
+  it('every era-V component is visible at the full stage', () => {
+    const visible = visibleAt(levelsForEra5(ERA_FIVE_FULL));
+    for (const id of MACHINE_COMPONENT_IDS) expect(visible.has(id), id).toBe(true);
+  });
+
+  it('ring back, front and bead parts come in at containmentRing 1 / 8 / 16 / 25, and ring N implies ring N-1', () => {
+    const gates = [1, 8, 16, 25];
+    for (let level = 0; level <= 25; level++) {
+      const visible = visibleAt(levelsForEra5([['containmentRing', level]]));
+      if (visible.has(ringId('Back', 4))) expect(visible.has(ringId('Back', 3))).toBe(true);
+      if (visible.has(ringId('Back', 3))) expect(visible.has(ringId('Back', 2))).toBe(true);
+      if (visible.has(ringId('Back', 2))) expect(visible.has(ringId('Back', 1))).toBe(true);
+      gates.forEach((gate, i) => {
+        const k = i + 1;
+        for (const part of ['Back', 'Front', 'Bead'] as const) {
+          expect(visible.has(ringId(part, k)), `${ringId(part, k)} at ${level}`).toBe(level >= gate);
+        }
+      });
+    }
+  });
+
+  it('siphon tubes and arcs come in at resonantSiphon 1 / 10 / 20, tube 3 implies tube 2 implies tube 1', () => {
+    const gates = [1, 10, 20];
+    for (let level = 0; level <= 20; level++) {
+      const visible = visibleAt(levelsForEra5([['resonantSiphon', level]]));
+      if (visible.has(siphonTubeId(3, 'L'))) expect(visible.has(siphonTubeId(2, 'L'))).toBe(true);
+      if (visible.has(siphonTubeId(2, 'L'))) expect(visible.has(siphonTubeId(1, 'L'))).toBe(true);
+      gates.forEach((gate, i) => {
+        const k = i + 1;
+        expect(visible.has(siphonTubeId(k, 'L')), `tube ${k}L at ${level}`).toBe(level >= gate);
+        expect(visible.has(siphonTubeId(k, 'R')), `tube ${k}R at ${level}`).toBe(level >= gate);
+        expect(visible.has(`siphonArcs${k}` as MachineComponentId), `arcs ${k} at ${level}`).toBe(level >= gate);
+      });
+    }
+  });
+
+  it('anchor glows come in at graviticAnchor 1 / 5 / 10, glow 3 implies glow 2 implies glow 1 on each side', () => {
+    const gates = [1, 5, 10];
+    for (let level = 0; level <= 10; level++) {
+      const visible = visibleAt(levelsForEra5([['graviticAnchor', level]]));
+      for (const side of ['L', 'R'] as const) {
+        if (visible.has(anchorGlowId(3, side))) expect(visible.has(anchorGlowId(2, side))).toBe(true);
+        if (visible.has(anchorGlowId(2, side))) expect(visible.has(anchorGlowId(1, side))).toBe(true);
+        gates.forEach((gate, i) => {
+          expect(visible.has(anchorGlowId(i + 1, side)), `glow ${i + 1}${side} at ${level}`).toBe(level >= gate);
+        });
+      }
+    }
+  });
+
+  it('the null gallery, chamber, core and core glint are visible exactly from nullChamber 1', () => {
+    const ids: MachineComponentId[] = ['nullGallery', 'nullChamber', 'nullCore', 'nullCoreGlint'];
+    expect(visibleAt(levelsForEra5([['nullChamber', 0]])).has('nullChamber')).toBe(false);
+    for (const id of ids) {
+      expect(visibleAt(levelsForEra5([])).has(id), id).toBe(false);
+      expect(visibleAt(levelsForEra5([['nullChamber', 1]])).has(id), id).toBe(true);
+    }
+  });
+
+  it('the inversion ghost is visible only with inversionCrank', () => {
+    const others = ERA_FIVE_FULL.filter(([id]) => id !== 'inversionCrank');
+    expect(visibleAt(levelsForEra5(others)).has('inversionGhost')).toBe(false);
+    expect(visibleAt(levelsForEra5([['inversionCrank', 1]])).has('inversionGhost')).toBe(true);
+  });
+
+  it('the lens light, lens column and aperture are visible exactly with lensArray', () => {
+    const others = ERA_FIVE_FULL.filter(([id]) => id !== 'lensArray');
+    const ids: MachineComponentId[] = ['lensLight', 'lensColumn', 'aperture'];
+    for (const id of ids) {
+      expect(visibleAt(levelsForEra5(others)).has(id), id).toBe(false);
+      expect(visibleAt(levelsForEra5([['lensArray', 1]])).has(id), id).toBe(true);
+    }
+  });
+
+  it('the name plate is visible with no techs besides the starting hand crank', () => {
+    expect(visibleAt(levelsForPrefix(1)).has('namePlate')).toBe(true);
+  });
+});
