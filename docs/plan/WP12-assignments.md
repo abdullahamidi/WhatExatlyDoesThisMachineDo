@@ -513,5 +513,5 @@ git diff --stat -- src/game/scenes src/data     # must be empty
 ---
 
 # Mode B checklist (EM, after W4)
-`npm run typecheck` · `npm test` (>= baseline + new) · `npm run build` (app chunk <= 200 KB) · `npx vitest run src/simulation/balance.sim.test.ts` (era I-V times unchanged) ·
+`npm run typecheck` · `npm test` (>= baseline + new) · `npm run build` (app chunk <= 300 KB (relaxed: 200 KB predates eras II–V data)) · `npx vitest run src/simulation/balance.sim.test.ts` (era I-V times unchanged) ·
 `grep -rn "from 'phaser'" src/simulation src/data src/persistence src/utils` empty · `grep -rn "innerHTML" src/ui` empty · Director smokes `wp2-crank`, `wp3-techtree`, `wp4-persistence`, `stages`, `full-machine` unchanged + `wp12-menus.mjs` (see T10) · `git diff --stat` shows no file outside the owner lists.

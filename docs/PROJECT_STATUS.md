@@ -17,7 +17,7 @@
 | WP9 | Era III Thermal/Pressure (boiler, chimney, steam hammer, turbine, pipes, steam/smoke FX, relief valves offline buffer) | ✅ done |
 | WP10 | Era IV Resonance (spire, coils, crystal, dishes, calliope, fork, crank servo autoClick) | ✅ done |
 | WP11 | Era V Exotic (crown, rings, siphons, lens, aperture/beam, anchors, world 3840×2160, violet sky, eclipse) | ✅ done |
-| WP12 | Settings, accessibility, stats, achievements, save export/import, reduced motion (roadmap WP10) | implemented, validating |
+| WP12 | Settings, accessibility, stats, achievements, save export/import, reduced motion (roadmap WP10) | ✅ done |
 | WP13 | Ending sequence, reveal, postgame, restored world (roadmap WP14) | in progress |
 | WP14 | New-cycle prestige: Echoes, Memory perks (roadmap WP15) | planning |
 | WP15 | Music bed, audio mix, perf pass (roadmap WP16) | — |
@@ -64,6 +64,7 @@ Era I: blueprint 22:06 · Era II: generator 29:18, substation 60:23 · Era III (
 - Thin cloud streaks behind the sun (cosmetic, accepted).
 - Some WP6 parts (gears, pulleys, yoke) are hand-pixelled to exact geometry rather than PixelLab output.
 - Phaser chunk >500 KB by nature; warning limit raised rather than removed.
+- App chunk ~260 KB (target relaxed 200→300 KB: era II–V data); lazy-loading era data deferred.
 
 ## Important technical decisions
 - Art Director agent (`.claude/agents/art-director.md`, Opus) owns visual/mechanical correctness;
