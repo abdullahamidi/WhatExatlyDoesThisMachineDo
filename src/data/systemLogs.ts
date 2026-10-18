@@ -30,6 +30,9 @@ export const SYSTEM_LOGS: readonly SystemLogEntry[] = [
   { id: 'copper-memory', text: 'Copper remembers a current older than the copper.', trigger: { kind: 'lifetime', res: 'ee', atLeast: 1000000 } },
   { id: 'pressure-rising', text: 'Pressure rising. Safe limit field left blank.', trigger: { kind: 'lifetime', res: 'pr', atLeast: 1000 } },
   { id: 'steam-rain', text: 'Steam tastes of rain. Logged as error.', trigger: { kind: 'lifetime', res: 'pr', atLeast: 1000000 } },
+  { id: 'sync-success', text: 'Synchronization successful.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 1000 } },
+  { id: 'signal-below', text: 'Frequency matches a signal from below the ground.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 1000000 } },
+  { id: 'observer-one', text: 'Observer count: 1.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 20000000 } },
 ];
 
 // Scheduler settings: minGapMs between two logs, poll interval, toast time on screen.

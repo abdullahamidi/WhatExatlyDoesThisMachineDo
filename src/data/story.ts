@@ -12,4 +12,5 @@ export const PLAQUE_LINES: readonly PlaqueLine[] = [
   { milestone: 'generatorBlueprint', text: 'PRIMARY FUNCTION: R?S????' },
   { milestone: 'substationBlueprint', text: 'PRIMARY FUNCTION: RES?OR?' },
   { milestone: 'pressureVesselBlueprint', text: 'PRIMARY FUNCTION: REST?RE' },
+  { milestone: 'harmonicConvergence', text: 'PRIMARY FUNCTION: RESTORE (TARGET: ?)' },
 ];

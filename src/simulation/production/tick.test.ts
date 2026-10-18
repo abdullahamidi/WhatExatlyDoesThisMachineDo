@@ -258,3 +258,48 @@ describe('applyOffline', () => {
     expect(state.lifetime).toEqual({ me: 100, ee: 7, pr: 0, rs: 0, xf: 0 });
   });
 });
+
+describe('autoClick (servo auto-cranks)', () => {
+  // Injected table: gearRatio grants 2 automatic cranks/s per level (era I otherwise).
+  const autoTechs = withEffects({ gearRatio: [{ type: 'autoClick', perSecond: 2 }] });
+  const autoState = (extra: Partial<GameState> = {}) => withLevels({ gearRatio: 3 }, extra);
+
+  // Injected table with an ee economy: wornMotor autoAdd 10 ee, echo 3 s of ee, convert 1 pr.
+  const eeAutoTechs = withEffects({
+    gearRatio: [{ type: 'autoClick', perSecond: 2 }],
+    wornMotor: [
+      { type: 'autoAdd', amount: 10, res: 'ee' },
+      { type: 'clickEcho', seconds: 3, res: 'ee' },
+      { type: 'convert', amount: 1, res: 'pr' },
+    ],
+  });
+  const eeAutoState = () => withLevels({ gearRatio: 3, wornMotor: 1 });
+
+  it('advance credits auto-cranks to me and lifetime.me without touching totalClicks', () => {
+    const s = autoState();
+    const next = advance(s, 10, autoTechs);
+    expect(next.res.me - s.res.me).toBeCloseTo(60, 9);
+    expect(next.lifetime.me - s.lifetime.me).toBeCloseTo(60, 9);
+    expect(next.totalClicks).toBe(s.totalClicks);
+  });
+
+  it('computeOffline credits auto-cranks at 6/s for the elapsed time', () => {
+    const s = autoState();
+    const r = computeOffline(s, s.lastSimTime + 100000, undefined, autoTechs);
+    expect(r.elapsedSeconds).toBe(100);
+    expect(r.gained.me).toBeCloseTo(600, 9);
+  });
+
+  it('applyClick is unchanged by auto-cranks: one manual click, no auto bonus', () => {
+    const s = autoState();
+    const { state, gained } = applyClick(s, autoTechs);
+    expect(gained).toBeCloseTo(1, 9);
+    expect(state.totalClicks).toBe(s.totalClicks + 1);
+  });
+
+  it('advance folds the ee echo of auto-cranks: ee gains 190/s', () => {
+    const s = eeAutoState();
+    const next = advance(s, 10, eeAutoTechs);
+    expect(next.res.ee - s.res.ee).toBeCloseTo(1900, 9);
+  });
+});

@@ -63,4 +63,13 @@ export const INSTALL_LINES: Record<TechId, string> = {
   turbine: 'Output sent back up the line. Line accepted.',
   reliefValves: 'Relief valves fitted. Relief not expected.',
   pressureVesselBlueprint: 'Containment rating exceeded by design.',
+  resonatorSpire: 'Tower raised. It was already humming.',
+  harmonicCoil: 'Coil wound. The tower rang a note lower.',
+  pressureResonator: 'Whistles fitted. Nobody pulled the cord.',
+  crankServo: 'Operator input automated. Operator retained.',
+  echoCrank: 'The fork answers every turn of the crank.',
+  phaseLock: 'Phase locked. To what, not specified.',
+  standingWave: 'The wave stopped moving. The tower did not.',
+  crystalLattice: 'Crystal seated. It was cut for this socket.',
+  harmonicConvergence: 'All frequencies agree. Agreement logged.',
 };

@@ -244,6 +244,12 @@ describe('describeEffect', () => {
     expect(describeEffect({ type: 'offlineHours', hours: 4 }, 3)).toBe('+12h offline buffer');
     expect(describeEffect({ type: 'offlineHours', hours: 0.5 }, 1)).toBe('+0.5h offline buffer');
   });
+
+  it('describes servo auto-cranks', () => {
+    expect(describeEffect({ type: 'autoClick', perSecond: 1 }, 1)).toBe('+1 auto-cranks/s');
+    expect(describeEffect({ type: 'autoClick', perSecond: 1 }, 3)).toBe('+3 auto-cranks/s');
+    expect(describeEffect({ type: 'autoClick', perSecond: 0.5 }, 1)).toBe('+0.5 auto-cranks/s');
+  });
 });
 
 describe('purchase failures', () => {

@@ -277,3 +277,60 @@ describe('computeRates', () => {
     expect(r.perSecond.ee).toBeCloseTo(2, 9);
   });
 });
+
+describe('autoClick fold', () => {
+  // Injected table: gearRatio grants 2 automatic cranks/s per level; the rest is era I.
+  const autoTechs = withEffects({ gearRatio: [{ type: 'autoClick', perSecond: 2 }] });
+
+  it('adds perSecond x level x perClick to me; perClick stays manual-only', () => {
+    const r = computeRates(withLevels({ gearRatio: 3 }), autoTechs);
+    expect(r.perClick.me).toBeCloseTo(1, 9);
+    expect(r.perSecond.me).toBeCloseTo(6, 9);
+  });
+
+  it('repeatable levels multiply the auto-cranks', () => {
+    expect(computeRates(withLevels({ gearRatio: 5 }), autoTechs).perSecond.me).toBeCloseTo(10, 9);
+  });
+
+  it('level 0 is ignored', () => {
+    expect(computeRates(withLevels({ gearRatio: 0 }), autoTechs).perSecond.me).toBe(0);
+  });
+
+  // Injected table with an ee economy: wornMotor autoAdd 10 ee, echo 3 s of ee, convert 1 pr.
+  const eeAutoTechs = withEffects({
+    gearRatio: [{ type: 'autoClick', perSecond: 2 }],
+    wornMotor: [
+      { type: 'autoAdd', amount: 10, res: 'ee' },
+      { type: 'clickEcho', seconds: 3, res: 'ee' },
+      { type: 'convert', amount: 1, res: 'pr' },
+    ],
+  });
+  const eeAutoLevels = withLevels({ gearRatio: 3, wornMotor: 1 });
+
+  it('folds auto-cranks after perClick: ee gains 6 x perClick.ee', () => {
+    const r = computeRates(eeAutoLevels, eeAutoTechs);
+    expect(r.perClick.ee).toBeCloseTo(30, 9);
+    expect(r.perSecond.ee).toBeCloseTo(10 + 6 * 30, 9);
+    expect(r.perSecond.me).toBeCloseTo(6, 9);
+  });
+
+  it('conversion uses the pre-fold ee rate (sqrt(10), not sqrt(190))', () => {
+    const r = computeRates(eeAutoLevels, eeAutoTechs);
+    expect(r.perSecond.pr).toBeCloseTo(Math.sqrt(10), 9);
+    expect(r.perClick.pr).toBe(0);
+  });
+
+  it('perClick equals the table without the autoClick effect', () => {
+    const noAuto = withEffects({
+      gearRatio: [],
+      wornMotor: [
+        { type: 'autoAdd', amount: 10, res: 'ee' },
+        { type: 'clickEcho', seconds: 3, res: 'ee' },
+        { type: 'convert', amount: 1, res: 'pr' },
+      ],
+    });
+    expect(computeRates(eeAutoLevels, eeAutoTechs).perClick).toEqual(
+      computeRates(eeAutoLevels, noAuto).perClick,
+    );
+  });
+});
