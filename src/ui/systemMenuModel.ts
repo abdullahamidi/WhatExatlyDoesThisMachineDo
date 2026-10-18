@@ -1,5 +1,7 @@
-// Pure model for the SYSTEM menu: two-step reset reducer and button labels (WP4).
+// Pure model for the SYSTEM menu: two-step reset reducer and button labels (WP4), NEW CYCLE row (WP13).
 import { MUTE_LABELS, RESET_LABELS, SAVE_LABELS, SYSTEM_MENU_CONFIG } from '../data/systemMenu';
+import { FINALE_CHOICE } from '../data/finale';
+import type { EndingPhase } from '../data/types';
 
 export type ResetState = { stage: 'idle' } | { stage: 'armed'; armedAt: number };
 
@@ -45,6 +47,23 @@ export function resetLabel(s: ResetState): string {
 
 export function saveFeedbackLabel(ok: boolean): string {
   return ok ? SAVE_LABELS.ok : SAVE_LABELS.failed;
+}
+
+export interface NewCycleRow {
+  visible: boolean;
+  enabled: boolean;
+  label: string;
+  reason: string;
+}
+
+/** BEGIN A NEW CYCLE row in the SYSTEM tab: visible only in postgame; enabled when the hook has no reason. */
+export function newCycleRow(phase: EndingPhase, reason: string | null): NewCycleRow {
+  return {
+    visible: phase === 'postgame',
+    enabled: reason === null,
+    label: FINALE_CHOICE.cycle.label,
+    reason: reason ?? '',
+  };
 }
 
 export type TabNavKey = 'ArrowRight' | 'ArrowLeft' | 'Home' | 'End';

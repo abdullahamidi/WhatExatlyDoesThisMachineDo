@@ -142,6 +142,7 @@ export function bootstrap(): Phaser.Game {
     resetProgress: () => saveController.resetProgress(),
     modals,
     panels,
+    ending: { phase: () => session.state.ending.phase, newCycle: ctx.newCycle },
   });
   // The two dialogs are mutually exclusive: opening one closes the other.
   ctx.commands.openSystemMenu.on(() => {

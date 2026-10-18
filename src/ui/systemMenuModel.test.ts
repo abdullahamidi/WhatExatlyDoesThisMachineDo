@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel, nextTab, clampTab, leavingTab } from './systemMenuModel';
+import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel, nextTab, clampTab, leavingTab, newCycleRow } from './systemMenuModel';
 import type { ResetState } from './systemMenuModel';
 import { SYSTEM_MENU_CONFIG } from '../data/systemMenu';
+import { FINALE_CHOICE } from '../data/finale';
 
 const IDLE: ResetState = { stage: 'idle' };
 const ARM = SYSTEM_MENU_CONFIG.resetArmMs;
@@ -161,5 +162,33 @@ describe('leavingTab', () => {
   it('returns null when the selection stays on the same tab', () => {
     expect(leavingTab(2, 2)).toBeNull();
     expect(leavingTab(0, 0)).toBeNull();
+  });
+});
+
+describe('newCycleRow', () => {
+  it('is invisible in none, sequence and choice', () => {
+    for (const phase of ['none', 'sequence', 'choice'] as const) {
+      expect(newCycleRow(phase, 'blocked').visible).toBe(false);
+      expect(newCycleRow(phase, null).visible).toBe(false);
+    }
+  });
+
+  it('postgame with a reason is visible, disabled, and carries the reason', () => {
+    const row = newCycleRow('postgame', FINALE_CHOICE.cycleStubReason);
+    expect(row).toEqual({
+      visible: true,
+      enabled: false,
+      label: 'BEGIN A NEW CYCLE',
+      reason: 'Cycle 0043 is still calibrating.',
+    });
+  });
+
+  it('postgame without a reason is visible and enabled with an empty reason', () => {
+    expect(newCycleRow('postgame', null)).toEqual({
+      visible: true,
+      enabled: true,
+      label: FINALE_CHOICE.cycle.label,
+      reason: '',
+    });
   });
 });

@@ -146,6 +146,20 @@
   animation: sys-reset-pulse 1.2s ease-in-out infinite;
 }
 
+/* WP13 NEW CYCLE row: blocked state keeps the button focusable (aria-disabled) but looks inert. */
+#sys-new-cycle.is-disabled,
+#sys-new-cycle.is-disabled:hover {
+  color: var(--amber-dim);
+  background: var(--iron-2);
+  border-color: var(--rust-dark);
+  cursor: not-allowed;
+}
+
+#sys-new-cycle-reason {
+  font-size: max(12px, 1em);
+  color: var(--amber-dim);
+}
+
 #sys-feedback {
   min-height: 1.4em;
   color: var(--amber-dim);

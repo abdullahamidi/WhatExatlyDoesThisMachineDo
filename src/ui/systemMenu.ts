@@ -3,8 +3,10 @@ import { MENU_TABS, MENU_TEXT, SYSTEM_MENU_CONFIG } from '../data/systemMenu';
 import { UI_ART } from '../data/achievements';
 import { trapFocus } from './hotkeys';
 import type { ModalStack } from './modalStack';
-import { clampTab, leavingTab, muteLabel, nextTab, reduceReset, resetLabel, saveFeedbackLabel } from './systemMenuModel';
-import type { ResetState, TabNavKey } from './systemMenuModel';
+import { clampTab, leavingTab, muteLabel, newCycleRow, nextTab, reduceReset, resetLabel, saveFeedbackLabel } from './systemMenuModel';
+import type { NewCycleRow, ResetState, TabNavKey } from './systemMenuModel';
+import type { EndingPhase } from '../data/types';
+import type { NewCycleHook } from '../game/newCycle';
 
 // SYSTEM menu overlay (DOM). Built once; open/close toggle the is-open class. No Phaser.
 // Esc is handled by the shared modal stack (bindEscapeToStack); this file registers no key listener.
@@ -32,6 +34,8 @@ export interface SystemMenuDeps {
   resetProgress(): void;
   modals: ModalStack;
   panels?: readonly SystemMenuPanel[];
+  /** WP13: NEW CYCLE row (SYSTEM tab, postgame only). Omitted = row never shows. */
+  ending?: { phase(): EndingPhase; newCycle: NewCycleHook };
 }
 
 export interface SystemMenu { open(): void; close(): void; toggle(): void; isOpen(): boolean; destroy(): void }
@@ -123,12 +127,18 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
   const cancelButton = createElement('button', { id: 'sys-reset-cancel', className: 'sys-btn', text: MENU_TEXT.cancel });
   cancelButton.type = 'button';
   cancelButton.hidden = true;
+  // WP13 NEW CYCLE row: hidden by default, shown in open() only when deps.ending says postgame.
+  const newCycleButton = createElement('button', { id: 'sys-new-cycle', className: 'sys-btn' });
+  newCycleButton.type = 'button';
+  newCycleButton.hidden = true;
+  const newCycleReason = createElement('div', { id: 'sys-new-cycle-reason' });
+  newCycleReason.hidden = true;
   const feedbackEl = createElement('div', { id: 'sys-feedback' });
   feedbackEl.setAttribute('aria-live', 'polite');
   const closeButton = createElement('button', { id: 'sys-close', className: 'sys-btn', text: MENU_TEXT.close });
   closeButton.type = 'button';
 
-  systemPane.append(muteButton, saveButton, resetButton, cancelButton, feedbackEl);
+  systemPane.append(muteButton, saveButton, resetButton, cancelButton, newCycleButton, newCycleReason, feedbackEl);
 
   // Extra panels: mounted once, each into its own tabpanel.
   for (const p of deps.panels ?? []) {
@@ -153,6 +163,20 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
 
   const refreshMute = (): void => {
     muteButton.textContent = muteLabel(deps.isMuted());
+  };
+
+  // NEW CYCLE row state; the last computed row also guards the click (disabled rows do nothing).
+  let cycleRow: NewCycleRow = newCycleRow('none', null);
+  const refreshNewCycle = (): void => {
+    cycleRow = newCycleRow(deps.ending?.phase() ?? 'none', deps.ending?.newCycle.blockedReason() ?? null);
+    newCycleButton.hidden = !cycleRow.visible;
+    newCycleButton.textContent = cycleRow.label;
+    newCycleButton.classList.toggle('is-disabled', !cycleRow.enabled);
+    newCycleButton.setAttribute('aria-disabled', cycleRow.enabled ? 'false' : 'true');
+    if (cycleRow.enabled) newCycleButton.removeAttribute('aria-description');
+    else newCycleButton.setAttribute('aria-description', cycleRow.reason);
+    newCycleReason.hidden = !cycleRow.visible || cycleRow.reason === '';
+    newCycleReason.textContent = cycleRow.reason;
   };
 
   const clearFeedback = (): void => {
@@ -255,6 +279,7 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     overlay.classList.add('is-open');
     activateTab(0, false);
     refreshMute();
+    refreshNewCycle();
     disposeFocusTrap = trapFocus(overlay);
     modals.push(MENU_STACK_ID, close);
     closeButton.focus();
@@ -296,6 +321,13 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     resetButton.focus();
   };
 
+  const onNewCycle = (): void => {
+    const ending = deps.ending;
+    if (ending === undefined || !cycleRow.visible || !cycleRow.enabled) return;
+    ending.newCycle.begin();
+    close();
+  };
+
   const onClose = (): void => {
     close();
   };
@@ -330,6 +362,7 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
   saveButton.addEventListener('click', onSave);
   resetButton.addEventListener('click', onReset);
   cancelButton.addEventListener('click', onCancel);
+  newCycleButton.addEventListener('click', onNewCycle);
   closeButton.addEventListener('click', onClose);
   overlay.addEventListener('click', onBackdropClick);
   selectTab(0);
@@ -356,6 +389,7 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     saveButton.removeEventListener('click', onSave);
     resetButton.removeEventListener('click', onReset);
     cancelButton.removeEventListener('click', onCancel);
+    newCycleButton.removeEventListener('click', onNewCycle);
     closeButton.removeEventListener('click', onClose);
     overlay.removeEventListener('click', onBackdropClick);
     if (feedbackTimer !== null) {
