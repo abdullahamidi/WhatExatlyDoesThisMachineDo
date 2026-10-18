@@ -55,3 +55,9 @@ All agent reports and Director updates to the user: caveman style — minimal wo
 ## Art Director
 `art-director` (Opus, `.claude/agents/art-director.md`): screenshot audits, web reference research,
 mechanical/visual correctness, PixelLab asset production. Code fixes it specifies go through EM → workers.
+
+## Operating mode (user directive)
+Work non-stop until the FULL game (docs/plan/ROADMAP_FULL.md) is finished. Never pause for approval,
+never end a turn with nothing in flight: after each work package, immediately start the next
+(planner → EM → workers → reviewer/Art Director → validate → commit/push → next). Only stop for a
+genuine blocker that needs the user.
