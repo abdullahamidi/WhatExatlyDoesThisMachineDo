@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { TECH_IDS } from '../data/types';
 import type { GameState, TechId } from '../data/types';
 import { OFFLINE_REPORT_THRESHOLD_SECONDS } from '../data/balance';
 import { TECHNOLOGIES } from '../data/technologies';
@@ -473,9 +474,9 @@ describe('GameSession', () => {
   });
 
   describe('views', () => {
-    it('returns nine tech views and gearRatio is available initially', () => {
+    it('returns one tech view per TECH_IDS entry and gearRatio is available initially', () => {
       const session = new GameSession({ state: createInitialState(0), now: () => 0 });
-      expect(session.getAllTechViews()).toHaveLength(9);
+      expect(session.getAllTechViews()).toHaveLength(TECH_IDS.length);
       expect(session.getTechView('gearRatio').status).toBe('available');
     });
   });

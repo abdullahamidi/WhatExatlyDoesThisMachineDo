@@ -1,5 +1,6 @@
-import { TECH_LIST } from '../../data/technologies';
-import type { GameState, TechId } from '../../data/types';
+import { TECHNOLOGIES } from '../../data/technologies';
+import { TECH_IDS } from '../../data/types';
+import type { GameState, TechDefinition, TechId } from '../../data/types';
 import { requirementsMet } from './requirements';
 
 /**
@@ -7,15 +8,19 @@ import { requirementsMet } from './requirements';
  * idempotent: an owned milestone is skipped, and when nothing unlocks the input
  * state is returned by reference.
  */
-export function evaluateMilestones(state: GameState): { state: GameState; unlocked: TechId[] } {
+export function evaluateMilestones(
+  state: GameState,
+  techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
+): { state: GameState; unlocked: TechId[] } {
   let current = state;
   const unlocked: TechId[] = [];
-  for (const def of TECH_LIST) {
+  for (const id of TECH_IDS) {
+    const def = techs[id];
     if (def.kind !== 'milestone') continue;
-    if (current.techLevels[def.id] !== 0) continue;
+    if (current.techLevels[id] !== 0) continue;
     if (!requirementsMet(current, def)) continue;
-    current = { ...current, techLevels: { ...current.techLevels, [def.id]: 1 } };
-    unlocked.push(def.id);
+    current = { ...current, techLevels: { ...current.techLevels, [id]: 1 } };
+    unlocked.push(id);
   }
   return unlocked.length === 0 ? { state, unlocked } : { state: current, unlocked };
 }

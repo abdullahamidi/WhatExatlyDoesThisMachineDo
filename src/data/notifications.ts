@@ -45,4 +45,13 @@ export const INSTALL_LINES: Record<TechId, string> = {
   pistonArray: 'Reciprocating assembly online. Observers: none.',
   improvedPistons: 'Stroke length exceeds specification.',
   generatorBlueprint: 'Primary function: UNKNOWN.',
+  generator: 'Current detected. Destination: unlisted.',
+  copperWinding: 'Winding count exceeds the drawing.',
+  motorRetrofit: 'Motor accepted the retrofit. Motor did not ask.',
+  dynamoCrank: 'Crank now yields something besides effort.',
+  capacitorBank: 'Charge stored. Reason for storage: pending.',
+  sparkGap: 'Discharge observed. Observers: none.',
+  transformer: 'Voltage changed. Ratio chosen by something.',
+  powerLines: 'Conductors raised toward a grid. Grid: not found.',
+  substationBlueprint: 'Grid handshake... no response from grid.',
 };

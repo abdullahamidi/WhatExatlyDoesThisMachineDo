@@ -25,6 +25,9 @@ export const SYSTEM_LOGS: readonly SystemLogEntry[] = [
   { id: 'power-draw', text: 'Power draw matches a load that is not present.', trigger: { kind: 'playSeconds', atLeast: 1200 } },
   { id: 'chamber-seal', text: 'Chamber seal inspected. Inspector not logged.', trigger: { kind: 'lifetime', res: 'me', atLeast: 100000 } },
   { id: 'idle-cycle', text: 'Idle cycle logged. Cycle has no beginning.', trigger: { kind: 'playSeconds', atLeast: 2400 } },
+  { id: 'grid-handshake', text: 'Grid handshake sent. No grid answered.', trigger: { kind: 'lifetime', res: 'ee', atLeast: 1000 } },
+  { id: 'load-beneath', text: 'Load detected 4 km beneath the surface.', trigger: { kind: 'lifetime', res: 'ee', atLeast: 100000 } },
+  { id: 'copper-memory', text: 'Copper remembers a current older than the copper.', trigger: { kind: 'lifetime', res: 'ee', atLeast: 1000000 } },
 ];
 
 // Scheduler settings: minGapMs between two logs, poll interval, toast time on screen.

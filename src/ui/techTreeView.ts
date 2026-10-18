@@ -1,5 +1,6 @@
 import { formatCost, formatNumber } from '../utils/format';
 import { RESOURCES } from '../data/resources';
+import { RESOURCE_IDS } from '../data/types';
 import type { PurchaseFailure, ResourceId, ResourceMap, TechId, TechStatus, TechView } from '../data/types';
 
 // Pure view model for the TECH INDEX overlay. No DOM, no Phaser.
@@ -21,7 +22,15 @@ export interface TechDetailView {
   currentEffect: string; nextEffect: string | null; costText: string | null;
   buyState: BuyState; buyLabel: string; buyEnabled: boolean; shortfallText: string | null;
 }
-export interface TechTreeView { width: number; height: number; meText: string; nodes: TechNodeView[]; edges: TechEdgeView[]; detail: TechDetailView | null }
+export interface TechTreeView { width: number; height: number; headerText: string; nodes: TechNodeView[]; edges: TechEdgeView[]; detail: TechDetailView | null }
+export interface EraTabView { era: number; label: string; reached: boolean; selected: boolean; resourceText: string }
+
+const ROMAN_ERAS = ['I', 'II', 'III', 'IV', 'V'] as const;
+
+/** Resource that marks an era: the one whose era matches, else ME. */
+function eraResourceOf(era: number): ResourceId {
+  return RESOURCE_IDS.find((id) => RESOURCES[id].era === era) ?? 'me';
+}
 
 /** Top-left corner of a node: padding + index * (node size + gap). */
 export function techNodePosition(
@@ -44,13 +53,49 @@ export function edgePath(from: TechNodeView, to: TechNodeView): string {
   return `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
 }
 
-/** Affordable node first; else first available non-starting node; else the crank. */
+/** Affordable node first; else first available non-starting node; else the crank (or the first view). */
 export function defaultSelection(views: readonly TechView[]): TechId {
   const affordable = views.find((view) => view.affordable);
   if (affordable) return affordable.id;
   const available = views.find((view) => view.status === 'available' && view.def.kind !== 'starting');
   if (available) return available.id;
-  return 'handCrank';
+  if (views.some((view) => view.id === 'handCrank')) return 'handCrank';
+  return views[0]?.id ?? 'handCrank';
+}
+
+/** Eras whose tab is open: era 1 always; era n > 1 once any of its techs is not locked. Ascending. */
+export function reachedEras(views: readonly TechView[]): number[] {
+  const eras = new Set<number>([1]);
+  for (const view of views) {
+    if (view.status !== 'locked') eras.add(view.def.era);
+  }
+  return [...eras].sort((a, b) => a - b);
+}
+
+/** One tab per era present in `views` (ascending). Unreached eras show a placeholder. */
+export function buildEraTabs(
+  views: readonly TechView[],
+  res: Readonly<ResourceMap>,
+  selectedEra: number,
+): EraTabView[] {
+  const reached = new Set(reachedEras(views));
+  const eras = [...new Set(views.map((view) => view.def.era))].sort((a, b) => a - b);
+  return eras.map((era): EraTabView => {
+    const isReached = reached.has(era);
+    if (!isReached) {
+      return { era, label: 'SIGNAL ?', reached: false, selected: era === selectedEra, resourceText: '' };
+    }
+    const eraRes = eraResourceOf(era);
+    const short = RESOURCES[eraRes].short;
+    const roman = ROMAN_ERAS[era - 1] ?? String(era);
+    return {
+      era,
+      label: `ERA ${roman} · ${short}`,
+      reached: true,
+      selected: era === selectedEra,
+      resourceText: `${formatNumber(res[eraRes])} ${short}`,
+    };
+  });
 }
 
 /** Missing amount as whole units, rounded up: ceil(max(0, x) - eps). */
@@ -161,25 +206,38 @@ function detailOf(view: TechView, res: Readonly<ResourceMap>): TechDetailView {
   };
 }
 
-/** Full overlay view: nodes, tech-requirement edges and the detail of the selection. */
+/** Full overlay view for one era: nodes, tech-requirement edges and the detail of the selection. */
 export function buildTechTreeView(
   views: readonly TechView[],
   res: Readonly<ResourceMap>,
   selected: TechId | null,
+  era: number,
   layout: typeof TECH_TREE_LAYOUT = TECH_TREE_LAYOUT,
 ): TechTreeView {
-  // maxCol/maxRow over the tree hints; width = 2*pad + (maxCol+1)*w + maxCol*gap (same for rows)
+  // min/max col and row over the tree hints; nodes are shifted so the era's first column/row sits at 0.
+  // width = 2*pad + (span+1)*w + span*gap, span = maxCol - minCol (same for rows)
+  let minCol = Infinity;
+  let minRow = Infinity;
   let maxCol = 0;
   let maxRow = 0;
   for (const view of views) {
+    minCol = Math.min(minCol, view.def.tree.col);
+    minRow = Math.min(minRow, view.def.tree.row);
     maxCol = Math.max(maxCol, view.def.tree.col);
     maxRow = Math.max(maxRow, view.def.tree.row);
   }
-  const width = layout.padding * 2 + (maxCol + 1) * layout.nodeWidth + maxCol * layout.colGap;
-  const height = layout.padding * 2 + (maxRow + 1) * layout.nodeHeight + maxRow * layout.rowGap;
+  if (!Number.isFinite(minCol)) minCol = 0;
+  if (!Number.isFinite(minRow)) minRow = 0;
+  const spanCol = maxCol - minCol;
+  const spanRow = maxRow - minRow;
+  const width = layout.padding * 2 + (spanCol + 1) * layout.nodeWidth + spanCol * layout.colGap;
+  const height = layout.padding * 2 + (spanRow + 1) * layout.nodeHeight + spanRow * layout.rowGap;
 
   const nodes: TechNodeView[] = views.map((view) => {
-    const pos = techNodePosition(view.def.tree, layout);
+    const pos = techNodePosition(
+      { col: view.def.tree.col - minCol, row: view.def.tree.row - minRow },
+      layout,
+    );
     return {
       id: view.id,
       name: view.def.name,
@@ -218,10 +276,11 @@ export function buildTechTreeView(
   }
 
   const selectedView = selected === null ? undefined : views.find((view) => view.id === selected);
+  const eraRes = eraResourceOf(era);
   return {
     width,
     height,
-    meText: formatNumber(res.me),
+    headerText: `${formatNumber(res[eraRes])} ${RESOURCES[eraRes].short}`,
     nodes,
     edges,
     detail: selectedView ? detailOf(selectedView, res) : null,

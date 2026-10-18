@@ -1,6 +1,6 @@
 import { RESOURCES } from '../../data/resources';
 import { TECHNOLOGIES } from '../../data/technologies';
-import type { GameState, Requirement, TechDefinition } from '../../data/types';
+import type { GameState, Requirement, TechDefinition, TechId } from '../../data/types';
 import { formatNumber } from '../../utils/format';
 
 /** True when a single requirement is satisfied by the current state. */
@@ -21,11 +21,14 @@ export function requirementsMet(
 }
 
 /** Player-facing text for a requirement, e.g. "Gear Ratio Lv 3" or "200K lifetime ME". */
-export function requirementLabel(req: Requirement): string {
+export function requirementLabel(
+  req: Requirement,
+  techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
+): string {
   if (req.type === 'lifetime') {
     return `${formatNumber(req.amount)} lifetime ${RESOURCES[req.res].short}`;
   }
-  const target = TECHNOLOGIES[req.id];
+  const target = techs[req.id];
   if (req.minLevel > 1 || target.kind === 'repeatable') {
     return `${target.name} Lv ${req.minLevel}`;
   }

@@ -1,5 +1,6 @@
+import { TECHNOLOGIES } from '../../data/technologies';
 import { RESOURCE_IDS, TECH_IDS } from '../../data/types';
-import type { GameState, ResourceId, TechId, TechView } from '../../data/types';
+import type { GameState, ResourceId, TechDefinition, TechId, TechView } from '../../data/types';
 import { applyClick, advance } from '../production/tick';
 import { computeRates } from '../production/rates';
 import { getAllTechViews } from '../progression/status';
@@ -17,12 +18,14 @@ export interface GreedyOptions {
   stepSeconds: number;
   buyIntervalSeconds: number;
   initial?: GameState;
+  techs?: Record<TechId, TechDefinition>;
 }
 
 export interface GreedyResult {
   firstAt: Record<TechId, number>;
   maxValue: number;
   final: GameState;
+  purchases: Array<{ t: number; id: TechId }>;
 }
 
 /** Cheapest available, purchasable-next, non-milestone view paying in `res`; null when none. */
@@ -37,9 +40,11 @@ function pickCheapest(views: readonly TechView[], res: ResourceId): TechView | n
 }
 
 export function runGreedy(o: GreedyOptions): GreedyResult {
+  const techs = o.techs ?? TECHNOLOGIES;
   let state: GameState = o.initial ?? createInitialState(0);
   const firstAt = {} as Record<TechId, number>;
   for (const id of TECH_IDS) firstAt[id] = Infinity;
+  const purchases: Array<{ t: number; id: TechId }> = [];
 
   const record = (t: number): void => {
     for (const id of TECH_IDS) {
@@ -62,24 +67,27 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
     clickDebt += o.clicksPerSecond * o.stepSeconds;
     const clicks = Math.floor(clickDebt + 1e-9);
     clickDebt -= clicks;
-    for (let i = 0; i < clicks; i++) state = applyClick(state).state;
+    for (let i = 0; i < clicks; i++) state = applyClick(state, techs).state;
 
-    state = advance(state, o.stepSeconds);
-    state = evaluateMilestones(state).state;
+    state = advance(state, o.stepSeconds, techs);
+    state = evaluateMilestones(state, techs).state;
 
     const ratio = t / o.buyIntervalSeconds;
     if (Math.abs(ratio - Math.round(ratio)) < 1e-9) {
       for (const res of RESOURCE_IDS) {
-        const pick = pickCheapest(getAllTechViews(state), res);
+        const pick = pickCheapest(getAllTechViews(state, techs), res);
         if (pick !== null && pick.affordable) {
-          const result = purchase(state, pick.id);
-          if (result.ok) state = result.state;
+          const result = purchase(state, pick.id, techs);
+          if (result.ok) {
+            state = result.state;
+            purchases.push({ t, id: pick.id });
+          }
         }
       }
     }
     record(t);
 
-    const rates = computeRates(state);
+    const rates = computeRates(state, techs);
     for (const r of RESOURCE_IDS) {
       track(state.res[r]);
       track(state.lifetime[r]);
@@ -88,5 +96,30 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
     }
   }
 
-  return { firstAt, maxValue, final: state };
+  return { firstAt, maxValue, final: state, purchases };
+}
+
+/**
+ * Longest interval inside [fromT, toT] with no purchase. Buys outside the range are ignored,
+ * buys exactly on the ends split nothing. fromT > toT -> 0; non-finite bounds -> Infinity.
+ */
+export function maxPurchaseGap(
+  purchases: GreedyResult['purchases'],
+  fromT: number,
+  toT: number,
+): number {
+  if (!Number.isFinite(fromT) || !Number.isFinite(toT)) return Infinity;
+  if (fromT > toT) return 0;
+  const times = purchases
+    .map((p) => p.t)
+    .filter((t) => t >= fromT && t <= toT)
+    .sort((a, b) => a - b);
+  const points = [fromT, ...times, toT];
+  let gap = 0;
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1] ?? fromT;
+    const next = points[i] ?? toT;
+    gap = Math.max(gap, next - prev);
+  }
+  return gap;
 }

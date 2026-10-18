@@ -15,7 +15,7 @@ describe('createInitialState', () => {
     for (const id of TECH_IDS) {
       if (id !== 'handCrank') expect(s.techLevels[id]).toBe(0);
     }
-    expect(Object.keys(s.techLevels)).toHaveLength(9);
+    expect(Object.keys(s.techLevels)).toHaveLength(TECH_IDS.length);
     expect(s.lastSimTime).toBe(5);
     expect(s.createdAt).toBe(5);
   });

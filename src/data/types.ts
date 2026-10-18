@@ -1,5 +1,6 @@
 export const TECH_IDS = ['handCrank','gearRatio','reinforcedCrank','flywheel','wornMotor',
-  'motorTuning','pistonArray','improvedPistons','generatorBlueprint'] as const;
+  'motorTuning','pistonArray','improvedPistons','generatorBlueprint',
+  'generator','copperWinding','motorRetrofit','dynamoCrank','capacitorBank','sparkGap','transformer','powerLines','substationBlueprint'] as const;
 export type TechId = typeof TECH_IDS[number];
 export const RESOURCE_IDS = ['me', 'ee', 'pr', 'rs', 'xf'] as const;
 export type ResourceId = typeof RESOURCE_IDS[number];

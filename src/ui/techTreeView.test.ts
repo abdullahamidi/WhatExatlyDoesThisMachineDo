@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   TECH_TREE_LAYOUT,
+  buildEraTabs,
   buildTechTreeView,
   defaultSelection,
   edgePath,
   purchaseFailureText,
+  reachedEras,
   techNodePosition,
 } from './techTreeView';
 import { getAllTechViews, getTechView, createInitialState, emptyResourceMap } from '../simulation';
@@ -24,10 +26,31 @@ function viewsOf(state: GameState): TechView[] {
   return getAllTechViews(state);
 }
 
+/** Era-I views only (real data; era II content may or may not be present). */
+function eraOneViewsOf(state: GameState): TechView[] {
+  return viewsOf(state).filter((v) => v.def.era === 1);
+}
+
+// Injected era-II content: wornMotor and motorTuning moved to era 2 (EE-priced, own tree columns).
+const ERA_TWO_AVAILABLE: Record<TechId, TechDefinition> = {
+  ...TECHNOLOGIES,
+  wornMotor: { ...TECHNOLOGIES.wornMotor, era: 2, costRes: 'ee', tree: { col: 3, row: 0 } },
+  motorTuning: { ...TECHNOLOGIES.motorTuning, era: 2, tree: { col: 4, row: 0 } },
+};
+
+// Same as above, but wornMotor is gated behind a lifetime EE requirement nobody reaches.
+const ERA_TWO_LOCKED: Record<TechId, TechDefinition> = {
+  ...ERA_TWO_AVAILABLE,
+  wornMotor: {
+    ...ERA_TWO_AVAILABLE.wornMotor,
+    requires: [{ type: 'lifetime', res: 'ee', amount: 1e12 }],
+  },
+};
+
 describe('techTreeView', () => {
   describe('initial state', () => {
-    const views = viewsOf(createInitialState(0));
-    const view = buildTechTreeView(views, emptyResourceMap(), null);
+    const views = eraOneViewsOf(createInitialState(0));
+    const view = buildTechTreeView(views, emptyResourceMap(), null, 1);
 
     it('builds one node per tech at its tree position', () => {
       expect(view.nodes).toHaveLength(9);
@@ -74,8 +97,8 @@ describe('techTreeView', () => {
       expect(node?.levelText).toBe('LV 0/15');
     });
 
-    it('shows the ME balance as meText', () => {
-      expect(view.meText).toBe('0');
+    it('shows the era header as headerText', () => {
+      expect(view.headerText).toBe('0 ME');
     });
 
     it('defaults the selection to gearRatio', () => {
@@ -85,8 +108,8 @@ describe('techTreeView', () => {
 
   describe('gearRatio purchase states', () => {
     it('is insufficient at ME 0 with a shortfall of 15', () => {
-      const views = viewsOf(stateWith({ res: resWithMe(0) }));
-      const view = buildTechTreeView(views, resWithMe(0), 'gearRatio');
+      const views = eraOneViewsOf(stateWith({ res: resWithMe(0) }));
+      const view = buildTechTreeView(views, resWithMe(0), 'gearRatio', 1);
       expect(view.detail?.buyState).toBe('insufficient');
       expect(view.detail?.buyLabel).toBe('INSUFFICIENT ME');
       expect(view.detail?.shortfallText).toBe('NEED 15 MORE ME');
@@ -94,8 +117,8 @@ describe('techTreeView', () => {
     });
 
     it('is buyable at ME 15 with the cost in the label', () => {
-      const views = viewsOf(stateWith({ res: resWithMe(15) }));
-      const view = buildTechTreeView(views, resWithMe(15), 'gearRatio');
+      const views = eraOneViewsOf(stateWith({ res: resWithMe(15) }));
+      const view = buildTechTreeView(views, resWithMe(15), 'gearRatio', 1);
       expect(view.detail?.buyState).toBe('buy');
       expect(view.detail?.buyLabel).toContain('15 ME');
       expect(view.detail?.buyEnabled).toBe(true);
@@ -103,11 +126,11 @@ describe('techTreeView', () => {
     });
 
     it('keeps gearRatio as default selection at ME 15', () => {
-      expect(defaultSelection(viewsOf(stateWith({ res: resWithMe(15) })))).toBe('gearRatio');
+      expect(defaultSelection(eraOneViewsOf(stateWith({ res: resWithMe(15) })))).toBe('gearRatio');
     });
 
     it('shows the cost text with the ME unit', () => {
-      const view = buildTechTreeView(viewsOf(createInitialState(0)), emptyResourceMap(), 'gearRatio');
+      const view = buildTechTreeView(eraOneViewsOf(createInitialState(0)), emptyResourceMap(), 'gearRatio', 1);
       expect(view.detail?.costText).toBe('15 ME');
       expect(view.nodes.find((n) => n.id === 'gearRatio')?.costText).toBe('15 ME');
     });
@@ -116,7 +139,7 @@ describe('techTreeView', () => {
       const state = stateWith({
         techLevels: { ...createInitialState(0).techLevels, gearRatio: 15 },
       });
-      const view = buildTechTreeView(viewsOf(state), emptyResourceMap(), 'gearRatio');
+      const view = buildTechTreeView(eraOneViewsOf(state), emptyResourceMap(), 'gearRatio', 1);
       const node = view.nodes.find((n) => n.id === 'gearRatio');
       expect(node?.levelText).toBe('LV 15/15');
       expect(view.detail?.statusLabel).toBe('MAXED');
@@ -132,19 +155,17 @@ describe('techTreeView', () => {
       wornMotor: { ...TECHNOLOGIES.wornMotor, costRes: 'ee' },
     };
     const viewsFor = (state: GameState): TechView[] =>
-      getAllTechViews(state).map((v): TechView =>
-        v.id === 'wornMotor' ? getTechView(state, 'wornMotor', techs) : v,
-      );
+      getAllTechViews(state, techs).filter((v) => v.def.era === 1);
     const rich = stateWith({ res: { ...emptyResourceMap(), me: 1e9, ee: 0 } });
 
     it('takes the cost text unit from costRes', () => {
-      const view = buildTechTreeView(viewsFor(rich), rich.res, 'wornMotor');
+      const view = buildTechTreeView(viewsFor(rich), rich.res, 'wornMotor', 1);
       expect(view.detail?.costText).toBe('40 EE');
       expect(view.nodes.find((n) => n.id === 'wornMotor')?.costText).toBe('40 EE');
     });
 
     it('is insufficient on EE even when ME is huge, with shortfall from res.ee', () => {
-      const view = buildTechTreeView(viewsFor(rich), rich.res, 'wornMotor');
+      const view = buildTechTreeView(viewsFor(rich), rich.res, 'wornMotor', 1);
       expect(view.detail?.buyState).toBe('insufficient');
       expect(view.detail?.buyLabel).toBe('INSUFFICIENT EE');
       expect(view.detail?.shortfallText).toBe('NEED 40 MORE EE');
@@ -152,33 +173,33 @@ describe('techTreeView', () => {
 
     it('computes the shortfall from the costRes balance', () => {
       const partial = stateWith({ res: { ...emptyResourceMap(), me: 1e9, ee: 5 } });
-      const view = buildTechTreeView(viewsFor(partial), partial.res, 'wornMotor');
+      const view = buildTechTreeView(viewsFor(partial), partial.res, 'wornMotor', 1);
       expect(view.detail?.shortfallText).toBe('NEED 35 MORE EE');
     });
 
     it('is buyable when res.ee covers the cost, whatever ME is', () => {
       const funded = stateWith({ res: { ...emptyResourceMap(), me: 0, ee: 40 } });
-      const view = buildTechTreeView(viewsFor(funded), funded.res, 'wornMotor');
+      const view = buildTechTreeView(viewsFor(funded), funded.res, 'wornMotor', 1);
       expect(view.detail?.buyState).toBe('buy');
       expect(view.detail?.buyLabel).toBe('PURCHASE — 40 EE');
     });
 
-    it('shows the ME balance as meText regardless of costRes', () => {
-      const view = buildTechTreeView(viewsFor(rich), rich.res, 'wornMotor');
-      expect(view.meText).toBe('1B');
+    it('shows the era-I ME balance as headerText regardless of costRes', () => {
+      const view = buildTechTreeView(viewsFor(rich), rich.res, 'wornMotor', 1);
+      expect(view.headerText).toBe('1B ME');
     });
   });
 
   describe('locked and special techs', () => {
     it('marks reinforcedCrank locked with the unmet Gear Ratio requirement', () => {
-      const view = buildTechTreeView(viewsOf(createInitialState(0)), emptyResourceMap(), 'reinforcedCrank');
+      const view = buildTechTreeView(eraOneViewsOf(createInitialState(0)), emptyResourceMap(), 'reinforcedCrank', 1);
       expect(view.detail?.buyState).toBe('locked');
       expect(view.detail?.statusLabel).toBe('LOCKED');
       expect(view.detail?.requirements).toContainEqual({ label: 'Gear Ratio Lv 3', met: false });
     });
 
     it('shows generatorBlueprint as automatic milestone', () => {
-      const view = buildTechTreeView(viewsOf(createInitialState(0)), emptyResourceMap(), 'generatorBlueprint');
+      const view = buildTechTreeView(eraOneViewsOf(createInitialState(0)), emptyResourceMap(), 'generatorBlueprint', 1);
       expect(view.detail?.buyState).toBe('automatic');
       expect(view.detail?.buyLabel).toBe('MILESTONE — AUTOMATIC');
       const node = view.nodes.find((n) => n.id === 'generatorBlueprint');
@@ -188,7 +209,7 @@ describe('techTreeView', () => {
     });
 
     it('shows handCrank as owned', () => {
-      const view = buildTechTreeView(viewsOf(createInitialState(0)), emptyResourceMap(), 'handCrank');
+      const view = buildTechTreeView(eraOneViewsOf(createInitialState(0)), emptyResourceMap(), 'handCrank', 1);
       expect(view.detail?.buyState).toBe('owned');
       expect(view.detail?.buyEnabled).toBe(false);
     });
@@ -197,7 +218,7 @@ describe('techTreeView', () => {
       const state = stateWith({
         techLevels: { ...createInitialState(0).techLevels, generatorBlueprint: 1 },
       });
-      const view = buildTechTreeView(viewsOf(state), emptyResourceMap(), 'generatorBlueprint');
+      const view = buildTechTreeView(eraOneViewsOf(state), emptyResourceMap(), 'generatorBlueprint', 1);
       expect(view.detail?.buyState).toBe('owned');
       expect(view.detail?.buyLabel).toBe('ACHIEVED');
       expect(view.detail?.statusLabel).toBe('ACHIEVED');
@@ -206,11 +227,11 @@ describe('techTreeView', () => {
 
   describe('selection and helpers', () => {
     it('returns null detail for an unselected tree', () => {
-      expect(buildTechTreeView(viewsOf(createInitialState(0)), emptyResourceMap(), null).detail).toBeNull();
+      expect(buildTechTreeView(eraOneViewsOf(createInitialState(0)), emptyResourceMap(), null, 1).detail).toBeNull();
     });
 
     it('marks the selected node', () => {
-      const view = buildTechTreeView(viewsOf(createInitialState(0)), emptyResourceMap(), 'gearRatio');
+      const view = buildTechTreeView(eraOneViewsOf(createInitialState(0)), emptyResourceMap(), 'gearRatio', 1);
       const selected = view.nodes.filter((n) => n.selected).map((n) => n.id);
       expect(selected).toEqual(['gearRatio']);
     });
@@ -226,7 +247,7 @@ describe('techTreeView', () => {
     });
 
     it('falls back to handCrank when nothing is available', () => {
-      const views = viewsOf(createInitialState(0)).map((v): TechView => ({
+      const views = eraOneViewsOf(createInitialState(0)).map((v): TechView => ({
         ...v,
         status: 'purchased',
         affordable: false,
@@ -235,8 +256,100 @@ describe('techTreeView', () => {
     });
 
     it('edge keys are from->to', () => {
-      const view = buildTechTreeView(viewsOf(createInitialState(0)), emptyResourceMap(), null);
+      const view = buildTechTreeView(eraOneViewsOf(createInitialState(0)), emptyResourceMap(), null, 1);
       expect(view.edges.every((e) => e.key === `${e.from}->${e.to}`)).toBe(true);
+    });
+  });
+
+  describe('era tabs', () => {
+    it('reachedEras: fresh state is [1]', () => {
+      expect(reachedEras(viewsOf(createInitialState(0)))).toEqual([1]);
+    });
+
+    it('reachedEras: an available era-II tech opens era 2', () => {
+      const views = getAllTechViews(createInitialState(0), ERA_TWO_AVAILABLE);
+      expect(reachedEras(views)).toEqual([1, 2]);
+    });
+
+    it('reachedEras: a locked era-II tech keeps era 2 closed', () => {
+      const views = getAllTechViews(createInitialState(0), ERA_TWO_LOCKED);
+      expect(reachedEras(views)).toEqual([1]);
+    });
+
+    it('buildEraTabs: fresh state gives one reached, selected ERA I · ME tab', () => {
+      const tabs = buildEraTabs(eraOneViewsOf(createInitialState(0)), emptyResourceMap(), 1);
+      expect(tabs).toEqual([
+        { era: 1, label: 'ERA I · ME', reached: true, selected: true, resourceText: '0 ME' },
+      ]);
+    });
+
+    it('buildEraTabs: locked era II shows the SIGNAL ? placeholder', () => {
+      const views = getAllTechViews(createInitialState(0), ERA_TWO_LOCKED);
+      const tabs = buildEraTabs(views, emptyResourceMap(), 1);
+      expect(tabs).toHaveLength(2);
+      expect(tabs[1]).toEqual({ era: 2, label: 'SIGNAL ?', reached: false, selected: false, resourceText: '' });
+    });
+
+    it('buildEraTabs: reached era II shows ERA II · EE with the EE balance', () => {
+      const res: ResourceMap = { ...emptyResourceMap(), ee: 1200 };
+      const views = getAllTechViews(stateWith({ res }), ERA_TWO_AVAILABLE);
+      const tabs = buildEraTabs(views, res, 2);
+      expect(tabs[1]).toEqual({ era: 2, label: 'ERA II · EE', reached: true, selected: true, resourceText: '1.2K EE' });
+    });
+
+    it('buildEraTabs: selected follows the argument', () => {
+      const views = getAllTechViews(createInitialState(0), ERA_TWO_AVAILABLE);
+      const tabs = buildEraTabs(views, emptyResourceMap(), 2);
+      expect(tabs.map((t) => t.selected)).toEqual([false, true]);
+    });
+
+    it('buildEraTabs: one tab per era present in the views, ascending', () => {
+      const views = getAllTechViews(createInitialState(0), ERA_TWO_AVAILABLE);
+      expect(buildEraTabs(views, emptyResourceMap(), 1).map((t) => t.era)).toEqual([1, 2]);
+      const eraTwoOnly = views.filter((v) => v.def.era === 2);
+      expect(buildEraTabs(eraTwoOnly, emptyResourceMap(), 2).map((t) => t.era)).toEqual([2]);
+    });
+  });
+
+  describe('era-II tree (injected)', () => {
+    const state = createInitialState(0);
+    const eraTwoViews = [
+      getTechView(state, 'wornMotor', ERA_TWO_AVAILABLE),
+      getTechView(state, 'motorTuning', ERA_TWO_AVAILABLE),
+    ];
+
+    it('starts the layout at column 0 and row 0', () => {
+      const view = buildTechTreeView(eraTwoViews, emptyResourceMap(), null, 2);
+      const worn = view.nodes.find((n) => n.id === 'wornMotor');
+      const tuning = view.nodes.find((n) => n.id === 'motorTuning');
+      expect(worn?.x).toBe(TECH_TREE_LAYOUT.padding);
+      expect(worn?.y).toBe(TECH_TREE_LAYOUT.padding);
+      expect(tuning?.x).toBe(TECH_TREE_LAYOUT.padding + TECH_TREE_LAYOUT.nodeWidth + TECH_TREE_LAYOUT.colGap);
+    });
+
+    it('sizes the canvas from the era span only', () => {
+      const view = buildTechTreeView(eraTwoViews, emptyResourceMap(), null, 2);
+      expect(view.width).toBe(TECH_TREE_LAYOUT.padding * 2 + 2 * TECH_TREE_LAYOUT.nodeWidth + TECH_TREE_LAYOUT.colGap);
+      expect(view.height).toBe(TECH_TREE_LAYOUT.padding * 2 + TECH_TREE_LAYOUT.nodeHeight);
+    });
+
+    it('drops edges from techs outside the era but keeps the requirement in the detail', () => {
+      const view = buildTechTreeView(eraTwoViews, emptyResourceMap(), 'wornMotor', 2);
+      expect(view.edges.map((e) => e.key)).toEqual(['wornMotor->motorTuning']);
+      expect(view.detail?.requirements.some((r) => r.label.includes('Hand Crank'))).toBe(true);
+    });
+
+    it('headerText uses the EE balance', () => {
+      const res: ResourceMap = { ...emptyResourceMap(), ee: 1200 };
+      const view = buildTechTreeView(eraTwoViews, res, null, 2);
+      expect(view.headerText).toBe('1.2K EE');
+    });
+  });
+
+  describe('defaultSelection fallbacks', () => {
+    it('returns the first view when there is no handCrank and nothing is available', () => {
+      const views = getAllTechViews(createInitialState(0), ERA_TWO_LOCKED).filter((v) => v.def.era === 2);
+      expect(defaultSelection(views)).toBe('wornMotor');
     });
   });
 });

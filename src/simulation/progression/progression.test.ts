@@ -56,6 +56,13 @@ describe('requirements', () => {
     expect(requirementLabel({ type: 'lifetime', res: 'ee', amount: 100 })).toBe('100 lifetime EE');
     expect(requirementLabel({ type: 'lifetime', res: 'xf', amount: 5 })).toBe('5 lifetime ???');
   });
+
+  it('labels tech requirements from an injected table', () => {
+    const techs = { ...TECHNOLOGIES, gearRatio: { ...TECHNOLOGIES.gearRatio, name: 'Gear Train' } };
+    expect(requirementLabel({ type: 'tech', id: 'gearRatio', minLevel: 3 }, techs)).toBe('Gear Train Lv 3');
+    expect(requirementLabel({ type: 'tech', id: 'gearRatio', minLevel: 1 }, techs)).toBe('Gear Train Lv 1');
+    expect(requirementLabel({ type: 'tech', id: 'gearRatio', minLevel: 3 })).toBe('Gear Ratio Lv 3');
+  });
 });
 
 describe('getTechStatus', () => {
@@ -177,10 +184,31 @@ describe('getTechView', () => {
     expect(v.requirements.every((r) => r.met === false)).toBe(true);
   });
 
-  it('getAllTechViews returns all nine in TECH_IDS order', () => {
+  it('getAllTechViews returns one view per tech in TECH_IDS order', () => {
     const views = getAllTechViews(createInitialState(0));
-    expect(views.length).toBe(9);
+    expect(views.length).toBe(TECH_IDS.length);
     expect(views.map((v) => v.id)).toEqual([...TECH_IDS]);
+  });
+
+  it('getAllTechViews reflects an injected tech table', () => {
+    const techs = {
+      ...TECHNOLOGIES,
+      generatorBlueprint: {
+        ...TECHNOLOGIES.generatorBlueprint,
+        requires: [{ type: 'lifetime' as const, res: 'me' as const, amount: 100 }],
+      },
+    };
+    const views = getAllTechViews(withMe(createInitialState(0), 0, 100), techs);
+    const blueprint = views.find((v) => v.id === 'generatorBlueprint');
+    expect(blueprint?.def.requires).toEqual([{ type: 'lifetime', res: 'me', amount: 100 }]);
+    expect(blueprint?.requirements.map((r) => r.met)).toEqual([true]);
+    expect(views.map((v) => v.id)).toEqual([...TECH_IDS]);
+  });
+
+  it('getTechView passes the injected table to requirement labels', () => {
+    const techs = { ...TECHNOLOGIES, gearRatio: { ...TECHNOLOGIES.gearRatio, name: 'Gear Train' } };
+    const v = getTechView(withLevels({ gearRatio: 3, reinforcedCrank: 1 }), 'reinforcedCrank', techs);
+    expect(v.requirements.map((r) => r.label)).toEqual(['Gear Train Lv 3']);
   });
 
   it('affordability follows the tech costRes (injected table: wornMotor costs EE)', () => {
@@ -358,6 +386,21 @@ describe('evaluateMilestones', () => {
   it('needs pistonArray', () => {
     const s = withMe(withLevels({ flywheel: 1 }), 0, 200000);
     expect(evaluateMilestones(s).unlocked).toEqual([]);
+  });
+
+  it('uses an injected tech table: generatorBlueprint unlocks at lifetime.me 100', () => {
+    const techs = {
+      ...TECHNOLOGIES,
+      generatorBlueprint: {
+        ...TECHNOLOGIES.generatorBlueprint,
+        requires: [{ type: 'lifetime' as const, res: 'me' as const, amount: 100 }],
+      },
+    };
+    const s = withMe(withLevels({}), 0, 100);
+    expect(evaluateMilestones(s).unlocked).toEqual([]);
+    const result = evaluateMilestones(s, techs);
+    expect(result.unlocked).toEqual(['generatorBlueprint']);
+    expect(result.state.techLevels.generatorBlueprint).toBe(1);
   });
 });
 

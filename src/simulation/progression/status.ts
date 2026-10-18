@@ -1,5 +1,6 @@
 import { RESOURCES } from '../../data/resources';
-import { TECH_LIST, TECHNOLOGIES } from '../../data/technologies';
+import { TECHNOLOGIES } from '../../data/technologies';
+import { TECH_IDS } from '../../data/types';
 import type {
   Effect,
   GameState,
@@ -98,7 +99,7 @@ export function getTechView(
   const requirements: RequirementView[] = def.requires.map((req) => ({
     req,
     met: isRequirementMet(state, req),
-    label: requirementLabel(req),
+    label: requirementLabel(req, techs),
   }));
   const nextCost = nextCostFor(state, id, techs);
   const affordable =
@@ -124,7 +125,10 @@ export function getTechView(
   };
 }
 
-/** Views for every technology, in TECH_LIST (= TECH_IDS) order. */
-export function getAllTechViews(state: GameState): TechView[] {
-  return TECH_LIST.map((tech) => getTechView(state, tech.id));
+/** Views for every technology, in TECH_IDS order. */
+export function getAllTechViews(
+  state: GameState,
+  techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
+): TechView[] {
+  return TECH_IDS.map((id) => getTechView(state, id, techs));
 }
