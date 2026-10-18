@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { TECH_IDS } from '../../data/types';
-import type { GameState, TechId } from '../../data/types';
+import type { GameState, TechDefinition, TechId } from '../../data/types';
 import { TECHNOLOGIES } from '../../data/technologies';
 import { createInitialState } from '../state';
+import { emptyResourceMap } from '../resources';
 import { isRequirementMet, requirementsMet, requirementLabel } from './requirements';
-import { getTechStatus, getTechView, getAllTechViews } from './status';
+import { describeEffect, getTechStatus, getTechView, getAllTechViews } from './status';
 import { purchase } from './purchase';
 import { evaluateMilestones } from './milestones';
 
@@ -13,13 +14,33 @@ const withLevels = (levels: Partial<Record<TechId, number>>, extra: Partial<Game
   return { ...s, ...extra, techLevels: { ...s.techLevels, ...levels } };
 };
 
+// Sets both the spendable `me` and the lifetime `me` (lifetime defaults to the same amount).
+const withMe = (state: GameState, me: number, lifetimeMe: number = me): GameState => ({
+  ...state,
+  res: { ...state.res, me },
+  lifetime: { ...state.lifetime, me: lifetimeMe },
+});
+
+// Era-I table, except wornMotor is paid in Electrical Energy.
+const eeWornMotor: Record<TechId, TechDefinition> = {
+  ...TECHNOLOGIES,
+  wornMotor: { ...TECHNOLOGIES.wornMotor, costRes: 'ee' },
+};
+
 describe('requirements', () => {
-  it('checks tech and lifetimeMe requirements', () => {
-    const s = withLevels({ gearRatio: 2 }, { lifetimeMe: 999 });
+  it('checks tech and lifetime requirements', () => {
+    const s = withMe(withLevels({ gearRatio: 2 }), 0, 999);
     expect(isRequirementMet(s, { type: 'tech', id: 'gearRatio', minLevel: 2 })).toBe(true);
     expect(isRequirementMet(s, { type: 'tech', id: 'gearRatio', minLevel: 3 })).toBe(false);
-    expect(isRequirementMet(s, { type: 'lifetimeMe', amount: 1000 })).toBe(false);
-    expect(isRequirementMet(s, { type: 'lifetimeMe', amount: 999 })).toBe(true);
+    expect(isRequirementMet(s, { type: 'lifetime', res: 'me', amount: 1000 })).toBe(false);
+    expect(isRequirementMet(s, { type: 'lifetime', res: 'me', amount: 999 })).toBe(true);
+  });
+
+  it('lifetime requirement reads only the named resource', () => {
+    const s = withMe(withLevels({}), 1e9, 1e9);
+    const withEe = (ee: number): GameState => ({ ...s, lifetime: { ...s.lifetime, ee } });
+    expect(isRequirementMet(withEe(99), { type: 'lifetime', res: 'ee', amount: 100 })).toBe(false);
+    expect(isRequirementMet(withEe(100), { type: 'lifetime', res: 'ee', amount: 100 })).toBe(true);
   });
 
   it('empty requirement list is met', () => {
@@ -31,7 +52,9 @@ describe('requirements', () => {
     expect(requirementLabel({ type: 'tech', id: 'wornMotor', minLevel: 1 })).toBe('Worn Motor');
     expect(requirementLabel({ type: 'tech', id: 'flywheel', minLevel: 1 })).toBe('Flywheel Lv 1');
     expect(requirementLabel({ type: 'tech', id: 'motorTuning', minLevel: 5 })).toBe('Motor Tuning Lv 5');
-    expect(requirementLabel({ type: 'lifetimeMe', amount: 200000 })).toBe('200K lifetime ME');
+    expect(requirementLabel({ type: 'lifetime', res: 'me', amount: 200000 })).toBe('200K lifetime ME');
+    expect(requirementLabel({ type: 'lifetime', res: 'ee', amount: 100 })).toBe('100 lifetime EE');
+    expect(requirementLabel({ type: 'lifetime', res: 'xf', amount: 5 })).toBe('5 lifetime ???');
   });
 });
 
@@ -78,14 +101,14 @@ describe('getTechStatus', () => {
   });
 
   it('milestone is never available even when its conditions are met', () => {
-    const s = withLevels({ pistonArray: 1, flywheel: 1 }, { lifetimeMe: 200000 });
+    const s = withMe(withLevels({ pistonArray: 1, flywheel: 1 }), 0, 200000);
     expect(getTechStatus(s, 'generatorBlueprint')).toBe('locked');
   });
 });
 
 describe('getTechView', () => {
   it('gearRatio at level 2 with 26 ME', () => {
-    const v = getTechView(withLevels({ gearRatio: 2 }, { me: 26 }), 'gearRatio');
+    const v = getTechView(withMe(withLevels({ gearRatio: 2 }), 26), 'gearRatio');
     expect(v.status).toBe('available');
     expect(v.level).toBe(2);
     expect(v.nextCost).toBe(26);
@@ -95,7 +118,7 @@ describe('getTechView', () => {
   });
 
   it('gearRatio at level 2 with 25 ME is not affordable', () => {
-    expect(getTechView(withLevels({ gearRatio: 2 }, { me: 25 }), 'gearRatio').affordable).toBe(false);
+    expect(getTechView(withMe(withLevels({ gearRatio: 2 }), 25), 'gearRatio').affordable).toBe(false);
   });
 
   it('gearRatio at level 0', () => {
@@ -159,6 +182,34 @@ describe('getTechView', () => {
     expect(views.length).toBe(9);
     expect(views.map((v) => v.id)).toEqual([...TECH_IDS]);
   });
+
+  it('affordability follows the tech costRes (injected table: wornMotor costs EE)', () => {
+    const cheap = { ...withLevels({}), res: { ...emptyResourceMap(), me: 1e9, ee: 40 } };
+    expect(getTechView(cheap, 'wornMotor', eeWornMotor)).toMatchObject({ nextCost: 40, affordable: true });
+
+    const short = { ...withLevels({}), res: { ...emptyResourceMap(), me: 1e9, ee: 39 } };
+    expect(getTechView(short, 'wornMotor', eeWornMotor)).toMatchObject({ nextCost: 40, affordable: false });
+  });
+});
+
+describe('describeEffect', () => {
+  it('describes ME effects', () => {
+    expect(describeEffect({ type: 'clickAdd', amount: 1 }, 3)).toBe('+3 ME/click');
+    expect(describeEffect({ type: 'clickMult', factor: 2 }, 3)).toBe('×8 manual production');
+    expect(describeEffect({ type: 'autoAdd', amount: 1 }, 2)).toBe('+2 ME/s');
+    expect(describeEffect({ type: 'autoPct', percent: 10 }, 2)).toBe('+20% automation');
+    expect(describeEffect({ type: 'autoPct', percent: 10, res: 'me' }, 2)).toBe('+20% automation');
+  });
+
+  it('describes non-ME effects', () => {
+    expect(describeEffect({ type: 'autoAdd', amount: 1.5, res: 'ee' }, 2)).toBe('+3 EE/s');
+    expect(describeEffect({ type: 'autoPct', percent: 10, res: 'pr' }, 2)).toBe('+20% PR production');
+    expect(describeEffect({ type: 'rateMult', factor: 2, res: 'all' }, 2)).toBe('×4 all production');
+    expect(describeEffect({ type: 'rateMult', factor: 3, res: 'rs' }, 1)).toBe('×3 RS production');
+    expect(describeEffect({ type: 'convert', amount: 0.5, res: 'ee' }, 2)).toBe('Converts ME/s into EE/s (×1)');
+    expect(describeEffect({ type: 'clickEcho', seconds: 2, res: 'ee' }, 2)).toBe('Clicks echo 4s of EE/s');
+    expect(describeEffect({ type: 'none' }, 1)).toBe('Effect unknown');
+  });
 });
 
 describe('purchase failures', () => {
@@ -174,19 +225,19 @@ describe('purchase failures', () => {
   });
 
   it('locked motorTuning', () => {
-    expectFailure(withLevels({}, { me: 1000 }), 'motorTuning', 'locked');
+    expectFailure(withMe(withLevels({}), 1000), 'motorTuning', 'locked');
   });
 
   it('locked reinforcedCrank at gearRatio 2', () => {
-    expectFailure(withLevels({ gearRatio: 2 }, { me: 1000 }), 'reinforcedCrank', 'locked');
+    expectFailure(withMe(withLevels({ gearRatio: 2 }), 1000), 'reinforcedCrank', 'locked');
   });
 
   it('owned wornMotor', () => {
-    expectFailure(withLevels({ wornMotor: 1 }, { me: 1e9 }), 'wornMotor', 'owned');
+    expectFailure(withMe(withLevels({ wornMotor: 1 }), 1e9), 'wornMotor', 'owned');
   });
 
   it('maxed gearRatio', () => {
-    expectFailure(withLevels({ gearRatio: 15 }, { me: 1e9 }), 'gearRatio', 'maxed');
+    expectFailure(withMe(withLevels({ gearRatio: 15 }), 1e9), 'gearRatio', 'maxed');
   });
 
   it('starting tech is not purchasable', () => {
@@ -194,69 +245,104 @@ describe('purchase failures', () => {
   });
 
   it('milestone is not purchasable even when locked-but-rich', () => {
-    expectFailure(withLevels({}, { me: 1e9 }), 'generatorBlueprint', 'notPurchasable');
+    expectFailure(withMe(withLevels({}), 1e9), 'generatorBlueprint', 'notPurchasable');
+  });
+
+  it('insufficient EE is reported even when ME is huge (injected table)', () => {
+    const s = withMe(withLevels({}), 1e9);
+    const before = structuredClone(s);
+    expect(purchase(s, 'wornMotor', eeWornMotor)).toEqual({ ok: false, reason: 'insufficient' });
+    expect(s).toEqual(before);
   });
 });
 
 describe('purchase success', () => {
-  it('buys gearRatio level 1 for 10 ME', () => {
-    const input = withLevels({}, { me: 15, lifetimeMe: 15 });
+  it('buys gearRatio level 1 for 15 ME', () => {
+    const input = withMe(withLevels({}), 15, 15);
     const result = purchase(input, 'gearRatio');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.cost).toBe(15);
     expect(result.newLevel).toBe(1);
-    expect(result.state.me).toBe(0);
+    expect(result.state.res.me).toBe(0);
     expect(result.state.techLevels.gearRatio).toBe(1);
-    expect(result.state.lifetimeMe).toBe(15);
+    expect(result.state.lifetime.me).toBe(15);
     // input is unchanged, and the new objects are distinct references
-    expect(input.me).toBe(15);
+    expect(input.res.me).toBe(15);
     expect(input.techLevels.gearRatio).toBe(0);
     expect(result.state).not.toBe(input);
     expect(result.state.techLevels).not.toBe(input.techLevels);
   });
 
   it('buys gearRatio level 2 for 20 ME', () => {
-    const result = purchase(withLevels({ gearRatio: 1 }, { me: 20, lifetimeMe: 20 }), 'gearRatio');
+    const result = purchase(withMe(withLevels({ gearRatio: 1 }), 20, 20), 'gearRatio');
     expect(result).toMatchObject({ ok: true, cost: 20, newLevel: 2 });
-    if (result.ok) expect(result.state.me).toBe(0);
+    if (result.ok) expect(result.state.res.me).toBe(0);
   });
 
   it('buys reinforcedCrank for 2000 ME once gearRatio is 3', () => {
-    const first = purchase(withLevels({ gearRatio: 3 }, { me: 2000, lifetimeMe: 2000 }), 'reinforcedCrank');
+    const first = purchase(withMe(withLevels({ gearRatio: 3 }), 2000, 2000), 'reinforcedCrank');
     expect(first).toMatchObject({ ok: true, cost: 2000, newLevel: 1 });
     if (!first.ok) return;
-    expect(first.state.me).toBe(0);
+    expect(first.state.res.me).toBe(0);
     expect(first.state.techLevels.reinforcedCrank).toBe(1);
     expect(purchase(first.state, 'reinforcedCrank')).toEqual({ ok: false, reason: 'owned' });
   });
 
-  it('never reduces lifetimeMe across successive purchases', () => {
-    let s = withLevels({}, { me: 1000, lifetimeMe: 1000 });
+  it('never reduces lifetime.me across successive purchases', () => {
+    let s = withMe(withLevels({}), 1000, 1000);
     for (let i = 0; i < 3; i++) {
       const r = purchase(s, 'gearRatio');
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       s = r.state;
-      expect(s.lifetimeMe).toBe(1000);
+      expect(s.lifetime.me).toBe(1000);
     }
+  });
+
+  it('spends the tech costRes only and keeps the same lifetime object (injected table)', () => {
+    const s = { ...withLevels({}), res: { ...emptyResourceMap(), me: 1e9, ee: 100 } };
+    const result = purchase(s, 'wornMotor', eeWornMotor);
+    expect(result).toMatchObject({ ok: true, cost: 40, newLevel: 1 });
+    if (!result.ok) return;
+    expect(result.state.res.ee).toBe(60);
+    expect(result.state.res.me).toBe(1e9);
+    expect(result.state.lifetime).toBe(s.lifetime);
+    expect(result.state.techLevels.wornMotor).toBe(1);
+    expect(s.res.ee).toBe(100);
+  });
+
+  it('never decreases lifetime across multiple purchases of different costRes (injected table)', () => {
+    const start = {
+      ...withLevels({}),
+      res: { ...emptyResourceMap(), me: 15, ee: 1000 },
+      lifetime: { ...emptyResourceMap(), me: 15, ee: 500 },
+    };
+    const first = purchase(start, 'wornMotor', eeWornMotor);
+    if (!first.ok) throw new Error('first purchase failed');
+    const second = purchase(first.state, 'gearRatio', eeWornMotor);
+    expect(second).toMatchObject({ ok: true, cost: 15 });
+    if (!second.ok) return;
+    expect(second.state.lifetime).toBe(start.lifetime);
+    expect(second.state.res.ee).toBe(1000 - 40);
+    expect(second.state.res.me).toBe(0);
   });
 });
 
 describe('evaluateMilestones', () => {
   it('does nothing below the lifetime threshold', () => {
-    const s = withLevels({ pistonArray: 1, flywheel: 1 }, { lifetimeMe: 199999 });
+    const s = withMe(withLevels({ pistonArray: 1, flywheel: 1 }), 0, 199999);
     const result = evaluateMilestones(s);
     expect(result.unlocked).toEqual([]);
     expect(result.state).toBe(s);
   });
 
   it('unlocks generatorBlueprint at the threshold, idempotently', () => {
-    const s = withLevels({ pistonArray: 1, flywheel: 1 }, { lifetimeMe: 200000, me: 5 });
+    const s = withMe(withLevels({ pistonArray: 1, flywheel: 1 }), 5, 200000);
     const first = evaluateMilestones(s);
     expect(first.unlocked).toEqual(['generatorBlueprint']);
     expect(first.state.techLevels.generatorBlueprint).toBe(1);
-    expect(first.state.me).toBe(5);
+    expect(first.state.res.me).toBe(5);
     expect(getTechStatus(first.state, 'generatorBlueprint')).toBe('purchased');
 
     const second = evaluateMilestones(first.state);
@@ -265,19 +351,19 @@ describe('evaluateMilestones', () => {
   });
 
   it('needs flywheel', () => {
-    const s = withLevels({ pistonArray: 1 }, { lifetimeMe: 200000 });
+    const s = withMe(withLevels({ pistonArray: 1 }), 0, 200000);
     expect(evaluateMilestones(s).unlocked).toEqual([]);
   });
 
   it('needs pistonArray', () => {
-    const s = withLevels({ flywheel: 1 }, { lifetimeMe: 200000 });
+    const s = withMe(withLevels({ flywheel: 1 }), 0, 200000);
     expect(evaluateMilestones(s).unlocked).toEqual([]);
   });
 });
 
 describe('scripted two-branch run', () => {
   it('buys the full convergence path and unlocks the milestone', () => {
-    let s: GameState = { ...createInitialState(0), me: 1e6, lifetimeMe: 1e6 };
+    let s: GameState = withMe(createInitialState(0), 1e6);
     const buy = (id: TechId) => {
       const r = purchase(s, id);
       expect(r.ok).toBe(true);
@@ -300,7 +386,7 @@ describe('scripted two-branch run', () => {
 
     const result = evaluateMilestones(s);
     expect(result.unlocked).toEqual(['generatorBlueprint']);
-    expect(result.state.me).toBe(1e6 - 18645);
-    expect(result.state.lifetimeMe).toBe(1e6);
+    expect(result.state.res.me).toBe(1e6 - 18645);
+    expect(result.state.lifetime.me).toBe(1e6);
   });
 });

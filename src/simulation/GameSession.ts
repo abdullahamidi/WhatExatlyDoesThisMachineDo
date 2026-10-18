@@ -1,9 +1,11 @@
 import { MAX_UPDATE_SECONDS, OFFLINE_REPORT_THRESHOLD_SECONDS } from '../data/balance';
+import { TECHNOLOGIES } from '../data/technologies';
 import type {
   GameState,
   OfflineReport,
   ProductionRates,
   PurchaseResult,
+  ResourceMap,
   SettingsState,
   TechId,
   TechView,
@@ -17,9 +19,11 @@ import { purchase as purchaseTech } from './progression/purchase';
 import { getAllTechViews, getTechView } from './progression/status';
 import { DEFAULT_SETTINGS, createInitialState } from './state';
 
-/** Read-only view of a GameState, including its techLevels record. */
-export type ReadonlyGameState = Readonly<Omit<GameState, 'techLevels'>> & {
+/** Read-only view of a GameState, including its techLevels record and resource maps. */
+export type ReadonlyGameState = Readonly<Omit<GameState, 'techLevels' | 'res' | 'lifetime'>> & {
   readonly techLevels: Readonly<Record<TechId, number>>;
+  readonly res: Readonly<ResourceMap>;
+  readonly lifetime: Readonly<ResourceMap>;
 };
 
 export interface GameSessionOptions {
@@ -91,11 +95,14 @@ export class GameSession {
     return this.currentRevision;
   }
 
-  /** Manual click. Emits 'click', then runs the milestone check. Returns the ME gained. */
+  /**
+   * Manual click. Emits 'click' (ME gained plus every resource gained), then runs the milestone
+   * check. Returns the ME gained.
+   */
   click(): number {
-    const { state, gained } = applyClick(this.current);
+    const { state, gained, gainedAll } = applyClick(this.current);
     this.setState(state);
-    this.emitter.emit('click', { gained });
+    this.emitter.emit('click', { gained, gainedAll });
     this.checkMilestones();
     return gained;
   }
@@ -110,7 +117,12 @@ export class GameSession {
 
     const previousLevel = this.current.techLevels[id];
     this.setState(result.state);
-    this.emitter.emit('purchase', { id, level: result.newLevel, cost: result.cost });
+    this.emitter.emit('purchase', {
+      id,
+      level: result.newLevel,
+      cost: result.cost,
+      res: TECHNOLOGIES[id].costRes,
+    });
     if (previousLevel === 0) {
       this.emitter.emit('unlock', { id });
     }

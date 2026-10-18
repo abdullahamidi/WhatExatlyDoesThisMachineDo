@@ -1,9 +1,9 @@
-import type { OfflineReport, SettingsState, TechId } from '../data/types';
+import type { OfflineReport, ResourceId, ResourceMap, SettingsState, TechId } from '../data/types';
 
 /** Payloads of every event a GameSession emits. */
 export interface SessionEvents {
-  click: { gained: number };
-  purchase: { id: TechId; level: number; cost: number };
+  click: { gained: number; gainedAll: ResourceMap };  // gained = ME; gainedAll = every resource
+  purchase: { id: TechId; level: number; cost: number; res: ResourceId };
   unlock: { id: TechId };            // tech level 0 -> 1, INCLUDING milestones
   milestone: { id: TechId };
   offline: OfflineReport;

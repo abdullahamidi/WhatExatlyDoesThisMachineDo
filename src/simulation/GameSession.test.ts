@@ -5,12 +5,20 @@ import { TECHNOLOGIES } from '../data/technologies';
 import { GameSession } from './GameSession';
 import { costAt } from './economy/cost';
 import { createInitialState } from './state';
+import { emptyResourceMap } from './resources';
 import * as api from './index';
 
 const withLevels = (levels: Partial<Record<TechId, number>>, extra: Partial<GameState> = {}): GameState => {
   const s = createInitialState(0);
   return { ...s, ...extra, techLevels: { ...s.techLevels, ...levels } };
 };
+
+// Sets both the spendable `me` and the lifetime `me` (lifetime defaults to the same amount).
+const withMe = (state: GameState, me: number, lifetimeMe: number = me): GameState => ({
+  ...state,
+  res: { ...state.res, me },
+  lifetime: { ...state.lifetime, me: lifetimeMe },
+});
 
 // Records events of a session as compact strings, in emission order.
 const record = (session: GameSession): string[] => {
@@ -19,7 +27,7 @@ const record = (session: GameSession): string[] => {
   session.on('purchase', (p) => log.push(`purchase:${p.id}:${p.level}:${p.cost}`));
   session.on('unlock', (p) => log.push(`unlock:${p.id}`));
   session.on('milestone', (p) => log.push(`milestone:${p.id}`));
-  session.on('offline', (p) => log.push(`offline:${p.gained}`));
+  session.on('offline', (p) => log.push(`offline:${p.gained.me}`));
   session.on('reset', () => log.push('reset'));
   session.on('settings', (p) => log.push(`settings:${p.muted}`));
   return log;
@@ -46,10 +54,21 @@ describe('GameSession', () => {
       const session = new GameSession({ state: createInitialState(0), now: () => 0 });
       const log = record(session);
       expect(session.click()).toBe(1);
-      expect(session.state.me).toBe(1);
-      expect(session.state.lifetimeMe).toBe(1);
+      expect(session.state.res.me).toBe(1);
+      expect(session.state.lifetime.me).toBe(1);
       expect(session.state.totalClicks).toBe(1);
       expect(log).toEqual(['click:1']);
+    });
+
+    it('emits the click payload with gainedAll whose me matches gained', () => {
+      const session = new GameSession({ state: createInitialState(0), now: () => 0 });
+      const payloads: { gained: number; gainedAll: Record<string, number> }[] = [];
+      session.on('click', (p) => payloads.push(p));
+      session.click();
+      expect(payloads).toHaveLength(1);
+      expect(payloads[0]?.gainedAll.me).toBe(payloads[0]?.gained);
+      expect(payloads[0]?.gained).toBe(1);
+      expect(payloads[0]?.gainedAll).toEqual({ ...emptyResourceMap(), me: 1 });
     });
   });
 
@@ -58,17 +77,17 @@ describe('GameSession', () => {
       const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
       session.applyOffline(0);
       session.update(5000);
-      expect(session.state.me).toBeCloseTo(5, 9);
+      expect(session.state.res.me).toBeCloseTo(5, 9);
       expect(session.state.lastSimTime).toBe(5000);
       session.update(5000);
-      expect(session.state.me).toBeCloseTo(5, 9);
+      expect(session.state.res.me).toBeCloseTo(5, 9);
     });
 
     it('routes a first update through offline progress, capped at the offline limit', () => {
       const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
       const log = record(session);
       session.update(36_000_000);
-      expect(session.state.me).toBeCloseTo(28800, 9);
+      expect(session.state.res.me).toBeCloseTo(28800, 9);
       expect(session.state.lastSimTime).toBe(36_000_000);
       expect(log).toEqual(['offline:28800']);
     });
@@ -78,19 +97,19 @@ describe('GameSession', () => {
       session.applyOffline(0);
       const log = record(session);
       session.update(OFFLINE_REPORT_THRESHOLD_SECONDS * 1000);
-      expect(session.state.me).toBeCloseTo(OFFLINE_REPORT_THRESHOLD_SECONDS, 9);
+      expect(session.state.res.me).toBeCloseTo(OFFLINE_REPORT_THRESHOLD_SECONDS, 9);
       expect(session.state.lastSimTime).toBe(OFFLINE_REPORT_THRESHOLD_SECONDS * 1000);
       expect(log).toEqual([]);
     });
 
     it('a first update of 2 hours emits offline with perSecond x 7200 (never silent)', () => {
       const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
-      const perSecond = session.rates.perSecond;
+      const perSecond = session.rates.perSecond.me;
       const log = record(session);
       const twoHours = 2 * 3600 * 1000;
       session.update(twoHours);
       expect(log).toEqual([`offline:${perSecond * 7200}`]);
-      expect(session.state.me).toBeCloseTo(perSecond * 7200, 9);
+      expect(session.state.res.me).toBeCloseTo(perSecond * 7200, 9);
     });
 
     it('after applyOffline, a 0.5 s update advances normally with no offline event', () => {
@@ -98,7 +117,7 @@ describe('GameSession', () => {
       session.applyOffline(0);
       const log = record(session);
       session.update(500);
-      expect(session.state.me).toBeCloseTo(0.5, 9);
+      expect(session.state.res.me).toBeCloseTo(0.5, 9);
       expect(log).toEqual([]);
     });
 
@@ -110,16 +129,16 @@ describe('GameSession', () => {
       const log = record(session);
       session.update(2000 + 300_000);
       expect(log).toEqual(['offline:300']);
-      expect(session.state.me).toBeCloseTo(302, 9);
+      expect(session.state.res.me).toBeCloseTo(302, 9);
     });
 
     it('does not double-count: applyOffline(t) then update(t) adds nothing', () => {
       const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
       session.applyOffline(10_000);
-      const before = session.state.me;
+      const before = session.state.res.me;
       const log = record(session);
       session.update(10_000);
-      expect(session.state.me).toBe(before);
+      expect(session.state.res.me).toBe(before);
       expect(log).toEqual([]);
     });
 
@@ -128,9 +147,9 @@ describe('GameSession', () => {
         state: withLevels({ wornMotor: 1 }, { lastSimTime: 10_000 }),
         now: () => 0,
       });
-      const before = session.state.me;
+      const before = session.state.res.me;
       session.update(2_000);
-      expect(session.state.me).toBe(before);
+      expect(session.state.res.me).toBe(before);
       expect(session.state.lastSimTime).toBe(2000);
     });
 
@@ -145,18 +164,18 @@ describe('GameSession', () => {
       let t = 3000;
       const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => t });
       session.update();
-      expect(session.state.me).toBeCloseTo(3, 9);
+      expect(session.state.res.me).toBeCloseTo(3, 9);
       expect(session.state.lastSimTime).toBe(3000);
       t = 4000;
       session.update();
-      expect(session.state.me).toBeCloseTo(4, 9);
+      expect(session.state.res.me).toBeCloseTo(4, 9);
     });
   });
 
   describe('revision', () => {
     it('bumps on click, update with elapsed time, and purchase', () => {
       const session = new GameSession({
-        state: withLevels({}, { me: costAt(TECHNOLOGIES.gearRatio, 0), lastSimTime: 0 }),
+        state: withMe(withLevels({}, { lastSimTime: 0 }), costAt(TECHNOLOGIES.gearRatio, 0)),
         now: () => 0,
       });
       session.applyOffline(0);
@@ -244,7 +263,10 @@ describe('GameSession', () => {
   describe('rates', () => {
     it('is initially one per click and no per second', () => {
       const session = new GameSession({ state: createInitialState(0), now: () => 0 });
-      expect(session.rates).toEqual({ perClick: 1, perSecond: 0 });
+      expect(session.rates).toEqual({
+        perClick: { ...emptyResourceMap(), me: 1 },
+        perSecond: emptyResourceMap(),
+      });
     });
 
     it('returns the same object across updates', () => {
@@ -255,9 +277,9 @@ describe('GameSession', () => {
     });
 
     it('is recomputed after a purchase changes tech levels', () => {
-      const session = new GameSession({ state: withLevels({}, { me: costAt(TECHNOLOGIES.gearRatio, 0) }), now: () => 0 });
+      const session = new GameSession({ state: withMe(withLevels({}), costAt(TECHNOLOGIES.gearRatio, 0)), now: () => 0 });
       expect(session.purchase('gearRatio').ok).toBe(true);
-      expect(session.rates.perClick).toBe(2);
+      expect(session.rates.perClick.me).toBe(2);
     });
   });
 
@@ -269,13 +291,33 @@ describe('GameSession', () => {
       });
       const log = record(session);
       const report = session.applyOffline(3_600_000);
-      expect(report).toEqual({ elapsedSeconds: 3600, cappedSeconds: 3600, gained: 21600 });
-      expect(session.state.me).toBeCloseTo(21600, 9);
+      expect(report).toEqual({
+        elapsedSeconds: 3600,
+        cappedSeconds: 3600,
+        gained: { ...emptyResourceMap(), me: 21600 },
+      });
+      expect(session.state.res.me).toBeCloseTo(21600, 9);
       expect(session.state.lastSimTime).toBe(3_600_000);
 
       session.update(3_600_000);
-      expect(session.state.me).toBeCloseTo(21600, 9);
+      expect(session.state.res.me).toBeCloseTo(21600, 9);
       expect(log).toEqual(['offline:21600']);
+    });
+
+    it('reports only ME for a motor save and credits res and lifetime', () => {
+      const session = new GameSession({
+        state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }),
+        now: () => 0,
+      });
+      const report = session.applyOffline(10_000);
+      expect(report.gained.me).toBeCloseTo(10, 9);
+      expect(report.gained.ee).toBe(0);
+      expect(report.gained.pr).toBe(0);
+      expect(report.gained.rs).toBe(0);
+      expect(report.gained.xf).toBe(0);
+      expect(session.state.res.me).toBeCloseTo(10, 9);
+      expect(session.state.lifetime.me).toBeCloseTo(10, 9);
+      expect(session.state.res.ee).toBe(0);
     });
 
     it('caps at the offline limit', () => {
@@ -285,15 +327,15 @@ describe('GameSession', () => {
       });
       const report = session.applyOffline(10 * 3_600_000);
       expect(report.cappedSeconds).toBe(28800);
-      expect(report.gained).toBeCloseTo(172800, 9);
-      expect(session.state.me).toBeCloseTo(172800, 9);
+      expect(report.gained.me).toBeCloseTo(172800, 9);
+      expect(session.state.res.me).toBeCloseTo(172800, 9);
     });
 
     it('still emits offline when nothing is gained', () => {
       const session = new GameSession({ state: createInitialState(0), now: () => 0 });
       const log = record(session);
       const report = session.applyOffline(1000);
-      expect(report.gained).toBe(0);
+      expect(report.gained.me).toBe(0);
       expect(log).toEqual(['offline:0']);
     });
 
@@ -303,9 +345,9 @@ describe('GameSession', () => {
         now: () => 0,
       });
       const report = session.applyOffline(Number.NaN);
-      expect(report.gained).toBe(0);
+      expect(report.gained.me).toBe(0);
       expect(session.state.lastSimTime).toBe(500);
-      expect(session.state.me).toBe(0);
+      expect(session.state.res.me).toBe(0);
     });
   });
 
@@ -323,18 +365,18 @@ describe('GameSession', () => {
       const session = new GameSession({ state: createInitialState(0), now: () => 0 });
       const firstCost = costAt(TECHNOLOGIES.gearRatio, 0);
       for (let i = 0; i < firstCost; i++) session.click();
-      expect(session.state.me).toBe(firstCost);
+      expect(session.state.res.me).toBe(firstCost);
 
       const log = record(session);
       const first = session.purchase('gearRatio');
       expect(first).toMatchObject({ ok: true, cost: firstCost, newLevel: 1 });
-      expect(session.state.me).toBe(0);
-      expect(session.rates.perClick).toBe(2);
+      expect(session.state.res.me).toBe(0);
+      expect(session.rates.perClick.me).toBe(2);
       expect(log).toEqual([`purchase:gearRatio:1:${firstCost}`, 'unlock:gearRatio']);
 
       const secondCost = costAt(TECHNOLOGIES.gearRatio, 1);
-      while (session.state.me < secondCost) session.click();
-      expect(session.state.me).toBe(secondCost);
+      while (session.state.res.me < secondCost) session.click();
+      expect(session.state.res.me).toBe(secondCost);
 
       log.length = 0;
       const second = session.purchase('gearRatio');
@@ -342,11 +384,20 @@ describe('GameSession', () => {
       expect(log).toEqual([`purchase:gearRatio:2:${secondCost}`]);
     });
 
+    it('purchase event carries the costRes of the tech (ME for era I)', () => {
+      const session = new GameSession({ state: withMe(withLevels({}), costAt(TECHNOLOGIES.gearRatio, 0)), now: () => 0 });
+      const payloads: { id: TechId; level: number; cost: number; res: string }[] = [];
+      session.on('purchase', (p) => payloads.push(p));
+      expect(session.purchase('gearRatio').ok).toBe(true);
+      expect(payloads).toEqual([{ id: 'gearRatio', level: 1, cost: costAt(TECHNOLOGIES.gearRatio, 0), res: 'me' }]);
+    });
+
     it('emits milestone events in order when a purchase completes a milestone', () => {
       const session = new GameSession({
-        state: withLevels(
-          { gearRatio: 3, reinforcedCrank: 1, wornMotor: 1, motorTuning: 5, pistonArray: 1 },
-          { me: 5000, lifetimeMe: 200000, lastSimTime: 0 },
+        state: withMe(
+          withLevels({ gearRatio: 3, reinforcedCrank: 1, wornMotor: 1, motorTuning: 5, pistonArray: 1 }, { lastSimTime: 0 }),
+          5000,
+          200000,
         ),
         now: () => 0,
       });
@@ -354,7 +405,7 @@ describe('GameSession', () => {
       const log = record(session);
       const result = session.purchase('flywheel');
       expect(result).toMatchObject({ ok: true, cost: 4000 });
-      expect(session.state.me).toBe(1000);
+      expect(session.state.res.me).toBe(1000);
       expect(session.state.techLevels.generatorBlueprint).toBe(1);
       expect(log).toEqual([
         'purchase:flywheel:1:4000',
@@ -389,7 +440,7 @@ describe('GameSession', () => {
       });
       session.on('click', second);
       expect(() => session.click()).not.toThrow();
-      expect(second).toHaveBeenCalledWith({ gained: 1 });
+      expect(second).toHaveBeenCalledWith({ gained: 1, gainedAll: { ...emptyResourceMap(), me: 1 } });
       expect(spy).toHaveBeenCalled();
     });
   });
@@ -402,11 +453,12 @@ describe('GameSession', () => {
       const log = record(session);
 
       session.reset(5000);
-      expect(session.state.me).toBe(0);
+      expect(session.state.res).toEqual(emptyResourceMap());
+      expect(session.state.lifetime).toEqual(emptyResourceMap());
       expect(session.state.totalClicks).toBe(0);
       expect(session.state.techLevels).toEqual(createInitialState(0).techLevels);
       expect(session.state.lastSimTime).toBe(5000);
-      expect(session.rates.perClick).toBe(1);
+      expect(session.rates.perClick.me).toBe(1);
       expect(log).toEqual(['reset']);
     });
 
@@ -416,7 +468,7 @@ describe('GameSession', () => {
       const log = record(session);
       session.update(5500);
       expect(log).toEqual([]);
-      expect(session.state.me).toBe(0);
+      expect(session.state.res.me).toBe(0);
     });
   });
 
@@ -436,6 +488,9 @@ describe('GameSession', () => {
       expect(typeof api.purchase).toBe('function');
       expect(typeof api.evaluateMilestones).toBe('function');
       expect(typeof api.costAt).toBe('function');
+      expect(typeof api.emptyResourceMap).toBe('function');
+      expect(typeof api.addMaps).toBe('function');
+      expect(typeof api.scaleMap).toBe('function');
     });
   });
 });

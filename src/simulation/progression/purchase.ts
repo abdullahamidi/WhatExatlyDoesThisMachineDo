@@ -1,15 +1,19 @@
 import { TECHNOLOGIES } from '../../data/technologies';
-import type { GameState, PurchaseResult, TechId } from '../../data/types';
+import type { GameState, PurchaseResult, TechDefinition, TechId } from '../../data/types';
 import { canAfford, costAt } from '../economy/cost';
 import { requirementsMet } from './requirements';
 
 /**
  * Attempts to buy one level of a technology. Never mutates `state`; on failure the
  * result carries only the reason, so the caller's state is untouched by construction.
- * Spending reduces `me` only; `lifetimeMe` is never changed.
+ * Spending reduces the tech's `costRes` only; `lifetime` is never changed.
  */
-export function purchase(state: GameState, id: TechId): PurchaseResult {
-  const def = TECHNOLOGIES[id];
+export function purchase(
+  state: GameState,
+  id: TechId,
+  techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
+): PurchaseResult {
+  const def = techs[id];
   const level = state.techLevels[id];
 
   if (def.kind === 'starting' || def.kind === 'milestone') {
@@ -25,13 +29,13 @@ export function purchase(state: GameState, id: TechId): PurchaseResult {
     return { ok: false, reason: 'locked' };
   }
   const cost = costAt(def, level);
-  if (!canAfford(state, cost)) {
+  if (!canAfford(state, def.costRes, cost)) {
     return { ok: false, reason: 'insufficient' };
   }
 
   const next: GameState = {
     ...state,
-    me: state.me - cost,
+    res: { ...state.res, [def.costRes]: state.res[def.costRes] - cost },
     techLevels: { ...state.techLevels, [id]: level + 1 },
   };
   return { ok: true, state: next, cost, newLevel: level + 1 };

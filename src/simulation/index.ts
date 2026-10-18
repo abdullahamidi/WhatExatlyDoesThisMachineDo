@@ -4,6 +4,7 @@ export type { GameSessionOptions, ReadonlyGameState } from './GameSession';
 export { TypedEmitter } from './events';
 export type { Listener, SessionEvents } from './events';
 export { DEFAULT_SETTINGS, createInitialState } from './state';
+export { emptyResourceMap, addMaps, scaleMap } from './resources';
 export { costAt, canAfford } from './economy/cost';
 export { computeRates } from './production/rates';
 export { applyClick, advance, computeOffline, applyOffline } from './production/tick';

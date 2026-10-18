@@ -1,8 +1,10 @@
+import { RESOURCES } from '../../data/resources';
 import { TECH_LIST, TECHNOLOGIES } from '../../data/technologies';
 import type {
   Effect,
   GameState,
   RequirementView,
+  TechDefinition,
   TechId,
   TechStatus,
   TechView,
@@ -11,9 +13,13 @@ import { costAt, canAfford } from '../economy/cost';
 import { isRequirementMet, requirementLabel, requirementsMet } from './requirements';
 
 /** Derives the player-facing status of a technology from the current state. */
-export function getTechStatus(state: GameState, id: TechId): TechStatus {
+export function getTechStatus(
+  state: GameState,
+  id: TechId,
+  techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
+): TechStatus {
   const level = state.techLevels[id];
-  const def = TECHNOLOGIES[id];
+  const def = techs[id];
   if (def.kind === 'starting') return level >= 1 ? 'purchased' : 'available';
   if (def.kind === 'milestone') return level >= 1 ? 'purchased' : 'locked';
   if (def.kind === 'unlock') {
@@ -31,16 +37,31 @@ function fmt(x: number): string {
   return String(Number(x.toFixed(2)));
 }
 
-function effectPart(effect: Effect, n: number): string {
+/** Player-facing text for `n` levels of one effect. */
+export function describeEffect(effect: Effect, n: number): string {
   switch (effect.type) {
     case 'clickAdd':
       return `+${fmt(effect.amount * n)} ME/click`;
     case 'clickMult':
       return `×${fmt(effect.factor ** n)} manual production`;
     case 'autoAdd':
-      return `+${fmt(effect.amount * n)} ME/s`;
-    case 'autoPct':
-      return `+${fmt(effect.percent * n)}% automation`;
+      return `+${fmt(effect.amount * n)} ${RESOURCES[effect.res ?? 'me'].short}/s`;
+    case 'autoPct': {
+      const res = effect.res ?? 'me';
+      if (res === 'me') return `+${fmt(effect.percent * n)}% automation`;
+      return `+${fmt(effect.percent * n)}% ${RESOURCES[res].short} production`;
+    }
+    case 'rateMult': {
+      const label = effect.res === 'all' ? 'all' : RESOURCES[effect.res].short;
+      return `×${fmt(effect.factor ** n)} ${label} production`;
+    }
+    case 'convert': {
+      const source = RESOURCES[effect.res].source;
+      const sourceShort = source === null ? '?' : RESOURCES[source].short;
+      return `Converts ${sourceShort}/s into ${RESOURCES[effect.res].short}/s (×${fmt(effect.amount * n)})`;
+    }
+    case 'clickEcho':
+      return `Clicks echo ${fmt(effect.seconds * n)}s of ${RESOURCES[effect.res].short}/s`;
     case 'none':
       return 'Effect unknown';
   }
@@ -48,12 +69,16 @@ function effectPart(effect: Effect, n: number): string {
 
 /** Text for the cumulative effect of `n` levels of the given effects. */
 function effectText(effects: Effect[], n: number): string {
-  return effects.map((effect) => effectPart(effect, n)).join(', ');
+  return effects.map((effect) => describeEffect(effect, n)).join(', ');
 }
 
 /** Price of the next purchase, or null when there is nothing left to buy. */
-function nextCostFor(state: GameState, id: TechId): number | null {
-  const def = TECHNOLOGIES[id];
+function nextCostFor(
+  state: GameState,
+  id: TechId,
+  techs: Record<TechId, TechDefinition>,
+): number | null {
+  const def = techs[id];
   const level = state.techLevels[id];
   if (def.kind === 'starting' || def.kind === 'milestone') return null;
   if (def.kind === 'unlock') return level >= 1 ? null : costAt(def, level);
@@ -62,17 +87,22 @@ function nextCostFor(state: GameState, id: TechId): number | null {
 }
 
 /** Full view model of one technology for the UI. */
-export function getTechView(state: GameState, id: TechId): TechView {
-  const def = TECHNOLOGIES[id];
+export function getTechView(
+  state: GameState,
+  id: TechId,
+  techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
+): TechView {
+  const def = techs[id];
   const level = state.techLevels[id];
-  const status = getTechStatus(state, id);
+  const status = getTechStatus(state, id, techs);
   const requirements: RequirementView[] = def.requires.map((req) => ({
     req,
     met: isRequirementMet(state, req),
     label: requirementLabel(req),
   }));
-  const nextCost = nextCostFor(state, id);
-  const affordable = status === 'available' && nextCost !== null && canAfford(state, nextCost);
+  const nextCost = nextCostFor(state, id, techs);
+  const affordable =
+    status === 'available' && nextCost !== null && canAfford(state, def.costRes, nextCost);
 
   let nextEffectText: string | null = null;
   if (level === 0) {
