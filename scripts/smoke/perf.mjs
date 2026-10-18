@@ -221,18 +221,21 @@ async function runStage(browser, st, ctxRes, errors, frames) {
   const rec = { buyFailed: null };
   try {
     if (st.name === 's0_crank') {
-      ctxRes.boot = await page.evaluate(() => {
+      // marks are absolute performance.now() values; navigation start is 0 on that clock (subtracted anyway)
+      const marks = await page.evaluate(() => {
         const nav = performance.getEntriesByType('navigation')[0];
-        const navStartMs = nav ? nav.startTime : 0;
         const m = window.__wedtmd?.perfMarks?.() ?? null;
-        if (m === null) return null;
-        const firstFrameMs = m.firstFrameMs > 0 ? m.firstFrameMs : null;
-        return {
-          navToBootMs: round(m.bootStartMs > 0 ? m.bootStartMs - navStartMs : null),
-          bootMs: round(firstFrameMs === null ? null : firstFrameMs - navStartMs),
-          bootToFirstFrameMs: round(firstFrameMs === null || m.bootStartMs <= 0 ? null : firstFrameMs - m.bootStartMs),
-        };
+        return m === null ? null : { navStartMs: nav ? nav.startTime : 0, bootStartMs: m.bootStartMs, firstFrameMs: m.firstFrameMs };
       });
+      if (marks !== null) {
+        const firstFrame = marks.firstFrameMs > 0 ? marks.firstFrameMs : null;
+        const boot = marks.bootStartMs > 0 ? marks.bootStartMs : null;
+        ctxRes.boot = {
+          navToBootMs: round(boot === null ? null : boot - marks.navStartMs),
+          bootMs: round(firstFrame === null ? null : firstFrame - marks.navStartMs),
+          bootToFirstFrameMs: round(firstFrame === null || boot === null ? null : firstFrame - boot),
+        };
+      }
     }
     if (st.buys.length > 0) {
       const pt = await page.evaluate(() => window.__wedtmd.crankClientPoint());
