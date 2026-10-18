@@ -4,7 +4,7 @@ import { SYSTEM_MENU_CONFIG } from '../../data/systemMenu';
 import { reduceReset } from '../systemMenuModel';
 import type { ResetEvent, ResetState } from '../systemMenuModel';
 
-/** Two-step import: same arm window and rules as the SYSTEM reset (thin wrapper over reduceReset). */
+/** Two-step import: same arm period and rules as the SYSTEM reset (thin wrapper over reduceReset). */
 export function reduceImport(
   s: ResetState,
   ev: ResetEvent,

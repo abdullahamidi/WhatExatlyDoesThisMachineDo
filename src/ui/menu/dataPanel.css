@@ -1,0 +1,94 @@
+/* DATA tab (WP12 T8). Palette vars come from #system-menu (systemMenu.css). Text min 12 px. */
+
+.data-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.data-panel [hidden] {
+  display: none !important;
+}
+
+.data-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.data-title {
+  margin: 0;
+  padding-bottom: 4px;
+  font-size: 1em;
+  color: var(--amber);
+  border-bottom: 1px solid var(--rust-dark);
+}
+
+.data-hint,
+.data-label,
+.data-status {
+  margin: 0;
+  font-size: max(12px, .9em);
+  color: var(--amber-dim);
+  overflow-wrap: anywhere;
+}
+
+.data-status {
+  min-height: 1.4em;
+}
+
+.data-text {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 5em;
+  resize: vertical;
+  font-family: inherit;
+  font-size: max(12px, .9em);
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--haze);
+  background: var(--ink);
+  border: 2px solid var(--rust-dark);
+  padding: 6px;
+  overflow-wrap: anywhere;
+}
+
+.data-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.data-btn {
+  font-family: inherit;
+  font-size: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: var(--amber);
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  padding: 10px 14px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.data-btn:hover {
+  background: var(--rust-dark);
+  color: var(--haze);
+}
+
+.data-btn.is-armed {
+  background: var(--rust-dark);
+  color: var(--haze);
+  border-color: var(--haze);
+}
+
+.data-btn:focus-visible,
+.data-text:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
