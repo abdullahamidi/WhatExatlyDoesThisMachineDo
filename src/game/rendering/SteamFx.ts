@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { MILESTONE_BURST, STEAM_EMITTERS, STEAM_FX } from '../../data/steamFx';
 import type { EmitterMode, SteamEmitter } from '../../data/steamFx';
 import { MACHINE_MOTION } from '../../data/machineComponents';
-import type { Vec2 } from '../../data/machineComponents';
+import type { MachineComponentId, Vec2 } from '../../data/machineComponents';
 import { PIXEL_SCALE } from '../../data/world';
 import type { GameSession } from '../../simulation';
 import type { MachineView } from '../entities/MachineView';
@@ -40,6 +40,12 @@ interface ScheduledPuff {
 
 /** Hammer puffs per frame are capped so a long stall cannot flood the pool. */
 const MAX_STRIKE_PUFFS = 3;
+
+/** Machine part each rate emitter belongs to: its puffs wait while that part is still assembling. */
+const RATE_EMITTER_PART: Readonly<Record<string, MachineComponentId>> = {
+  chimney: 'chimney',
+  manifold: 'steamManifold',
+};
 
 function freshState(): EmitterState {
   return { acc: 0, nextBurstAt: null, burstIndex: 0, counter: 0 };
@@ -118,8 +124,11 @@ export class SteamFx {
     const v = driverValue(emitter.driver, 0, rates.me, rates.ee, rates.pr);
     const mode = emitter.mode;
     switch (mode.kind) {
-      case 'rate':
-        if (v >= emitter.threshold) {
+      case 'rate': {
+        // A part still flying in has no steam yet: its lane stays quiet until it lands.
+        const part = RATE_EMITTER_PART[emitter.id];
+        const assembling = part !== undefined && machine?.isAssembling(part) === true;
+        if (v >= emitter.threshold && !assembling) {
           const step = stepEmitter(state.acc, emitterRate(mode, v), dt);
           state.acc = step.acc;
           for (let i = 0; i < step.spawn; i += 1) {
@@ -131,8 +140,9 @@ export class SteamFx {
           state.acc = 0;
         }
         return;
+      }
       case 'burst':
-        if (v >= Math.max(emitter.threshold, mode.minDriver)) {
+        if (v >= emitter.threshold && v > mode.minDriver) {
           if (state.nextBurstAt === null) state.nextBurstAt = this.clock + this.nextBurstGap(state, mode);
           if (this.clock >= state.nextBurstAt) {
             this.scheduleBurst(emitter, mode.count, mode.spacingMs, this.clock);

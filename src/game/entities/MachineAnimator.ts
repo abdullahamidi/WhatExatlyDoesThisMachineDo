@@ -158,10 +158,13 @@ export class MachineAnimator {
       if (sprite === undefined) continue;
       if (!isActive(id)) {
         // Assembling: the tween owns x/y/scale/alpha, but a visible driven or spin part keeps turning so it does not snap on landing.
+        // A visible ram adds its stroke offset on top of the tween's y (tweens step before scene update), so it lands
+        // in step with thetaM without overriding the drop. Strikes are not counted while assembling.
         if (anim.kind === 'driven' && sprite.visible) applyAngle(sprite, this.drivenAngle(id, anim));
         if (anim.kind === 'spin' && sprite.visible) {
           this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr), dt);
         }
+        if (anim.kind === 'reciprocate' && sprite.visible) sprite.y += this.ramOffset(anim, prevMasterDeg, dt);
         continue;
       }
 
@@ -210,21 +213,33 @@ export class MachineAnimator {
           break;
         }
         case 'reciprocate': {
-          // Ram: rides thetaM. A swing faster than HAMMER_FX.maxDegPerSec is parked mid-stroke and counts no strike.
-          const base = resolveAttachment(MACHINE_COMPONENTS[id]);
-          const deltaDeg = this.master.deg - prevMasterDeg;
-          const fast = dt > 0 && Math.abs(anim.ratio * deltaDeg) / dt > HAMMER_FX.maxDegPerSec;
-          if (fast) {
-            sprite.setPosition(base.x, base.y + HAMMER_FX.midOffsetArtPx);
-            break;
-          }
-          const offset = reciprocateOffset(this.master.deg, anim.ratio, anim.strokeArtPx, anim.phaseDeg);
-          sprite.setPosition(base.x, base.y + offset);
-          if (dt > 0) this.strikes += strikeCount(prevMasterDeg, this.master.deg, anim.ratio, anim.phaseDeg);
+          this.placeRam(id, sprite, anim, prevMasterDeg, dt);
           break;
         }
       }
     }
+  }
+
+  /** Ram stroke offset (art px) for this frame: a swing faster than HAMMER_FX.maxDegPerSec is parked mid-stroke. */
+  private ramOffset(anim: { ratio: number; strokeArtPx: number; phaseDeg: number }, prevMasterDeg: number, dt: number): number {
+    const deltaDeg = this.master.deg - prevMasterDeg;
+    const fast = dt > 0 && Math.abs(anim.ratio * deltaDeg) / dt > HAMMER_FX.maxDegPerSec;
+    return fast ? HAMMER_FX.midOffsetArtPx : reciprocateOffset(this.master.deg, anim.ratio, anim.strokeArtPx, anim.phaseDeg);
+  }
+
+  /** Active ram: base + stroke offset; counts strikes unless parked (fast swing). */
+  private placeRam(
+    id: MachineComponentId,
+    sprite: Phaser.GameObjects.Sprite,
+    anim: { ratio: number; strokeArtPx: number; phaseDeg: number },
+    prevMasterDeg: number,
+    dt: number,
+  ): void {
+    const base = resolveAttachment(MACHINE_COMPONENTS[id]);
+    const deltaDeg = this.master.deg - prevMasterDeg;
+    const fast = dt > 0 && Math.abs(anim.ratio * deltaDeg) / dt > HAMMER_FX.maxDegPerSec;
+    sprite.setPosition(base.x, base.y + this.ramOffset(anim, prevMasterDeg, dt));
+    if (!fast && dt > 0) this.strikes += strikeCount(prevMasterDeg, this.master.deg, anim.ratio, anim.phaseDeg);
   }
 
   /** Spin part: own angle += speed(driver) * dt, rest below the threshold; shown on its rotation sheet or rotated. */

@@ -5,7 +5,7 @@ import { DEPTH } from './world';
 /**
  * How an emitter spawns puffs.
  * rate: puffs/s = clamp(base + perLog * log10(1 + v), min, max) on the driver value v.
- * burst: `count` puffs spaced `spacingMs` apart, once every everyMinS..everyMaxS seconds while the driver is at least minDriver.
+ * burst: `count` puffs spaced `spacingMs` apart, once every everyMinS..everyMaxS seconds while the driver is above minDriver.
  *        A burst also fires once on purchase of the gate tech (see STEAM_FX.purchaseBurstDelayMs).
  * strike: one puff per hammer strike.
  */
