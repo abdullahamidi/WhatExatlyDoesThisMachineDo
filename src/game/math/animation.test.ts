@@ -14,6 +14,15 @@ import {
   gaugeFrame,
   lowPass,
   spinStep,
+  orbitPoint,
+  orbitFront,
+  orbitStep,
+  alignStep,
+  latchFrame,
+  stageFrameOf,
+  echoAlpha,
+  mirrorAngle,
+  milestonePhase,
 } from './animation';
 
 const CURVE: SpeedCurve = { base: 90, gain: 0.5, min: 30, max: 360 };
@@ -221,6 +230,261 @@ describe('driverValue resonance', () => {
     expect(driverValue('combined', 2, 3, 7, 9, 11)).toBe(5);
     expect(driverValue('manual', 2, 3, 7, 9, 11)).toBe(2);
     expect(driverValue('automation', 2, 3, 7, 9, 11)).toBe(3);
+  });
+});
+
+describe('driverValue exotic', () => {
+  it('picks the exotic value for the exotic driver', () => {
+    expect(driverValue('exotic', 2, 3, 7, 9, 11, 13)).toBe(13);
+    expect(driverValue('exotic', 1, 2)).toBe(0);
+  });
+
+  it('leaves the other drivers unchanged with the exotic argument present', () => {
+    expect(driverValue('manual', 2, 3, 7, 9, 11, 13)).toBe(2);
+    expect(driverValue('automation', 2, 3, 7, 9, 11, 13)).toBe(3);
+    expect(driverValue('combined', 2, 3, 7, 9, 11, 13)).toBe(5);
+    expect(driverValue('electric', 2, 3, 7, 9, 11, 13)).toBe(7);
+    expect(driverValue('thermal', 2, 3, 7, 9, 11, 13)).toBe(9);
+    expect(driverValue('resonance', 2, 3, 7, 9, 11, 13)).toBe(11);
+  });
+});
+
+// ART section 4 ring geometry (tilt in degrees) used by the orbit tests below.
+const RINGS = [
+  { a: 36, b: 7, tiltDeg: -10 },
+  { a: 42, b: 10, tiltDeg: 16 },
+  { a: 46, b: 13, tiltDeg: -24 },
+  { a: 50, b: 18, tiltDeg: 30 },
+] as const;
+
+function orbitSamples(ring: { a: number; b: number; tiltDeg: number }): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  for (let i = 0; i < 3600; i++) out.push(orbitPoint(ring, i * 0.1)); // phi step 0.1 deg
+  return out;
+}
+
+describe('orbitPoint', () => {
+  it('matches the ART section 4 extents within 0.5 px', () => {
+    const extents = [
+      { x: 35.5, y: 9.3 },
+      { x: 40.6, y: 15 },
+      { x: 42.4, y: 22.1 },
+      { x: 44.2, y: 29.5 },
+    ];
+    RINGS.forEach((ring, i) => {
+      const pts = orbitSamples(ring);
+      const maxX = Math.max(...pts.map((p) => Math.abs(p.x)));
+      const maxY = Math.max(...pts.map((p) => Math.abs(p.y)));
+      const want = extents[i];
+      expect(want).toBeDefined();
+      expect(Math.abs(maxX - (want?.x ?? 0))).toBeLessThanOrEqual(0.5);
+      expect(Math.abs(maxY - (want?.y ?? 0))).toBeLessThanOrEqual(0.5);
+    });
+  });
+
+  it('is the tilted start point at phi 0', () => {
+    const ring = RINGS[1];
+    expect(ring).toBeDefined();
+    if (!ring) return;
+    const t = (ring.tiltDeg * Math.PI) / 180;
+    const p = orbitPoint(ring, 0);
+    expect(p.x).toBeCloseTo(ring.a * Math.cos(t), 9);
+    expect(p.y).toBeCloseTo(ring.a * Math.sin(t), 9);
+  });
+
+  it('gives (0, b) for zero tilt at phi 90', () => {
+    const p = orbitPoint({ a: 40, b: 12, tiltDeg: 0 }, 90);
+    expect(p.x).toBeCloseTo(0, 9);
+    expect(p.y).toBeCloseTo(12, 9);
+  });
+
+  it('never returns -0 over the samples', () => {
+    for (const ring of RINGS) {
+      for (const p of orbitSamples(ring)) {
+        expect(Object.is(p.x, -0)).toBe(false);
+        expect(Object.is(p.y, -0)).toBe(false);
+      }
+    }
+  });
+});
+
+describe('orbitFront', () => {
+  it('is true for the upper half and multiples of 90 that are not 270', () => {
+    for (const phi of [0, 45, 90, 180, 450]) expect(orbitFront(phi)).toBe(true);
+  });
+
+  it('is false for the lower half, 270 and negative angles', () => {
+    for (const phi of [181, 270, 359, -90]) expect(orbitFront(phi)).toBe(false);
+  });
+});
+
+describe('orbitStep', () => {
+  it('wraps forward past 360', () => {
+    expect(orbitStep(350, 1, 20, 1)).toBeCloseTo(10, 9);
+  });
+
+  it('wraps backward past 0', () => {
+    expect(orbitStep(10, -1, 20, 1)).toBeCloseTo(350, 9);
+  });
+
+  it('keeps the angle for dt 0', () => {
+    expect(orbitStep(123, 1, 50, 0)).toBe(123);
+  });
+
+  it('keeps the angle for a NaN speed or dt', () => {
+    expect(orbitStep(45, 1, Number.NaN, 1)).toBe(45);
+    expect(orbitStep(45, 1, 10, Number.NaN)).toBe(45);
+  });
+
+  it('stays in [0, 360) over a sweep', () => {
+    for (let phi = -720; phi <= 720; phi += 37) {
+      for (const dir of [1, -1] as const) {
+        const x = orbitStep(phi, dir, 333, 0.7);
+        expect(x).toBeGreaterThanOrEqual(0);
+        expect(x).toBeLessThan(360);
+      }
+    }
+  });
+});
+
+describe('alignStep', () => {
+  it('moves linearly along the short way for dir 1', () => {
+    expect(alignStep(10, 90, 1, 0)).toBeCloseTo(10, 9);
+    expect(alignStep(10, 90, 1, 0.5)).toBeCloseTo(50, 9);
+  });
+
+  it('lands exactly on the target at t01 1', () => {
+    expect(alignStep(10, 90, 1, 1)).toBe(90);
+  });
+
+  it('goes the long way for dir -1', () => {
+    expect(alignStep(10, 90, -1, 1)).toBe(90);
+    expect(alignStep(10, 90, -1, 0.5)).toBeCloseTo(230, 9);
+  });
+
+  it('returns the target for every t01 when starting on it', () => {
+    for (const dir of [1, -1] as const) {
+      for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+        expect(alignStep(90, 90, dir, t)).toBe(90);
+      }
+    }
+  });
+
+  it('is monotone along dir', () => {
+    let prevForward = 0;
+    let prevBack = 0;
+    for (let i = 0; i <= 20; i++) {
+      const t = i / 20;
+      const forward = alignStep(10, 90, 1, t);
+      const back = alignStep(10, 90, -1, t);
+      const travelForward = (forward - 10 + 360) % 360;
+      const travelBack = (10 - back + 360) % 360;
+      expect(travelForward).toBeGreaterThanOrEqual(prevForward - 1e-9);
+      expect(travelBack).toBeGreaterThanOrEqual(prevBack - 1e-9);
+      prevForward = travelForward;
+      prevBack = travelBack;
+    }
+  });
+});
+
+describe('latchFrame', () => {
+  it('steps at 5 fps over 6 frames', () => {
+    expect([0, 0.1, 0.2, 0.4, 0.8, 1.0].map((s) => latchFrame(s, 6, 5))).toEqual([0, 0, 1, 2, 4, 5]);
+  });
+
+  it('holds the last frame after the sequence', () => {
+    expect(latchFrame(5, 6, 5)).toBe(5);
+  });
+
+  it('is 0 for null and negative time', () => {
+    expect(latchFrame(null, 6, 5)).toBe(0);
+    expect(latchFrame(-1, 6, 5)).toBe(0);
+  });
+
+  it('shows the last frame for Infinity (gate already true at load)', () => {
+    expect(latchFrame(Number.POSITIVE_INFINITY, 6, 5)).toBe(5);
+  });
+});
+
+describe('stageFrameOf', () => {
+  it('maps the gates met onto frames 0..4', () => {
+    expect([0, 1, 2, 3, 4].map((m) => stageFrameOf(m, 6))).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it('clamps to the last frame and to 0', () => {
+    expect(stageFrameOf(9, 6)).toBe(5);
+    expect(stageFrameOf(-2, 6)).toBe(0);
+  });
+
+  it('uses the ending frame when restored', () => {
+    expect(stageFrameOf(4, 6, true, 5)).toBe(5);
+    expect(stageFrameOf(0, 6, true, 5)).toBe(5);
+  });
+
+  it('uses the normal clamp when restored without an ending frame', () => {
+    expect(stageFrameOf(2, 6, true)).toBe(2);
+    expect(stageFrameOf(9, 6, true)).toBe(5);
+  });
+});
+
+describe('echoAlpha', () => {
+  const STEPS = [
+    { untilS: 1.5, alpha: 1 },
+    { untilS: 2.25, alpha: 0.66 },
+    { untilS: 3, alpha: 0.33 },
+  ] as const;
+
+  it('steps down hard across the three windows', () => {
+    expect(echoAlpha(0, STEPS)).toBe(1);
+    expect(echoAlpha(1.6, STEPS)).toBe(0.66);
+    expect(echoAlpha(2.3, STEPS)).toBe(0.33);
+  });
+
+  it('is 0 at and after the last window, and for null', () => {
+    expect(echoAlpha(3.0, STEPS)).toBe(0);
+    expect(echoAlpha(null, STEPS)).toBe(0);
+  });
+
+  it('moves a boundary value to the next step', () => {
+    expect(echoAlpha(1.5, STEPS)).toBe(0.66);
+  });
+});
+
+describe('mirrorAngle', () => {
+  it('mirrors and wraps into [0, 360)', () => {
+    expect(mirrorAngle(90)).toBe(270);
+    expect(mirrorAngle(-45)).toBe(45);
+    expect(mirrorAngle(725)).toBe(355);
+  });
+
+  it('returns +0 for 0 and 360 (never -0)', () => {
+    expect(Object.is(mirrorAngle(0), -0)).toBe(false);
+    expect(mirrorAngle(0)).toBe(0);
+    expect(Object.is(mirrorAngle(360), -0)).toBe(false);
+    expect(mirrorAngle(360)).toBe(0);
+  });
+
+  it('returns 0 for non-finite input', () => {
+    expect(mirrorAngle(Number.NaN)).toBe(0);
+    expect(mirrorAngle(Number.POSITIVE_INFINITY)).toBe(0);
+  });
+});
+
+describe('milestonePhase', () => {
+  it('is none without a milestone', () => {
+    expect(milestonePhase(null, 1500, 2000)).toEqual({ phase: 'none', t01: 0 });
+  });
+
+  it('aligns over alignMs, then holds over holdMs, then ends', () => {
+    expect(milestonePhase(0, 1500, 2000)).toEqual({ phase: 'align', t01: 0 });
+    const half = milestonePhase(0.75, 1500, 2000);
+    expect(half.phase).toBe('align');
+    expect(half.t01).toBeCloseTo(0.5, 9);
+    expect(milestonePhase(1.5, 1500, 2000)).toEqual({ phase: 'hold', t01: 0 });
+    const mid = milestonePhase(2.5, 1500, 2000);
+    expect(mid.phase).toBe('hold');
+    expect(mid.t01).toBeCloseTo(0.5, 9);
+    expect(milestonePhase(3.5, 1500, 2000)).toEqual({ phase: 'none', t01: 0 });
   });
 });
 

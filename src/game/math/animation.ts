@@ -30,7 +30,7 @@ export function addActivity(value: number, gained: number, tauSeconds: number): 
   return value + gained / tauSeconds; // value + gained / tau
 }
 
-/** Driver value picked from the activity sources: manual, automation, their sum for 'combined', electric (EE/s), thermal (PR/s), or resonance (RS/s). */
+/** Driver value picked from the activity sources: manual, automation, their sum for 'combined', electric (EE/s), thermal (PR/s), resonance (RS/s), or exotic (XF/s). */
 export function driverValue(
   driver: AnimationDriver,
   manual: number,
@@ -38,6 +38,7 @@ export function driverValue(
   electric = 0,
   thermal = 0,
   resonance = 0,
+  exotic = 0,
 ): number {
   switch (driver) {
     case 'manual':
@@ -52,6 +53,8 @@ export function driverValue(
       return thermal; // thermal only
     case 'resonance':
       return resonance; // resonance only
+    case 'exotic':
+      return exotic; // exotic only
   }
 }
 
@@ -147,4 +150,106 @@ export function spinStep(angleDeg: number, degPerSec: number, dtSeconds: number)
   if (!Number.isFinite(angleDeg)) return 0;
   const step = degPerSec * dtSeconds; // degrees travelled this frame
   return wrapDeg(Number.isFinite(step) ? angleDeg + step : angleDeg);
+}
+
+/** Angle in degrees wrapped into [0, 360) with no -0; non-finite input gives 0. */
+function mod360(angleDeg: number): number {
+  if (!Number.isFinite(angleDeg)) return 0;
+  return noNegativeZero(((angleDeg % 360) + 360) % 360); // ((x % 360) + 360) % 360
+}
+
+/**
+ * Point on a tilted orbit ring at orbit angle phiDeg (+y down):
+ * X = a cos p cos t - b sin p sin t, Y = a cos p sin t + b sin p cos t, with p = phi and t = tilt in radians.
+ */
+export function orbitPoint(ring: { a: number; b: number; tiltDeg: number }, phiDeg: number): Vec2 {
+  const t = (ring.tiltDeg * Math.PI) / 180; // tilt in radians
+  const p = (phiDeg * Math.PI) / 180; // orbit angle in radians
+  const cosP = Math.cos(p);
+  const sinP = Math.sin(p);
+  const cosT = Math.cos(t);
+  const sinT = Math.sin(t);
+  const x = ring.a * cosP * cosT - ring.b * sinP * sinT; // horizontal screen offset
+  const y = ring.a * cosP * sinT + ring.b * sinP * cosT; // vertical offset, +y down
+  return { x: noNegativeZero(x), y: noNegativeZero(y) };
+}
+
+/** Bead is in front of the core when sin(phi) >= 0: d = phi mod 360 in [0, 360), true for d <= 180 (0, 90, 180 true; 270 false). */
+export function orbitFront(phiDeg: number): boolean {
+  if (!Number.isFinite(phiDeg)) return false;
+  const d = ((phiDeg % 360) + 360) % 360; // [0, 360)
+  return d <= 180;
+}
+
+/** Orbit angle after dt: wrap(phi + dir * degPerSec * dt) into [0, 360); non-finite step keeps phi; non-finite phi gives 0. */
+export function orbitStep(phiDeg: number, dir: 1 | -1, degPerSec: number, dt: number): number {
+  if (!Number.isFinite(phiDeg)) return 0;
+  const step = dir * degPerSec * dt; // degrees travelled this frame
+  return mod360(phiDeg + (Number.isFinite(step) ? step : 0));
+}
+
+/**
+ * Move from phi along dir to the next angle equal to targetDeg (mod 360). t01 is clamped to 0..1 linearly;
+ * t01 >= 1 lands on the target exactly. Starting on the target returns the target for every t01.
+ */
+export function alignStep(phiDeg: number, targetDeg: number, dir: 1 | -1, t01: number): number {
+  if (!Number.isFinite(phiDeg)) return 0;
+  if (!Number.isFinite(targetDeg)) return mod360(phiDeg);
+  if (t01 >= 1) return mod360(targetDeg); // exact landing
+  const k = t01 > 0 ? t01 : 0; // clamp below 0 (NaN gives 0)
+  const dist = dir === 1 ? mod360(targetDeg - phiDeg) : mod360(phiDeg - targetDeg); // travel along dir, [0, 360)
+  return mod360(phiDeg + dir * dist * k);
+}
+
+/**
+ * Latch sprite frame: null -> 0; Infinity (gate already true at load) -> frames - 1; otherwise
+ * min(frames - 1, floor(s * fps)). Negative / NaN time or non-positive fps gives 0.
+ */
+export function latchFrame(secondsSinceGate: number | null, frames: number, fps: number): number {
+  if (secondsSinceGate === null || !(frames >= 1) || !Number.isFinite(frames)) return 0;
+  const last = frames - 1; // last frame index
+  if (secondsSinceGate === Infinity) return last;
+  if (!(fps > 0) || !Number.isFinite(fps) || !(secondsSinceGate >= 0)) return 0;
+  return Math.min(last, Math.floor(secondsSinceGate * fps)); // whole frames since the gate opened
+}
+
+/** Stage frame: restored (with endingFrame) -> endingFrame; otherwise floor(gatesMet). Clamped to [0, frames - 1]. */
+export function stageFrameOf(gatesMet: number, frames: number, restored = false, endingFrame?: number): number {
+  const pick = restored && endingFrame !== undefined ? endingFrame : gatesMet; // value to clamp
+  if (Number.isNaN(pick)) return 0;
+  const hi = Math.max(0, frames - 1); // last frame index
+  return noNegativeZero(clampTo(Math.floor(pick), 0, hi));
+}
+
+/** Echo alpha: null or negative time -> 0; else the alpha of the first step with s < untilS; past the last step -> 0. */
+export function echoAlpha(
+  secondsSinceClick: number | null,
+  steps: readonly { untilS: number; alpha: number }[],
+): number {
+  if (secondsSinceClick === null || !(secondsSinceClick >= 0)) return 0;
+  for (const step of steps) {
+    if (secondsSinceClick < step.untilS) return step.alpha; // hard steps, boundary goes to the next step
+  }
+  return 0;
+}
+
+/** Mirror of an angle about the vertical: -deg wrapped into [0, 360); never -0; non-finite gives 0. */
+export function mirrorAngle(deg: number): number {
+  return mod360(-deg);
+}
+
+/**
+ * Milestone bead timeline in seconds since the milestone: align for alignMs (t01 0..1), then hold for holdMs
+ * (t01 0..1), then none (t01 0). null, negative or NaN time is none.
+ */
+export function milestonePhase(
+  secondsSince: number | null,
+  alignMs: number,
+  holdMs: number,
+): { phase: 'none' | 'align' | 'hold'; t01: number } {
+  if (secondsSince === null || !(secondsSince >= 0)) return { phase: 'none', t01: 0 };
+  const ms = secondsSince * 1000; // elapsed milliseconds
+  if (ms < alignMs) return { phase: 'align', t01: ms / alignMs }; // alignMs > 0 here
+  if (ms < alignMs + holdMs) return { phase: 'hold', t01: (ms - alignMs) / holdMs }; // holdMs > 0 here
+  return { phase: 'none', t01: 0 };
 }
