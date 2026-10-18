@@ -160,7 +160,7 @@ export function cameraPoseAt(t: number, start: CameraPose, reduced: boolean): { 
   return { pose, cutFade };
 }
 
-/** Linear 0..1 across the track window (FINALE_TRACKS). `_reduced` is accepted for signature parity; reduced only changes the ground draw (fade instead of wipe) in finaleFrame. */
+/** Linear 0..1 across the track span (FINALE_TRACKS). `_reduced` is accepted for signature parity; reduced only changes the ground draw (fade instead of wipe) in finaleFrame. */
 export function trackValue(id: FinaleTrackId, t: number, _reduced: boolean): number {
   const w = FINALE_TRACKS[id];
   return clamp01((t - w.startS) / w.durS);
