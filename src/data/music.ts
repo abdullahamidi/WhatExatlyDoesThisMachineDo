@@ -81,7 +81,7 @@ const THEMES: Record<MusicThemeId, MusicTheme> = {
 export const MUSIC = {
   themes: THEMES,
   keystones: KEYSTONES,
-  busGain: 0.6,
+  busGain: 0.36,   // release tails overlap across bars: keeps the music sum <= 0.15 of full scale (WP15 review)
   chordToneChance: 0.7,   // chance a melody note is a chord tone (else a scale passing tone)
   lookaheadS: 0.5,
   maxEventsPerCall: 16,

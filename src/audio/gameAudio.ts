@@ -178,10 +178,12 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
   /**
    * Starts `theme` on the idle slot at the next bar after startDelayS. The active slot becomes the outgoing one
    * and fades out from its current gain while the new slot fades in (D5). Keeps the idle slot's gain so the synth ramps from it.
+   * The idle slot may still have tails fading out: they are stopped first so they do not ride the new gain.
    */
-  function startTheme(theme: MusicThemeId, ctxNowS: number, wallNowS: number): void {
+  function startTheme(s: Synth, theme: MusicThemeId, ctxNowS: number, wallNowS: number): void {
     const outSlot = activeSlot;
     const inSlot: 0 | 1 = outSlot === 0 ? 1 : 0;
+    s.stopMusic(inSlot);
     const start = ctxNowS + MUSIC.startDelayS;
     const idle = slots[inSlot];
     slots[inSlot] = { theme, clockStartS: start, scheduledUntilS: start, gain: idle.gain };
@@ -256,7 +258,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     }
     const phase = session.state.ending.phase;
     const theme = musicTheme(session.state.techLevels, phase);
-    if (theme !== null && theme !== slots[activeSlot].theme) startTheme(theme, ctxNow, wallNow);
+    if (theme !== null && theme !== slots[activeSlot].theme) startTheme(s, theme, ctxNow, wallNow);
     updateFade(s, wallNow);
     const duck = duckLevel(phase, sinceBeat(beats.swellS, wallNow), sinceBeat(beats.chordS, wallNow), sinceBeat(beats.milestoneS, wallNow));
     if (!Object.is(duck, duckNow)) {
@@ -276,8 +278,8 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
    * Update loop: hum and gear ticks follow the current ME/s; mains and arcs follow EE/s; the boiler roar follows PR/s;
    * the resonance pad follows RS/s (owned spire only); the servo whirr follows the crank servo level;
    * the sub-bass drone follows XF/s (owned nullChamber only). The volume levels are checked each tick (pushed on change only).
-   * Ambient beds are multiplied by their era trim (AUDIO.bedTrim): gear has no gain parameter in the synth, so its trim
-   * is skipped; wind has no gain parameter either (its trim is 1 in every era, so nothing is lost).
+   * Ambient beds are multiplied by their era trim (AUDIO.bedTrim); wind has no gain parameter in the synth (its trim
+   * is 1 in every era, so nothing is lost).
    * The music controller runs before the mute branch so muting stops the notes. Muted keeps the hum pitch and drops only its gain.
    */
   function tick(): void {
@@ -307,7 +309,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
       }
       const era = currentEra(session.state.techLevels);
       s.setHum(humFrequency(ps), humGain(ps) * bedTrim('hum', era));
-      s.scheduleGearTicks(gearTickRate(ps));
+      s.scheduleGearTicks(gearTickRate(ps), bedTrim('gear', era));
       s.setMains(mainsGain(ee) * bedTrim('mains', era));
       s.scheduleArcs(arcRate(ee, session.state.techLevels.sparkGap >= 1));
       s.setBoiler(boilerGain(pr, session.state.techLevels.boiler >= 1) * bedTrim('boiler', era));

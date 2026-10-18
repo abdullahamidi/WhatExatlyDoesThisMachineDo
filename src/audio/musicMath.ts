@@ -213,17 +213,28 @@ export function musicTheme(techLevels: Readonly<Record<TechId, number>>, phase: 
 
 /**
  * Loudest music level of a theme at the music bus (WP15 C2): busGain x the largest sum of note gains sounding at
- * once, over one full loop. Bars do not overlap, so each bar is checked on its own.
+ * once, over one full loop. A note sounds for its durS plus its release tail, so a bar's notes are summed with the
+ * tails of the bars before it (an event starts at or after its bar, so only earlier bars can still be sounding).
  */
 export function musicContribution(theme: MusicTheme): number {
   let peak = 0;
   const loop = loopBars(theme);
+  const barS = barSeconds(theme);
+  const tail = theme.releaseS;
+  // Earlier bars whose tails can still reach into this bar: a tail longer than one bar reaches further back.
+  const reach = 1 + Math.ceil(tail / barS);
   for (let bar = 0; bar < loop; bar++) {
-    const events = eventsForBar(theme, bar, MUSIC.seed);
-    for (const ev of events) {
+    const sounding: MusicNoteEvent[] = [];
+    for (let back = 0; back <= reach; back++) {
+      const shiftS = back * barS;
+      for (const ev of eventsForBar(theme, bar - back, MUSIC.seed)) {
+        sounding.push({ ...ev, startS: ev.startS - shiftS });
+      }
+    }
+    for (const ev of eventsForBar(theme, bar, MUSIC.seed)) {
       let sum = 0;
-      for (const other of events) {
-        if (other.startS <= ev.startS && ev.startS < other.startS + other.durS) sum += other.gain;
+      for (const other of sounding) {
+        if (other.startS <= ev.startS && ev.startS < other.startS + other.durS + tail) sum += other.gain;
       }
       peak = Math.max(peak, sum);
     }

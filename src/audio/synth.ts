@@ -816,14 +816,28 @@ export function createSynth(context: AudioContext): Synth {
     return musicGraph;
   }
 
-  /** Fades every sounding music note to silence within a few milliseconds and stops its oscillators; the counters drop as they end. */
-  function stopMusicNotes(): void {
+  /**
+   * Fades the sounding music notes (one slot, or all) to silence within a few milliseconds and stops their oscillators; the
+   * counters drop as they end. A note not yet started is stopped before its start, so it never sounds. A sounding note holds
+   * its current level first, so a future note's envelope is never wiped (cancelScheduledValues alone would reset it to gain 1).
+   */
+  function stopMusicNotes(slot?: 0 | 1): void {
     const now = context.currentTime;
     for (const note of activeNotes) {
-      note.env.gain.cancelScheduledValues(now);
-      note.env.gain.setTargetAtTime(ENVELOPE_FLOOR, now, MUSIC_STOP_FADE_S);
-      const stopAt = Math.max(now, note.startS) + STOP_PAD_S;
-      for (const osc of note.oscs) osc.stop(stopAt);
+      if (slot !== undefined && note.slot !== slot) continue;
+      if (note.startS > now) {
+        for (const osc of note.oscs) osc.stop(now);
+        continue;
+      }
+      const param = note.env.gain;
+      if (typeof param.cancelAndHoldAtTime === 'function') {
+        param.cancelAndHoldAtTime(now);
+      } else {
+        param.cancelScheduledValues(now);
+        param.setValueAtTime(param.value, now);
+      }
+      param.setTargetAtTime(ENVELOPE_FLOOR, now, MUSIC_STOP_FADE_S);
+      for (const osc of note.oscs) osc.stop(now + STOP_PAD_S);
     }
   }
 
@@ -976,7 +990,7 @@ export function createSynth(context: AudioContext): Synth {
       });
     },
 
-    scheduleGearTicks(ticksPerSecond: number): void {
+    scheduleGearTicks(ticksPerSecond: number, gain = 1): void {
       run('scheduleGearTicks', 'ambient', (out) => {
         if (!Number.isFinite(ticksPerSecond) || ticksPerSecond <= 0) {
           nextTickTime = 0;
@@ -986,15 +1000,18 @@ export function createSynth(context: AudioContext): Synth {
         if (nextTickTime < now) nextTickTime = now;
         const interval = 1 / ticksPerSecond;
         const g = AUDIO.gearTick;
+        const level = Number.isFinite(gain) && gain > 0 ? gain : 0;
         let count = 0;
         while (nextTickTime < now + AUDIO.lookaheadSeconds && count < MAX_TICKS_PER_CALL) {
-          voice(out,{
-            wave: 'triangle',
-            hz: g.hz,
-            startAt: nextTickTime,
-            decay: g.decayMs / 1000,
-            peak: g.gain,
-          });
+          if (level > 0) {
+            voice(out,{
+              wave: 'triangle',
+              hz: g.hz,
+              startAt: nextTickTime,
+              decay: g.decayMs / 1000,
+              peak: g.gain * level,
+            });
+          }
           nextTickTime += interval;
           count++;
         }
@@ -1231,7 +1248,7 @@ export function createSynth(context: AudioContext): Synth {
         const g = getMusic(out);
         const s = g.slots[slot];
         s.lowpass.frequency.value = t.lowpassHz;
-        const note = startMusicNote(context, s, t, { ...ev, durS: Math.max(0, ev.durS) }, () => {
+        const note = startMusicNote(context, s, slot, t, { ...ev, durS: Math.max(0, ev.durS) }, () => {
           musicTally.live -= 1;
           activeNotes.delete(note);
         });
@@ -1258,9 +1275,9 @@ export function createSynth(context: AudioContext): Synth {
       });
     },
 
-    stopMusic(): void {
+    stopMusic(slot?: 0 | 1): void {
       run('stopMusic', 'music', () => {
-        stopMusicNotes();
+        stopMusicNotes(slot);
       });
     },
 
