@@ -1,9 +1,17 @@
 import { TECHNOLOGIES } from '../data/technologies';
-import { FIRST_CLICK_MESSAGE, INSTALL_LINES, TOAST_CONFIG } from '../data/notifications';
+import {
+  FIRST_CLICK_MESSAGE,
+  INSTALL_LINES,
+  RECOVERED_TEXT,
+  TOAST_CONFIG,
+  WELCOME_MIN_ELAPSED_SECONDS,
+  WELCOME_TEXT,
+} from '../data/notifications';
 import type { ToastMessage } from '../data/notifications';
-import type { TechId } from '../data/types';
+import type { OfflineReport, TechId } from '../data/types';
+import { formatDuration, formatNumber } from '../utils/format';
 
-// Pure mapping from session events to toast messages (WP3). No DOM, no Phaser.
+// Pure mapping from session events to toast messages (WP3, WP4). No DOM, no Phaser.
 
 export type NotificationEvent =
   | { type: 'click'; totalClicks: number }
@@ -55,6 +63,34 @@ export function messageFor(event: NotificationEvent): ToastMessage | null {
         durationMs: TOAST_CONFIG.milestoneDurationMs,
       };
   }
+}
+
+// Welcome-back toast after an offline catch-up, or null when the absence was too short or earned nothing.
+export function welcomeBackMessage(r: OfflineReport): ToastMessage | null {
+  if (!(r.gained > 0)) return null;
+  if (!(r.elapsedSeconds >= WELCOME_MIN_ELAPSED_SECONDS)) return null;
+  let body = `Unattended for ${formatDuration(r.elapsedSeconds)}. +${formatNumber(r.gained)} ME accumulated.`;
+  if (r.elapsedSeconds > r.cappedSeconds) {
+    body += ` Buffer capped at ${formatDuration(r.cappedSeconds)}.`;
+  }
+  return {
+    key: 'welcome-back',
+    title: WELCOME_TEXT.title,
+    body,
+    tone: 'system',
+    durationMs: TOAST_CONFIG.welcomeDurationMs,
+  };
+}
+
+// Toast shown when the stored save was unreadable and a fresh state was started.
+export function recoveredMessage(): ToastMessage {
+  return {
+    key: 'save-recovered',
+    title: RECOVERED_TEXT.title,
+    body: RECOVERED_TEXT.body,
+    tone: 'system',
+    durationMs: TOAST_CONFIG.welcomeDurationMs,
+  };
 }
 
 // Upper-case display name of a technology.

@@ -17,7 +17,18 @@ export const TOAST_CONFIG = {
   maxVisible: 3,
   durationMs: 3200,
   milestoneDurationMs: 6500,
+  welcomeDurationMs: 7000,
   fadeMs: 250,
+} as const;
+
+// Offline reports shorter than this (seconds) stay silent.
+export const WELCOME_MIN_ELAPSED_SECONDS = 60;
+
+export const WELCOME_TEXT = { title: 'WELCOME BACK' } as const;
+
+export const RECOVERED_TEXT = {
+  title: 'MEMORY CORRUPTED',
+  body: 'Factory state restored.',
 } as const;
 
 export const FIRST_CLICK_MESSAGE = 'Manual operation detected.';

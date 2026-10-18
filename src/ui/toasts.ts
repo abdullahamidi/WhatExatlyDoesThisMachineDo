@@ -2,7 +2,7 @@ import './toasts.css';
 import { TOAST_CONFIG } from '../data/notifications';
 import type { ToastMessage, ToastTone } from '../data/notifications';
 import type { GameSession } from '../simulation';
-import { messageFor } from './notificationRules';
+import { messageFor, welcomeBackMessage } from './notificationRules';
 import type { NotificationEvent } from './notificationRules';
 
 // Toast stack (WP3). DOM only: no Phaser. Text is always written with textContent.
@@ -163,4 +163,13 @@ export function connectNotifications(session: GameSession, toasts: Toasts): () =
   return () => {
     for (const unsubscribe of unsubscribers) unsubscribe();
   };
+}
+
+// Shows a welcome-back toast for every later 'offline' event (tab return). The boot-time report is
+// shown by bootstrap from the StartupResult, because it fires before listeners exist.
+export function connectOfflineNotices(session: GameSession, toasts: Toasts): () => void {
+  return session.on('offline', (report) => {
+    const msg = welcomeBackMessage(report);
+    if (msg !== null) toasts.show(msg);
+  });
 }

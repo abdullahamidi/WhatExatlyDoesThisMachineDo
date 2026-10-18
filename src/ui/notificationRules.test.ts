@@ -1,9 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { messageFor } from './notificationRules';
+import { messageFor, recoveredMessage, welcomeBackMessage } from './notificationRules';
 import type { NotificationEvent } from './notificationRules';
-import { FIRST_CLICK_MESSAGE, INSTALL_LINES, TOAST_CONFIG } from '../data/notifications';
+import {
+  FIRST_CLICK_MESSAGE,
+  INSTALL_LINES,
+  RECOVERED_TEXT,
+  TOAST_CONFIG,
+  WELCOME_MIN_ELAPSED_SECONDS,
+} from '../data/notifications';
 import { TECHNOLOGIES } from '../data/technologies';
 import { TECH_IDS } from '../data/types';
+import { formatDuration, formatNumber } from '../utils/format';
 
 describe('INSTALL_LINES', () => {
   it('has a non-empty line of at most 60 chars for every tech', () => {
@@ -95,5 +102,61 @@ describe('messageFor titles', () => {
       const msg = messageFor(event);
       if (msg !== null) expect(msg.title.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('welcomeBackMessage', () => {
+  const report = (elapsedSeconds: number, cappedSeconds: number, gained: number) => ({
+    elapsedSeconds,
+    cappedSeconds,
+    gained,
+  });
+
+  it('stays silent when nothing was gained', () => {
+    expect(welcomeBackMessage(report(7200, 28800, 0))).toBeNull();
+    expect(welcomeBackMessage(report(7200, 28800, Number.NaN))).toBeNull();
+    expect(welcomeBackMessage(report(7200, 28800, -5))).toBeNull();
+  });
+
+  it('stays silent below the minimum elapsed time', () => {
+    expect(welcomeBackMessage(report(59, 28800, 5))).toBeNull();
+    expect(WELCOME_MIN_ELAPSED_SECONDS).toBe(60);
+  });
+
+  it('shows a system toast at the minimum elapsed time', () => {
+    const msg = welcomeBackMessage(report(60, 28800, 5));
+    expect(msg).not.toBeNull();
+    expect(msg?.key).toBe('welcome-back');
+    expect(msg?.tone).toBe('system');
+    expect(msg?.title).toBe('WELCOME BACK');
+    expect(msg?.durationMs).toBe(TOAST_CONFIG.welcomeDurationMs);
+  });
+
+  it('body carries the elapsed time and the gain', () => {
+    const msg = welcomeBackMessage(report(7200, 28800, 1234));
+    expect(msg?.body).toContain(formatDuration(7200));
+    expect(msg?.body).toContain(formatNumber(1234));
+  });
+
+  it('omits the cap note when the absence was within the cap', () => {
+    const msg = welcomeBackMessage(report(7200, 28800, 5));
+    expect(msg?.body).not.toContain('capped');
+  });
+
+  it('adds the cap note when the absence exceeded the cap', () => {
+    const msg = welcomeBackMessage(report(36000, 28800, 5));
+    expect(msg?.body).toContain('capped at 8h');
+  });
+});
+
+describe('recoveredMessage', () => {
+  it('is a system toast with the recovered texts', () => {
+    const msg = recoveredMessage();
+    expect(msg.key).toBe('save-recovered');
+    expect(msg.tone).toBe('system');
+    expect(msg.title.length).toBeGreaterThan(0);
+    expect(msg.title).toBe(RECOVERED_TEXT.title);
+    expect(msg.body).toBe(RECOVERED_TEXT.body);
+    expect(msg.durationMs).toBe(TOAST_CONFIG.welcomeDurationMs);
   });
 });
