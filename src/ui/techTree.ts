@@ -281,7 +281,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   };
 
   const buildView = (): TechTreeView =>
-    buildTechTreeView(session.getAllTechViews(), session.state.me, selected);
+    buildTechTreeView(session.getAllTechViews(), session.state.res, selected);
 
   function update(): void {
     if (destroyed || !isOpenFlag) return;
@@ -351,7 +351,9 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     const before = session.getTechView(selected);
     const result = session.purchase(selected);
     if (!result.ok) {
-      setFeedback(purchaseFailureText(result.reason, Math.max(0, (before.nextCost ?? 0) - session.state.me)));
+      const costRes = before.def.costRes;
+      const shortfall = Math.max(0, (before.nextCost ?? 0) - session.state.res[costRes]);
+      setFeedback(purchaseFailureText(result.reason, shortfall, costRes));
       flashDenied();
       feedback.purchaseDenied.emit(result.reason);
       return;

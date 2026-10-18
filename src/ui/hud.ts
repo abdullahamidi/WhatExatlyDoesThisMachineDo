@@ -1,10 +1,20 @@
 import './hud.css';
+import { RESOURCES } from '../data/resources';
+import type { ResourceId } from '../data/types';
 import type { GameContext } from '../game/context';
-import type { HudView } from './hudView';
+import { HUD_ROW_IDS } from './hudView';
+import type { HudView, HudResourceRow } from './hudView';
 
 export interface Hud { render(view: HudView): void; destroy(): void }
 
 interface Readout { me: string; perClick: string; perSecond: string }
+
+/** DOM refs and last-written values of one non-ME resource row. */
+interface ResourceRowRefs {
+  row: HTMLElement;
+  value: HTMLElement;
+  written: { value: string; perSecond: string; visible: boolean };
+}
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -36,6 +46,19 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
   panel.appendChild(me.row);
   panel.appendChild(perClick.row);
   panel.appendChild(perSecond.row);
+
+  // One row per non-ME resource, hidden until the resource is used (see HudView.rows).
+  const resourceRows = new Map<ResourceId, ResourceRowRefs>();
+  for (const id of HUD_ROW_IDS) {
+    const built = createRow(RESOURCES[id].short, `hud-res-${id}`, '0');
+    built.row.style.display = 'none';
+    panel.appendChild(built.row);
+    resourceRows.set(id, {
+      row: built.row,
+      value: built.value,
+      written: { value: '0', perSecond: '0/s', visible: false },
+    });
+  }
 
   const buttons = createElement('div', { id: 'hud-buttons', className: 'hud-buttons' });
   const techButton = createElement('button', { id: 'hud-tech', className: 'hud-btn', text: 'TECH INDEX' });
@@ -69,11 +92,30 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
     el.textContent = text;
   };
 
+  const renderResourceRow = (rowView: HudResourceRow): void => {
+    const refs = resourceRows.get(rowView.id);
+    if (refs === undefined) return;
+    const written = refs.written;
+    if (written.value !== rowView.value) {
+      written.value = rowView.value;
+      refs.value.textContent = rowView.value;
+    }
+    if (written.perSecond !== rowView.perSecond) {
+      written.perSecond = rowView.perSecond;
+      refs.row.title = rowView.perSecond;
+    }
+    if (written.visible !== rowView.visible) {
+      written.visible = rowView.visible;
+      refs.row.style.display = rowView.visible ? '' : 'none';
+    }
+  };
+
   return {
     render(view: HudView): void {
       setText(me.value, 'me', view.me);
       setText(perClick.value, 'perClick', view.perClick);
       setText(perSecond.value, 'perSecond', view.perSecond);
+      for (const rowView of view.rows) renderResourceRow(rowView);
     },
     destroy(): void {
       techButton.removeEventListener('click', onTech);
