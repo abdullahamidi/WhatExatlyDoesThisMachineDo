@@ -72,7 +72,7 @@ export class HandCrank {
   private crank(): void {
     this.ctx.session.click(); // the only state mutation
     this.floatingText.spawn(this.machine.getComponentWorldPosition('handCrank'), clickGainText(this.lastGain));
-    if (motionPolicy(this.ctx.session.settings).shake) this.machine.shake();
+    this.machine.shake(); // no-op under reduced motion (MachineView owns the policy check)
     this.stopPulse();
   }
 
@@ -89,6 +89,10 @@ export class HandCrank {
       duration: CRANK_PULSE.periodMs / 2,
       yoyo: true,
       repeat: -1,
+      // Reduced motion (flashes off): the ring is held static at its peak alpha. Checked live on every tween step.
+      onUpdate: (_tween, target: Phaser.GameObjects.Arc) => {
+        if (!motionPolicy(this.ctx.session.settings).flashes) target.setAlpha(CRANK_PULSE.alphaPeak);
+      },
     });
   }
 

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { VIEW, WORLD, CAMERA, ECLIPSE } from '../../data/world';
 import type { GameSession } from '../../simulation';
+import { motionPolicy } from '../../simulation/settings';
 import { effectiveMinZoom } from '../math/camera';
 import { skyPxToScrollZero, stageFrame } from '../math/parallax';
 
@@ -51,9 +52,10 @@ export class Eclipse {
     if (this.sprite.scene) this.sprite.destroy(); // Phaser clears scene on destroy
   }
 
-  // Sets the sheet frame only when it changes; frame 0 hides the sprite.
+  // Sets the sheet frame only when it changes; frame 0 hides the sprite. Reduced motion (flashes off) skips the diamond flash.
   private refresh(): void {
-    const frame = this.diamondLeftMs !== null
+    const flashing = this.diamondLeftMs !== null && motionPolicy(this.session.settings).flashes;
+    const frame = flashing
       ? ECLIPSE.diamond.frame
       : stageFrame(ECLIPSE.stages, this.session.state.techLevels);
     if (frame === this.shownFrame) return;

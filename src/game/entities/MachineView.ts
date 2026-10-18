@@ -12,6 +12,8 @@ import {
 } from '../../data/machineComponents';
 import type { MachineComponentId, Vec2 } from '../../data/machineComponents';
 import { HAMMER_FX } from '../../data/steamFx';
+import { REDUCED_MOTION } from '../../data/settings';
+import { motionPolicy } from '../../simulation/settings';
 import { componentDepth, machineLocalToWorld, resolveAttachment } from '../math/machineLayout';
 import { connectionOffset } from '../math/machineLinks';
 import { newlyVisible, visibleComponentIds } from '../math/machineVisibility';
@@ -160,16 +162,20 @@ export class MachineView {
     }
   }
 
-  /** Fly-in tween from above with a fade; on landing the part settles, puffs dust and the machine shakes. */
+  /**
+   * Fly-in tween from above with a fade; on landing the part settles, puffs dust and the machine shakes.
+   * Reduced motion (assemblyDrop off): fade-in only, no fly-in offset or scale, no dust and no landing shake.
+   */
   private startAssembly(id: MachineComponentId): void {
     this.cancelAssembly(id);
     const sprite = this.sprites.get(id);
     if (sprite === undefined) return;
     const base = resolveAttachment(MACHINE_COMPONENTS[id]);
+    const drop = motionPolicy(this.ctx.session.settings).assemblyDrop;
     sprite
       .setVisible(true)
-      .setPosition(base.x, base.y - MACHINE_ASSEMBLY.dropArtPx)
-      .setScale(MACHINE_ASSEMBLY.startScale)
+      .setPosition(base.x, base.y - (drop ? MACHINE_ASSEMBLY.dropArtPx : REDUCED_MOTION.assemblyDropPx))
+      .setScale(drop ? MACHINE_ASSEMBLY.startScale : 1)
       .setAlpha(0);
     const tween = this.scene.tweens.add({
       targets: sprite,
@@ -178,11 +184,13 @@ export class MachineView {
       scaleY: 1,
       alpha: 1,
       duration: MACHINE_ASSEMBLY.durationMs,
-      ease: MACHINE_ASSEMBLY.ease,
+      ease: drop ? MACHINE_ASSEMBLY.ease : 'Linear',
       onComplete: () => {
         this.settle(id, true);
-        this.spawnPuff(id);
-        this.shake();
+        if (drop) {
+          this.spawnPuff(id);
+          this.shake();
+        }
         this.ctx.feedback.partLanded.emit(id);
       },
     });
@@ -368,8 +376,10 @@ export class MachineView {
   /**
    * Short horizontal jolt of the machine parts: -a, then +a, then back to rest (x = 0).
    * A running shake is stopped first; the rest position is only reached by the final step.
+   * Single source of truth for the shake: a no-op while the motion policy has shake off (click and landing both come here).
    */
   shake(): void {
+    if (!motionPolicy(this.ctx.session.settings).shake) return;
     this.shakeTween?.stop();
     const a = CRANK_FEEDBACK.shakePx; // art px; parts live inside the scaled container, so no PIXEL_SCALE here
     const quarter = CRANK_FEEDBACK.shakeMs / 4;

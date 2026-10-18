@@ -366,6 +366,7 @@ export class MachineAnimator {
         }
       }
     }
+    this.firstFrame = false;
   }
 
   /** Inversion ghost: a mirror of the hand crank, shown with hard alpha steps for echoSeconds after a click. */
@@ -390,6 +391,7 @@ export class MachineAnimator {
     dt: number,
     exotic: { phase: 'none' | 'align' | 'hold'; t01: number },
     xf: number,
+    maxDegPerSec: number | null,
   ): void {
     const from = this.orbitAngles.get(id) ?? anim.phi0Deg;
     let phi: number;
@@ -398,8 +400,8 @@ export class MachineAnimator {
     } else if (exotic.phase === 'hold') {
       phi = EXOTIC_MILESTONE_FX.beadPhiDeg;
     } else {
-      const speed = xf < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, xf) * anim.speedScale; // rest below threshold
-      phi = orbitStep(from, anim.dir, speed, dt);
+      const raw = xf < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, xf) * anim.speedScale; // rest below threshold
+      phi = orbitStep(from, anim.dir, capSpeed(raw, maxDegPerSec), dt);
     }
     this.orbitAngles.set(id, phi);
     const def = MACHINE_COMPONENTS[id];
@@ -415,7 +417,8 @@ export class MachineAnimator {
 
   /**
    * Latch part: frame 0 until its gate holds, then 0 -> frames-1 once and held (latchFrame). A gate already met at the first
-   * active frame (a loaded save) shows the last frame without animating. Losing the gate re-arms the latch.
+   * update after load / reset (see seeding in update) shows the last frame without animating. A gate met later animates from
+   * the moment it opened, also when the part was still assembling then. Losing the gate re-arms the latch.
    */
   private placeLatch(
     sprite: Phaser.GameObjects.Sprite,
@@ -428,10 +431,7 @@ export class MachineAnimator {
     if (!gate) {
       this.latchStart.set(id, 'off'); // gate not met (or reset): frame 0
       since = null;
-    } else if (prior === undefined) {
-      this.latchStart.set(id, 'done'); // met at first sight: last frame
-      since = Infinity;
-    } else if (prior === 'off') {
+    } else if (prior === undefined || prior === 'off') {
       this.latchStart.set(id, this.elapsed); // the gate just opened: the sequence starts now
       since = 0;
     } else if (prior === 'done') {
@@ -483,11 +483,21 @@ export class MachineAnimator {
     if (!fast && dt > 0) this.strikes += strikeCount(prevMasterDeg, this.master.deg, anim.ratio, anim.phaseDeg);
   }
 
-  /** Spin part: own angle += speed(driver) * dt, rest below the threshold; shown on its rotation sheet or rotated. */
-  private spinPart(id: MachineComponentId, sprite: Phaser.GameObjects.Sprite, anim: { speed: SpeedCurve }, dv: number, dt: number): void {
+  /**
+   * Spin part: own angle += speed(driver) * dt, rest below the threshold; shown on its rotation sheet or rotated.
+   * maxDegPerSec (reduced motion) caps the speed, milestone boost included.
+   */
+  private spinPart(
+    id: MachineComponentId,
+    sprite: Phaser.GameObjects.Sprite,
+    anim: { speed: SpeedCurve },
+    dv: number,
+    dt: number,
+    maxDegPerSec: number | null,
+  ): void {
     const base = dv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, dv); // rest below threshold
     const boost = id === EXOTIC_MILESTONE_FX.core && this.exoticWithin(EXOTIC_MILESTONE_FX.coreSpinMs) ? EXOTIC_MILESTONE_FX.coreSpinMult : 1;
-    const angle = spinStep(this.spinAngles.get(id) ?? 0, base * boost, dt);
+    const angle = spinStep(this.spinAngles.get(id) ?? 0, capSpeed(base * boost, maxDegPerSec), dt);
     this.spinAngles.set(id, angle);
     applyAngle(sprite, angle);
   }

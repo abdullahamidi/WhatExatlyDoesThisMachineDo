@@ -5,6 +5,7 @@ import { MACHINE_MOTION } from '../../data/machineComponents';
 import type { MachineComponentId, Vec2 } from '../../data/machineComponents';
 import { PIXEL_SCALE } from '../../data/world';
 import type { GameSession } from '../../simulation';
+import { motionPolicy } from '../../simulation/settings';
 import type { MachineView } from '../entities/MachineView';
 import { driverValue } from '../math/animation';
 import { machineLocalToWorld } from '../math/machineLayout';
@@ -208,7 +209,9 @@ export class SteamFx {
   }
 
   // Milestone whistles: a short burst from each named emitter, starting now (MILESTONE_BURSTS order).
+  // Skipped under reduced motion (no flashes).
   private onMilestone(id: string): void {
+    if (!motionPolicy(this.session.settings).flashes) return;
     for (const m of MILESTONE_BURSTS) {
       if (m.techId !== id) continue;
       const lane = this.lanes.find((l) => l.emitter.id === m.emitter);

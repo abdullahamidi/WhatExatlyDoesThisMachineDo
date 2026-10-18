@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
-import { VIEW, WORLD, CAMERA, PIXEL_SCALE } from '../../data/world';
+import { VIEW, WORLD, CAMERA, PIXEL_SCALE, GROUND_Y } from '../../data/world';
 import { PALETTE_CSS } from '../../data/palette';
+import { REDUCED_MOTION } from '../../data/settings';
 import type { Vec2 } from '../../data/machineComponents';
 import type { GameSession } from '../../simulation';
+import { motionPolicy } from '../../simulation/settings';
 import {
   effectiveMinZoom,
   clampZoom,
@@ -157,6 +159,7 @@ export class CameraController {
       defaultCenter: { x: CAMERA.focus.x, y: CAMERA.focus.y },
       world: WORLD,
       hudTopInsetPx: CAMERA.hudTopInsetPx,
+      fullView: { groundY: GROUND_Y, groundBandPx: CAMERA.fullViewGroundBandPx, topMinPx: CAMERA.fullViewTopMinPx },
     });
   }
 
@@ -181,15 +184,23 @@ export class CameraController {
   }
 
   // Tweens center/zoom from the current view to the given one (drag state untouched).
+  // Reduced motion (no camera tween): the duration is REDUCED_MOTION.cameraTweenMs and the view jumps straight to the target.
   private animateTo(to: { center: Vec2; zoom: number }): void {
     this.cancelRefocus();
+    const duration = motionPolicy(this.session.settings).cameraTween ? CAMERA.refocusMs : REDUCED_MOTION.cameraTweenMs;
+    if (duration <= 0) {
+      this.zoom = clampZoom(to.zoom, this.minZoom, CAMERA.maxZoom);
+      this.center = clampCenter(to.center, this.zoom, VIEW, WORLD);
+      this.apply();
+      return;
+    }
     const from = { center: { ...this.center }, zoom: this.zoom };
     const toZoom = to.zoom;
     const toCenter = to.center;
     this.refocusTween = this.scene.tweens.addCounter({
       from: 0,
       to: 1,
-      duration: CAMERA.refocusMs,
+      duration,
       ease: 'Sine.easeInOut',
       onUpdate: (tween) => {
         const t = tween.getValue() ?? 1;
