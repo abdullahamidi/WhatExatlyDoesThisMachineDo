@@ -204,3 +204,8 @@ Core experience: "I found a strange machine. I started turning a crank. Now it i
 1. Working source code 2. README with setup/run 3. Playable prototype 4. Automated tests 5. Asset guide for PixelLab 6. Short architecture explanation 7. Implemented features list 8. Suggested next milestones.
 
 Prioritize making the first 15–30 minutes coherent, satisfying, and visually responsive.
+
+## 18. Full-game extension (user directive)
+The user asked for the complete game beyond the vertical slice. `docs/plan/ROADMAP_FULL.md` is the
+authoritative extension: it supersedes §14 (out-of-scope list, which applied to the first version only)
+and §2.9 (the purpose is revealed in the finale).
