@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { DEFAULT_SETTINGS_VALUES, SETTINGS_LABELS, VOLUME_RANGE } from '../../data/settings';
 import type { SettingsState } from '../../data/types';
 import {
+  VOLUME_IDS,
   hotkeyHelpLines,
   notationOf,
   radioPatch,
@@ -12,13 +13,13 @@ import {
   volumePatch,
   volumeText,
 } from './settingsView';
-import type { RadioControl, ToggleControl, VolumeControl } from './settingsView';
+import type { RadioControl, ToggleControl, VolumeControl, VolumeId } from './settingsView';
 
 function withSettings(patch: Partial<SettingsState>): SettingsState {
   return { ...DEFAULT_SETTINGS_VALUES, ...patch };
 }
 
-function volume(s: SettingsState, id: 'masterVolume' | 'sfxVolume' | 'ambientVolume'): VolumeControl {
+function volume(s: SettingsState, id: VolumeId): VolumeControl {
   const found = settingsViewModel(s).find((c) => c.id === id);
   expect(found?.kind).toBe('volume');
   return found as VolumeControl;
@@ -41,14 +42,20 @@ describe('settingsViewModel (default settings)', () => {
 
   it('lists controls in AUDIO, DISPLAY, ACCESS order', () => {
     expect(model.map((c) => c.id)).toEqual([
-      'masterVolume', 'sfxVolume', 'ambientVolume', 'notation', 'uiScale', 'statusMarkers', 'confirmNewCycle', 'reducedMotion', 'screenShake',
+      'masterVolume', 'sfxVolume', 'ambientVolume', 'musicVolume', 'notation', 'uiScale', 'statusMarkers', 'confirmNewCycle', 'reducedMotion', 'screenShake',
     ]);
     expect(model.map((c) => c.section)).toEqual([
-      'audio', 'audio', 'audio', 'display', 'display', 'display', 'display', 'access', 'access',
+      'audio', 'audio', 'audio', 'audio', 'display', 'display', 'display', 'display', 'access', 'access',
     ]);
   });
 
-  it('volume rows read VOLUME_RANGE and show 100 %', () => {
+  it('has four volume sliders in master, sfx, ambient, music order', () => {
+    expect(VOLUME_IDS).toEqual(['masterVolume', 'sfxVolume', 'ambientVolume', 'musicVolume']);
+    const sliders = model.filter((c) => c.kind === 'volume');
+    expect(sliders.map((c) => c.id)).toEqual(['masterVolume', 'sfxVolume', 'ambientVolume', 'musicVolume']);
+  });
+
+  it('volume rows read VOLUME_RANGE and show their stored value', () => {
     for (const id of ['masterVolume', 'sfxVolume', 'ambientVolume'] as const) {
       const row = volume(DEFAULT_SETTINGS_VALUES, id);
       expect(row.value).toBe(100);
@@ -58,6 +65,16 @@ describe('settingsViewModel (default settings)', () => {
       expect(row.step).toBe(VOLUME_RANGE.step);
       expect(row.label).toBe(SETTINGS_LABELS[id]);
     }
+  });
+
+  it('music row defaults to 70 % with its own label and range', () => {
+    const row = volume(DEFAULT_SETTINGS_VALUES, 'musicVolume');
+    expect(DEFAULT_SETTINGS_VALUES.musicVolume).toBe(70);
+    expect(row).toMatchObject({ kind: 'volume', section: 'audio', id: 'musicVolume', value: 70, valueText: '70 %' });
+    expect(row.label).toBe(SETTINGS_LABELS.musicVolume);
+    expect(row.min).toBe(VOLUME_RANGE.min);
+    expect(row.max).toBe(VOLUME_RANGE.max);
+    expect(row.step).toBe(VOLUME_RANGE.step);
   });
 
   it('notation radio has the three names, only SUFFIX checked', () => {
@@ -91,6 +108,8 @@ describe('settingsViewModel (changed settings)', () => {
   it('volume text follows the stored value', () => {
     expect(volume(withSettings({ masterVolume: 70 }), 'masterVolume')).toMatchObject({ value: 70, valueText: '70 %' });
     expect(volume(withSettings({ sfxVolume: 0 }), 'sfxVolume').valueText).toBe('0 %');
+    expect(volume(withSettings({ musicVolume: 0 }), 'musicVolume')).toMatchObject({ value: 0, valueText: '0 %' });
+    expect(volume(withSettings({ musicVolume: 40 }), 'musicVolume')).toMatchObject({ value: 40, valueText: '40 %' });
   });
 
   it('notation and UI scale checked flags follow the stored value', () => {
@@ -184,6 +203,13 @@ describe('patches', () => {
     expect(volumePatch('masterVolume', 40)).toEqual({ masterVolume: 40 });
     expect(volumePatch('sfxVolume', 5)).toEqual({ sfxVolume: 5 });
     expect(volumePatch('ambientVolume', 0)).toEqual({ ambientVolume: 0 });
+    expect(volumePatch('musicVolume', 55)).toEqual({ musicVolume: 55 });
+  });
+
+  it('every volume id patches only its own field', () => {
+    for (const id of VOLUME_IDS) {
+      expect(volumePatch(id, 33)).toEqual({ [id]: 33 });
+    }
   });
 
   it('radioPatch returns a patch for known values and null otherwise', () => {
