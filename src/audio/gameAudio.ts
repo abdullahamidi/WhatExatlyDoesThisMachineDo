@@ -5,18 +5,51 @@
 // a silent no-op. Never throws into the game.
 
 import { AUDIO } from '../data/audio';
+import { MUSIC } from '../data/music';
+import type { AudioStats, MusicThemeId } from '../data/music';
 import type { SettingsState } from '../data/types';
 import { TECHNOLOGIES } from '../data/technologies';
 import type { GameFeedback } from '../game/context';
 import type { GameSession } from '../simulation';
-import { arcRate, boilerGain, busGain, droneGain, gearTickRate, humFrequency, humGain, levelsChanged, mainsGain, masterTarget, padGain, servoGain, servoHz, windAllowed } from './audioMath';
+import { arcRate, bedTrim, boilerGain, busGain, currentEra, droneGain, gearTickRate, humFrequency, humGain, levelsChanged, mainsGain, masterTarget, padGain, servoGain, servoHz, windAllowed } from './audioMath';
 import type { LevelSnapshot } from './audioMath';
+import { barSeconds, crossfadeGains, duckLevel, eventsInWindow, musicAllowed, musicTheme } from './musicMath';
 import { createSynth } from './synth';
 import type { Synth } from './synth';
 
 export interface GameAudio {
   readonly unlocked: boolean;
+  /** Live readout for the debug hook (WP15): theme, slot gains, duck, voices, peak. All zeros and nulls before the first gesture. */
+  stats(): AudioStats;
   dispose(): void;
+}
+
+/** One music slot: a theme on its own bar grid. Two slots: the active one fades in while the other fades out (D5). */
+interface MusicSlot {
+  theme: MusicThemeId | null;
+  clockStartS: number; // AudioContext time of bar 0
+  scheduledUntilS: number; // events starting before this AudioContext time are already on the synth
+  gain: number; // last slot gain pushed to the synth
+}
+
+/** A crossfade in progress: the outgoing slot fades from outStartGain over MUSIC.crossfadeS (wall clock). */
+interface MusicFade {
+  startS: number;
+  outSlot: 0 | 1;
+  outStartGain: number;
+}
+
+/** Finale and milestone beats in wall-clock seconds; null = not seen since the last reset or cycle. */
+interface BeatClock {
+  swellS: number | null;
+  chordS: number | null;
+  milestoneS: number | null;
+}
+
+const SLOT_INDEXES: readonly [0, 1] = [0, 1];
+
+function newMusicSlot(): MusicSlot {
+  return { theme: null, clockStartS: 0, scheduledUntilS: 0, gain: 0 };
 }
 
 /** Window with the optional audio constructors (webkit prefix for older Safari). */
@@ -58,6 +91,12 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
   let unsubscribers: Array<() => void> = [];
   let appliedLevels: LevelSnapshot | null = null; // last set pushed to the synth; the tick skips unchanged sets
   let windStopped = false; // finale windStop beat fired: wind off for the rest of the sequence (cleared when the phase is 'none')
+  const slots: [MusicSlot, MusicSlot] = [newMusicSlot(), newMusicSlot()];
+  let activeSlot: 0 | 1 = 0; // slot of the current theme; the other one is the outgoing or idle slot
+  let fade: MusicFade | null = null;
+  let musicOn = false; // musicAllowed held at the last music tick; false -> true re-anchors the bar grids
+  let duckNow = 1; // last duck level pushed to the synth
+  let beats: BeatClock = { swellS: null, chordS: null, milestoneS: null };
   const warned = new Set<string>();
   const doc: Document | undefined = target.document;
 
@@ -70,6 +109,16 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
 
   function isVisible(): boolean {
     return doc?.visibilityState === 'visible';
+  }
+
+  /** Wall clock in seconds: the finale ducks and the crossfade run on it (beats may arrive before the context exists). */
+  function wallS(): number {
+    return target.performance.now() / 1000;
+  }
+
+  /** Seconds since a beat, or null when the beat was not seen. */
+  function sinceBeat(atS: number | null, nowS: number): number | null {
+    return atS === null ? null : nowS - atS;
   }
 
   /** One-shot voice: plays only when unlocked and not muted. Errors are logged, never thrown. */
@@ -107,6 +156,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
       wind: !settings.muted && windWanted(),
       sfxBus: busGain(settings.sfxVolume),
       ambientBus: busGain(settings.ambientVolume),
+      musicBus: busGain(settings.musicVolume) * MUSIC.busGain,
     };
     if (!force && !levelsChanged(appliedLevels, next)) return;
     appliedLevels = next;
@@ -114,19 +164,132 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     s.setWind(next.wind);
     s.setBusGain('sfx', next.sfxBus, AUDIO.rampSeconds);
     s.setBusGain('ambient', next.ambientBus, AUDIO.rampSeconds);
+    s.setBusGain('music', next.musicBus, AUDIO.rampSeconds);
+  }
+
+  /** Pushes a slot gain to the synth only when it changed. */
+  function setSlotGain(s: Synth, slot: 0 | 1, gain: number): void {
+    const state = slots[slot];
+    if (Object.is(state.gain, gain)) return;
+    state.gain = gain;
+    s.setMusicSlotGain(slot, gain, AUDIO.updateIntervalMs / 1000);
+  }
+
+  /**
+   * Starts `theme` on the idle slot at the next bar after startDelayS. The active slot becomes the outgoing one
+   * and fades out from its current gain while the new slot fades in (D5). Keeps the idle slot's gain so the synth ramps from it.
+   */
+  function startTheme(theme: MusicThemeId, ctxNowS: number, wallNowS: number): void {
+    const outSlot = activeSlot;
+    const inSlot: 0 | 1 = outSlot === 0 ? 1 : 0;
+    const start = ctxNowS + MUSIC.startDelayS;
+    const idle = slots[inSlot];
+    slots[inSlot] = { theme, clockStartS: start, scheduledUntilS: start, gain: idle.gain };
+    fade = { startS: wallNowS, outSlot, outStartGain: slots[outSlot].gain };
+    activeSlot = inSlot;
+  }
+
+  /** Crossfade step (equal power, MUSIC.crossfadeS). Without a fade the active slot sits at unity. Retires the outgoing slot at the end. */
+  function updateFade(s: Synth, wallNowS: number): void {
+    const current = fade;
+    if (current === null) {
+      if (slots[activeSlot].theme !== null) setSlotGain(s, activeSlot, 1);
+      return;
+    }
+    const elapsed = wallNowS - current.startS;
+    const [outGain, inGain] = crossfadeGains(elapsed, MUSIC.crossfadeS);
+    setSlotGain(s, current.outSlot, current.outStartGain * outGain);
+    setSlotGain(s, activeSlot, inGain);
+    if (elapsed >= MUSIC.crossfadeS) {
+      slots[current.outSlot].theme = null;
+      fade = null;
+    }
+  }
+
+  /** Moves a slot's bar grid to the first bar at or after nowS, so a resume never catches up on missed bars (no burst). */
+  function reanchor(slot: MusicSlot, nowS: number): void {
+    if (slot.theme === null) return;
+    const bar = barSeconds(MUSIC.themes[slot.theme]);
+    if (!(bar > 0)) return;
+    const bars = Math.max(0, Math.ceil((nowS - slot.clockStartS) / bar));
+    slot.clockStartS += bars * bar;
+    slot.scheduledUntilS = nowS;
+  }
+
+  /** Schedules the next lookahead window of every live slot (no repeats: each window starts where the last ended). */
+  function scheduleMusic(s: Synth, nowS: number): void {
+    const toS = nowS + MUSIC.lookaheadS;
+    for (const index of SLOT_INDEXES) {
+      const slot = slots[index];
+      const theme = slot.theme;
+      if (theme === null) continue;
+      const fromS = Math.max(slot.scheduledUntilS, nowS);
+      if (!(toS > fromS)) continue;
+      const events = eventsInWindow(MUSIC.themes[theme], slot.clockStartS, fromS, toS, MUSIC.maxEventsPerCall);
+      for (const ev of events) s.playMusicNote(index, theme, ev);
+      slot.scheduledUntilS = toS;
+    }
+  }
+
+  /**
+   * Music controller, once per tick (WP15 D2-D7). Nothing is scheduled unless musicAllowed (not muted, visible, master and
+   * music above 0); leaving that state stops the notes. Theme from the tech levels and ending phase (D3); a null theme
+   * (sequence) keeps the current one, which the duck silences. Duck from the finale and milestone beats (D6).
+   */
+  function tickMusic(s: Synth): void {
+    const ctx = context;
+    if (ctx === null) return;
+    const settings = session.settings;
+    const wallNow = wallS();
+    if (!musicAllowed(settings.muted, settings.masterVolume, settings.musicVolume, isVisible())) {
+      if (musicOn) {
+        musicOn = false;
+        s.stopMusic();
+      }
+      return;
+    }
+    const ctxNow = ctx.currentTime;
+    if (!musicOn) {
+      musicOn = true;
+      reanchor(slots[0], ctxNow);
+      reanchor(slots[1], ctxNow);
+    }
+    const phase = session.state.ending.phase;
+    const theme = musicTheme(session.state.techLevels, phase);
+    if (theme !== null && theme !== slots[activeSlot].theme) startTheme(theme, ctxNow, wallNow);
+    updateFade(s, wallNow);
+    const duck = duckLevel(phase, sinceBeat(beats.swellS, wallNow), sinceBeat(beats.chordS, wallNow), sinceBeat(beats.milestoneS, wallNow));
+    if (!Object.is(duck, duckNow)) {
+      duckNow = duck;
+      s.setMusicDuck(duck, AUDIO.updateIntervalMs / 1000);
+    }
+    // A suspended context has a frozen clock: scheduling waits until it runs (the grid resumes where it stopped).
+    if (s.isRunning()) scheduleMusic(s, ctxNow);
+  }
+
+  /** Clears the duck timers on a new game or cycle; the theme itself falls back to mech through the normal crossfade. */
+  function clearBeats(): void {
+    beats = { swellS: null, chordS: null, milestoneS: null };
   }
 
   /**
    * Update loop: hum and gear ticks follow the current ME/s; mains and arcs follow EE/s; the boiler roar follows PR/s;
    * the resonance pad follows RS/s (owned spire only); the servo whirr follows the crank servo level;
    * the sub-bass drone follows XF/s (owned nullChamber only). The volume levels are checked each tick (pushed on change only).
-   * Muted keeps the hum pitch and drops only its gain.
+   * Ambient beds are multiplied by their era trim (AUDIO.bedTrim): gear has no gain parameter in the synth, so its trim
+   * is skipped; wind has no gain parameter either (its trim is 1 in every era, so nothing is lost).
+   * The music controller runs before the mute branch so muting stops the notes. Muted keeps the hum pitch and drops only its gain.
    */
   function tick(): void {
     try {
       const s = synth;
       if (!s) return;
       applyLevels(session.settings);
+      try {
+        tickMusic(s);
+      } catch (error) {
+        warnOnce('music', error);
+      }
       const ps = session.rates.perSecond.me;
       const ee = session.rates.perSecond.ee;
       const pr = session.rates.perSecond.pr;
@@ -142,16 +305,17 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
         s.setServo(0, AUDIO.servo.minHz);
         return;
       }
-      s.setHum(humFrequency(ps), humGain(ps));
+      const era = currentEra(session.state.techLevels);
+      s.setHum(humFrequency(ps), humGain(ps) * bedTrim('hum', era));
       s.scheduleGearTicks(gearTickRate(ps));
-      s.setMains(mainsGain(ee));
+      s.setMains(mainsGain(ee) * bedTrim('mains', era));
       s.scheduleArcs(arcRate(ee, session.state.techLevels.sparkGap >= 1));
-      s.setBoiler(boilerGain(pr, session.state.techLevels.boiler >= 1));
-      s.setPad(padGain(rs, session.state.techLevels[AUDIO.pad.techId] >= 1));
-      s.setDrone(droneGain(session.rates.perSecond.xf, session.state.techLevels[AUDIO.drone.techId] >= 1));
+      s.setBoiler(boilerGain(pr, session.state.techLevels.boiler >= 1) * bedTrim('boiler', era));
+      s.setPad(padGain(rs, session.state.techLevels[AUDIO.pad.techId] >= 1) * bedTrim('pad', era));
+      s.setDrone(droneGain(session.rates.perSecond.xf, session.state.techLevels[AUDIO.drone.techId] >= 1) * bedTrim('drone', era));
       const servoLevel = session.state.techLevels[AUDIO.servo.techId];
       const servoMax = TECHNOLOGIES[AUDIO.servo.techId].maxLevel ?? 1;
-      s.setServo(servoGain(servoLevel, servoMax), servoHz(servoLevel, servoMax));
+      s.setServo(servoGain(servoLevel, servoMax) * bedTrim('servo', era), servoHz(servoLevel, servoMax));
     } catch (error) {
       warnOnce('update', error);
     }
@@ -237,6 +401,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
       }),
       session.on('milestone', ({ id }) => {
         try {
+          beats.milestoneS = wallS();
           const s = synth;
           if (s && !session.settings.muted) {
             s.playSting();
@@ -249,10 +414,14 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
         }
       }),
       session.on('cycle', oneShot('cycle', (s) => s.playStamp())),
+      session.on('cycle', clearBeats),
+      session.on('reset', clearBeats),
       feedback.partLanded.on(oneShot('partLanded', (s) => s.playClunk())),
       feedback.purchaseDenied.on(oneShot('purchaseDenied', (s) => s.playDeny())),
       feedback.finaleBeat.on((beat) => {
         try {
+          if (beat === 'swell') beats.swellS = wallS();
+          else if (beat === 'chord') beats.chordS = wallS();
           if (beat === 'windStop') {
             windStopped = true;
             applyLevels(session.settings); // pushes the wind-off set now, not on the next tick
