@@ -1,0 +1,40 @@
+import Phaser from 'phaser';
+import type { AssetId } from './assetIds';
+import { ASSET_MANIFEST, missingTextureIds } from './manifest';
+import type { Painter } from './painters/painterTypes';
+import { paintSky, paintMountains, paintSkyline, paintPylons, paintGround, paintDust } from './painters/background';
+import { paintFrame, paintCrank, paintGear } from './painters/machine';
+import { paintGenericPlate } from './painters/generic';
+
+const PAINTERS: Partial<Record<AssetId, Painter>> = {
+  'bg.sky': paintSky,
+  'bg.mountains': paintMountains,
+  'bg.skyline': paintSkyline,
+  'bg.pylons': paintPylons,
+  'terrain.ground': paintGround,
+  'fx.dust': paintDust,
+  'machine.frame': paintFrame,
+  'machine.crank': paintCrank,
+  'machine.gearSmall': paintGear,
+  'machine.gearLarge': paintGear,
+};
+
+// Generates a procedural texture for every manifest id that the scene does not already have.
+// Returns the generated ids.
+export function ensureFallbackTextures(scene: Phaser.Scene): AssetId[] {
+  const missing = missingTextureIds((key) => scene.textures.exists(key));
+  const generated: AssetId[] = [];
+  for (const id of missing) {
+    const entry = ASSET_MANIFEST[id];
+    const g = scene.make.graphics({ x: 0, y: 0 }, false);
+    (PAINTERS[id] ?? paintGenericPlate)(g, entry);
+    g.generateTexture(id, entry.width, entry.height);
+    g.destroy();
+    scene.textures.get(id).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    generated.push(id);
+  }
+  if (generated.length > 0) {
+    console.info('[assets] generated fallback textures:', generated.join(', '));
+  }
+  return generated;
+}
