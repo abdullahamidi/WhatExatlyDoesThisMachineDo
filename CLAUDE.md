@@ -51,3 +51,7 @@ If a requested model is unavailable, report it rather than substituting a more e
 
 ## Agent communication style
 All agent reports and Director updates to the user: caveman style — minimal words, facts only.
+
+## Art Director
+`art-director` (Opus, `.claude/agents/art-director.md`): screenshot audits, web reference research,
+mechanical/visual correctness, PixelLab asset production. Code fixes it specifies go through EM → workers.
