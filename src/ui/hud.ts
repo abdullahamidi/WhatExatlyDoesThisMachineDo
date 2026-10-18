@@ -7,7 +7,7 @@ import type { HudView, HudResourceRow } from './hudView';
 
 export interface Hud { render(view: HudView): void; destroy(): void }
 
-interface Readout { me: string; perClick: string; perSecond: string }
+interface Readout { me: string; perClick: string; perSecond: string; plaque: string }
 
 /** DOM refs and last-written values of one non-ME resource row. */
 interface ResourceRowRefs {
@@ -36,7 +36,7 @@ function createRow(label: string, valueId: string, initial: string): { row: HTML
 }
 
 export function createHud(root: HTMLElement, commands: GameContext['commands']): Hud {
-  const initial: Readout = { me: '0', perClick: '1', perSecond: '0/s' };
+  const initial: Readout = { me: '0', perClick: '1', perSecond: '0/s', plaque: 'PRIMARY FUNCTION: UNKNOWN' };
 
   const panel = createElement('div', { id: 'hud-panel', className: 'hud-panel' });
   panel.appendChild(createElement('div', { className: 'hud-title', text: 'MECHANICAL ENERGY' }));
@@ -59,6 +59,10 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
       written: { value: '0', perSecond: '0/s', visible: false },
     });
   }
+
+  // Machine plaque: the current primary function line (see plaqueText in hudView.ts).
+  const plaque = createElement('div', { id: 'hud-plaque', className: 'hud-plaque', text: initial.plaque });
+  panel.appendChild(plaque);
 
   const buttons = createElement('div', { id: 'hud-buttons', className: 'hud-buttons' });
   const techButton = createElement('button', { id: 'hud-tech', className: 'hud-btn', text: 'TECH INDEX' });
@@ -116,6 +120,7 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
       setText(perClick.value, 'perClick', view.perClick);
       setText(perSecond.value, 'perSecond', view.perSecond);
       for (const rowView of view.rows) renderResourceRow(rowView);
+      setText(plaque, 'plaque', view.plaque);
     },
     destroy(): void {
       techButton.removeEventListener('click', onTech);

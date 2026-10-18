@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { CRANK_FEEDBACK, CRANK_PULSE, DEPTH, PIXEL_SCALE } from '../../data/world';
-import { formatNumber } from '../../utils/format';
+import { emptyResourceMap } from '../../simulation';
+import type { ResourceMap } from '../../data/types';
+import { clickGainText } from '../../ui/hudView';
 import type { GameContext } from '../context';
 import type { MachineView } from './MachineView';
 import type { FloatingText } from '../rendering/FloatingText';
@@ -16,6 +18,9 @@ export class HandCrank {
   private readonly machine: MachineView;
   private readonly floatingText: FloatingText;
   private readonly onPointerDown: () => void;
+  private readonly unsubscribeClick: () => void;
+  /** Resources gained by the latest click, from the session 'click' event. */
+  private lastGain: ResourceMap = emptyResourceMap();
   private pulseRing: Phaser.GameObjects.Arc | null = null;
   private pulseTween: Phaser.Tweens.Tween | null = null;
 
@@ -23,6 +28,10 @@ export class HandCrank {
     this.ctx = ctx;
     this.machine = machine;
     this.floatingText = floatingText;
+
+    this.unsubscribeClick = ctx.session.on('click', (e) => {
+      this.lastGain = e.gainedAll;
+    });
 
     const pos = machine.getComponentWorldPosition('handCrank');
     const r = CRANK_FEEDBACK.hitRadius * PIXEL_SCALE;
@@ -39,8 +48,8 @@ export class HandCrank {
     }
 
     this.onPointerDown = (): void => {
-      const gained = this.ctx.session.click(); // the only state mutation
-      this.floatingText.spawn(this.machine.getComponentWorldPosition('handCrank'), '+' + formatNumber(gained));
+      this.ctx.session.click(); // the only state mutation
+      this.floatingText.spawn(this.machine.getComponentWorldPosition('handCrank'), clickGainText(this.lastGain));
       this.machine.shake();
       this.stopPulse();
     };
@@ -49,6 +58,7 @@ export class HandCrank {
 
   destroy(): void {
     this.stopPulse();
+    this.unsubscribeClick();
     // Phaser may already have destroyed the zone (scene teardown); its scene is then unset.
     if (this.zone.scene) {
       this.zone.off('pointerdown', this.onPointerDown);

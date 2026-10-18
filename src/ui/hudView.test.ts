@@ -1,10 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { buildHudView } from './hudView';
+import { buildHudView, clickGainText, plaqueText } from './hudView';
 import { createInitialState, emptyResourceMap } from '../simulation';
-import type { ProductionRates, ResourceMap } from '../data/types';
+import type { ProductionRates, ResourceMap, TechId } from '../data/types';
 
-function stateWithMe(me: number): { res: ResourceMap; lifetime: ResourceMap } {
-  return { res: { ...emptyResourceMap(), me }, lifetime: emptyResourceMap() };
+function stateWithMe(me: number): ReturnType<typeof createInitialState> {
+  return { ...createInitialState(0), res: { ...emptyResourceMap(), me }, lifetime: emptyResourceMap() };
+}
+
+function levelsWith(owned: readonly TechId[]): Record<TechId, number> {
+  const levels = { ...createInitialState(0).techLevels };
+  for (const id of owned) levels[id] = 1;
+  return levels;
 }
 
 function ratesOf(perClick: number, perSecond: Partial<ResourceMap>): ProductionRates {
@@ -48,6 +54,7 @@ describe('buildHudView', () => {
 
   it('shows a row when only its lifetime is positive', () => {
     const state = {
+      ...createInitialState(0),
       res: emptyResourceMap(),
       lifetime: { ...emptyResourceMap(), ee: 5 },
     };
@@ -66,6 +73,7 @@ describe('buildHudView', () => {
 
   it('formats extra resource values and rates with suffixes', () => {
     const state = {
+      ...createInitialState(0),
       res: { ...emptyResourceMap(), xf: 2500 },
       lifetime: { ...emptyResourceMap(), xf: 2500 },
     };
@@ -84,3 +92,74 @@ describe('buildHudView', () => {
     expect(buildHudView(stateWithMe(Number.NaN), ratesOf(1, { me: 0 })).me).toBe('0');
   });
 });
+
+describe('plaqueText', () => {
+  it('shows the unknown function line at the start', () => {
+    expect(plaqueText(createInitialState(0).techLevels)).toBe('PRIMARY FUNCTION: UNKNOWN');
+  });
+
+  it('shows the first milestone line once generatorBlueprint is owned', () => {
+    expect(plaqueText(levelsWith(['generatorBlueprint']))).toBe('PRIMARY FUNCTION: R?S????');
+  });
+
+  it('shows the last line once both blueprints are owned', () => {
+    expect(plaqueText(levelsWith(['generatorBlueprint', 'substationBlueprint']))).toBe('PRIMARY FUNCTION: RES?OR?');
+  });
+
+  it('shows the last owned line even without the earlier milestone', () => {
+    expect(plaqueText(levelsWith(['substationBlueprint']))).toBe('PRIMARY FUNCTION: RES?OR?');
+  });
+});
+
+describe('buildHudView plaque', () => {
+  it('follows techLevels and leaves every other field unchanged', () => {
+    const base = buildHudView(stateWithMe(1500), ratesOf(12, { me: 12.5, ee: 3 }));
+    const withPlaque = buildHudView(
+      { ...stateWithMe(1500), techLevels: levelsWith(['generatorBlueprint']) },
+      ratesOf(12, { me: 12.5, ee: 3 }),
+    );
+    expect(base.plaque).toBe('PRIMARY FUNCTION: UNKNOWN');
+    expect(withPlaque.plaque).toBe('PRIMARY FUNCTION: R?S????');
+    expect(withPlaque.me).toBe(base.me);
+    expect(withPlaque.perClick).toBe(base.perClick);
+    expect(withPlaque.perSecond).toBe(base.perSecond);
+    expect(withPlaque.rows).toEqual(base.rows);
+    expect(base.me).toBe('1.5K');
+    expect(base.perClick).toBe('12');
+    expect(base.perSecond).toBe('12.5/s');
+  });
+});
+
+describe('clickGainText', () => {
+  it('shows ME alone as +N', () => {
+    expect(clickGainText({ ...emptyResourceMap(), me: 32 })).toBe('+32');
+  });
+
+  it('shows +0 when nothing was gained', () => {
+    expect(clickGainText(emptyResourceMap())).toBe('+0');
+  });
+
+  it('lists ME and EE with two spaces between parts', () => {
+    expect(clickGainText({ ...emptyResourceMap(), me: 32, ee: 1200 })).toBe('+32 ME  +1.2K EE');
+  });
+
+  it('lists EE alone when ME is zero', () => {
+    expect(clickGainText({ ...emptyResourceMap(), ee: 1200 })).toBe('+1.2K EE');
+  });
+
+  it('uses the short label of unknown flux', () => {
+    expect(clickGainText({ ...emptyResourceMap(), me: 5, xf: 3 })).toBe('+5 ME  +3 ???');
+  });
+
+  it('ignores NaN and negative values', () => {
+    expect(clickGainText({ ...emptyResourceMap(), me: Number.NaN })).toBe('+0');
+    expect(clickGainText({ ...emptyResourceMap(), me: -4 })).toBe('+0');
+    expect(clickGainText({ ...emptyResourceMap(), me: 7, ee: Number.NaN, pr: -2 })).toBe('+7');
+  });
+
+  it('orders parts me, ee, pr, rs, xf', () => {
+    const text = clickGainText({ me: 1, ee: 2, pr: 3, rs: 4, xf: 5 });
+    expect(text).toBe('+1 ME  +2 EE  +3 PR  +4 RS  +5 ???');
+  });
+});
+
