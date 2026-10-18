@@ -28,6 +28,7 @@
   pointer-events: auto;
 }
 
+.cycle-confirm[hidden],
 .cycle-confirm [hidden] {
   display: none !important;
 }

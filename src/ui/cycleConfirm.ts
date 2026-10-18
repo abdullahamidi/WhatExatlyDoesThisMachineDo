@@ -116,6 +116,7 @@ export function createCycleConfirm(root: HTMLElement, deps: CycleConfirmDeps): C
   title.id = 'cycle-confirm-title';
   // Gain line is the polite live region: the new Echo total is announced when the dialog opens.
   const gain = el('p', 'cycle-confirm-gain');
+  gain.id = 'cycle-confirm-gain';
   gain.setAttribute('aria-live', 'polite');
   const hint = el('p', 'cycle-confirm-hint');
   const lists = el('div', 'cycle-confirm-lists');

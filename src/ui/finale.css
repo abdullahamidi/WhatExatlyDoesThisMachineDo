@@ -22,6 +22,7 @@
   color: var(--amber);
 }
 
+.finale-overlay[hidden],
 .finale-overlay [hidden] {
   display: none !important;
 }
