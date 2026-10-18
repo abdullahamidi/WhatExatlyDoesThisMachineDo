@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
 import { DRIVE_TRAIN, MACHINE_COMPONENTS, MACHINE_COMPONENT_IDS, MACHINE_LINKS, MACHINE_LINK_STYLE } from '../../data/machineComponents';
-import type { MachineComponentId, Vec2 } from '../../data/machineComponents';
+import type { MachineComponentId, MachineLink, Vec2 } from '../../data/machineComponents';
 import { partAngle, sliderCrank } from '../math/driveTrain';
 import { resolveAttachment } from '../math/machineLayout';
 import {
   beltTravel,
   coalesceRuns,
+  connectionOffset,
+  pinEnd,
   pointsAlongBelt,
   rasterBelt,
   rasterCable,
@@ -25,6 +27,7 @@ export interface LinkDrawContext {
   pointOf(component: MachineComponentId, pointId: string): Vec2 | null;   // live position (sprite pos + point offset); null while hidden or assembling
   isLive(component: MachineComponentId): boolean;                         // visible AND not assembling
   masterDeg: number;                                                      // unwrapped thetaM
+  angleOf(component: MachineComponentId): number | null;                  // displayed angle of a driven part (deg); null for any other part
 }
 
 /** Belt ready to rasterise: endpoints quantised, dash shift in whole pixels. key identifies the loop geometry only. */
@@ -32,6 +35,9 @@ interface BeltPlan { key: string; a: Vec2; b: Vec2; ra: number; rb: number; dash
 
 /** Rod ready to rasterise: pin and eye in whole pixels. */
 interface RodPlan { pin: Vec2; eye: Vec2 }
+
+/** Pin-to-pin rod (both ends driven) ready to rasterise: draw depth plus pin and eye in whole pixels. */
+interface PinRodPlan { depth: number; pin: Vec2; eye: Vec2 }
 
 /** Cable ready to rasterise: both ends in whole pixels, sag in art px. */
 interface CablePlan { a: Vec2; b: Vec2; sag: number }
@@ -46,10 +52,12 @@ interface PipePlan { depth: number; points: Vec2[]; style: 'steam' | 'water'; ke
  * Geometry of one draw, built from integers only. Each part has its own key: equal key means equal pixels for that part.
  * The belt key excludes the dash shift, so a moving belt only re-plots its dash pass.
  * Pipes are keyed per depth (one Graphics each); pipeKey is all pipe parts in link order.
+ * Pin-to-pin rods are keyed per depth too (pinRodKeys); the slider-crank rod keeps its own rodKey.
  */
 interface LinkPlan {
   belts: BeltPlan[];
   rods: RodPlan[];
+  pinRods: PinRodPlan[];
   caps: Vec2[];
   cables: CablePlan[];
   pipes: PipePlan[];
@@ -60,11 +68,24 @@ interface LinkPlan {
   cableKey: string;
   pipeKey: string;
   pipeKeys: Map<number, string>;
+  pinRodKeys: Map<number, string>;
 }
 
 /** Pipe depths in use: one Graphics per distinct depth of the pipe links (MACHINE_LINK_STYLE.pipe.depth unless a link sets its own). */
 function pipeDepths(): number[] {
   const depths = MACHINE_LINKS.filter((link) => link.kind === 'pipe').map((link) => link.depth ?? MACHINE_LINK_STYLE.pipe.depth);
+  return Array.from(new Set(depths));
+}
+
+/** True when a rod link joins two driven parts: a pin-to-pin rod (parallel crank) instead of a slider-crank rod. */
+function isPinToPinRod(link: MachineLink): boolean {
+  return link.kind === 'rod' && MACHINE_COMPONENTS[link.from.component].animation.kind === 'driven'
+    && MACHINE_COMPONENTS[link.to.component].animation.kind === 'driven';
+}
+
+/** Pin-to-pin rod depths in use: one Graphics per distinct depth of the pin-to-pin rod links (MACHINE_LINK_STYLE.rodDepth unless a link sets its own). */
+function pinRodDepths(): number[] {
+  const depths = MACHINE_LINKS.filter(isPinToPinRod).map((link) => link.depth ?? MACHINE_LINK_STYLE.rodDepth);
   return Array.from(new Set(depths));
 }
 
@@ -130,6 +151,8 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
   const beltKeyParts: string[] = [];
   const dashKeyParts: string[] = [];
   const rodKeyParts: string[] = [];
+  const pinRods: PinRodPlan[] = [];
+  const pinRodKeysByDepth = new Map<number, string[]>();
   const cables: CablePlan[] = [];
   const cableKeyParts: string[] = [];
   const pipes: PipePlan[] = [];
@@ -158,6 +181,25 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
       belts.push({ key, a: qa, b: qb, ra, rb, dashShift });
       beltKeyParts.push(`b${key}`);
       dashKeyParts.push(`${dashShift}`);
+    } else if (link.kind === 'rod' && isPinToPinRod(link)) {
+      // Pin-to-pin rod: each pin rides its own driven part's displayed angle (parallel crank); a hidden end drops the rod.
+      const depth = link.depth ?? MACHINE_LINK_STYLE.rodDepth;
+      const depthParts = pinRodKeysByDepth.get(depth) ?? [];
+      pinRodKeysByDepth.set(depth, depthParts);
+      const fromDef = MACHINE_COMPONENTS[link.from.component];
+      const toDef = MACHINE_COMPONENTS[link.to.component];
+      const a = ctx.angleOf(link.from.component);
+      const b = ctx.angleOf(link.to.component);
+      const pinFrom = connectionOffset(fromDef, link.from.point);
+      const pinTo = connectionOffset(toDef, link.to.point);
+      if (!fromLive || !toLive || a === null || b === null || pinFrom === null || pinTo === null) {
+        depthParts.push('q-'); // hidden or assembling end: no pin-to-pin rod
+        continue;
+      }
+      const pin = roundPoint(pinEnd(resolveAttachment(fromDef), pinFrom, a));
+      const eye = roundPoint(pinEnd(resolveAttachment(toDef), pinTo, b));
+      pinRods.push({ depth, pin, eye });
+      depthParts.push(`q${pin.x},${pin.y};${eye.x},${eye.y}`);
     } else if (link.kind === 'rod') {
       const crankAnim = MACHINE_COMPONENTS[link.from.component].animation;
       const hub = ctx.pointOf(link.from.component, link.from.point);
@@ -219,10 +261,13 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
 
   const pipeKeys = new Map<number, string>();
   for (const [depth, parts] of pipeKeysByDepth) pipeKeys.set(depth, parts.join('|'));
+  const pinRodKeys = new Map<number, string>();
+  for (const [depth, parts] of pinRodKeysByDepth) pinRodKeys.set(depth, parts.join('|'));
 
   return {
     belts,
     rods,
+    pinRods,
     caps,
     cables,
     pipes,
@@ -233,6 +278,7 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
     cableKey: cableKeyParts.join('|'),
     pipeKey: pipeKeyParts.join('|'),
     pipeKeys,
+    pinRodKeys,
   };
 }
 
@@ -247,6 +293,8 @@ export class MachineLinks {
   private readonly cables: Phaser.GameObjects.Graphics;
   /** Pipes: one Graphics per distinct pipe depth, added after the cables. */
   private readonly pipeGraphics = new Map<number, Phaser.GameObjects.Graphics>();
+  /** Pin-to-pin rods: one Graphics per distinct depth (created only when such a rod exists, so Era I-III have none). */
+  private readonly pinRodGraphics = new Map<number, Phaser.GameObjects.Graphics>();
   /** Keys of the last drawn parts; null until the first draw. Equal key means that Graphics is already correct. */
   private beltKey: string | null = null;
   private dashKey: string | null = null;
@@ -256,6 +304,8 @@ export class MachineLinks {
   private pipeKey: string | null = null;
   /** Last drawn key per pipe depth; a depth is redrawn only when its own key changed. */
   private pipeKeys = new Map<number, string>();
+  /** Last drawn key per pin-to-pin rod depth; a depth is redrawn only when its own key changed. */
+  private pinRodKeys = new Map<number, string>();
   /** Rastered belt loops by belt key; rebuilt from the current plan each draw so it never grows past the live belts. */
   private rasterCache = new Map<string, BeltRaster>();
   /** Rastered pipes by pipe key; rebuilt from the live pipes each time the pipe key changes. */
@@ -275,6 +325,11 @@ export class MachineLinks {
     for (const depth of pipeDepths()) {
       const g = scene.make.graphics({}, false).setDepth(depth);
       this.pipeGraphics.set(depth, g);
+      parent.add(g);
+    }
+    for (const depth of pinRodDepths()) {
+      const g = scene.make.graphics({}, false).setDepth(depth);
+      this.pinRodGraphics.set(depth, g);
       parent.add(g);
     }
   }
@@ -304,8 +359,9 @@ export class MachineLinks {
     if (plan.rodKey !== this.rodKey) {
       this.rodKey = plan.rodKey;
       this.rods.clear();
-      this.drawRods(plan.rods);
+      this.drawRods(this.rods, plan.rods);
     }
+    this.drawPinRods(plan);
     if (plan.capKey !== this.capKey) {
       this.capKey = plan.capKey;
       this.caps.clear();
@@ -321,7 +377,7 @@ export class MachineLinks {
 
   /** Destroys the Graphics objects; safe to call twice. */
   destroy(): void {
-    for (const g of [this.belts, this.dashes, this.rods, this.caps, this.cables, ...this.pipeGraphics.values()]) {
+    for (const g of [this.belts, this.dashes, this.rods, this.caps, this.cables, ...this.pipeGraphics.values(), ...this.pinRodGraphics.values()]) {
       if (g.scene) g.destroy(); // Phaser clears scene on destroy
     }
     this.beltKey = null;
@@ -331,6 +387,7 @@ export class MachineLinks {
     this.cableKey = null;
     this.pipeKey = null;
     this.pipeKeys = new Map();
+    this.pinRodKeys = new Map();
     this.rasterCache = new Map();
     this.pipeRasterCache = new Map();
   }
@@ -394,8 +451,21 @@ export class MachineLinks {
     return out;
   }
 
+  /**
+   * Pin-to-pin rods: each depth whose own key changed is cleared and refilled. A depth with no live rod stays empty.
+   */
+  private drawPinRods(plan: LinkPlan): void {
+    for (const [depth, g] of this.pinRodGraphics) {
+      const key = plan.pinRodKeys.get(depth) ?? '';
+      if (this.pinRodKeys.get(depth) === key) continue;
+      this.pinRodKeys.set(depth, key);
+      g.clear();
+      this.drawRods(g, plan.pinRods.filter((rod) => rod.depth === depth));
+    }
+  }
+
   /** Conrod: edge rows, core line, then the two eyes (disc plus centre pixel). */
-  private drawRods(plans: readonly RodPlan[]): void {
+  private drawRods(g: Phaser.GameObjects.Graphics, plans: readonly RodPlan[]): void {
     const style = MACHINE_LINK_STYLE.rod;
     for (const { pin, eye } of plans) {
       const dx = eye.x - pin.x;
@@ -404,13 +474,13 @@ export class MachineLinks {
       if (len > 0) {
         // Unit normal of (eye - pin), rounded to whole px so the edge rows stay on the pixel grid.
         const n: Vec2 = { x: noNegativeZero(Math.round(-dy / len)), y: noNegativeZero(Math.round(dx / len)) };
-        this.plot(this.rods, style.edge, rasterLine(offsetBy(pin, n, 1), offsetBy(eye, n, 1)));
-        this.plot(this.rods, style.edge, rasterLine(offsetBy(pin, n, -1), offsetBy(eye, n, -1)));
+        this.plot(g, style.edge, rasterLine(offsetBy(pin, n, 1), offsetBy(eye, n, 1)));
+        this.plot(g, style.edge, rasterLine(offsetBy(pin, n, -1), offsetBy(eye, n, -1)));
       }
-      this.plot(this.rods, style.core, rasterLine(pin, eye));
+      this.plot(g, style.core, rasterLine(pin, eye));
       for (const p of [pin, eye]) {
-        this.plot(this.rods, style.eye, discPixels(p, style.eyeRadius));
-        this.plot(this.rods, style.eyeCentre, [p]);
+        this.plot(g, style.eye, discPixels(p, style.eyeRadius));
+        this.plot(g, style.eyeCentre, [p]);
       }
     }
   }

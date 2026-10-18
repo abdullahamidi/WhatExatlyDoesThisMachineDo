@@ -32,6 +32,10 @@ export interface Synth {
   setBoiler(gain: number): void; // AUDIO.boiler looped noise -> lowpass -> gain; gain 0 = silent
   playHiss(): void; // AUDIO.hiss one highpassed noise burst (Era III purchase)
   playWhistle(delaySeconds?: number): void; // AUDIO.whistle two sines with attack and decay (milestone)
+  setPad(gain: number): void; // AUDIO.pad harmonic sines with a slow LFO on the gain (RS/s); gain 0 = silent
+  playForkPing(): void; // AUDIO.forkPing two decaying sines (manual click with echoCrank, Era IV purchase)
+  setServo(gain: number, hz: number): void; // AUDIO.servo looped sawtooth -> lowpass -> gain; gain 0 = silent
+  playChord(delaySeconds?: number): void; // AUDIO.chord three sines with attack and decay (milestone, after the sting)
   suspend(): void; // context.suspend().catch(noop)
   resume(): void; // context.resume().catch(noop)
   isRunning(): boolean; // context.state === 'running'; false once closed or if the state cannot be read
@@ -71,6 +75,26 @@ interface BoilerNodes {
   source: AudioBufferSourceNode;
   filter: BiquadFilterNode;
   gain: GainNode;
+}
+
+interface PadNodes {
+  oscs: OscillatorNode[];
+  gain: GainNode;
+  lfo: OscillatorNode;
+  depth: GainNode;
+}
+
+interface ServoNodes {
+  osc: OscillatorNode;
+  gain: GainNode;
+}
+
+/** Sines sounding together through one envelope: linear attack, exponential decay to the floor. Released when all have ended. */
+interface ClusterSpec {
+  hzs: readonly number[];
+  gain: number;
+  attackMs: number;
+  ms: number;
 }
 
 /** Creates the master bus at gain 0 wired to the destination. Returns null if WebAudio refuses. */
@@ -285,18 +309,17 @@ function playHissBurst(context: AudioContext, out: AudioNode, noise: AudioBuffer
   src.stop(startAt + decay + STOP_PAD_S);
 }
 
-/** Milestone whistle: two sines sounding together through one envelope (linear attack, exponential decay). */
-function playWhistleTone(context: AudioContext, out: AudioNode, startAt: number): void {
-  const w = AUDIO.whistle;
-  const decay = w.ms / 1000;
-  const attack = w.attackMs / 1000;
+/** Sines sounding together through one envelope (linear attack, exponential decay); the envelope is released after the last oscillator ends. */
+function playSineCluster(context: AudioContext, out: AudioNode, startAt: number, c: ClusterSpec): void {
+  const decay = c.ms / 1000;
+  const attack = c.attackMs / 1000;
   const env = context.createGain();
   env.gain.setValueAtTime(ENVELOPE_FLOOR, startAt);
-  env.gain.linearRampToValueAtTime(w.gain, startAt + attack);
+  env.gain.linearRampToValueAtTime(c.gain, startAt + attack);
   env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, startAt + decay);
   env.connect(out);
-  let live = 2;
-  for (const hz of [w.hzA, w.hzB]) {
+  let live = c.hzs.length;
+  for (const hz of c.hzs) {
     const osc = context.createOscillator();
     osc.type = 'sine';
     osc.frequency.value = hz;
@@ -311,6 +334,60 @@ function playWhistleTone(context: AudioContext, out: AudioNode, startAt: number)
   }
 }
 
+/** Milestone whistle: two sines sounding together through one envelope (linear attack, exponential decay). */
+function playWhistleTone(context: AudioContext, out: AudioNode, startAt: number): void {
+  const w = AUDIO.whistle;
+  playSineCluster(context, out, startAt, { hzs: [w.hzA, w.hzB], gain: w.gain, attackMs: w.attackMs, ms: w.ms });
+}
+
+/** Resonance pad: one sine per partial through its partial gain into a shared pad gain; a slow sine LFO drives that gain through a depth gain. */
+function ensurePad(context: AudioContext, out: AudioNode, cache: PadNodes | null): PadNodes {
+  if (cache) return cache;
+  const p = AUDIO.pad;
+  const gain = context.createGain();
+  gain.gain.value = 0;
+  gain.connect(out);
+  const oscs: OscillatorNode[] = [];
+  p.partials.forEach((partial, i) => {
+    const osc = context.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = p.baseHz * partial;
+    const level = context.createGain();
+    level.gain.value = p.partialGains[i] ?? 0;
+    osc.connect(level);
+    level.connect(gain);
+    osc.start();
+    oscs.push(osc);
+  });
+  const lfo = context.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = p.lfoHz;
+  const depth = context.createGain();
+  depth.gain.value = 0;
+  lfo.connect(depth);
+  depth.connect(gain.gain);
+  lfo.start();
+  return { oscs, gain, lfo, depth };
+}
+
+/** Servo whirr: one persistent sawtooth through a lowpass, then the level gain. */
+function ensureServo(context: AudioContext, out: AudioNode, hz: number, cache: ServoNodes | null): ServoNodes {
+  if (cache) return cache;
+  const osc = context.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.value = hz;
+  const filter = context.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = AUDIO.servo.lowpassHz;
+  const gain = context.createGain();
+  gain.gain.value = 0;
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(out);
+  osc.start();
+  return { osc, gain };
+}
+
 export function createSynth(context: AudioContext): Synth {
   const master = openMaster(context);
   let closed = false;
@@ -321,6 +398,8 @@ export function createSynth(context: AudioContext): Synth {
   let wind: WindNodes | null = null;
   let mains: MainsNodes | null = null;
   let boiler: BoilerNodes | null = null;
+  let pad: PadNodes | null = null;
+  let servo: ServoNodes | null = null;
   const warned = new Set<string>();
 
   function warnOnce(name: string, err: unknown): void {
@@ -545,6 +624,59 @@ export function createSynth(context: AudioContext): Synth {
       });
     },
 
+    setPad(gain: number): void {
+      run('setPad', (out) => {
+        const amp = Number.isFinite(gain) && gain > 0 ? gain : 0;
+        if (pad === null && amp === 0) return; // silent and never started: no nodes needed
+        pad = ensurePad(context, out, pad);
+        const now = context.currentTime;
+        pad.gain.gain.setTargetAtTime(amp, now, PARAM_TIME_CONSTANT_S);
+        // The LFO depth follows the level, so a silent pad does not swing below zero.
+        pad.depth.gain.setTargetAtTime(amp * AUDIO.pad.lfoDepth, now, PARAM_TIME_CONSTANT_S);
+      });
+    },
+
+    playForkPing(): void {
+      run('playForkPing', (out) => {
+        const f = AUDIO.forkPing;
+        const t0 = context.currentTime;
+        const decay = f.ms / 1000;
+        playVoice(context, out, { wave: 'sine', hz: f.hz, startAt: t0, decay, peak: f.gain });
+        playVoice(context, out, {
+          wave: 'sine',
+          hz: f.hz * f.partialRatio,
+          startAt: t0,
+          decay,
+          peak: f.gain * f.partialGain,
+        });
+      });
+    },
+
+    setServo(gain: number, hz: number): void {
+      run('setServo', (out) => {
+        const amp = Number.isFinite(gain) && gain > 0 ? gain : 0;
+        if (servo === null && amp === 0) return; // silent and never started: no nodes needed
+        const freq = Number.isFinite(hz) && hz >= 1 ? hz : 1;
+        servo = ensureServo(context, out, freq, servo);
+        const now = context.currentTime;
+        servo.osc.frequency.setTargetAtTime(freq, now, PARAM_TIME_CONSTANT_S);
+        servo.gain.gain.setTargetAtTime(amp, now, PARAM_TIME_CONSTANT_S);
+      });
+    },
+
+    playChord(delaySeconds = 0): void {
+      run('playChord', (out) => {
+        const c = AUDIO.chord;
+        const delay = Number.isFinite(delaySeconds) && delaySeconds > 0 ? delaySeconds : 0;
+        playSineCluster(context, out, context.currentTime + delay, {
+          hzs: c.ratios.map((ratio) => c.baseHz * ratio),
+          gain: c.gain,
+          attackMs: c.attackMs,
+          ms: c.ms,
+        });
+      });
+    },
+
     suspend(): void {
       run('suspend', () => {
         context.suspend().catch(() => undefined);
@@ -580,6 +712,9 @@ export function createSynth(context: AudioContext): Synth {
         boiler?.source.disconnect();
         boiler?.filter.disconnect();
         boiler?.gain.disconnect();
+        for (const o of pad?.oscs ?? []) o.stop();
+        pad?.lfo.stop();
+        servo?.osc.stop();
       } catch (err) {
         warnOnce('close', err);
       }

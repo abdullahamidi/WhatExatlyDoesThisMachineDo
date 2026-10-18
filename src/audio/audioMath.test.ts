@@ -1,6 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import { AUDIO } from '../data/audio';
-import { activityLevel, arcRate, boilerGain, gearTickRate, humFrequency, humGain, mainsGain, masterTarget } from './audioMath';
+import {
+  activityLevel,
+  arcRate,
+  boilerGain,
+  gearTickRate,
+  humFrequency,
+  humGain,
+  mainsGain,
+  masterTarget,
+  padGain,
+  servoFraction,
+  servoGain,
+  servoHz,
+} from './audioMath';
 
 const SAMPLE_INPUTS = [0, -5, NaN, Infinity, 1e12, 0.001, 1];
 
@@ -226,6 +239,67 @@ describe('boilerGain', () => {
     const list = [0, 0.001, 1, 10, 100, 1000, 5000, 1e6, 1e12];
     for (let i = 1; i < list.length; i++) {
       expect(boilerGain(list[i]!, true)).toBeGreaterThanOrEqual(boilerGain(list[i - 1]!, true));
+    }
+  });
+});
+
+describe('padGain', () => {
+  it('is 0 when the spire is not owned, even with huge RS/s', () => {
+    expect(padGain(1e9, false)).toBe(0);
+    expect(padGain(1e12, false)).toBe(0);
+  });
+
+  it('is 0 for rs 0, negative and NaN, even when owned', () => {
+    expect(padGain(0, true)).toBe(0);
+    expect(padGain(-5, true)).toBe(0);
+    expect(padGain(NaN, true)).toBe(0);
+  });
+
+  it('is positive for rs 1 when owned', () => {
+    expect(padGain(1, true)).toBeGreaterThan(0);
+  });
+
+  it('stays within [minGain, maxGain] for rs > 0, including huge values', () => {
+    for (const rs of [0.001, 1, 10, 1000, 1e12, Infinity]) {
+      const g = padGain(rs, true);
+      expect(g).toBeGreaterThanOrEqual(AUDIO.pad.minGain);
+      expect(g).toBeLessThanOrEqual(AUDIO.pad.maxGain);
+    }
+    expect(padGain(1e12, true)).toBeCloseTo(AUDIO.pad.maxGain, 9);
+  });
+
+  it('is monotonic non-decreasing over rs', () => {
+    const list = [1, 10, 1e3, 1e6];
+    for (let i = 1; i < list.length; i++) {
+      expect(padGain(list[i]!, true)).toBeGreaterThanOrEqual(padGain(list[i - 1]!, true));
+    }
+  });
+});
+
+describe('servo maths', () => {
+  it('servoFraction: level / maxLevel clamped to [0, 1]; invalid input 0', () => {
+    expect(servoFraction(0, 10)).toBe(0);
+    expect(servoFraction(5, 10)).toBeCloseTo(0.5, 9);
+    expect(servoFraction(20, 10)).toBe(1);
+    expect(servoFraction(3, 0)).toBe(0);
+    expect(servoFraction(NaN, 10)).toBe(0);
+    expect(servoFraction(-2, 10)).toBe(0);
+  });
+
+  it('servoGain: 0 at level 0 and NaN, maxGain at full level, between the bounds in between', () => {
+    expect(servoGain(0, 10)).toBe(0);
+    expect(servoGain(NaN, 10)).toBe(0);
+    expect(servoGain(10, 10)).toBeCloseTo(AUDIO.servo.maxGain, 9);
+    expect(servoGain(1, 10)).toBeGreaterThan(AUDIO.servo.minGain);
+    expect(servoGain(1, 10)).toBeLessThan(AUDIO.servo.maxGain);
+  });
+
+  it('servoHz: minHz at level 0, maxHz at full level, monotonic', () => {
+    expect(servoHz(0, 10)).toBe(AUDIO.servo.minHz);
+    expect(servoHz(10, 10)).toBeCloseTo(AUDIO.servo.maxHz, 9);
+    const list = [0, 1, 2, 5, 9, 10];
+    for (let i = 1; i < list.length; i++) {
+      expect(servoHz(list[i]!, 10)).toBeGreaterThanOrEqual(servoHz(list[i - 1]!, 10));
     }
   });
 });

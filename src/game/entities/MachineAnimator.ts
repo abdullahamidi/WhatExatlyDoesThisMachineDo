@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { GameSession } from '../../simulation';
-import { DRIVE_TRAIN, MACHINE_COMPONENTS, MACHINE_COMPONENT_IDS, MACHINE_MOTION } from '../../data/machineComponents';
+import { DRIVE_TRAIN, MACHINE_COMPONENTS, MACHINE_COMPONENT_IDS, MACHINE_MOTION, RESONANCE_MILESTONE_FX } from '../../data/machineComponents';
 import type { MachineComponentId, SpeedCurve } from '../../data/machineComponents';
 import { HAMMER_FX } from '../../data/steamFx';
 import { CRANK_FEEDBACK } from '../../data/world';
@@ -38,8 +38,8 @@ function applyAngle(sprite: Phaser.GameObjects.Sprite, deg: number): void {
   sprite.setAngle(deg);
 }
 
-/** Parts that turn with the hand crank. They share one crank angle state and one driven ratio/phase. */
-const CRANK_PARTS: readonly MachineComponentId[] = ['handCrank', 'crankBrace'];
+/** Parts that turn with the hand crank (the servo arm is a parallel crank). They share one crank angle state and one driven ratio/phase. */
+const CRANK_PARTS: readonly MachineComponentId[] = ['handCrank', 'crankBrace', 'servoArm'];
 
 /** Reads the driven ratio and phase of a component; throws when it is not a driven part. */
 function drivenOf(id: MachineComponentId): { ratio: number; phaseDeg: number } {
@@ -55,9 +55,12 @@ function drivenOf(id: MachineComponentId): { ratio: number; phaseDeg: number } {
  * Before the gears are unlocked the crank is not meshed to thetaM: clicks turn only crankState, and the motor turns
  * thetaM alone. On the moment the pinion appears, the crank angle is captured as an offset on thetaM (no snap).
  *
- * Other kinds: `vibrate` / `frames` follow the manual, automation, electric or thermal (PR/s) driver; `spin` turns its own
- * angle at a driver-set speed; `gauge` low-passes its driver into a needle frame; `reciprocate` strikes with thetaM and counts
- * hammer strikes (see consumeStrikes).
+ * Other kinds: `vibrate` / `frames` follow the manual, automation, electric, thermal (PR/s) or resonance (RS/s) driver; `spin`
+ * turns its own angle at a driver-set speed; `gauge` low-passes its driver into a needle frame; `reciprocate` strikes with
+ * thetaM and counts hammer strikes (see consumeStrikes).
+ *
+ * Milestone FX (Era IV): on the RESONANCE_MILESTONE_FX milestone the crystal holds its hold frame for holdMs, and the dish
+ * waves restart their frame clock at 0. Frame clocks are otherwise the animator clock (`elapsed`).
  */
 export class MachineAnimator {
   private readonly session: GameSession;
@@ -87,8 +90,13 @@ export class MachineAnimator {
   private elapsed = 0;
   /** Hammer strikes since the last consumeStrikes call. */
   private strikes = 0;
+  /** Animator clock until which the milestone crystal holds its hold frame; -1 when not holding. */
+  private crystalHoldUntil = -1;
+  /** Frame-clock origin of parts restarted by the milestone (absent: origin 0). Cleared on reset. */
+  private readonly frameOrigins = new Map<MachineComponentId, number>();
   private readonly unsubscribeClick: () => void;
   private readonly unsubscribeReset: () => void;
+  private readonly unsubscribeMilestone: () => void;
 
   constructor(session: GameSession, sprites: ReadonlyMap<MachineComponentId, Phaser.GameObjects.Sprite>) {
     this.session = session;
@@ -122,6 +130,8 @@ export class MachineAnimator {
       this.lastDegPerSec = 0;
       this.elapsed = 0;
       this.strikes = 0;
+      this.crystalHoldUntil = -1;
+      this.frameOrigins.clear();
       this.phases.clear();
       this.spinAngles.clear();
       this.gaugeValues.clear();
@@ -133,6 +143,11 @@ export class MachineAnimator {
         if (sprite !== undefined) applyAngle(sprite, 0);
       }
     });
+    this.unsubscribeMilestone = session.on('milestone', ({ id }) => {
+      if (id !== RESONANCE_MILESTONE_FX.techId) return;
+      this.crystalHoldUntil = this.elapsed + RESONANCE_MILESTONE_FX.holdMs / 1000; // crystal holds bright
+      for (const part of RESONANCE_MILESTONE_FX.restart) this.frameOrigins.set(part, this.elapsed); // dish waves restart at 0
+    });
   }
 
   /** Advances the master angle and places every active part by one frame. */
@@ -143,6 +158,7 @@ export class MachineAnimator {
     const me = this.session.rates.perSecond.me;
     const ee = this.session.rates.perSecond.ee;
     const pr = this.session.rates.perSecond.pr;
+    const rs = this.session.rates.perSecond.rs;
     this.manual = decayActivity(this.manual, dt, MACHINE_MOTION.manualTauSeconds); // activity fades when idle
     const dv = driverValue('combined', this.manual, me);
     const degPerSec = dv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(DRIVE_TRAIN.masterSpeed, dv); // rest below threshold
@@ -162,7 +178,7 @@ export class MachineAnimator {
         // in step with thetaM without overriding the drop. Strikes are not counted while assembling.
         if (anim.kind === 'driven' && sprite.visible) applyAngle(sprite, this.drivenAngle(id, anim));
         if (anim.kind === 'spin' && sprite.visible) {
-          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr), dt);
+          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr, rs), dt);
         }
         if (anim.kind === 'reciprocate' && sprite.visible) sprite.y += this.ramOffset(anim, prevMasterDeg, dt);
         continue;
@@ -181,7 +197,7 @@ export class MachineAnimator {
           break;
         }
         case 'vibrate': {
-          const vdv = driverValue(anim.driver, this.manual, me, ee, pr);
+          const vdv = driverValue(anim.driver, this.manual, me, ee, pr, rs);
           const speed = vdv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, vdv); // rest below threshold
           const base = resolveAttachment(MACHINE_COMPONENTS[id]);
           if (speed === 0) {
@@ -196,17 +212,22 @@ export class MachineAnimator {
         }
         case 'frames': {
           // Frame cycle: advances at up to maxHz while the driver is above rest, holds frame 0 otherwise.
-          const fdv = driverValue(anim.driver, this.manual, me, ee, pr);
-          sprite.setFrame(framesIndex(this.elapsed, anim.frames, anim.maxHz, fdv >= MACHINE_MOTION.restThreshold));
+          const fdv = driverValue(anim.driver, this.manual, me, ee, pr, rs);
+          if (id === RESONANCE_MILESTONE_FX.crystal && this.elapsed < this.crystalHoldUntil) {
+            sprite.setFrame(RESONANCE_MILESTONE_FX.holdFrame); // milestone hold: bright frame, no cycle
+            break;
+          }
+          const origin = this.frameOrigins.get(id) ?? 0; // milestone restarts count from their origin
+          sprite.setFrame(framesIndex(this.elapsed - origin, anim.frames, anim.maxHz, fdv >= MACHINE_MOTION.restThreshold));
           break;
         }
         case 'spin': {
-          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr), dt);
+          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr, rs), dt);
           break;
         }
         case 'gauge': {
           // Needle: the driver is low-passed, then mapped onto the log scale of the frames sheet.
-          const target = driverValue(anim.driver, this.manual, me, ee, pr);
+          const target = driverValue(anim.driver, this.manual, me, ee, pr, rs);
           const value = lowPass(this.gaugeValues.get(id) ?? 0, target, dt, anim.tauSeconds);
           this.gaugeValues.set(id, value);
           sprite.setFrame(gaugeFrame(value, anim.frames, anim.minLog, anim.maxLog));
@@ -276,10 +297,21 @@ export class MachineAnimator {
     return { masterDeg: this.master.deg, degPerSec: this.lastDegPerSec };
   }
 
-  /** Current driver inputs: manual activity, automation rate (ME/s), electric rate (EE/s) and thermal rate (PR/s). */
-  getDriverValues(): { manual: number; automation: number; electric: number; thermal: number } {
+  /** Displayed angle of a driven part (deg), or null for any other kind. Snapped to the rotation frame when the part shows one. */
+  angleOf(id: MachineComponentId): number | null {
+    const anim = MACHINE_COMPONENTS[id].animation;
+    if (anim.kind !== 'driven') return null;
+    const deg = this.drivenAngle(id, anim);
+    const sprite = this.sprites.get(id);
+    const n = sprite === undefined ? 0 : sprite.texture.frameTotal - 1; // Phaser counts the __BASE frame
+    if (sprite !== undefined && sprite.texture.key.endsWith('#rot') && n > 1) return (rotationFrame(deg, n) * 360) / n;
+    return deg;
+  }
+
+  /** Current driver inputs: manual activity, automation rate (ME/s), electric rate (EE/s), thermal rate (PR/s) and resonance rate (RS/s). */
+  getDriverValues(): { manual: number; automation: number; electric: number; thermal: number; resonance: number } {
     const rates = this.session.rates.perSecond;
-    return { manual: this.manual, automation: rates.me, electric: rates.ee, thermal: rates.pr };
+    return { manual: this.manual, automation: rates.me, electric: rates.ee, thermal: rates.pr, resonance: rates.rs };
   }
 
   /** Hammer strikes since the last call; returns the count and resets it to 0. */
@@ -293,5 +325,6 @@ export class MachineAnimator {
   destroy(): void {
     this.unsubscribeClick();
     this.unsubscribeReset();
+    this.unsubscribeMilestone();
   }
 }

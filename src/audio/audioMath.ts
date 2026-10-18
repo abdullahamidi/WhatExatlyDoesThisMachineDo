@@ -69,6 +69,31 @@ export function boilerGain(prPerSecond: number, boilerOwned: boolean, cfg: typeo
   return clampRange(lerp(cfg.minGain, cfg.maxGain, level), cfg.minGain, cfg.maxGain);
 }
 
+/** Resonance pad gain (Era IV): 0 unless the spire is owned and rs > 0 (or NaN -> 0), else lerp(minGain, maxGain, level). */
+export function padGain(rsPerSecond: number, owned: boolean, cfg: typeof AUDIO.pad = AUDIO.pad): number {
+  if (!owned || !(rsPerSecond > 0)) return 0;
+  const level = activityLevel(rsPerSecond, cfg.refPerSecond, cfg.maxPerSecond);
+  return clampRange(lerp(cfg.minGain, cfg.maxGain, level), cfg.minGain, cfg.maxGain);
+}
+
+/** Servo fraction: level / maxLevel clamped to [0, 1]; 0 for non-finite or non-positive level, or maxLevel <= 0. */
+export function servoFraction(level: number, maxLevel: number): number {
+  if (!Number.isFinite(level) || level <= 0 || !(maxLevel > 0)) return 0;
+  return clampRange(level / maxLevel, 0, 1);
+}
+
+/** Servo whirr gain: 0 at fraction 0, else lerp(minGain, maxGain, fraction). */
+export function servoGain(level: number, maxLevel: number, cfg: typeof AUDIO.servo = AUDIO.servo): number {
+  const fraction = servoFraction(level, maxLevel);
+  if (fraction === 0) return 0;
+  return lerp(cfg.minGain, cfg.maxGain, fraction);
+}
+
+/** Servo whirr pitch (Hz): lerp(minHz, maxHz, fraction); minHz at fraction 0. */
+export function servoHz(level: number, maxLevel: number, cfg: typeof AUDIO.servo = AUDIO.servo): number {
+  return lerp(cfg.minHz, cfg.maxHz, servoFraction(level, maxLevel));
+}
+
 /** Master target: 0 when muted or locked, else base (default AUDIO.masterGain). */
 export function masterTarget(muted: boolean, unlocked: boolean, base: number = AUDIO.masterGain): number {
   return muted || !unlocked ? 0 : base;
