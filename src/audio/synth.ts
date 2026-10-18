@@ -51,7 +51,7 @@ export interface Synth {
   playDeny(): void; // AUDIO.deny low buzz, `count` pulses
   playSting(): void; // AUDIO.sting 3 notes
   setHum(hz: number, gain: number): void; // one persistent oscillator, ramped; gain 0 = silent
-  scheduleGearTicks(ticksPerSecond: number): void; // lookahead scheduling; 0 clears/resets the schedule
+  scheduleGearTicks(ticksPerSecond: number, gain?: number): void; // lookahead scheduling; 0 clears/resets the schedule; gain (0..) scales AUDIO.gearTick.gain, default 1
   setWind(on: boolean): void; // looped noise -> lowpass -> gain, slow gust LFO on the gain
   setMains(gain: number): void; // AUDIO.mains 50 Hz + 100 Hz pair through a lowpass; gain 0 = silent
   scheduleArcs(perSecond: number): void; // AUDIO.arc crackle bursts; 0 clears/resets the schedule; capped at arc.maxRate
@@ -72,7 +72,7 @@ export interface Synth {
   playMusicNote(slot: 0 | 1, theme: MusicThemeId, ev: MusicNoteEvent): void; // one note on a music slot; ev.startS is an absolute context time
   setMusicSlotGain(slot: 0 | 1, gain: number, rampS: number): void; // slot level (crossfade), ramped linearly over rampS; 0 = silent
   setMusicDuck(level: number, rampS: number): void; // ducks both slots together (0..1), ramped linearly over rampS
-  stopMusic(): void; // fades and stops every sounding music note; slot levels are kept
+  stopMusic(slot?: 0 | 1): void; // fades and stops sounding music notes (one slot, or all when omitted); slot levels are kept
   stats(): SynthStats; // live counters and master peak (see SynthStats)
   suspend(): void; // context.suspend().catch(noop)
   resume(): void; // context.resume().catch(noop)
@@ -642,10 +642,11 @@ interface MusicGraph {
   echoFeedback: GainNode;
 }
 
-/** One sounding music note: its oscillators, its own envelope gain, and its scheduled start (for stopMusic). */
+/** One sounding music note: its oscillators, its own envelope gain, its slot and its scheduled start (for stopMusic). */
 interface MusicNote {
   oscs: OscillatorNode[];
   env: GainNode;
+  slot: 0 | 1;
   startS: number;
 }
 
@@ -725,6 +726,7 @@ function scheduleMusicEnvelope(env: GainNode, ev: MusicNoteEvent, theme: MusicTh
 function startMusicNote(
   context: AudioContext,
   slot: MusicSlot,
+  slotIndex: 0 | 1,
   theme: MusicTheme,
   ev: MusicNoteEvent,
   onEnd: () => void,
@@ -760,7 +762,7 @@ function startMusicNote(
     osc.stop(end + STOP_PAD_S);
     oscs.push(osc);
   }
-  return { oscs, env, startS: ev.startS };
+  return { oscs, env, slot: slotIndex, startS: ev.startS };
 }
 
 /** Ramps an AudioParam linearly to `to` over rampS seconds from its current value (negative or non-finite ramps are instant). */
