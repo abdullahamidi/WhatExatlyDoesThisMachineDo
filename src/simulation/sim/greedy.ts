@@ -1,7 +1,7 @@
 import { TECHNOLOGIES } from '../../data/technologies';
 import { RESOURCE_IDS, TECH_IDS } from '../../data/types';
 import type { GameState, ResourceId, TechDefinition, TechId, TechView } from '../../data/types';
-import { applyClick, advance } from '../production/tick';
+import { applyClick, advance, applyOffline } from '../production/tick';
 import { computeRates } from '../production/rates';
 import { getAllTechViews } from '../progression/status';
 import { purchase } from '../progression/purchase';
@@ -12,7 +12,18 @@ import { createInitialState } from '../state';
 // randomness, no console, no timers. Policy: per resource, buy the cheapest available
 // non-milestone tech whose costRes is that resource (ties: TECH_IDS order), only if affordable.
 
+/**
+ * Repeating play blocks (profile D). Active block: clicks, buys, production. Offline block (after each
+ * full active block, never after the last one): no clicks, no buys, automation credited once through
+ * the existing applyOffline path (capped by offlineCapSeconds). offlineSeconds 0 = no offline blocks.
+ */
+export interface GreedySchedule {
+  activeSeconds: number;
+  offlineSeconds: number;
+}
+
 export interface GreedyOptions {
+  /** Active-seconds budget (with `schedule`, offline blocks do not count towards it). */
   seconds: number;
   clicksPerSecond: number;
   stepSeconds: number;
@@ -21,13 +32,19 @@ export interface GreedyOptions {
   techs?: Record<TechId, TechDefinition>;
   /** Stop after the step that first owns this tech (default: run the full `seconds`). */
   stopAt?: TechId;
+  /** Optional active/offline block schedule. Absent = continuous active play (no offline). */
+  schedule?: GreedySchedule;
 }
 
 export interface GreedyResult {
+  /** Active seconds (offline time does not advance it). */
   firstAt: Record<TechId, number>;
   maxValue: number;
   final: GameState;
+  /** Purchase times in active seconds. */
   purchases: Array<{ t: number; id: TechId }>;
+  /** Wall-clock seconds simulated (active + offline). Present only when `schedule` is set. */
+  wallSeconds?: number;
 }
 
 /** Cheapest available, purchasable-next, non-milestone view paying in `res`; null when none. */
@@ -55,16 +72,43 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
   };
   record(0);
 
+  const schedule = o.schedule;
+  if (schedule !== undefined) {
+    const { activeSeconds, offlineSeconds } = schedule;
+    const blocks = activeSeconds / o.stepSeconds;
+    if (
+      !Number.isFinite(activeSeconds) ||
+      activeSeconds <= 0 ||
+      !Number.isFinite(offlineSeconds) ||
+      offlineSeconds < 0 ||
+      Math.abs(blocks - Math.round(blocks)) > 1e-9
+    ) {
+      throw new RangeError('runGreedy: schedule needs finite activeSeconds > 0 (multiple of stepSeconds) and offlineSeconds >= 0');
+    }
+  }
+
   const steps = Math.floor(o.seconds / o.stepSeconds);
   let clickDebt = 0;
   let maxValue = 0;
+  let activeT = 0;
+  let offlineTotal = 0;
   const track = (value: number): void => {
     if (!Number.isFinite(value)) maxValue = Infinity;
     else if (value > maxValue) maxValue = value;
   };
+  const observe = (): void => {
+    const rates = computeRates(state, techs);
+    for (const r of RESOURCE_IDS) {
+      track(state.res[r]);
+      track(state.lifetime[r]);
+      track(rates.perSecond[r]);
+      track(rates.perClick[r]);
+    }
+  };
 
   for (let k = 1; k <= steps; k++) {
     const t = k * o.stepSeconds;
+    activeT = t;
 
     clickDebt += o.clicksPerSecond * o.stepSeconds;
     const clicks = Math.floor(clickDebt + 1e-9);
@@ -91,18 +135,26 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
       }
     }
     record(t);
-
-    const rates = computeRates(state, techs);
-    for (const r of RESOURCE_IDS) {
-      track(state.res[r]);
-      track(state.lifetime[r]);
-      track(rates.perSecond[r]);
-      track(rates.perClick[r]);
-    }
+    observe();
     if (o.stopAt !== undefined && state.techLevels[o.stopAt] >= 1) break;
+
+    // Offline block after a full active block (not after the last step of the budget).
+    if (schedule !== undefined && schedule.offlineSeconds > 0 && k < steps) {
+      const ratio = t / schedule.activeSeconds;
+      if (Math.abs(ratio - Math.round(ratio)) < 1e-9) {
+        const offline = applyOffline({ ...state, lastSimTime: 0 }, schedule.offlineSeconds * 1000, techs);
+        state = { ...offline.state, lastSimTime: state.lastSimTime };
+        offlineTotal += schedule.offlineSeconds;
+        state = evaluateMilestones(state, techs).state;
+        record(t);
+        observe();
+      }
+    }
   }
 
-  return { firstAt, maxValue, final: state, purchases };
+  const result: GreedyResult = { firstAt, maxValue, final: state, purchases };
+  if (schedule !== undefined) result.wallSeconds = activeT + offlineTotal;
+  return result;
 }
 
 /**

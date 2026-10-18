@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel, nextTab, clampTab, leavingTab, newCycleRow } from './systemMenuModel';
+import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel, nextTab, clampTab, leavingTab, newCycleRow, versionFooter, versionAriaLabel } from './systemMenuModel';
 import type { ResetState } from './systemMenuModel';
 import { SYSTEM_MENU_CONFIG } from '../data/systemMenu';
 import { FINALE_CHOICE } from '../data/finale';
+import { APP_VERSION } from '../data/version';
+import { SAVE_VERSION } from '../persistence/schema';
 
 const IDLE: ResetState = { stage: 'idle' };
 const ARM = SYSTEM_MENU_CONFIG.resetArmMs;
@@ -190,5 +192,17 @@ describe('newCycleRow', () => {
       label: FINALE_CHOICE.cycle.label,
       reason: '',
     });
+  });
+});
+
+describe('versionFooter', () => {
+  it('reads "v<app> · SAVE v<save>" with the imported save version', () => {
+    expect(versionFooter()).toBe(`v${APP_VERSION} · SAVE v${SAVE_VERSION}`);
+    expect(versionFooter()).toBe('v1.0.0 · SAVE v' + SAVE_VERSION);
+  });
+
+  it('aria label names the app version', () => {
+    expect(versionAriaLabel()).toBe(`Version ${APP_VERSION}`);
+    expect(versionAriaLabel()).toBe('Version 1.0.0');
   });
 });

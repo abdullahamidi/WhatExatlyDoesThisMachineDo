@@ -3,7 +3,7 @@ import { MENU_REFRESH_MS, MENU_TABS, MENU_TEXT, SYSTEM_MENU_CONFIG } from '../da
 import { UI_ART } from '../data/achievements';
 import { trapFocus } from './hotkeys';
 import type { ModalStack } from './modalStack';
-import { clampTab, leavingTab, muteLabel, newCycleRow, nextTab, reduceReset, resetLabel, saveFeedbackLabel } from './systemMenuModel';
+import { clampTab, leavingTab, muteLabel, newCycleRow, nextTab, reduceReset, resetLabel, saveFeedbackLabel, versionAriaLabel, versionFooter } from './systemMenuModel';
 import type { NewCycleRow, ResetState, TabNavKey } from './systemMenuModel';
 import type { EndingPhase } from '../data/types';
 import type { NewCycleHook } from '../game/newCycle';
@@ -161,10 +161,14 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
   newCycleReason.hidden = true;
   const feedbackEl = createElement('div', { id: 'sys-feedback' });
   feedbackEl.setAttribute('aria-live', 'polite');
+  // WP16 T5 version footer (static text; read-only, not a control).
+  const versionEl = createElement('div', { id: 'sys-version', text: versionFooter() });
+  versionEl.setAttribute('role', 'note');
+  versionEl.setAttribute('aria-label', versionAriaLabel());
   const closeButton = createElement('button', { id: 'sys-close', className: 'sys-btn', text: MENU_TEXT.close });
   closeButton.type = 'button';
 
-  systemPane.append(muteButton, saveButton, resetButton, cancelButton, newCycleButton, newCycleReason, feedbackEl);
+  systemPane.append(muteButton, saveButton, resetButton, cancelButton, newCycleButton, newCycleReason, feedbackEl, versionEl);
 
   // Extra panels: mounted once, each into its own tabpanel.
   for (const p of deps.panels ?? []) {
