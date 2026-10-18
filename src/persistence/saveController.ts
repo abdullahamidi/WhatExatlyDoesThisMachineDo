@@ -45,9 +45,24 @@ export function createSaveController(o: {
   let running = false;
   let timer: unknown = undefined;
   let unsubscribers: Array<() => void> = [];
+  let warnedNonFinite = false;
+
+  /** Counters that must be finite numbers before anything is written; NaN/Infinity would corrupt the save. */
+  const hasNonFiniteCounter = (): boolean => {
+    const s = session.state;
+    return ![s.me, s.lifetimeMe, s.lastSimTime, s.totalClicks].every(Number.isFinite);
+  };
 
   const saveNow = (): boolean => {
     try {
+      if (hasNonFiniteCounter()) {
+        if (!warnedNonFinite) {
+          warnedNonFinite = true;
+          console.warn('[saveController] non-finite state counter; save skipped');
+        }
+        lastSaveOk = false;
+        return lastSaveOk;
+      }
       lastSaveOk = saveManager.save(session.state, session.settings, now());
     } catch {
       lastSaveOk = false;

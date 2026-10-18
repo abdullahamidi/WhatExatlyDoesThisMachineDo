@@ -13,6 +13,8 @@ export interface StartupResult {
 /**
  * Boots a GameSession from storage. Offline progress is applied exactly once (applyOffline),
  * then the state is written back so the next load does not award the same time again.
+ * When the read failed (load.error with status 'new') the boot save is skipped so a possibly
+ * good save is not overwritten; `saved` is then false.
  * Never throws: storage failures degrade to a fresh state and `saved: false`.
  */
 export function startSession(
@@ -23,6 +25,9 @@ export function startSession(
   const load = saveManager.load(nowMs);
   const session = new GameSession({ state: load.state, settings: load.settings, now: clock });
   const offline = session.applyOffline(nowMs);
+  if (load.error !== undefined && load.status === 'new') {
+    return { session, load, offline, saved: false };
+  }
   const saved = saveManager.save(session.state, session.settings, nowMs);
   return { session, load, offline, saved };
 }

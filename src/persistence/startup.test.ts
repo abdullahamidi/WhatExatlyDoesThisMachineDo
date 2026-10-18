@@ -84,6 +84,25 @@ describe('startSession', () => {
     expect(stored.settings.muted).toBe(true);
   });
 
+  it('skips the boot save when the read fails, so a possibly good save is not overwritten', () => {
+    let writes = 0;
+    const unreadable = {
+      getItem: (): string | null => {
+        throw new Error('SecurityError');
+      },
+      setItem: (): void => {
+        writes += 1;
+      },
+      removeItem: (): void => undefined,
+    };
+    const result = startSession(new SaveManager(unreadable), t0, clock);
+    expect(result.load.status).toBe('new');
+    expect(result.load.error).toBeDefined();
+    expect(result.saved).toBe(false);
+    expect(writes).toBe(0);
+    expect(result.session.state.me).toBe(0);
+  });
+
   it('reports saved false when storage refuses writes, without throwing', () => {
     const refusing = {
       getItem: (): string | null => null,

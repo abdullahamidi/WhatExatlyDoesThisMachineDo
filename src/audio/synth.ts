@@ -25,6 +25,7 @@ export interface Synth {
   setWind(on: boolean): void; // looped noise -> lowpass -> gain, slow gust LFO on the gain
   suspend(): void; // context.suspend().catch(noop)
   resume(): void; // context.resume().catch(noop)
+  isRunning(): boolean; // context.state === 'running'; false once closed or if the state cannot be read
   close(): void; // stop nodes, context.close().catch(noop); further calls are no-ops
 }
 
@@ -343,6 +344,16 @@ export function createSynth(context: AudioContext): Synth {
       run('resume', () => {
         context.resume().catch(() => undefined);
       });
+    },
+
+    isRunning(): boolean {
+      if (closed) return false;
+      try {
+        return context.state === 'running';
+      } catch (err) {
+        warnOnce('isRunning', err);
+        return false;
+      }
     },
 
     close(): void {

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { GameState, SettingsState } from '../data/types';
 import { AUTOSAVE_INTERVAL_MS, SAVE_KEY } from '../data/balance';
 import { GameSession } from '../simulation';
@@ -196,5 +196,52 @@ describe('createSaveController', () => {
   it('lastSaveOk is null before the first save', () => {
     const { controller } = setup();
     expect(controller.lastSaveOk).toBeNull();
+  });
+
+  it('saveNow() skips the write, reports false and warns once when a counter is non-finite', () => {
+    const counters = ['me', 'lifetimeMe', 'lastSimTime', 'totalClicks'] as const;
+    for (const field of counters) {
+      const storage = new CountingStorage();
+      const state = { ...createInitialState(t0), [field]: Number.NaN };
+      const session = new GameSession({ state, settings: { muted: false }, now: () => t0 });
+      const controller = createSaveController({
+        session,
+        saveManager: new SaveManager(storage),
+        now: () => t0,
+        scheduler: new FakeScheduler(),
+      });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      try {
+        expect(controller.saveNow(), field).toBe(false);
+        expect(controller.saveNow(), field).toBe(false);
+        expect(controller.lastSaveOk, field).toBe(false);
+        expect(writesOf(storage), field).toBe(0);
+        expect(storage.getItem(SAVE_KEY), field).toBeNull();
+        expect(warn, field).toHaveBeenCalledTimes(1);
+      } finally {
+        warn.mockRestore();
+      }
+    }
+  });
+
+  it('saveNow() writes again once the counters are finite', () => {
+    const storage = new CountingStorage();
+    const state = { ...createInitialState(t0), lastSimTime: Number.POSITIVE_INFINITY };
+    const session = new GameSession({ state, settings: { muted: false }, now: () => t0 });
+    const controller = createSaveController({
+      session,
+      saveManager: new SaveManager(storage),
+      now: () => t0,
+      scheduler: new FakeScheduler(),
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      expect(controller.saveNow()).toBe(false);
+      session.reset(t0);
+      expect(controller.saveNow()).toBe(true);
+      expect(controller.lastSaveOk).toBe(true);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

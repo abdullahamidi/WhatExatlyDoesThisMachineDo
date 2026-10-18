@@ -1,6 +1,8 @@
 // Gesture-unlocked game audio. Listens to the session and the feedback signals and drives the Synth.
-// Constructing this creates no AudioContext: the first pointerdown or keydown does. Without an
-// AudioContext constructor the controller stays a silent no-op. Never throws into the game.
+// Constructing this creates no AudioContext: the first gesture (pointer, touch, click or key) does.
+// Gesture listeners stay armed until the context reports 'running', so a context that starts
+// suspended is resumed by a later gesture. Without an AudioContext constructor the controller stays
+// a silent no-op. Never throws into the game.
 
 import { AUDIO } from '../data/audio';
 import type { GameFeedback } from '../game/context';
@@ -20,15 +22,22 @@ interface AudioWindow extends Window {
   webkitAudioContext?: typeof AudioContext;
 }
 
-const GESTURE_EVENTS = ['pointerdown', 'keydown'] as const;
+const GESTURE_EVENTS = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const;
+
+/** A created context together with the synth that drives it. */
+interface AudioHandle {
+  synth: Synth;
+  context: AudioContext;
+}
 
 /** Builds the synth from the first available AudioContext constructor, or null when impossible. */
-function createAudioSynth(target: Window): Synth | null {
+function createAudioHandle(target: Window): AudioHandle | null {
   try {
     const audioWindow = target as AudioWindow;
     const Ctor = audioWindow.AudioContext ?? audioWindow.webkitAudioContext;
     if (!Ctor) return null;
-    return createSynth(new Ctor());
+    const context = new Ctor();
+    return { synth: createSynth(context), context };
   } catch (error) {
     console.warn('[gameAudio] AudioContext unavailable', error);
     return null;
@@ -37,9 +46,11 @@ function createAudioSynth(target: Window): Synth | null {
 
 export function createGameAudio(session: GameSession, feedback: GameFeedback, target: Window = window): GameAudio {
   let synth: Synth | null = null;
+  let context: AudioContext | null = null;
   let unlocked = false;
   let failed = false; // unlock attempted and impossible: permanent no-op
   let disposed = false;
+  let gesturesArmed = false;
   let timer: number | null = null;
   let unsubscribers: Array<() => void> = [];
   const warned = new Set<string>();
@@ -77,17 +88,17 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     if (!muted && isVisible()) s.resume();
   }
 
-  /** Update loop: hum and gear ticks follow the current ME/s. */
+  /** Update loop: hum and gear ticks follow the current ME/s. Muted keeps the hum pitch and drops only its gain. */
   function tick(): void {
     try {
       const s = synth;
       if (!s) return;
+      const ps = session.rates.perSecond;
       if (session.settings.muted) {
-        s.setHum(0, 0);
+        s.setHum(humFrequency(ps), 0);
         s.scheduleGearTicks(0);
         return;
       }
-      const ps = session.rates.perSecond;
       s.setHum(humFrequency(ps), humGain(ps));
       s.scheduleGearTicks(gearTickRate(ps));
     } catch (error) {
@@ -106,12 +117,44 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     }
   }
 
-  function onGesture(): void {
-    unlock();
+  /** Adds the gesture listeners once. */
+  function armGestures(): void {
+    if (gesturesArmed || failed || disposed) return;
+    gesturesArmed = true;
+    for (const type of GESTURE_EVENTS) target.addEventListener(type, onGesture, true);
   }
 
-  function removeGestureListeners(): void {
+  /** Removes the gesture listeners once. */
+  function disarmGestures(): void {
+    if (!gesturesArmed) return;
+    gesturesArmed = false;
     for (const type of GESTURE_EVENTS) target.removeEventListener(type, onGesture, true);
+  }
+
+  /** Gesture: unlocks on the first one, then resumes the context until it reports running. */
+  function onGesture(): void {
+    try {
+      if (disposed || failed) return;
+      if (!unlocked) unlock();
+      const s = synth;
+      if (!s) return;
+      if (s.isRunning()) disarmGestures();
+      else s.resume();
+    } catch (error) {
+      warnOnce('gesture', error);
+    }
+  }
+
+  /** Context state changed: stop listening for gestures once running, listen again when it is not. */
+  function onStateChange(): void {
+    try {
+      const s = synth;
+      if (!s || disposed) return;
+      if (s.isRunning()) disarmGestures();
+      else armGestures();
+    } catch (error) {
+      warnOnce('statechange', error);
+    }
   }
 
   function subscribe(): Array<() => void> {
@@ -131,38 +174,39 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     ];
   }
 
-  /** First gesture: create the context once, then start the bus, loop and listeners. */
+  /** First gesture: create the context once, then start the bus, loop and listeners. Does not resume. */
   function unlock(): void {
     if (unlocked || failed || disposed) return;
-    removeGestureListeners();
 
-    const created = createAudioSynth(target);
-    if (!created) {
+    const handle = createAudioHandle(target);
+    if (!handle) {
       failed = true;
+      disarmGestures();
       return;
     }
-    synth = created;
+    synth = handle.synth;
+    context = handle.context;
     unlocked = true;
 
     try {
       const muted = session.settings.muted;
-      created.setMaster(masterTarget(muted, true), AUDIO.rampSeconds);
-      created.setWind(!muted);
-      created.resume();
+      handle.synth.setMaster(masterTarget(muted, true), AUDIO.rampSeconds);
+      handle.synth.setWind(!muted);
       timer = target.setInterval(tick, AUDIO.updateIntervalMs);
       doc?.addEventListener('visibilitychange', onVisibility);
+      handle.context.addEventListener('statechange', onStateChange);
       unsubscribers = subscribe();
     } catch (error) {
       warnOnce('unlock', error);
     }
   }
 
-  for (const type of GESTURE_EVENTS) target.addEventListener(type, onGesture, true);
+  armGestures();
 
   function dispose(): void {
     if (disposed) return;
     disposed = true;
-    removeGestureListeners();
+    disarmGestures();
     if (timer !== null) {
       target.clearInterval(timer);
       timer = null;
@@ -171,6 +215,15 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     unsubscribers = [];
     for (const off of offs) off();
     doc?.removeEventListener('visibilitychange', onVisibility);
+    const ctx = context;
+    context = null;
+    if (ctx) {
+      try {
+        ctx.removeEventListener('statechange', onStateChange);
+      } catch (error) {
+        warnOnce('dispose', error);
+      }
+    }
     const s = synth;
     synth = null;
     unlocked = false;

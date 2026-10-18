@@ -1,7 +1,7 @@
 # Project Status
 
 ## Current milestone
-WP4 — Persistence, feedback, audio (planning). WP1–WP3 complete.
+WP5 — Polish & verification. WP1–WP4 complete.
 
 ## Roadmap
 | WP | Scope | State |
@@ -9,8 +9,8 @@ WP4 — Persistence, feedback, audio (planning). WP1–WP3 complete.
 | WP1 | Tooling + pure simulation core | ✅ done |
 | WP2 | Wasteland scene, asset registry, camera, crank, HUD | ✅ done |
 | WP3 | Tech tree overlay + modular machine components | ✅ done |
-| WP4 | Save/load wiring, offline summary, settings, audio | planning |
-| WP5 | Balance, ASSET_GUIDE, README, smoke test, §16 checklist | — |
+| WP4 | Save/load wiring, offline summary, settings, audio | ✅ done |
+| WP5 | Balance, ASSET_GUIDE, README, smoke test, §16 checklist | planning |
 
 Plans/assignments: `docs/plan/WP*.md`.
 
@@ -31,14 +31,18 @@ Plans/assignments: `docs/plan/WP*.md`.
   procedural machine animation (rotate/vibrate/reciprocate driven by clicks/ME/s, clamped), unlock
   assembly animation, belts/shafts, milestone. 8-step browser smoke passes, 0 console errors.
 - **Art**: all machine sprites PixelLab Pro, one style anchor + locked palette (docs/plan/ART_BRIEF.md),
-  curated by Opus reviewer. Background layers: round 2 in progress (round 1 rejected).
+  curated by Opus reviewer. Background layers (mountains, skyline, pylons, ground) PixelLab,
+  seams fixed, ground contrast reduced + pylons hazed for depth.
+- **WP4**: save/load + recovery, autosave/unload saves, offline welcome-back (8h cap, once),
+  system menu (save, mute, two-step reset), modal/Esc stack, WebAudio synth SFX + hum/gear ticks/wind,
+  rare system logs. Browser smoke passes (reload, offline, corrupt, mute, reset), 473 tests.
 
 ## Remaining tasks
-- WP4 (save/offline UI/settings/audio/logs), WP5 (balance, ASSET_GUIDE, README, final checklist).
-- Background art round 2.
+- WP5 (balance, ASSET_GUIDE, README, final §16 checklist).
 
 ## Known issues
-- None open.
+- Pylon cables peak slightly at tile seams (art; minor).
+- Audio verified by code review only (no audible check in CI).
 
 ## Important technical decisions
 - Phaser pinned to 3.90.0 (npm `latest` is Phaser 4; spec requires Phaser 3). Phaser 3.90 typings
@@ -59,5 +63,4 @@ Plans/assignments: `docs/plan/WP*.md`.
 - `session.revision` bumps every frame; UI uses events / reference checks, not revision, for heavy rebuilds.
 
 ## Next recommended task
-- WP4 per docs/plan/WP4.md. Carry-overs from WP3 review: shared Esc/modal stack; audio taps for
-  purchase-denied and part-landed.
+- WP5 per docs/plan/WP5.md.

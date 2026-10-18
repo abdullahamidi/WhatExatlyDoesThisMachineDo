@@ -6,7 +6,7 @@ export const AUDIO = {
   masterGain: 0.3,
   rampSeconds: 0.08,
   updateIntervalMs: 200,
-  lookaheadSeconds: 0.15,
+  lookaheadSeconds: 0.3, // must exceed updateIntervalMs plus timer jitter so ticks never starve
 
   // Crank ratchet played on every click: short bursts spaced by tickGapMs.
   crank: { hz: 180, ticks: 3, tickGapMs: 28, decayMs: 45, gain: 0.5 },
