@@ -1,6 +1,15 @@
 import Phaser from 'phaser';
 import { DEPTH, CRANK_FEEDBACK, MACHINE_ANCHOR, PIXEL_SCALE } from '../../data/world';
-import { MACHINE_ASSEMBLY, MACHINE_COMPONENTS, MACHINE_COMPONENT_IDS, MACHINE_LAYER_DEPTH } from '../../data/machineComponents';
+import {
+  MACHINE_ASSEMBLY,
+  MACHINE_BOUNDS,
+  MACHINE_COMPONENTS,
+  MACHINE_COMPONENT_IDS,
+  MACHINE_LAYER_DEPTH,
+  MACHINE_RENDER,
+  MACHINE_SHADOWS,
+  MACHINE_SHADOW_STYLE,
+} from '../../data/machineComponents';
 import type { MachineComponentId, Vec2 } from '../../data/machineComponents';
 import { componentDepth, machineLocalToWorld, resolveAttachment } from '../math/machineLayout';
 import { connectionOffset } from '../math/machineLinks';
@@ -16,12 +25,20 @@ function between(lo: number, hi: number): number {
 
 /**
  * The machine container: one sprite per component, visibility driven by tech levels.
- * Layout lives on the outer `container`; the inner `parts` container holds the sprites and links and is the only thing shaken.
- * Newly unlocked parts fly in (assembly tween) and puff dust on landing; motion and links are driven per frame by `update`.
+ * Layout lives on the outer `container`; the inner `parts` container holds the sprites, links and contact shadows and is the only thing shaken.
+ * Render modes (`MACHINE_RENDER.mode`):
+ *  - `renderTexture`: `parts` is off the display list and is drawn once per frame into a RenderTexture on the art-pixel grid
+ *    (RT pixel (200,200) is machine (0,0)); the RT is the only machine image on the display list, scaled by `container`.
+ *  - `direct`: `parts` sits under `container` and Phaser draws the sprites itself.
+ * Newly unlocked parts fly in (assembly tween) and puff dust on landing; motion, links and shadows are driven per frame by `update`.
  */
 export class MachineView {
   readonly container: Phaser.GameObjects.Container;
   private readonly parts: Phaser.GameObjects.Container;
+  /** Art-resolution target for `parts` in renderTexture mode; null in direct mode. */
+  private readonly rt: Phaser.GameObjects.RenderTexture | null;
+  private readonly shadows: Phaser.GameObjects.Graphics;
+  private lastShadowKey = '';
   private readonly ctx: GameContext;
   private readonly scene: Phaser.Scene;
   private readonly sprites = new Map<MachineComponentId, Phaser.GameObjects.Sprite>();
@@ -51,8 +68,29 @@ export class MachineView {
       .container(MACHINE_ANCHOR.x, MACHINE_ANCHOR.y)
       .setScale(PIXEL_SCALE)
       .setDepth(DEPTH.machine);
-    this.parts = scene.add.container(0, 0);
-    this.container.add(this.parts);
+    let parts: Phaser.GameObjects.Container;
+    let rt: Phaser.GameObjects.RenderTexture | null = null;
+    if (MACHINE_RENDER.mode === 'renderTexture') {
+      parts = scene.make.container({ x: 0, y: 0 }, false);
+      rt = scene.make
+        .renderTexture(
+          {
+            x: MACHINE_BOUNDS.left,
+            y: MACHINE_BOUNDS.top,
+            width: MACHINE_BOUNDS.right - MACHINE_BOUNDS.left,
+            height: MACHINE_BOUNDS.bottom - MACHINE_BOUNDS.top,
+          },
+          false,
+        )
+        .setOrigin(0, 0);
+      rt.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      this.container.add(rt);
+    } else {
+      parts = scene.add.container(0, 0);
+      this.container.add(parts);
+    }
+    this.parts = parts;
+    this.rt = rt;
 
     for (const id of MACHINE_COMPONENT_IDS) {
       const def = MACHINE_COMPONENTS[id];
@@ -67,6 +105,9 @@ export class MachineView {
     }
     // Links are added before the depth sort so the container orders them with the sprites.
     this.links = new MachineLinks(scene, this.parts);
+    // Contact shadows sit at the bottom of the parts stack (depth -1).
+    this.shadows = scene.make.graphics({}, false).setDepth(MACHINE_SHADOW_STYLE.depth);
+    this.parts.add(this.shadows);
     // Container renders children in list order; sort by depth so layers stack correctly.
     this.parts.sort('depth');
     this.animator = new MachineAnimator(ctx.session, this.sprites);
@@ -84,6 +125,7 @@ export class MachineView {
   sync(): void {
     this.stopAssemblies();
     this.visibleIds = visibleComponentIds(this.ctx.session.state.techLevels);
+    this.lastShadowKey = '';
     for (const id of MACHINE_COMPONENT_IDS) this.settle(id, this.visibleIds.has(id));
   }
 
@@ -193,10 +235,47 @@ export class MachineView {
     this.sync();
   }
 
-  /** Per frame: drive part motion, then redraw the shafts and belts between live part positions. */
+  /**
+   * Shadows under the live static parts. Redrawn only when the set of live shadow owners changes.
+   * Oval shadows are stepped row by row with an integer half-ellipse width.
+   */
+  private drawShadows(): void {
+    const active = MACHINE_SHADOWS.filter((shadow) => this.isActive(shadow.component));
+    const key = active.map((shadow) => shadow.component).join(',');
+    if (key === this.lastShadowKey) return;
+    this.lastShadowKey = key;
+    this.shadows.clear();
+    this.shadows.fillStyle(MACHINE_SHADOW_STYLE.color, MACHINE_SHADOW_STYLE.alpha);
+    for (const shadow of active) {
+      if (shadow.oval !== true) {
+        this.shadows.fillRect(shadow.x, shadow.y, shadow.width, shadow.height);
+        continue;
+      }
+      for (let j = 0; j < shadow.height; j += 1) {
+        const t = (j + 0.5 - shadow.height / 2) / (shadow.height / 2);
+        const w = Math.round(shadow.width * Math.sqrt(1 - t * t));
+        this.shadows.fillRect(shadow.x + Math.floor((shadow.width - w) / 2), shadow.y + j, w, 1);
+      }
+    }
+  }
+
+  /**
+   * Per frame: drive part motion, redraw the links between live part positions and the contact shadows,
+   * then (renderTexture mode) repaint the RenderTexture from `parts`, carrying the shake offset.
+   */
   update(deltaMs: number): void {
     this.animator.update(deltaMs, this.isActive);
-    this.links.draw(this.pointOf);
+    const drive = this.animator.getDrive();
+    this.links.draw({ pointOf: this.pointOf, isLive: this.isActive, masterDeg: drive.masterDeg });
+    this.drawShadows();
+    if (this.rt !== null) {
+      this.rt.clear();
+      this.rt.draw(
+        this.parts,
+        -MACHINE_BOUNDS.left + Math.round(this.parts.x),
+        -MACHINE_BOUNDS.top + Math.round(this.parts.y),
+      );
+    }
   }
 
   isAssembling(id: MachineComponentId): boolean {
@@ -252,6 +331,10 @@ export class MachineView {
     this.shakeTween = null;
     this.container.setPosition(MACHINE_ANCHOR.x, MACHINE_ANCHOR.y);
     this.sprites.clear();
-    this.container.destroy(true);
+    // Guard: Phaser clears `scene` once an object is destroyed; skip what is already gone.
+    if (this.shadows.scene) this.shadows.destroy();
+    // parts is not a child of container in renderTexture mode, so it is destroyed explicitly.
+    if (this.rt !== null && this.parts.scene) this.parts.destroy(true);
+    if (this.container.scene) this.container.destroy(true); // frees the RT image and its texture
   }
 }
