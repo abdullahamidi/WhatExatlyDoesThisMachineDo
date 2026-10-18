@@ -178,3 +178,29 @@ Evidence (scratch `/tmp/claude-0/-home-user-WhatExatlyDoesThisMachineDo/0b9fa637
 - CR-B ACCEPTED: fork ping per click (echoCrank owned), whistle chord on harmonicConvergence milestone.
 - CR-C ACCEPTED: roadmap size changes (servo base+arm+rod, one dish file + flipX, crystal 32×48).
 - CR-D ACCEPTED: no vibration on the exciter.
+
+## In-game review (WP10, Art Director)
+Build at http://localhost:4173/ (s12_spire, s13_era4_full), close-ups at zoom 2 + motion frames. Evidence (scratch `…/scratchpad/ad4/`):
+`crown.png dishes.png rings.png calliope.png base.png servo.png`, `s12/base.png s12/top.png`, `servo_2x.png crankknob_f0.png crankknob_f6.png`,
+`top_sheet.png` (wave/crystal/dish-wave motion), `calli_sheet.png` (before) / `calli_after_sheet.png` (after), `s13_spire_2x.png`.
+
+**Pass:** spire shoes on girder over posts; rod exciter eye → crown; rings 1–4 on battens, graded, glint frames; P4 header → riser x 47 → exciter port,
+no gap; calliope stubs on the studs; fork box on girder (1 px gaps); exciter on girder; dishes D-silhouette, rim outward, horn at focus facing the
+mirror, trunnion on leg, waves leave outward; crystal in claws, 4-frame pulse; servo feet on bottom girder; **R1 vertical at every sampled angle,
+top eye on the crank knob centre (r 19), bottom on the servo pin** (servo_2x.png); no floating part in s12 or s13; composition at 0.5 reads (T shape,
+spire axis near centre, top ≈ screen y 100, clear of HUD).
+
+| # | defect | fix | status |
+|---|---|---|---|
+| D1 | calliope puffs spawned at the mouth slot (−193) rose 20 px straight up the bell face → read as a lamp inside the brass, not a whistle toot | `STEAM_EMITTERS.calliope.at` → bell caps + 4 px: (−72,−211) (−44,−216) (−16,−221) (`src/data/steamFx.ts` + test) | **done**, calli_after_sheet.png: plume above each cap, round robin, ~1 burst / 5–8 s |
+| D2 | Era III `manifold` leak emitter (−72/−44/−16, −182, rate 0.3–1.5/s) still fires once the calliope sits on the studs: puffs appear at every whistle foot and climb the bells, drowning the round-robin toots (most of the puffs in calli_after_sheet.png are these) | **code**: `SteamEmitter.until?: { techId: TechId; minLevel: number }` (emitter quiet once reached); `SteamFx` active = gate met && !until met; data `manifold.until = { techId: 'pressureResonator', minLevel: 1 }` (the whistle tee valves seal the studs). Test: manifold inactive at pressureResonator 1, calliope active. | spec → EM |
+| D3 (low) | hand-crank knob is worn wood `#8a7a64/#a8957a`, near the sky/sand value; at 1:1 R1's top eye can look pinned to air when the knob overlaps sky | none for WP10 (Era I asset, outlined in ink; geometry correct). Optional later: knob 1 value darker (`#5f5244` body, `#8a7a64` light) in hand-crank.png + re-run make_rot | note |
+
+**WP11 (world 3840×2160, GROUND_Y 1680) flags**
+- W1 minZoom: `minZoomToFit(VIEW, WORLD)` becomes 1/3 → art px = 0.667 screen px (non-integer): 1–2 px features (spire rod, wave line, ring glints,
+  dish-wave arcs, belts, R1) drop rows / shimmer. Keep the zoom ladder on art-integer steps (0.5, 1, 1.5, 2; 0.25 only if an overview is required, and
+  then accept 2:1 decimation). Era V top (art −840) at 0.5 = 840 screen px > 720 → the whole machine no longer fits at 0.5; auto-frame should pan, not zoom below 0.5.
+- W2 `MACHINE_ANCHOR.x` and `CAMERA.focus.x` are literal 1280 → derive from `WORLD.width / 2` (Era IV parts are machine-local, unaffected).
+- W3 `bg.sky` 1280×720 at scrollFactor 0: verify cover at the new min zoom; above art −470 the view shows only the flat top cloud band (s12/top.png) → Era V needs a taller sky gradient/zenith band.
+- W4 `DUST.maxParticles` 60 spread over `WORLD.width`: density per screen drops by 1/3 at 3840 → scale to 90 (or spawn x around the camera). `DUST_RISING.spawnTopY` is GROUND_Y-relative: OK.
+- W5 parallax spans (`parallaxSpan`, pylon line) depend on minZoom → re-shoot s0/s9/s13 after the change.

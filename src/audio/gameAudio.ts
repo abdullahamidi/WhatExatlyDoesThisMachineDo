@@ -8,7 +8,7 @@ import { AUDIO } from '../data/audio';
 import { TECHNOLOGIES } from '../data/technologies';
 import type { GameFeedback } from '../game/context';
 import type { GameSession } from '../simulation';
-import { arcRate, boilerGain, gearTickRate, humFrequency, humGain, mainsGain, masterTarget, padGain, servoGain, servoHz } from './audioMath';
+import { arcRate, boilerGain, droneGain, gearTickRate, humFrequency, humGain, mainsGain, masterTarget, padGain, servoGain, servoHz } from './audioMath';
 import { createSynth } from './synth';
 import type { Synth } from './synth';
 
@@ -91,7 +91,8 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
 
   /**
    * Update loop: hum and gear ticks follow the current ME/s; mains and arcs follow EE/s; the boiler roar follows PR/s;
-   * the resonance pad follows RS/s (owned spire only); the servo whirr follows the crank servo level.
+   * the resonance pad follows RS/s (owned spire only); the servo whirr follows the crank servo level;
+   * the sub-bass drone follows XF/s (owned nullChamber only).
    * Muted keeps the hum pitch and drops only its gain.
    */
   function tick(): void {
@@ -109,6 +110,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
         s.scheduleArcs(0);
         s.setBoiler(0);
         s.setPad(0);
+        s.setDrone(0);
         s.setServo(0, AUDIO.servo.minHz);
         return;
       }
@@ -118,6 +120,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
       s.scheduleArcs(arcRate(ee, session.state.techLevels.sparkGap >= 1));
       s.setBoiler(boilerGain(pr, session.state.techLevels.boiler >= 1));
       s.setPad(padGain(rs, session.state.techLevels[AUDIO.pad.techId] >= 1));
+      s.setDrone(droneGain(session.rates.perSecond.xf, session.state.techLevels[AUDIO.drone.techId] >= 1));
       const servoLevel = session.state.techLevels[AUDIO.servo.techId];
       const servoMax = TECHNOLOGIES[AUDIO.servo.techId].maxLevel ?? 1;
       s.setServo(servoGain(servoLevel, servoMax), servoHz(servoLevel, servoMax));
@@ -191,7 +194,8 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
           const s = synth;
           if (s && !session.settings.muted) {
             const era = TECHNOLOGIES[id].era;
-            if (era >= 4) s.playForkPing();
+            if (era >= 5) s.playSwell();
+            else if (era >= 4) s.playForkPing();
             else if (era === 3) s.playHiss();
             else if (era === 2) s.playRelay();
             else s.playPurchase();
@@ -207,6 +211,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
             s.playSting();
             if (id === AUDIO.whistle.techId) s.playWhistle((AUDIO.sting.notesHz.length * AUDIO.sting.noteMs) / 1000);
             if (id === AUDIO.chord.techId) s.playChord((AUDIO.sting.notesHz.length * AUDIO.sting.noteMs) / 1000);
+            if (id === AUDIO.beadTick.techId) s.playBeadTicks((AUDIO.sting.notesHz.length * AUDIO.sting.noteMs) / 1000);
           }
         } catch (error) {
           warnOnce('milestone', error);

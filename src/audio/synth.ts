@@ -402,6 +402,89 @@ function ensureServo(context: AudioContext, out: AudioNode, hz: number, cache: S
   return { osc, filter, gain };
 }
 
+/** Sub-bass drone: a sine at hz and one at hz * partialRatio (through partialGain) into a shared drone gain; a slow sine LFO drives that gain through a depth gain. */
+function ensureDrone(context: AudioContext, out: AudioNode, cache: DroneNodes | null): DroneNodes {
+  if (cache) return cache;
+  const d = AUDIO.drone;
+  const gain = context.createGain();
+  gain.gain.value = 0;
+  gain.connect(out);
+  const fundamental = context.createOscillator();
+  fundamental.type = 'sine';
+  fundamental.frequency.value = d.hz;
+  fundamental.connect(gain);
+  const partial = context.createOscillator();
+  partial.type = 'sine';
+  partial.frequency.value = d.hz * d.partialRatio;
+  const partialLevel = context.createGain();
+  partialLevel.gain.value = d.partialGain;
+  partial.connect(partialLevel);
+  partialLevel.connect(gain);
+  const lfo = context.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = d.lfoHz;
+  const depth = context.createGain();
+  depth.gain.value = 0;
+  lfo.connect(depth);
+  depth.connect(gain.gain);
+  fundamental.start();
+  partial.start();
+  lfo.start();
+  return { fundamental, partial, partialLevel, gain, lfo, depth };
+}
+
+/**
+ * Reversed swell: filtered noise (lowpass rising exponentially) and a sawtooth, one gain that rises exponentially
+ * over the swell time, then stops hard. Sources and nodes are released when the last source ends.
+ */
+function playSwellVoice(context: AudioContext, out: AudioNode, noise: AudioBuffer, startAt: number): void {
+  const w = AUDIO.swell;
+  const decay = w.ms / 1000;
+  const endAt = startAt + decay;
+  const stopAt = endAt + SWELL_STOP_RAMP_S;
+  const env = context.createGain();
+  env.gain.setValueAtTime(ENVELOPE_FLOOR, startAt);
+  env.gain.exponentialRampToValueAtTime(w.gain, endAt);
+  env.gain.linearRampToValueAtTime(0, stopAt);
+  env.connect(out);
+  const filter = context.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(w.noiseLowpassFromHz, startAt);
+  filter.frequency.exponentialRampToValueAtTime(w.noiseLowpassToHz, endAt);
+  const noiseLevel = context.createGain();
+  noiseLevel.gain.value = w.noiseGain;
+  const src = context.createBufferSource();
+  src.buffer = noise;
+  src.connect(filter);
+  filter.connect(noiseLevel);
+  noiseLevel.connect(env);
+  const saw = context.createOscillator();
+  saw.type = 'sawtooth';
+  saw.frequency.value = w.sawHz;
+  const sawLevel = context.createGain();
+  sawLevel.gain.value = w.sawGain;
+  saw.connect(sawLevel);
+  sawLevel.connect(env);
+  let live = 2;
+  const release = (): void => {
+    live -= 1;
+    if (live > 0) return;
+    src.disconnect();
+    filter.disconnect();
+    noiseLevel.disconnect();
+    saw.disconnect();
+    sawLevel.disconnect();
+    env.disconnect();
+  };
+  src.onended = release;
+  saw.onended = release;
+  const offset = Math.random() * Math.max(0, noise.duration - decay);
+  src.start(startAt, offset);
+  src.stop(stopAt + STOP_PAD_S);
+  saw.start(startAt);
+  saw.stop(stopAt + STOP_PAD_S);
+}
+
 export function createSynth(context: AudioContext): Synth {
   const master = openMaster(context);
   let closed = false;
@@ -414,6 +497,7 @@ export function createSynth(context: AudioContext): Synth {
   let boiler: BoilerNodes | null = null;
   let pad: PadNodes | null = null;
   let servo: ServoNodes | null = null;
+  let drone: DroneNodes | null = null;
   const warned = new Set<string>();
 
   function warnOnce(name: string, err: unknown): void {
@@ -691,6 +775,41 @@ export function createSynth(context: AudioContext): Synth {
       });
     },
 
+    setDrone(gain: number): void {
+      run('setDrone', (out) => {
+        const amp = Number.isFinite(gain) && gain > 0 ? gain : 0;
+        if (drone === null && amp === 0) return; // silent and never started: no nodes needed
+        drone = ensureDrone(context, out, drone);
+        const now = context.currentTime;
+        drone.gain.gain.setTargetAtTime(amp, now, PARAM_TIME_CONSTANT_S);
+        // The LFO depth follows the level, so a silent drone does not swing below zero.
+        drone.depth.gain.setTargetAtTime(amp * AUDIO.drone.lfoDepth, now, PARAM_TIME_CONSTANT_S);
+      });
+    },
+
+    playSwell(): void {
+      run('playSwell', (out) => {
+        playSwellVoice(context, out, getNoise(), context.currentTime);
+      });
+    },
+
+    playBeadTicks(delaySeconds = 0): void {
+      run('playBeadTicks', (out) => {
+        const b = AUDIO.beadTick;
+        const delay = Number.isFinite(delaySeconds) && delaySeconds > 0 ? delaySeconds : 0;
+        const t0 = context.currentTime + delay;
+        for (let i = 0; i < b.count; i++) {
+          playVoice(context, out, {
+            wave: 'sine',
+            hz: b.hz,
+            startAt: t0 + (i * b.gapMs) / 1000,
+            decay: b.ms / 1000,
+            peak: b.gain,
+          });
+        }
+      });
+    },
+
     suspend(): void {
       run('suspend', () => {
         context.suspend().catch(() => undefined);
@@ -733,6 +852,12 @@ export function createSynth(context: AudioContext): Synth {
         servo?.osc.stop();
         servo?.filter.disconnect();
         servo?.gain.disconnect();
+        drone?.fundamental.stop();
+        drone?.partial.stop();
+        drone?.lfo.stop();
+        drone?.partialLevel.disconnect();
+        drone?.gain.disconnect();
+        drone?.depth.disconnect();
       } catch (err) {
         warnOnce('close', err);
       }
