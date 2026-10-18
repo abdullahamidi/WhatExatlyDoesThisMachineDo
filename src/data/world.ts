@@ -61,10 +61,10 @@ export const HORIZON_STRIP = { height: 6, color: PALETTE.rustDark, alpha: 0.6 } 
 export const DUST: { maxParticles: number; frequencyMs: number; lifespanMs: [number, number]; speedX: [number, number];
   speedY: [number, number]; alpha: [number, number]; scale: [number, number]; depth: number; spawnTopY: number; spawnBottomY: number;
   spawnHalfWidth: number } =
-  { maxParticles: 60, frequencyMs: 250, lifespanMs: [6000, 11000], speedX: [10, 30], speedY: [-4, 4],
+  { maxParticles: 90 /* 60 x 1.5 with the 1.5x wider spawn band (WP11 review): same density */, frequencyMs: 250, lifespanMs: [6000, 11000], speedX: [10, 30], speedY: [-4, 4],
     alpha: [0, 0.35] /* [end, start] fade */, scale: [1, 2.5], depth: DEPTH.dust,
     spawnTopY: GROUND_Y - 520, spawnBottomY: GROUND_Y - 20,
-    spawnHalfWidth: 1280 /* dust spawns in MACHINE_ANCHOR.x +- spawnHalfWidth */ };
+    spawnHalfWidth: WORLD.width / 2 /* dust spawns across the whole world: MACHINE_ANCHOR.x +- spawnHalfWidth */ };
 /** Rising dust once the spire stands (Era IV): mote speedY [-18, -6] world px/s, spawn top GROUND_Y - 900. */
 export const DUST_RISING: { techId: TechId; minLevel: number; speedY: [number, number]; spawnTopY: number } =
   { techId: 'resonatorSpire', minLevel: 1, speedY: [-18, -6], spawnTopY: GROUND_Y - 900 };

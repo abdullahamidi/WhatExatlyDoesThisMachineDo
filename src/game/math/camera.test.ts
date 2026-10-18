@@ -16,7 +16,7 @@ import {
   fitView,
 } from './camera';
 import type { Bounds, FitViewOptions, RectLike } from './camera';
-import { VIEW, WORLD, CAMERA } from '../../data/world';
+import { VIEW, WORLD, CAMERA, GROUND_Y, MACHINE_ANCHOR, PIXEL_SCALE } from '../../data/world';
 import { TECH_IDS } from '../../data/types';
 import type { TechId } from '../../data/types';
 import { TECHNOLOGIES } from '../../data/technologies';
@@ -413,5 +413,56 @@ describe('fitView HUD top inset', () => {
   it('does not move when the base has no room below', () => {
     const b = { left: 900, right: 1660, top: 380, bottom: 1180 };
     expect(fitView(b, VIEW, { ...FIT, hudTopInsetPx: 240 })).toEqual(fitView(b, VIEW, FIT));
+  });
+});
+
+describe('fitView fullView (ART_ERA5 F2, min zoom framing)', () => {
+  const FULL: FitViewOptions = {
+    margin: CAMERA.fitMarginPx,
+    pixelScale: PIXEL_SCALE,
+    minZoom: effectiveMinZoom(VIEW, WORLD, CAMERA.minZoom),
+    maxZoom: CAMERA.maxZoom,
+    defaultZoom: CAMERA.defaultZoom,
+    defaultCenter: { x: CAMERA.focus.x, y: CAMERA.focus.y },
+    world: WORLD,
+    hudTopInsetPx: CAMERA.hudTopInsetPx,
+    fullView: { groundY: GROUND_Y, groundBandPx: CAMERA.fullViewGroundBandPx, topMinPx: CAMERA.fullViewTopMinPx },
+  };
+
+  /** Screen y of a world y for a fitted view. */
+  function screenY(worldY: number, out: { center: { y: number }; zoom: number }): number {
+    return (worldY - out.center.y) * out.zoom + VIEW.height / 2;
+  }
+
+  it('Era V bounds {-560, 560, -616, 8} at min zoom put the ground line at screen y 640', () => {
+    const b = boundsToWorld({ left: -560, right: 560, top: -616, bottom: 8 }, MACHINE_ANCHOR);
+    const out = fitView(b, VIEW, FULL);
+    expect(out.zoom).toBe(0.5);
+    expect(screenY(GROUND_Y, out)).toBeCloseTo(640, 9);
+    expect(out.center.y).toBeCloseTo(GROUND_Y - 280 / 0.5, 9);
+  });
+
+  it('a short machine at min zoom keeps the ground line at H - groundBandPx (screen y 560, centre GROUND_Y - 400)', () => {
+    const b: Bounds = { left: 0, top: GROUND_Y - 200, right: 2600, bottom: GROUND_Y + 8 };
+    const out = fitView(b, VIEW, FULL);
+    expect(out.zoom).toBe(0.5);
+    expect(screenY(GROUND_Y, out)).toBeCloseTo(560, 9);
+    expect(out.center.y).toBeCloseTo(GROUND_Y - 400, 9);
+  });
+
+  it('a tall machine at min zoom is lowered so its top sits at topMinPx (ground at screen y 600), base within the margin', () => {
+    const b: Bounds = { left: 0, top: GROUND_Y - 1152, right: 2600, bottom: GROUND_Y + 8 };
+    const out = fitView(b, VIEW, FULL);
+    expect(out.zoom).toBe(0.5);
+    expect(screenY(GROUND_Y, out)).toBeCloseTo(600, 9);
+    expect(screenY(b.top, out)).toBeCloseTo(CAMERA.fullViewTopMinPx, 9);
+    expect(screenY(b.bottom, out)).toBeLessThanOrEqual(VIEW.height - CAMERA.fitMarginPx + 1e-9);
+  });
+
+  it('zoom above the min is unchanged by fullView', () => {
+    const b: Bounds = { left: 1000, top: 500, right: 2232, bottom: 900 }; // zoom 0.75
+    const plain = fitView(b, VIEW, { ...FULL, fullView: undefined });
+    expect(plain.zoom).toBe(0.75);
+    expect(fitView(b, VIEW, FULL)).toEqual(plain);
   });
 });

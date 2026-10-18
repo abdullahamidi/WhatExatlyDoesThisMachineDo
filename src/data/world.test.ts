@@ -176,10 +176,15 @@ describe('WP11 world growth (C2)', () => {
     expect(PATTERN_ORIGIN_X).toBe(1280);
   });
 
-  it('dust spawns +- 1280 around the machine anchor, inside the world', () => {
-    expect(DUST.spawnHalfWidth).toBe(1280);
+  it('dust spawns across the whole world: +- WORLD.width / 2 around the machine anchor, inside the world', () => {
+    expect(DUST.spawnHalfWidth).toBe(WORLD.width / 2);
     expect(MACHINE_ANCHOR.x - DUST.spawnHalfWidth).toBeGreaterThanOrEqual(0);
     expect(MACHINE_ANCHOR.x + DUST.spawnHalfWidth).toBeLessThanOrEqual(WORLD.width);
+  });
+
+  it('dust max particles keep the pre-WP11 density (60 over a 2560 px band) over the wider band', () => {
+    const preWp11Density = 60 / 2560;
+    expect(DUST.maxParticles / (2 * DUST.spawnHalfWidth)).toBeCloseTo(preWp11Density, 9);
   });
 });
 
@@ -325,6 +330,19 @@ describe('WP11 aperture beam (C3)', () => {
   it('artX equals the apertureBase socket x and the foot sits above the ground line', () => {
     expect(APERTURE_BEAM.artX).toBe(MACHINE_SOCKETS.apertureBase.x);
     expect(APERTURE_BEAM.footArtY).toBeLessThan(0);
+  });
+
+  it('artX is inside the aperture box and footArtY is inside it above the socket (the mouth, not the base)', () => {
+    const socket = MACHINE_SOCKETS.apertureBase;
+    const part = MACHINE_COMPONENTS.aperture;
+    const boxLeft = socket.x - part.origin.x * part.size.width;
+    const boxTop = socket.y - part.origin.y * part.size.height;
+    const boxBottom = boxTop + part.size.height;
+    expect(APERTURE_BEAM.artX).toBeGreaterThanOrEqual(boxLeft);
+    expect(APERTURE_BEAM.artX).toBeLessThanOrEqual(boxLeft + part.size.width);
+    expect(APERTURE_BEAM.footArtY).toBeGreaterThan(boxTop);
+    expect(APERTURE_BEAM.footArtY).toBeLessThan(socket.y);
+    expect(APERTURE_BEAM.footArtY).toBeLessThan(boxBottom);
   });
 
   it('the minimum latch frame is a valid frame of the aperture sheet', () => {

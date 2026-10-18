@@ -1421,7 +1421,7 @@ const ERA_FIVE_TABLE: readonly EraFiveRow[] = [
   { id: 'aperture', techId: 'lensArray', minLevel: 1, assetId: 'machine.aperture', width: 64, height: 28, origin: { x: 0.5, y: 1 }, socket: 'apertureBase', layer: 'mid', depthBias: 3,
     animation: { kind: 'latch', techId: 'skyAperture', minLevel: 1, frames: 6, fps: 5 }, connections: [] },
   { id: 'namePlate', techId: 'handCrank', minLevel: 1, assetId: 'machine.namePlate', width: 40, height: 11, origin: { x: 0.5, y: 1 }, socket: 'plateSeat', layer: 'frame', depthBias: 2,
-    animation: { kind: 'stage', frames: 6, gates: [['generator', 1], ['boiler', 1], ['resonatorSpire', 1], ['nullChamber', 1]], endingFrame: 5 }, connections: [] },
+    animation: { kind: 'stage', frames: 6, gates: [['generatorBlueprint', 1], ['substationBlueprint', 1], ['pressureVesselBlueprint', 1], ['harmonicConvergence', 1]], endingFrame: 5 }, connections: [] },
 ];
 
 /** Era-V sockets (contract C3 coordinates). */
@@ -1616,7 +1616,7 @@ describe('era V machine data (WP11)', () => {
     const plate = MACHINE_COMPONENTS.namePlate.animation;
     expect(plate.kind).toBe('stage');
     if (plate.kind !== 'stage') return;
-    expect(plate.gates.map(([t]) => t)).toEqual(['generator', 'boiler', 'resonatorSpire', 'nullChamber']);
+    expect(plate.gates.map(([t]) => t)).toEqual(['generatorBlueprint', 'substationBlueprint', 'pressureVesselBlueprint', 'harmonicConvergence']);
     expect(plate.endingFrame).toBeLessThan(plate.frames);
     expect(plate.gates.length).toBeLessThan(plate.frames);
   });

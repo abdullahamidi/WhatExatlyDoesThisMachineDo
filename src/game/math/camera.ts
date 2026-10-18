@@ -121,10 +121,13 @@ export interface FitViewOptions {
   defaultCenter: Vec2;
   world: Size;
   hudTopInsetPx?: number; // screen px under the HUD panel (default 0); the fitted machine top is kept below it
+  // framing at the min zoom (ART_ERA5 F2): ground line at screen H - groundBandPx when possible, machine top >= topMinPx
+  fullView?: { groundY: number; groundBandPx: number; topMinPx: number };
 }
 
 // default view when b already fits it (with margin); otherwise the largest grid zoom that fits b, capped at
-// defaultZoom, centred on b, moved up when its top would sit under the HUD inset, and clamped inside the world
+// defaultZoom, centred on b, moved up when its top would sit under the HUD inset, and clamped inside the world.
+// At the min zoom with fullView the ground line is placed instead of applying the HUD-inset shift.
 export function fitView(b: Bounds, view: Size, o: FitViewOptions): { center: Vec2; zoom: number } {
   const defaultCenter = clampCenter(o.defaultCenter, o.defaultZoom, view, o.world);
   if (boundsInView(b, viewBounds(defaultCenter, o.defaultZoom, view), o.margin)) {
@@ -138,7 +141,17 @@ export function fitView(b: Bounds, view: Size, o: FitViewOptions): { center: Vec
   const centre = { x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 };
   const inset = o.hudTopInsetPx ?? 0;
   const topScreenY = (b.top - centre.y) * zoom + view.height / 2; // screen y of the machine top before the HUD shift
-  if (topScreenY < inset) {
+  const fv = o.fullView;
+  if (fv && zoom <= o.minZoom + 1e-9) {
+    // ground line preferred at H - groundBandPx; clamped so the machine top stays >= topMinPx and the base + margin
+    // stays above the bottom edge; centre.y is then the value that puts the ground line at that screen y
+    const H = view.height;
+    const groundPref = H - fv.groundBandPx;
+    const groundMin = fv.topMinPx + (fv.groundY - b.top) * zoom;
+    const groundMax = H - o.margin - (b.bottom - fv.groundY) * zoom;
+    const ground = Math.min(groundMax, Math.max(groundPref, groundMin));
+    centre.y = fv.groundY - (ground - H / 2) / zoom;
+  } else if (topScreenY < inset) {
     // move the view up so the top clears the HUD, but never push the machine base (plus margin) off the bottom
     const bottomScreenY = (b.bottom - centre.y) * zoom + view.height / 2;
     const room = Math.max(0, view.height - o.margin - bottomScreenY);

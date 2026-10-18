@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { fitView, effectiveMinZoom, viewBounds, boundsInView } from './camera';
 import type { Bounds, FitViewOptions } from './camera';
 import { visibleMachineBounds, boundsToWorld } from './machineBounds';
-import { VIEW, WORLD, CAMERA, MACHINE_ANCHOR, PIXEL_SCALE } from '../../data/world';
+import { VIEW, WORLD, CAMERA, MACHINE_ANCHOR, PIXEL_SCALE, GROUND_Y } from '../../data/world';
 import { TECH_IDS } from '../../data/types';
 import type { TechId } from '../../data/types';
 
@@ -84,6 +84,7 @@ const NEXT: FitViewOptions = {
   defaultCenter: { x: CAMERA.focus.x, y: CAMERA.focus.y },
   world: WORLD,
   hudTopInsetPx: CAMERA.hudTopInsetPx,
+  fullView: { groundY: GROUND_Y, groundBandPx: CAMERA.fullViewGroundBandPx, topMinPx: CAMERA.fullViewTopMinPx },
 };
 
 /** Screen y of a world y for a view centred on centreY at the given zoom. */
@@ -111,22 +112,23 @@ describe('framing: legacy vs WP11 world', () => {
       expect(boundsInView(nextBounds, view, CAMERA.fitMarginPx)).toBe(true);
       if (next.zoom !== 0.5) return;
       const top = screenY(nextBounds.top, next.center.y, next.zoom);
-      const baseCapped = VIEW.height - CAMERA.fitMarginPx - (nextBounds.bottom - nextBounds.top) * next.zoom;
-      expect(top).toBeGreaterThanOrEqual(Math.min(CAMERA.hudTopInsetPx, baseCapped) - 1e-9);
+      expect(top).toBeGreaterThanOrEqual(CAMERA.fullViewTopMinPx - 1e-9);
     });
   }
 
-  it('s11 (era III full) is framed at zoom 0.5 in the WP11 world, with its ground line at screen y 480', () => {
+  it('s11 (era III full) is framed at zoom 0.5 in the WP11 world, with its ground line at screen y 560 (centre GROUND_Y - 400)', () => {
     const levels = levelsFrom(S11);
     const next = fitView(boundsToWorld(visibleMachineBounds(levels)), VIEW, NEXT);
     expect(next.zoom).toBe(0.5);
-    expect(screenY(MACHINE_ANCHOR.y, next.center.y, next.zoom)).toBeCloseTo(480, 9);
+    expect(screenY(MACHINE_ANCHOR.y, next.center.y, next.zoom)).toBeCloseTo(560, 9);
+    expect(next.center.y).toBeCloseTo(GROUND_Y - 400, 9);
   });
 
-  it('s13 (era IV full) is framed at zoom 0.5 in the WP11 world, with its ground line at screen y 648 (HUD shift capped by the bottom margin)', () => {
+  it('s13 (era IV full) is framed at zoom 0.5 in the WP11 world, with its ground line at screen y 560 (centre GROUND_Y - 400)', () => {
     const levels = levelsFrom(S13);
     const next = fitView(boundsToWorld(visibleMachineBounds(levels)), VIEW, NEXT);
     expect(next.zoom).toBe(0.5);
-    expect(screenY(MACHINE_ANCHOR.y, next.center.y, next.zoom)).toBeCloseTo(648, 9);
+    expect(screenY(MACHINE_ANCHOR.y, next.center.y, next.zoom)).toBeCloseTo(560, 9);
+    expect(next.center.y).toBeCloseTo(GROUND_Y - 400, 9);
   });
 });
