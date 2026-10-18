@@ -10,6 +10,7 @@ import { OFFLINE_CAP_SECONDS, MAX_UPDATE_SECONDS, AUTOSAVE_INTERVAL_MS, SAVE_KEY
 const ERA_ONE_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 1);
 const ERA_TWO_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 2);
 const ERA_THREE_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 3);
+const ERA_FOUR_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 4);
 
 // Projection of a definition onto the C1 columns.
 const project = (def: TechDefinition): unknown => ({
@@ -33,7 +34,7 @@ describe('technology table', () => {
   });
 
   it('TECH_LIST follows TECH_IDS order', () => {
-    expect(TECH_LIST).toHaveLength(27);
+    expect(TECH_LIST).toHaveLength(36);
     expect(TECH_LIST.map((t) => t.id)).toEqual([...TECH_IDS]);
   });
 
@@ -154,6 +155,15 @@ describe('technology table', () => {
       turbine: ['unlock', 300000, null, null],
       reliefValves: ['unlock', 800000, null, null],
       pressureVesselBlueprint: ['milestone', 0, null, null],
+      resonatorSpire: ['unlock', 1500000, null, null],
+      harmonicCoil: ['repeatable', 200, 1.3, 25],
+      pressureResonator: ['repeatable', 1000000, 1.35, 20],
+      crankServo: ['repeatable', 300000, 1.5, 10],
+      echoCrank: ['unlock', 10000, null, null],
+      phaseLock: ['unlock', 50000, null, null],
+      standingWave: ['repeatable', 100000, 1.3, 20],
+      crystalLattice: ['unlock', 1500000, null, null],
+      harmonicConvergence: ['milestone', 0, null, null],
     };
     for (const id of TECH_IDS) {
       const [kind, baseCost, growth, maxLevel] = expected[id];
@@ -302,8 +312,8 @@ describe('era II technology table', () => {
     }
   });
 
-  it('era is 1, 2 or 3 for every tech', () => {
-    for (const id of TECH_IDS) expect([1, 2, 3]).toContain(TECHNOLOGIES[id].era);
+  it('era is 1 to 4 for every tech', () => {
+    for (const id of TECH_IDS) expect([1, 2, 3, 4]).toContain(TECHNOLOGIES[id].era);
   });
 });
 
@@ -438,8 +448,8 @@ describe('era III technology table', () => {
     }
   });
 
-  it('appends the two pressure logs at the end of SYSTEM_LOGS', () => {
-    expect(SYSTEM_LOGS.slice(-2)).toEqual([
+  it('appends the two pressure logs at the end of SYSTEM_LOGS (before the era IV logs)', () => {
+    expect(SYSTEM_LOGS.slice(-5, -3)).toEqual([
       { id: 'pressure-rising', text: 'Pressure rising. Safe limit field left blank.', trigger: { kind: 'lifetime', res: 'pr', atLeast: 1000 } },
       { id: 'steam-rain', text: 'Steam tastes of rain. Logged as error.', trigger: { kind: 'lifetime', res: 'pr', atLeast: 1000000 } },
     ]);
@@ -607,7 +617,7 @@ describe('era I rows are unchanged', () => {
 
 describe('plaque lines', () => {
   it('first line is always owned, then the milestones in order', () => {
-    expect(PLAQUE_LINES).toHaveLength(4);
+    expect(PLAQUE_LINES).toHaveLength(5);
     expect(PLAQUE_LINES[0]?.milestone).toBeNull();
     for (const line of PLAQUE_LINES.slice(1)) {
       expect(line.milestone).not.toBeNull();
@@ -623,6 +633,7 @@ describe('plaque lines', () => {
       { milestone: 'generatorBlueprint', text: 'PRIMARY FUNCTION: R?S????' },
       { milestone: 'substationBlueprint', text: 'PRIMARY FUNCTION: RES?OR?' },
       { milestone: 'pressureVesselBlueprint', text: 'PRIMARY FUNCTION: REST?RE' },
+      { milestone: 'harmonicConvergence', text: 'PRIMARY FUNCTION: RESTORE (TARGET: ?)' },
     ]);
   });
 });
