@@ -2,6 +2,7 @@ import type { GameState, LoadResult, SettingsState } from '../data/types';
 import { SAVE_BACKUP_KEY, SAVE_KEY } from '../data/balance';
 import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
 import { emptyStats } from '../simulation/stats';
+import { DEFAULT_PRESTIGE } from '../simulation/prestige';
 import { deserialize, serialize } from './codec';
 import type { SaveMeta } from './codec';
 
@@ -52,6 +53,7 @@ export class SaveManager {
         settings: { ...DEFAULT_SETTINGS },
         stats: emptyStats(nowMs),
         achievements: { unlocked: {} },
+        prestige: { ...DEFAULT_PRESTIGE, perks: [] },
         status: 'new',
         error: `Could not read save: ${errorMessage(e)}`,
       };

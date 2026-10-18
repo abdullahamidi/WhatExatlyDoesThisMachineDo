@@ -1,13 +1,19 @@
 import { formatNumber, formatRate } from '../utils/format';
 import { PLAQUE_LINES } from '../data/story';
 import { RESOURCE_IDS } from '../data/types';
-import type { GameState, ProductionRates, ResourceId, ResourceMap, TechId } from '../data/types';
+import type { GameState, ProductionRates, PrestigeState, ResourceId, ResourceMap, TechId } from '../data/types';
+import { cycleLabel, DEFAULT_PRESTIGE } from '../simulation/prestige';
 import { resourceShort } from './revealRules';
 
 // Pure HUD view model. No DOM, no Phaser.
 
 export interface HudResourceRow { id: ResourceId; label: string; value: string; perSecond: string; visible: boolean }
-export interface HudView { me: string; perClick: string; perSecond: string; rows: HudResourceRow[]; plaque: string }
+export interface HudView { me: string; perClick: string; perSecond: string; rows: HudResourceRow[]; plaque: string; cycle: string | null }
+
+/** Cycle line under the plaque: null in cycle 1 (era I start, nothing to show), `CYCLE 0043` from cycle 2. */
+export function cycleLine(cycle: number): string | null {
+  return cycle > 1 ? cycleLabel(cycle) : null;
+}
 
 /** Resources shown as extra HUD rows (ME has its own three rows). */
 export const HUD_ROW_IDS: readonly ResourceId[] = ['ee', 'pr', 'rs', 'xf'];
@@ -27,9 +33,11 @@ export function plaqueText(techLevels: Readonly<Record<TechId, number>>): string
 // row: label = short; value = formatNumber(res[id]); perSecond = formatRate(rates.perSecond[id]);
 // visible = lifetime[id] > 0 || rates.perSecond[id] > 0 (hidden while the resource is unused)
 // plaque = plaqueText(techLevels)
+// cycle = cycleLine(prestige.cycle) (null in cycle 1)
 export function buildHudView(
   state: Pick<GameState, 'res' | 'lifetime' | 'techLevels'>,
   rates: Readonly<ProductionRates>,
+  prestige: Pick<PrestigeState, 'cycle'> = DEFAULT_PRESTIGE,
 ): HudView {
   return {
     me: formatNumber(state.res.me),
@@ -43,6 +51,7 @@ export function buildHudView(
       visible: state.lifetime[id] > 0 || rates.perSecond[id] > 0,
     })),
     plaque: plaqueText(state.techLevels),
+    cycle: cycleLine(prestige.cycle),
   };
 }
 

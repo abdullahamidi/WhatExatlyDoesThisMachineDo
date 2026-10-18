@@ -4,6 +4,7 @@ import type {
   EndingPhase,
   EndingState,
   GameState,
+  PrestigeState,
   ResourceMap,
   SaveEnvelope,
   SettingsState,
@@ -18,6 +19,7 @@ import { createInitialState } from '../simulation/state';
 import { normalizeSettings } from '../simulation/settings';
 import { emptyResourceMap } from '../simulation/resources';
 import { deriveStats } from '../simulation/stats';
+import { normalizePrestige } from '../simulation/prestige';
 import { DEFAULT_ENDING, ENDING_PHASES, normalizeEnding } from '../simulation/progression/ending';
 
 /** Current save schema version. v2 stores per-resource maps (`state.res`, `state.lifetime`). */
@@ -289,9 +291,17 @@ export function readAchievements(input: unknown): AchievementsState {
 }
 
 /**
+ * Lenient reader for the new-cycle prestige block (WP14). Missing -> DEFAULT_PRESTIGE; bad values are
+ * normalised (never an error, never 'recovered'). See normalizePrestige.
+ */
+export function readPrestige(input: unknown): PrestigeState {
+  return normalizePrestige(input);
+}
+
+/**
  * Lenient normaliser for a (migrated) save envelope. Missing optional fields take defaults;
- * present core fields (version, savedAt, state) of the wrong type are errors. Settings, stats and
- * achievements never fail a save. The result contains only known fields and always has all of them.
+ * present core fields (version, savedAt, state) of the wrong type are errors. Settings, stats,
+ * achievements and prestige never fail a save. The result contains only known fields and always has all of them.
  * `techs` supplies the technology definitions used to clamp levels (injectable for tests).
  */
 export function validateEnvelope(
@@ -310,6 +320,7 @@ export function validateEnvelope(
   const settings = readSettings(input['settings']);
   const stats = readStats(input['stats'], state.value, nowMs);
   const achievements = readAchievements(input['achievements']);
+  const prestige = readPrestige(input['prestige']);
   return {
     ok: true,
     envelope: {
@@ -319,6 +330,7 @@ export function validateEnvelope(
       settings,
       stats,
       achievements,
+      prestige,
     },
   };
 }

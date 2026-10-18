@@ -7,7 +7,7 @@ import { resourceShort } from './revealRules';
 
 export interface Hud { render(view: HudView): void; destroy(): void }
 
-interface Readout { me: string; perClick: string; perSecond: string; plaque: string }
+interface Readout { me: string; perClick: string; perSecond: string; plaque: string; cycle: string }
 
 /** DOM refs and last-written values of one non-ME resource row. */
 interface ResourceRowRefs {

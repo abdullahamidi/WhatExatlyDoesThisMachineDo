@@ -1,33 +1,44 @@
-import type { AchievementsState, GameState, LoadResult, SaveEnvelope, SettingsState, StatsState } from '../data/types';
+import type { AchievementsState, GameState, LoadResult, PrestigeState, SaveEnvelope, SettingsState, StatsState } from '../data/types';
 import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
 import { emptyStats } from '../simulation/stats';
+import { DEFAULT_PRESTIGE } from '../simulation/prestige';
 import { MIGRATIONS, SAVE_VERSION, migrate, validateEnvelope } from './schema';
 import type { Migration } from './schema';
 
-/** Cosmetic progress written next to the core save (WP12). */
+/** Cosmetic progress written next to the core save (WP12); prestige is the new-cycle block (WP14). */
 export interface SaveMeta {
   stats: StatsState;
   achievements: AchievementsState;
+  prestige: PrestigeState;
 }
 
 /**
  * Encodes state and settings as a versioned JSON envelope. `meta` is optional: when omitted the
- * stats and achievements fields are left out, so the output matches the pre-WP12 format.
+ * stats, achievements and prestige fields are left out, so the output matches the pre-WP12 format.
  */
 export function serialize(state: GameState, settings: SettingsState, nowMs: number, meta?: SaveMeta): string {
   const envelope =
     meta === undefined
       ? { version: SAVE_VERSION, savedAt: nowMs, state, settings }
-      : { version: SAVE_VERSION, savedAt: nowMs, state, settings, stats: meta.stats, achievements: meta.achievements };
+      : {
+          version: SAVE_VERSION,
+          savedAt: nowMs,
+          state,
+          settings,
+          stats: meta.stats,
+          achievements: meta.achievements,
+          prestige: meta.prestige,
+        };
   return JSON.stringify(envelope);
 }
 
-function fresh(nowMs: number): Pick<LoadResult, 'state' | 'settings' | 'stats' | 'achievements'> {
+function fresh(nowMs: number): Pick<LoadResult, 'state' | 'settings' | 'stats' | 'achievements' | 'prestige'> {
   return {
     state: createInitialState(nowMs),
     settings: { ...DEFAULT_SETTINGS },
     stats: emptyStats(nowMs),
     achievements: { unlocked: {} },
+    prestige: { ...DEFAULT_PRESTIGE, perks: [] },
   };
 }
 
@@ -76,6 +87,7 @@ export function deserialize(
     settings: envelope.settings,
     stats: envelope.stats,
     achievements: envelope.achievements,
+    prestige: envelope.prestige,
     status: parsed.migrated ? 'migrated' : 'loaded',
   };
 }

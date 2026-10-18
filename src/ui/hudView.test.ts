@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { buildHudView, clickGainText, plaqueText } from './hudView';
+import { buildHudView, clickGainText, cycleLine, plaqueText } from './hudView';
 import { setRevealed } from './revealRules';
 import { createInitialState, emptyResourceMap } from '../simulation';
 import type { ProductionRates, ResourceMap, TechId } from '../data/types';
@@ -186,5 +186,25 @@ describe('xf label reveal (WP13 D4)', () => {
     setRevealed(true);
     const view = buildHudView(stateWithMe(0), ratesOf(1, { me: 0 }));
     expect(view.rows.map((r) => r.label)).toEqual(['EE', 'PR', 'RS', 'RF']);
+  });
+});
+
+describe('cycle line (WP14 T8a)', () => {
+  it('is null in cycle 1, so the default HUD strings do not change', () => {
+    expect(cycleLine(1)).toBeNull();
+    expect(buildHudView(stateWithMe(0), ratesOf(1, { me: 0 })).cycle).toBeNull();
+    expect(buildHudView(stateWithMe(0), ratesOf(1, { me: 0 }), { cycle: 1 }).cycle).toBeNull();
+  });
+
+  it('shows the cycle label from cycle 2', () => {
+    expect(cycleLine(2)).toBe('CYCLE 0043');
+    expect(cycleLine(3)).toBe('CYCLE 0044');
+    expect(buildHudView(stateWithMe(0), ratesOf(1, { me: 0 }), { cycle: 2 }).cycle).toBe('CYCLE 0043');
+  });
+
+  it('leaves every other field unchanged', () => {
+    const base = buildHudView(stateWithMe(1500), ratesOf(12, { me: 12.5 }));
+    const cycled = buildHudView(stateWithMe(1500), ratesOf(12, { me: 12.5 }), { cycle: 2 });
+    expect({ ...cycled, cycle: null }).toEqual(base);
   });
 });

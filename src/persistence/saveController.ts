@@ -67,7 +67,7 @@ export function createSaveController(o: {
     return RESOURCE_IDS.some((id) => !Number.isFinite(s.res[id]) || !Number.isFinite(s.lifetime[id]));
   };
 
-  const meta = () => ({ stats: session.stats, achievements: session.achievements });
+  const meta = () => ({ stats: session.stats, achievements: session.achievements, prestige: session.prestige });
 
   const saveNow = (): boolean => {
     if (suspended) return false;
@@ -125,6 +125,12 @@ export function createSaveController(o: {
           saveNow();
         }),
         session.on('ending', () => {
+          saveNow();
+        }),
+        session.on('cycle', () => {
+          saveNow();
+        }),
+        session.on('prestige', () => {
           saveNow();
         }),
       ];
