@@ -17,6 +17,7 @@ import {
   fitView,
 } from '../math/camera';
 import { visibleMachineBounds, boundsToWorld } from '../math/machineBounds';
+import type { CameraPose } from '../math/finale';
 
 interface DragState {
   startCenter: Vec2;
@@ -38,10 +39,13 @@ export class CameraController {
   private autoFrameSkipped = false; // a purchase/unlock refocus was skipped while dragging; replayed on release
   private refocusTween: Phaser.Tweens.Tween | null = null;
   private lastWheelMs = Number.NEGATIVE_INFINITY; // performance.now() of the last applied wheel step
+  /** True while the finale drives the camera (setOverride): drag, wheel and auto-frame are ignored. */
+  private overridden = false;
   private readonly unsubscribes: Array<() => void> = [];
 
   // pointer handlers are arrow properties so `this` is bound and the same references can be removed in destroy()
   private readonly pointerdown = (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]): void => {
+    if (this.overridden) return;
     if (currentlyOver.length > 0) return;
     if (!pointer.leftButtonDown() && !pointer.middleButtonDown()) return;
     this.drag = { startCenter: { ...this.center }, startX: pointer.x, startY: pointer.y, active: false };
@@ -77,6 +81,7 @@ export class CameraController {
     _deltaX: number,
     deltaY: number,
   ): void => {
+    if (this.overridden) return;
     const now = performance.now();
     if (now - this.lastWheelMs < CAMERA.wheelStepCooldownMs) return; // trackpads fire bursts; one grid step per window
     this.cancelRefocus();
@@ -127,6 +132,24 @@ export class CameraController {
     this.animateTo(this.target());
   }
 
+  /**
+   * Finale camera. A non-null pose is clamped like any view (world bounds, zoom range) and written at once; drag, wheel and
+   * auto-frame are ignored while it is set. null releases the override and the camera keeps its current pose (no jump).
+   */
+  setOverride(pose: CameraPose | null): void {
+    if (pose === null) {
+      this.overridden = false;
+      return;
+    }
+    this.overridden = true;
+    this.cancelRefocus();
+    this.drag = null;
+    this.autoFrameSkipped = false;
+    this.zoom = clampZoom(pose.zoom, this.minZoom, CAMERA.maxZoom);
+    this.center = clampCenter({ x: pose.centerX, y: pose.centerY }, this.zoom, VIEW, WORLD);
+    this.apply();
+  }
+
   destroy(): void {
     this.cancelRefocus();
     this.scene.input.off('pointerdown', this.pointerdown);
@@ -166,6 +189,7 @@ export class CameraController {
   // Purchases and unlocks grow the machine: refocus only when the machine no longer fits the current view.
   // During an active drag the refocus is deferred to the pointer release (see endDrag).
   private autoFrame(): void {
+    if (this.overridden) return;
     if (this.drag?.active === true) {
       this.autoFrameSkipped = true;
       return;

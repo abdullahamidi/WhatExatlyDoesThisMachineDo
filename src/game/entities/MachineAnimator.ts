@@ -13,6 +13,7 @@ import {
 } from '../../data/machineComponents';
 import type { ComponentAnimation, MachineComponentId, SpeedCurve } from '../../data/machineComponents';
 import { HAMMER_FX } from '../../data/steamFx';
+import { FINALE_BOOST } from '../../data/finale';
 import { CRANK_FEEDBACK } from '../../data/world';
 import {
   addActivity,
@@ -43,6 +44,16 @@ import type { MasterState } from '../math/driveTrain';
 import { crankAngle, crankOffsetOnGearUp } from '../math/crankLink';
 import { componentDepth, resolveAttachment } from '../math/machineLayout';
 import { motionPolicy } from '../../simulation/settings';
+import { boostedValue } from '../math/finale';
+
+/** Top frame rate of any frame-cycle part in the data: the boost target for `frames` maxHz (frame parts carry no speed curve). */
+const FRAMES_MAX_HZ = MACHINE_COMPONENT_IDS.reduce((top, id) => {
+  const anim = MACHINE_COMPONENTS[id].animation;
+  return anim.kind === 'frames' ? Math.max(top, anim.maxHz) : top;
+}, 0);
+
+/** Finale hold frames (FINALE_BOOST.holdFrames) keyed by part: shown while the finale boost is above 0. */
+const FINALE_HOLD_FRAMES: Partial<Record<MachineComponentId, number>> = FINALE_BOOST.holdFrames;
 
 /** Caps a degrees-per-second speed at maxDegPerSec (null: uncapped). Reduced motion only. */
 function capSpeed(degPerSec: number, maxDegPerSec: number | null): number {
@@ -104,6 +115,8 @@ function drivenOf(id: MachineComponentId): { ratio: number; phaseDeg: number } {
  * waves restart their frame clock at 0. Frame clocks are otherwise the animator clock (`elapsed`).
  * Milestone FX (Era V): on the EXOTIC_MILESTONE_FX milestone the beads align to beadPhiDeg and hold, the null core spins
  * faster for coreSpinMs and the anchor glows hold glowFrame for glowHoldMs.
+ * Finale (setFinale): boost lifts every speed and frame rate towards its curve max (boostedValue) and shows the
+ * FINALE_BOOST.holdFrames frames; restored moves stage parts to their endingFrame. Boost 0 and not restored = unchanged.
  */
 export class MachineAnimator {
   private readonly session: GameSession;
@@ -156,6 +169,10 @@ export class MachineAnimator {
   private readonly latchFrames = new Map<MachineComponentId, number>();
   /** True until the end of the first update after construction / reset: gates met then are 'done' (see latchStart). */
   private firstFrame = true;
+  /** Finale boost 0..1 (setFinale): 0 = WP11 behaviour. */
+  private finaleBoost = 0;
+  /** Finale restored flag (setFinale): stage parts show their endingFrame. */
+  private finaleRestored = false;
   private readonly unsubscribeClick: () => void;
   private readonly unsubscribeReset: () => void;
   private readonly unsubscribeMilestone: () => void;
@@ -244,11 +261,13 @@ export class MachineAnimator {
     const rs = this.session.rates.perSecond.rs;
     const xf = this.session.rates.perSecond.xf; // exotic driver: XF/s
     const levels = this.session.state.techLevels;
+    const boost = this.finaleBoost;
     const exoticSince = this.exoticMilestoneAt === null ? null : this.elapsed - this.exoticMilestoneAt;
     const exotic = milestonePhase(exoticSince, EXOTIC_MILESTONE_FX.alignMs, EXOTIC_MILESTONE_FX.holdMs); // finalAlignment: align, hold, none
     this.manual = decayActivity(this.manual, dt, MACHINE_MOTION.manualTauSeconds); // activity fades when idle
     const dv = driverValue('combined', this.manual, me);
-    const degPerSec = dv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(DRIVE_TRAIN.masterSpeed, dv); // rest below threshold
+    const idleDeg = dv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(DRIVE_TRAIN.masterSpeed, dv); // rest below threshold
+    const degPerSec = boostedValue(idleDeg, DRIVE_TRAIN.masterSpeed.max, boost); // finale boost; identity at 0
     this.syncGearing(isActive('gearSmall'));
     this.master = capTravel(
       this.master,
@@ -279,7 +298,7 @@ export class MachineAnimator {
         // in step with thetaM without overriding the drop. Strikes are not counted while assembling.
         if (anim.kind === 'driven' && sprite.visible) applyAngle(sprite, this.drivenAngle(id, anim));
         if (anim.kind === 'spin' && sprite.visible) {
-          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr, rs, xf), dt, policy.maxDegPerSec);
+          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr, rs, xf), dt, policy.maxDegPerSec, boost);
         }
         if (anim.kind === 'reciprocate' && sprite.visible) sprite.y += this.ramOffset(anim, prevMasterDeg, dt);
         continue;
@@ -328,15 +347,22 @@ export class MachineAnimator {
             sprite.setFrame(EXOTIC_MILESTONE_FX.glowFrame); // finalAlignment hold: anchor glow at its hold frame
             break;
           }
+          const hold = FINALE_HOLD_FRAMES[id];
+          if (hold !== undefined && boost > 0) {
+            sprite.setFrame(hold); // finale boost: the part holds its finale frame
+            break;
+          }
           const origin = this.frameOrigins.get(id) ?? 0; // milestone restarts count from their origin
           // Reduced motion (no flashes): the cycle is frozen on the rest frame (spark gap flicker, siphon arcs, dish waves).
-          const cycling = policy.flashes && fdv >= MACHINE_MOTION.restThreshold;
-          const cycle = framesIndex(this.elapsed - origin, anim.frames, anim.maxHz, cycling);
+          // A finale boost starts the cycle even when the driver is at rest.
+          const cycling = policy.flashes && (fdv >= MACHINE_MOTION.restThreshold || boost > 0);
+          const hz = boostedValue(anim.maxHz, FRAMES_MAX_HZ, boost);
+          const cycle = framesIndex(this.elapsed - origin, anim.frames, hz, cycling);
           sprite.setFrame((cycle + (anim.frameOffset ?? 0)) % anim.frames); // staggered sheets offset their cycle
           break;
         }
         case 'spin': {
-          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr, rs, xf), dt, policy.maxDegPerSec);
+          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr, rs, xf), dt, policy.maxDegPerSec, boost);
           break;
         }
         case 'gauge': {
@@ -352,7 +378,7 @@ export class MachineAnimator {
           break;
         }
         case 'orbit': {
-          this.placeBead(id, sprite, anim, dt, exotic, xf, policy.maxDegPerSec);
+          this.placeBead(id, sprite, anim, dt, exotic, xf, policy.maxDegPerSec, boost);
           break;
         }
         case 'latch': {
@@ -361,7 +387,7 @@ export class MachineAnimator {
         }
         case 'stage': {
           const met = anim.gates.filter(([techId, level]) => levels[techId] >= level).length; // gates met
-          sprite.setFrame(stageFrameOf(met, anim.frames, false, anim.endingFrame));
+          sprite.setFrame(stageFrameOf(met, anim.frames, this.finaleRestored, anim.endingFrame));
           break;
         }
       }
@@ -392,6 +418,7 @@ export class MachineAnimator {
     exotic: { phase: 'none' | 'align' | 'hold'; t01: number },
     xf: number,
     maxDegPerSec: number | null,
+    boost: number,
   ): void {
     const from = this.orbitAngles.get(id) ?? anim.phi0Deg;
     let phi: number;
@@ -400,7 +427,8 @@ export class MachineAnimator {
     } else if (exotic.phase === 'hold') {
       phi = EXOTIC_MILESTONE_FX.beadPhiDeg;
     } else {
-      const raw = xf < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, xf) * anim.speedScale; // rest below threshold
+      const actual = xf < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, xf) * anim.speedScale; // rest below threshold
+      const raw = boostedValue(actual, anim.speed.max * anim.speedScale, boost); // finale boost towards the bead's top speed
       phi = orbitStep(from, anim.dir, capSpeed(raw, maxDegPerSec), dt);
     }
     this.orbitAngles.set(id, phi);
@@ -485,7 +513,7 @@ export class MachineAnimator {
 
   /**
    * Spin part: own angle += speed(driver) * dt, rest below the threshold; shown on its rotation sheet or rotated.
-   * maxDegPerSec (reduced motion) caps the speed, milestone boost included.
+   * maxDegPerSec (reduced motion) caps the speed, milestone and finale boost included (the boost is applied before the cap).
    */
   private spinPart(
     id: MachineComponentId,
@@ -494,12 +522,23 @@ export class MachineAnimator {
     dv: number,
     dt: number,
     maxDegPerSec: number | null,
+    finaleBoost: number,
   ): void {
-    const base = dv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, dv); // rest below threshold
-    const boost = id === EXOTIC_MILESTONE_FX.core && this.exoticWithin(EXOTIC_MILESTONE_FX.coreSpinMs) ? EXOTIC_MILESTONE_FX.coreSpinMult : 1;
-    const angle = spinStep(this.spinAngles.get(id) ?? 0, capSpeed(base * boost, maxDegPerSec), dt);
+    const actual = dv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, dv); // rest below threshold
+    const base = boostedValue(actual, anim.speed.max, finaleBoost); // finale boost towards the curve max; identity at 0
+    const milestone = id === EXOTIC_MILESTONE_FX.core && this.exoticWithin(EXOTIC_MILESTONE_FX.coreSpinMs) ? EXOTIC_MILESTONE_FX.coreSpinMult : 1;
+    const angle = spinStep(this.spinAngles.get(id) ?? 0, capSpeed(base * milestone, maxDegPerSec), dt);
     this.spinAngles.set(id, angle);
     applyAngle(sprite, angle);
+  }
+
+  /**
+   * Finale render state, pushed by the director each frame: boost 0..1 lifts speeds and frame rates towards their curve maxima
+   * and holds the FINALE_BOOST.holdFrames parts; restored moves stage parts to their endingFrame. Non-finite boost reads as 0.
+   */
+  setFinale(f: { boost: number; restored: boolean }): void {
+    this.finaleBoost = Number.isFinite(f.boost) ? Math.min(1, Math.max(0, f.boost)) : 0;
+    this.finaleRestored = f.restored;
   }
 
   /** Angle of a driven part: crank parts follow the crank state and gearing, the rest follow thetaM. */

@@ -26,6 +26,12 @@ function between(lo: number, hi: number): number {
   return lo + Math.random() * (hi - lo); // lo + r * span
 }
 
+/** Index of a sprite's current texture frame. Phaser names numeric frames by their index; the __BASE frame (not numeric) reads as 0. */
+function frameIndexOf(sprite: Phaser.GameObjects.Sprite): number {
+  const n = Number(sprite.frame.name);
+  return Number.isInteger(n) && n >= 0 ? n : 0;
+}
+
 /** Perf probe window: number of recent update() durations kept for getUpdateStats. Debug only, not tuning. */
 const UPDATE_SAMPLE_COUNT = 120;
 
@@ -338,10 +344,21 @@ export class MachineView {
     return this.hammerStrikes;
   }
 
-  getComponentState(id: MachineComponentId): { visible: boolean; assembling: boolean; alpha: number; scale: number } {
+  getComponentState(id: MachineComponentId): { visible: boolean; assembling: boolean; alpha: number; scale: number; frame: number } {
     const sprite = this.sprites.get(id);
-    if (sprite === undefined) return { visible: false, assembling: false, alpha: 0, scale: 0 };
-    return { visible: sprite.visible, assembling: this.assembling.has(id), alpha: sprite.alpha, scale: sprite.scaleX };
+    if (sprite === undefined) return { visible: false, assembling: false, alpha: 0, scale: 0, frame: 0 };
+    return {
+      visible: sprite.visible,
+      assembling: this.assembling.has(id),
+      alpha: sprite.alpha,
+      scale: sprite.scaleX,
+      frame: frameIndexOf(sprite),
+    };
+  }
+
+  /** Finale render state (boost, restored) forwarded to the animator; see MachineAnimator.setFinale. */
+  applyFinale(f: { boost: number; restored: boolean }): void {
+    this.animator.setFinale(f);
   }
 
   getComponentSprite(id: MachineComponentId): Phaser.GameObjects.Sprite | undefined {
