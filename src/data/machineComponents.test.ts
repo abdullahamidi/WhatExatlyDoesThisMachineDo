@@ -18,11 +18,15 @@ import {
   DRIVE_TRAIN,
   SOCKET_IDS,
   RESONANCE_MILESTONE_FX,
+  RING_GEOMETRY,
+  INVERSION_GHOST_FX,
+  EXOTIC_MILESTONE_FX,
 } from './machineComponents';
 import type { ComponentAnimation, ConnectionPoint, MachineComponentDefinition, MachineComponentId, MachineLayer, MachineLink, SocketId, Vec2 } from './machineComponents';
 import { PYLON_FEEDS } from './world';
 import type { AssetId } from '../assets/assetIds';
 import { ASSET_MANIFEST } from '../assets/manifest';
+import { visibleMachineBounds } from '../game/math/machineBounds';
 
 const COMPONENTS = MACHINE_COMPONENT_IDS.map((id) => MACHINE_COMPONENTS[id]);
 
@@ -408,10 +412,10 @@ describe('machine component invariants', () => {
     }
   });
 
-  it('every speed curve (vibrate and spin) has min <= max and base > 0; frames, gauge and reciprocate need none', () => {
+  it('every speed curve (vibrate, spin and orbit) has min <= max and base > 0; frames, gauge and reciprocate need none', () => {
     for (const def of COMPONENTS) {
       const anim = def.animation;
-      if (anim.kind === 'vibrate' || anim.kind === 'spin') {
+      if (anim.kind === 'vibrate' || anim.kind === 'spin' || anim.kind === 'orbit') {
         expect(anim.speed.min).toBeLessThanOrEqual(anim.speed.max);
         expect(anim.speed.base).toBeGreaterThan(0);
       }
