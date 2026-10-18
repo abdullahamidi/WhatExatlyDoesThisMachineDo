@@ -3,6 +3,7 @@ import type { GameState, SettingsState } from '../data/types';
 import { AUTOSAVE_INTERVAL_MS, SAVE_KEY } from '../data/balance';
 import { GameSession } from '../simulation';
 import { createInitialState } from '../simulation/state';
+import { emptyResourceMap } from '../simulation/resources';
 import { deserialize } from './codec';
 import { MemoryStorage, SaveManager } from './saveManager';
 import type { KeyValueStorage } from './saveManager';
@@ -53,7 +54,11 @@ class FailingWriteStorage extends MemoryStorage {
 }
 
 const withMe = (me: number, muted = false): { state: GameState; settings: SettingsState } => ({
-  state: { ...createInitialState(t0), me, lifetimeMe: me },
+  state: {
+    ...createInitialState(t0),
+    res: { ...emptyResourceMap(), me },
+    lifetime: { ...emptyResourceMap(), me },
+  },
   settings: { muted },
 });
 
@@ -113,7 +118,11 @@ describe('createSaveController', () => {
     // generatorBlueprint requires pistonArray and flywheel; the next click runs the milestone check.
     const base = createInitialState(t0);
     const session = new GameSession({
-      state: { ...base, lifetimeMe: 200000, techLevels: { ...base.techLevels, pistonArray: 1, flywheel: 1 } },
+      state: {
+        ...base,
+        lifetime: { ...base.lifetime, me: 200000 },
+        techLevels: { ...base.techLevels, pistonArray: 1, flywheel: 1 },
+      },
       now: () => t0,
     });
     const controller = createSaveController({
@@ -152,7 +161,7 @@ describe('createSaveController', () => {
     expect(resets).toBe(1);
     const saved = storedSave(storage);
     expect(saved?.status).toBe('loaded');
-    expect(saved?.state.me).toBe(0);
+    expect(saved?.state.res.me).toBe(0);
     expect(saved?.state.techLevels.handCrank).toBe(1);
     expect(saved?.state.techLevels.gearRatio).toBe(0);
     expect(saved?.settings.muted).toBe(true);
@@ -199,10 +208,17 @@ describe('createSaveController', () => {
   });
 
   it('saveNow() skips the write, reports false and warns once when a counter is non-finite', () => {
-    const counters = ['me', 'lifetimeMe', 'lastSimTime', 'totalClicks'] as const;
-    for (const field of counters) {
+    const base = createInitialState(t0);
+    const cases: Array<{ field: string; state: GameState }> = [
+      { field: 'lastSimTime', state: { ...base, lastSimTime: Number.NaN } },
+      { field: 'totalClicks', state: { ...base, totalClicks: Number.NaN } },
+      { field: 'res.me', state: { ...base, res: { ...base.res, me: Number.NaN } } },
+      { field: 'res.ee', state: { ...base, res: { ...base.res, ee: Number.NaN } } },
+      { field: 'lifetime.me', state: { ...base, lifetime: { ...base.lifetime, me: Number.NaN } } },
+      { field: 'lifetime.xf', state: { ...base, lifetime: { ...base.lifetime, xf: Number.NaN } } },
+    ];
+    for (const { field, state } of cases) {
       const storage = new CountingStorage();
-      const state = { ...createInitialState(t0), [field]: Number.NaN };
       const session = new GameSession({ state, settings: { muted: false }, now: () => t0 });
       const controller = createSaveController({
         session,

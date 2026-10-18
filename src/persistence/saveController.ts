@@ -1,5 +1,6 @@
 import type { GameSession } from '../simulation';
 import { AUTOSAVE_INTERVAL_MS } from '../data/balance';
+import { RESOURCE_IDS } from '../data/types';
 import type { SaveManager } from './saveManager';
 
 /** Minimal timer abstraction so the controller can be tested without real timers. */
@@ -50,7 +51,8 @@ export function createSaveController(o: {
   /** Counters that must be finite numbers before anything is written; NaN/Infinity would corrupt the save. */
   const hasNonFiniteCounter = (): boolean => {
     const s = session.state;
-    return ![s.me, s.lifetimeMe, s.lastSimTime, s.totalClicks].every(Number.isFinite);
+    if (![s.lastSimTime, s.totalClicks].every(Number.isFinite)) return true;
+    return RESOURCE_IDS.some((id) => !Number.isFinite(s.res[id]) || !Number.isFinite(s.lifetime[id]));
   };
 
   const saveNow = (): boolean => {
