@@ -89,7 +89,7 @@ def tint(im, rgb):
 
 def scene(out):
     """1280x720 screen, zoom 0.5 (1 art px = 1 screen px), camera centred on the machine bounds (x 0, y -300 art)."""
-    W, H = 1280, 720; gy = 360 + 300 + int(os.environ.get('CAMDY', '0'))   # screen row of art y 0
+    W, H = 1280, int(os.environ.get('SH', '720')); gy = 360 + 300 + int(os.environ.get('CAMDY', '0'))   # screen row of art y 0
     gx = 640
     mode = os.environ.get('WORLD', 'violet')     # old | violet | mid | restored
     mix = float(os.environ.get('MIX', '0.5'))
@@ -106,7 +106,7 @@ def scene(out):
     if mode != 'restored' and not (mode == 'mid' and mix > .5):
         e = Image.open(R5 + 'finale/eclipse.png').convert('RGBA').crop((ecl * 48, 0, ecl * 48 + 48, 48))
         sky.alpha_composite(e, (372 - 24, 290 - 24))
-    cv = sky.copy()
+    cv = Image.new('RGBA', (W, H)); cv.paste(sky.crop((0, 719, 1280, 720)).resize((W, H)), (0, 0)); cv.paste(sky, (0, 0))
     d_art = 300 - 80                                  # camera centre above CAMERA.focus (art px)
     def layer(old, new, sf, alpha, ground_row, underfill, tnt=None):
         lift = int(round(d_art * (1 - sf)))           # parallax: layer horizon rises above the machine ground
@@ -124,10 +124,12 @@ def scene(out):
             if underfill:
                 uf = Image.new('RGBA', (W, max(0, H - (top + im.height))), underfill + (int(255 * alpha * a),))
                 cv.alpha_composite(uf, (0, top + im.height))
-    layer(R5 + 'bg/mountains.png', R5 + 'finale/mountains-restored.png', .15, .45, 156, (0x5a, 0x5f, 0x63))
-    layer(R5 + 'bg/skyline.png', R5 + 'finale/skyline-restored.png', .3, .4, 220, (0x2b, 0x2e, 0x31))
-    layer(R5 + 'bg/pylons.png', R5 + 'bg/pylons.png', .55, .45, 156, None, (0xb8, 0xa9, 0x8f))
-    layer(R5 + 'bg/pylons-lit.png', R5 + 'bg/pylons-lit.png', .55, .7, 156, None)
+    TR = os.environ.get('TRANSPARENT') == '1'
+    if TR: cv = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    if not TR: layer(R5 + 'bg/mountains.png', R5 + 'finale/mountains-restored.png', .15, .45, 156, (0x5a, 0x5f, 0x63))
+    if not TR: layer(R5 + 'bg/skyline.png', R5 + 'finale/skyline-restored.png', .3, .4, 220, (0x2b, 0x2e, 0x31))
+    if not TR: layer(R5 + 'bg/pylons.png', R5 + 'bg/pylons.png', .55, .45, 156, None, (0xb8, 0xa9, 0x8f))
+    if not TR: layer(R5 + 'bg/pylons-lit.png', R5 + 'bg/pylons-lit.png', .55, .7, 156, None)
     # ground
     g_old = Image.open(R5 + 'terrain/ground.png').convert('RGBA'); g_new = Image.open(R5 + 'terrain/ground-green.png').convert('RGBA')
     def gstrip(im):
@@ -141,8 +143,8 @@ def scene(out):
         gn = gstrip(g_new); wipe = int(os.environ.get('WIPE', '360'))        # green spreads outward from the machine (screen px)
         m = Image.new('L', gs.size, 0); ma = np.array(m); ma[:, max(0, gx - wipe):gx + wipe] = 255
         gs.paste(gn, (0, 0), Image.fromarray(ma))
-    cv.alpha_composite(gs, (0, gy))
-    hs = Image.new('RGBA', (W, 3), (0x4e, 0x2a, 0x1a, 150)); cv.alpha_composite(hs, (0, gy))
+    if not TR: cv.alpha_composite(gs, (0, gy))
+    hs = Image.new('RGBA', (W, 3), (0x4e, 0x2a, 0x1a, 150)); cv.alpha_composite(hs, (0, gy)) if not TR else None
     # regrowth strips
     st = int(os.environ.get('REGROW', '3' if mode == 'restored' else '0'))
     for s_ in range(1, st + 1):

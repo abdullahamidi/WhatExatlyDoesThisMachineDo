@@ -863,7 +863,7 @@ const PIPE_LINKS_EXPECTED: readonly MachineLink[] = [
   { from: { component: 'boiler', point: 'steam' }, to: { component: 'turbine', point: 'steam' }, kind: 'pipe',
     via: [{ x: -246, y: -112 }, { x: -412, y: -112 }], bore: 4, pipeStyle: 'steam' },
   { from: { component: 'condenser', point: 'condensate' }, to: { component: 'boiler', point: 'feed' }, kind: 'pipe',
-    via: [{ x: -308, y: -3 }, { x: -308, y: -46 }], bore: 2, depth: MACHINE_LAYER_DEPTH.mid - 1, pipeStyle: 'water' },
+    via: [{ x: -360, y: -13 }, { x: -360, y: -3 }, { x: -308, y: -3 }, { x: -308, y: -46 }], bore: 2, depth: MACHINE_LAYER_DEPTH.mid - 1, pipeStyle: 'water' },
 ];
 
 describe('era III machine data', () => {
@@ -961,7 +961,7 @@ describe('era III machine data', () => {
       P1: [{ x: -246, y: -91 }, { x: -92, y: -176 }],
       P2: [{ x: -246, y: -91 }, { x: -323, y: -79 }],
       P3: [{ x: -246, y: -91 }, { x: -412, y: -86 }],
-      W1: [{ x: -358, y: -3 }, { x: -304, y: -46 }],
+      W1: [{ x: -362, y: -13 }, { x: -304, y: -46 }],
     };
     const names = ['P1', 'P2', 'P3', 'W1'];
     const pipes = MACHINE_LINKS.filter((l) => l.kind === 'pipe');

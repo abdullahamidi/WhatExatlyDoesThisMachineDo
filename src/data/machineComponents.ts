@@ -157,7 +157,7 @@ export const MACHINE_LINKS: readonly MachineLink[] = [
   { from: { component: 'boiler', point: 'steam' }, to: { component: 'turbine', point: 'steam' }, kind: 'pipe',
     via: [{ x: -246, y: -112 }, { x: -412, y: -112 }], bore: 4, pipeStyle: 'steam' },
   { from: { component: 'condenser', point: 'condensate' }, to: { component: 'boiler', point: 'feed' }, kind: 'pipe',
-    via: [{ x: -308, y: -3 }, { x: -308, y: -46 }], bore: 2, depth: MACHINE_LAYER_DEPTH.mid - 1, pipeStyle: 'water' },
+    via: [{ x: -360, y: -13 }, { x: -360, y: -3 }, { x: -308, y: -3 }, { x: -308, y: -46 }], bore: 2, depth: MACHINE_LAYER_DEPTH.mid - 1, pipeStyle: 'water' },
   { from: { component: 'motorRetrofitKit', point: 'tie' }, to: { component: 'inductionHeater', point: 'tie' }, kind: 'cable', sag: 3 },
 ];
 
@@ -600,7 +600,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     size: { width: 80, height: 24 }, origin: { x: 0.5, y: 1 },
     layer: 'mid',
     animation: { kind: 'none' },
-    connections: [{ id: 'condensate', at: { x: 44, y: -3 }, kind: 'pipe' }],
+    connections: [{ id: 'condensate', at: { x: 40, y: -13 }, kind: 'pipe' }],   // hotwell nozzle on the right end cap (cols 78-79, rows -15..-12)
     effects: [],
   },
   // Turbine: steam in from pipe P3, export cable to the pylons. turbine.export is a world-space feed (PYLON_FEEDS), not a link.

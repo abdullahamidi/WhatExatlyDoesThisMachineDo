@@ -38,14 +38,14 @@ describe('STEAM_EMITTERS', () => {
     }
   });
 
-  it('chimney is dark smoke on the thermal driver with a rate of 0.4 + 0.3 log10(1 + v) clamped to 0.4..2', () => {
+  it('chimney is dark smoke on the thermal driver with a rate of 0.8 + 0.3 log10(1 + v) clamped to 0.8..2.5', () => {
     const c = emitter('chimney');
     expect(c.assetId).toBe('fx.smoke');
     expect(c.at).toEqual([{ x: -293, y: -240 }]);
     expect(c.gate).toEqual({ techId: 'boiler', minLevel: 1 });
     expect(c.driver).toBe('thermal');
     expect(c.threshold).toBe(0);
-    expect(c.mode).toEqual({ kind: 'rate', base: 0.4, perLog: 0.3, min: 0.4, max: 2 });
+    expect(c.mode).toEqual({ kind: 'rate', base: 0.8, perLog: 0.3, min: 0.8, max: 2.5 });
   });
 
   it('relief is two steam puffs, a burst of 4 spaced 120 ms, every 6..9 s while PR/s is at least 50', () => {

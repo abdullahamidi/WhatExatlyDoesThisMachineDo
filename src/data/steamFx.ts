@@ -28,7 +28,7 @@ export interface SteamEmitter {
 export const STEAM_EMITTERS: readonly SteamEmitter[] = [
   // Boiler chimney: dark smoke, rate follows PR/s.
   { id: 'chimney', assetId: 'fx.smoke', at: [{ x: -293, y: -240 }], gate: { techId: 'boiler', minLevel: 1 },
-    driver: 'thermal', threshold: 0, mode: { kind: 'rate', base: 0.4, perLog: 0.3, min: 0.4, max: 2 } },
+    driver: 'thermal', threshold: 0, mode: { kind: 'rate', base: 0.8, perLog: 0.3, min: 0.8, max: 2.5 } },
   // Relief valves: bursts of steam while PR/s is high enough to vent.
   { id: 'relief', assetId: 'fx.steamPuff', at: [{ x: -218, y: -94 }, { x: -211, y: -94 }], gate: { techId: 'reliefValves', minLevel: 1 },
     driver: 'thermal', threshold: 0, mode: { kind: 'burst', count: 4, spacingMs: 120, everyMinS: 6, everyMaxS: 9, minDriver: 50 } },
@@ -42,8 +42,8 @@ export const STEAM_EMITTERS: readonly SteamEmitter[] = [
 
 /** Shared steam puff tuning: pool size, life, frames and motion. purchaseBurstDelayMs = MACHINE_ASSEMBLY.durationMs (the valve lands first). */
 export const STEAM_FX = {
-  poolSize: 48, lifeMs: 1200, frames: 4, riseArtPx: 12, driftArtPxPerS: 4,
-  scaleFrom: 1, scaleTo: 1.5, fadeFrom: 0.75, depth: DEPTH.machine + 1, purchaseBurstDelayMs: 700,
+  poolSize: 48, lifeMs: 1600, frames: 4, riseArtPx: 20, driftArtPxPerS: 4,
+  scaleFrom: 1, scaleTo: 1.75, fadeFrom: 0.75, depth: DEPTH.machine + 1, purchaseBurstDelayMs: 700,
 } as const;
 
 /** Hammer strike feedback: ram swing speed cap, mid-layer offset and dust puffs at the hammer foot. */
