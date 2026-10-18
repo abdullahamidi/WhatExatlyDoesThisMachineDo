@@ -1,0 +1,16 @@
+// Global balance constants. All tunable numbers that are not per-technology live here.
+
+/** Maximum offline progress credited on load, in seconds (8 hours). */
+export const OFFLINE_CAP_SECONDS = 8 * 3600;
+
+/** How often the game autosaves, in milliseconds. */
+export const AUTOSAVE_INTERVAL_MS = 15000;
+
+/** localStorage key for the active save. */
+export const SAVE_KEY = 'wedtmd.save';
+
+/** localStorage key where a corrupt save is backed up before recovery. */
+export const SAVE_BACKUP_KEY = 'wedtmd.save.corrupt';
+
+/** Largest simulated time step applied by a single update, in seconds. */
+export const MAX_UPDATE_SECONDS = OFFLINE_CAP_SECONDS;

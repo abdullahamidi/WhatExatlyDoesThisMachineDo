@@ -1,0 +1,66 @@
+import { describe, it, expect } from 'vitest';
+import { TECH_IDS } from '../../data/types';
+import { TECHNOLOGIES } from '../../data/technologies';
+import { createInitialState } from '../state';
+import { costAt, canAfford } from './cost';
+
+const { gearRatio, motorTuning, flywheel, improvedPistons, wornMotor, pistonArray, handCrank } = TECHNOLOGIES;
+
+describe('costAt', () => {
+  it('gearRatio grows geometrically with rounding up', () => {
+    expect([0, 1, 2, 3].map((l) => costAt(gearRatio, l))).toEqual([10, 12, 14, 16]);
+  });
+
+  it('motorTuning costs', () => {
+    expect(costAt(motorTuning, 0)).toBe(40);
+    expect(costAt(motorTuning, 1)).toBe(48);
+  });
+
+  it('flywheel costs', () => {
+    expect(costAt(flywheel, 0)).toBe(150);
+    expect(costAt(flywheel, 1)).toBe(180);
+  });
+
+  it('improvedPistons costs', () => {
+    expect(costAt(improvedPistons, 0)).toBe(120);
+    expect(costAt(improvedPistons, 1)).toBe(144);
+  });
+
+  it('unlock costs ignore the level', () => {
+    expect(costAt(wornMotor, 0)).toBe(25);
+    expect(costAt(pistonArray, 0)).toBe(250);
+    expect(costAt(wornMotor, 1)).toBe(25);
+  });
+
+  it('starting tech is free', () => {
+    expect(costAt(handCrank, 0)).toBe(0);
+  });
+
+  it('repeatable costs are integers and non-decreasing for levels 0..24', () => {
+    for (const id of TECH_IDS) {
+      const def = TECHNOLOGIES[id];
+      if (def.kind !== 'repeatable') continue;
+      let prev = -Infinity;
+      for (let level = 0; level <= 24; level++) {
+        const cost = costAt(def, level);
+        expect(Number.isInteger(cost)).toBe(true);
+        expect(cost).toBeGreaterThanOrEqual(prev);
+        prev = cost;
+      }
+    }
+  });
+});
+
+describe('canAfford', () => {
+  it('is true when me equals cost', () => {
+    expect(canAfford({ ...createInitialState(0), me: 10 }, 10)).toBe(true);
+  });
+
+  it('is false when me is just below cost', () => {
+    expect(canAfford({ ...createInitialState(0), me: 9.999 }, 10)).toBe(false);
+  });
+
+  it('is true for a zero cost with zero ME', () => {
+    expect(canAfford({ ...createInitialState(0), me: 0 }, 0)).toBe(true);
+  });
+});
