@@ -1,0 +1,171 @@
+/* MEMORY tab (WP14 T7). Palette vars come from #system-menu (systemMenu.css). Text min 12 px. */
+
+.mem-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mem-empty {
+  margin: 0;
+  font-size: max(12px, 1em);
+  color: var(--amber-dim);
+}
+
+.mem-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* echo.png drawn at x2 (64 px), pixelated */
+.mem-echo-icon {
+  flex: 0 0 auto;
+  display: block;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+.mem-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mem-echoes {
+  font-size: max(12px, 1.1em);
+  color: var(--haze);
+  text-shadow: 0 0 6px rgba(217, 130, 43, .35);
+  overflow-wrap: anywhere;
+}
+
+.mem-unspent,
+.mem-cycle {
+  font-size: max(12px, 1em);
+  color: var(--amber-dim);
+}
+
+.mem-next {
+  font-size: max(12px, 1em);
+  color: var(--amber);
+  overflow-wrap: anywhere;
+}
+
+.mem-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mem-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 6px;
+  background: var(--iron-2);
+  border: 2px solid var(--rust-dark);
+}
+
+.mem-card:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.mem-card.is-affordable {
+  border-color: var(--rust);
+}
+
+.mem-card.is-owned {
+  border-color: var(--amber);
+}
+
+.mem-card.is-locked {
+  border-style: dashed;
+  color: var(--amber-dim);
+}
+
+/* perk-slot frame (72 px); the perk icon sits inside it at the slot inset (set inline) */
+.mem-slot {
+  position: relative;
+  flex: 0 0 auto;
+  display: block;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+.mem-icon {
+  position: absolute;
+  display: block;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+.mem-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mem-name {
+  font-size: max(12px, 1em);
+  color: var(--haze);
+  overflow-wrap: anywhere;
+}
+
+.mem-card.is-locked .mem-name {
+  color: var(--amber-dim);
+}
+
+.mem-desc {
+  font-size: max(12px, .9em);
+  text-transform: none;
+  color: var(--amber-dim);
+  overflow-wrap: anywhere;
+}
+
+.mem-status {
+  font-size: max(12px, 1em);
+  color: var(--amber-dim);
+}
+
+.mem-card:not(.is-locked) .mem-status {
+  color: var(--amber);
+}
+
+.mem-buy {
+  flex: 0 0 auto;
+  font-family: inherit;
+  font-size: max(12px, 1em);
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: var(--amber);
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.mem-buy:hover:not(:disabled) {
+  background: var(--rust-dark);
+  color: var(--haze);
+}
+
+.mem-buy:disabled {
+  color: var(--amber-dim);
+  border-color: var(--rust-dark);
+  cursor: not-allowed;
+}
+
+.mem-buy:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}

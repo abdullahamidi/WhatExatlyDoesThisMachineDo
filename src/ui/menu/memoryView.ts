@@ -54,6 +54,11 @@ function spriteFor(sheet: string, frameIndex: number, frameSize: number, sheetFr
   };
 }
 
+/** Currency icon: echo.png is one 32 px frame (same size as a perk frame), drawn at `scale`. */
+export function echoSprite(): MemorySprite {
+  return spriteFor(PRESTIGE_ART.echo, 0, PRESTIGE_ART.perkFrame, 1);
+}
+
 function statusLine(status: PerkStatus, cost: number, unspent: number): string {
   if (status === 'owned') return PRESTIGE_TEXT.owned;
   if (status === 'affordable') return `${PRESTIGE_TEXT.cost} ${cost} ${PRESTIGE_TEXT.echoes}`;
@@ -90,8 +95,7 @@ export function buildMemoryView(prestige: PrestigeState, preview: CyclePreview, 
   return {
     empty,
     message: empty ? PRESTIGE_TEXT.empty : '',
-    // echo.png is one 32 px frame (same size as a perk frame).
-    echo: spriteFor(PRESTIGE_ART.echo, 0, PRESTIGE_ART.perkFrame, 1),
+    echo: echoSprite(),
     echoesText: `${PRESTIGE_TEXT.echoes} ${prestige.echoesEarned} (+${pct}% ${PRESTIGE_TEXT.allPerSecond})`,
     unspentText: `${PRESTIGE_TEXT.unspent} ${unspent}`,
     cycleText: cycleLabel(prestige.cycle),
