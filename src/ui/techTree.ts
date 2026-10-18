@@ -11,6 +11,8 @@ export interface TechTree { open(): void; close(): void; isOpen(): boolean; upda
 
 /** How long the buy button shows the denied shake (UI timing, not balance). */
 const DENIED_FLASH_MS = 400;
+/** Longest age of the cached view before update() rebuilds it anyway (UI timing, catches ME changes). */
+const REBUILD_INTERVAL_MS = 100;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 interface ElementOptions { id?: string; className?: string; text?: string }
@@ -30,7 +32,7 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 
 /** Writes a DOM field only when its value differs from the last value written to it. */
 class Patcher {
-  private readonly last = new Map<Element, Map<string, string>>();
+  private readonly last = new WeakMap<Element, Map<string, string>>();
 
   private write(el: Element, field: string, value: string, apply: (next: string) => void): void {
     let fields = this.last.get(el);
@@ -153,6 +155,13 @@ export function createTechTree(root: HTMLElement, session: GameSession, commands
   let lastStamp = '';
   let returnFocus: HTMLElement | null = null;
   let deniedTimer: number | null = null;
+  // Inputs the cached view was built from; update() rebuilds only when they change or the cache is old.
+  let builtLevels: object | null = null;
+  let builtSelected: TechId | null = null;
+  let builtAt = Number.NEGATIVE_INFINITY;
+  // What the detail panel showed on the last render; feedback text is stale once either changes.
+  let renderedSelected: TechId | null = null;
+  let renderedBuyState: TechDetailView['buyState'] | null = null;
 
   const setFeedback = (text: string): void => {
     patch.text(feedbackEl, text);
@@ -256,6 +265,10 @@ export function createTechTree(root: HTMLElement, session: GameSession, commands
   };
 
   const render = (view: TechTreeView): void => {
+    const buyState = view.detail?.buyState ?? null;
+    if (selected !== renderedSelected || buyState !== renderedBuyState) setFeedback('');
+    renderedSelected = selected;
+    renderedBuyState = buyState;
     patch.text(meEl, `${view.meText} ME`);
     patch.px(inner, 'width', view.width);
     patch.px(inner, 'height', view.height);
@@ -271,7 +284,14 @@ export function createTechTree(root: HTMLElement, session: GameSession, commands
 
   function update(): void {
     if (destroyed || !isOpenFlag) return;
+    const now = performance.now();
+    const levels = session.state.techLevels;
+    const due = dirty || levels !== builtLevels || selected !== builtSelected || now - builtAt >= REBUILD_INTERVAL_MS;
+    if (!due) return;
     const view = buildView();
+    builtLevels = levels;
+    builtSelected = selected;
+    builtAt = now;
     const stamp = stampOf(view);
     if (!dirty && stamp === lastStamp) return;
     render(view);
@@ -311,6 +331,10 @@ export function createTechTree(root: HTMLElement, session: GameSession, commands
 
   const onClose = (): void => close();
 
+  const onBackdropClick = (event: Event): void => {
+    if (event.target === overlay) close();
+  };
+
   const onGraphClick = (event: Event): void => {
     if (!isOpenFlag) return;
     const target = event.target;
@@ -336,16 +360,17 @@ export function createTechTree(root: HTMLElement, session: GameSession, commands
       flashDenied();
       return;
     }
-    setFeedback(result.newLevel > 1 ? `LEVEL ${result.newLevel}` : 'INSTALLED');
+    // Render first: the purchase changes buyState, and render clears feedback on that change.
     dirty = true;
     update();
+    setFeedback(result.newLevel > 1 ? `LEVEL ${result.newLevel}` : 'INSTALLED');
   };
 
   const unsubscribes: Array<() => void> = [
     session.on('purchase', () => { dirty = true; }),
     session.on('unlock', () => { dirty = true; }),
     session.on('reset', () => {
-      selected = null;
+      selected = isOpenFlag ? defaultSelection(session.getAllTechViews()) : null;
       setFeedback('');
       dirty = true;
     }),
@@ -353,6 +378,7 @@ export function createTechTree(root: HTMLElement, session: GameSession, commands
   ];
 
   closeButton.addEventListener('click', onClose);
+  overlay.addEventListener('click', onBackdropClick);
   graph.addEventListener('click', onGraphClick);
   buyButton.addEventListener('click', onBuy);
 
@@ -366,6 +392,7 @@ export function createTechTree(root: HTMLElement, session: GameSession, commands
     destroyed = true;
     for (const unsubscribe of unsubscribes) unsubscribe();
     closeButton.removeEventListener('click', onClose);
+    overlay.removeEventListener('click', onBackdropClick);
     graph.removeEventListener('click', onGraphClick);
     buyButton.removeEventListener('click', onBuy);
     if (deniedTimer !== null) {

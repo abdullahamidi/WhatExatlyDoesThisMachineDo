@@ -9,6 +9,8 @@ import type { NotificationEvent } from './notificationRules';
 
 export interface Toasts {
   show(msg: ToastMessage): void;
+  /** Removes every visible toast and cancels its timers. The stack stays usable. */
+  clear(): void;
   destroy(): void;
 }
 
@@ -114,6 +116,13 @@ export function createToasts(root: HTMLElement, config: typeof TOAST_CONFIG = TO
         refresh(msg.key, existing, msg);
       } else {
         create(msg.key, msg);
+      }
+    },
+
+    clear(): void {
+      if (destroyed) return;
+      for (const [key, entry] of [...entries]) {
+        removeEntry(key, entry);
       }
     },
 

@@ -85,6 +85,7 @@ export const MACHINE_LINK_STYLE = {
   width: { shaft: 3, belt: 2, pipe: 4 },
   color: { shaft: PALETTE.industrialGray, belt: PALETTE.grayDark, pipe: PALETTE.rustDark },
   outline: PALETTE.ink,
+  outlineExtra: 2,          // outline stroke is this many art px wider than the colour stroke
 } as const;
 
 /** Drive-train links between components. */

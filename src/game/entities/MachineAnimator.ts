@@ -37,7 +37,16 @@ export class MachineAnimator {
       this.manual = 0;
       this.angles.clear();
       this.phases.clear();
+      this.zeroRotations();
     });
+  }
+
+  /** Puts every rotating part back at angle 0 so a stale angle cannot snap in later. */
+  private zeroRotations(): void {
+    for (const id of MACHINE_COMPONENT_IDS) {
+      if (MACHINE_COMPONENTS[id].animation.kind !== 'rotate') continue;
+      this.sprites.get(id)?.setAngle(0);
+    }
   }
 
   /** Advances every active, animated part by one frame. */

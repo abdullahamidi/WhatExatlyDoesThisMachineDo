@@ -23,6 +23,7 @@ export function bootstrap(): Phaser.Game {
   const hud = createHud(root, ctx.commands);
   const toasts = createToasts(root);
   connectNotifications(session, toasts);
+  session.on('reset', () => toasts.clear());
   const techTree = createTechTree(root, session, ctx.commands);
 
   const game = new Phaser.Game({

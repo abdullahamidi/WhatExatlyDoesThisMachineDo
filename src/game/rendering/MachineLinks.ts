@@ -5,8 +5,6 @@ import { linkSegments } from '../math/machineLinks';
 
 /** Key quantisation: coordinates are compared at 1/KEY_SCALE art px so sub-pixel noise does not redraw. */
 const KEY_SCALE = 100;
-/** Outline stroke is drawn this many art px wider than the colour stroke. */
-const OUTLINE_EXTRA_WIDTH = 2;
 
 interface DrawnLink {
   kind: ConnectionPoint['kind'];
@@ -53,7 +51,7 @@ export class MachineLinks {
 
     // Outlines first so they never cover another link's colour.
     for (const { kind, segments } of drawn) {
-      this.graphics.lineStyle(MACHINE_LINK_STYLE.width[kind] + OUTLINE_EXTRA_WIDTH, MACHINE_LINK_STYLE.outline, 1);
+      this.graphics.lineStyle(MACHINE_LINK_STYLE.width[kind] + MACHINE_LINK_STYLE.outlineExtra,MACHINE_LINK_STYLE.outline, 1);
       for (const [p, q] of segments) this.graphics.lineBetween(p.x, p.y, q.x, q.y);
     }
     for (const { kind, segments } of drawn) {

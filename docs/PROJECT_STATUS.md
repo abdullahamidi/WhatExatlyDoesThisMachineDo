@@ -1,15 +1,15 @@
 # Project Status
 
 ## Current milestone
-WP2 — World + interactive crank (planning). WP1 complete.
+WP4 — Persistence, feedback, audio (planning). WP1–WP3 complete.
 
 ## Roadmap
 | WP | Scope | State |
 |---|---|---|
 | WP1 | Tooling + pure simulation core | ✅ done |
-| WP2 | Wasteland scene, asset registry, camera, crank, HUD | planning |
-| WP3 | Tech tree overlay + modular machine components | — |
-| WP4 | Save/load wiring, offline summary, notifications, audio | — |
+| WP2 | Wasteland scene, asset registry, camera, crank, HUD | ✅ done |
+| WP3 | Tech tree overlay + modular machine components | ✅ done |
+| WP4 | Save/load wiring, offline summary, settings, audio | planning |
 | WP5 | Balance, ASSET_GUIDE, README, smoke test, §16 checklist | — |
 
 Plans/assignments: `docs/plan/WP*.md`.
@@ -24,8 +24,18 @@ Plans/assignments: `docs/plan/WP*.md`.
 - WP1 review follow-ups (done, 215 tests): unlimited-maxLevel save clamp fix, `GameSession.revision`, settings
   ownership (`settings`, `setMuted`), offline-never-silent `update()`, readonly snapshots, `formatCost`.
 
+- **WP2**: wasteland parallax (sky, mountains, skyline, pylons, terrain, dust), asset registry
+  (manifest + procedural fallbacks), camera pan/zoom/refocus, machine frame + clickable crank with
+  floating +ME/shake, terminal HUD. Browser smoke-tested (Playwright).
+- **WP3**: tech tree overlay (nodes, prerequisite lines, states, detail, purchase feedback), toasts,
+  procedural machine animation (rotate/vibrate/reciprocate driven by clicks/ME/s, clamped), unlock
+  assembly animation, belts/shafts, milestone. 8-step browser smoke passes, 0 console errors.
+- **Art**: all machine sprites PixelLab Pro, one style anchor + locked palette (docs/plan/ART_BRIEF.md),
+  curated by Opus reviewer. Background layers: round 2 in progress (round 1 rejected).
+
 ## Remaining tasks
-- WP2–WP5 (see roadmap).
+- WP4 (save/offline UI/settings/audio/logs), WP5 (balance, ASSET_GUIDE, README, final checklist).
+- Background art round 2.
 
 ## Known issues
 - None open.
@@ -44,5 +54,10 @@ Plans/assignments: `docs/plan/WP*.md`.
   `general-purpose` with model overrides. Effective models verified from transcripts:
   planner/reviewer `claude-opus-5-5`, EM `claude-sonnet-5-5`, workers `claude-haiku-5-5`.
 
+- Coordinates: machine-local art px (origin frame base centre), PIXEL_SCALE 2; texture key = asset id.
+- Phaser handles window-level mouse events → WorldScene disables scene input while tech tree is open.
+- `session.revision` bumps every frame; UI uses events / reference checks, not revision, for heavy rebuilds.
+
 ## Next recommended task
-- WP2 decomposition by the Engineering Manager once `docs/plan/WP2.md` lands.
+- WP4 per docs/plan/WP4.md. Carry-overs from WP3 review: shared Esc/modal stack; audio taps for
+  purchase-denied and part-landed.
