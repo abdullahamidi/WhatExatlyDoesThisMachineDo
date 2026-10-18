@@ -95,8 +95,11 @@ export class MachineView {
     for (const id of MACHINE_COMPONENT_IDS) {
       const def = MACHINE_COMPONENTS[id];
       const att = resolveAttachment(def);
+      // Driven parts start on their RotSprite rotation sheet when it is loaded; the animator picks frames from it.
+      const rotKey = def.assetId + '#rot';
+      const textureKey = def.animation.kind === 'driven' && scene.textures.exists(rotKey) ? rotKey : def.assetId;
       const sprite = scene.add
-        .sprite(att.x, att.y, def.assetId)
+        .sprite(att.x, att.y, textureKey, 0)
         .setOrigin(def.origin.x, def.origin.y)
         .setDepth(componentDepth(def))
         .setFlipX(def.flipX === true);

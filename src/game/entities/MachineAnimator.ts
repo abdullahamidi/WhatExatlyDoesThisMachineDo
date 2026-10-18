@@ -12,10 +12,24 @@ import {
   driverValue,
   vibrateOffset,
 } from '../math/animation';
-import { addClickImpulse, partAngle, sliderCrank, stepMaster } from '../math/driveTrain';
+import { addClickImpulse, partAngle, rotationFrame, sliderCrank, stepMaster } from '../math/driveTrain';
 import type { MasterState } from '../math/driveTrain';
 import { crankAngle, crankOffsetOnGearUp } from '../math/crankLink';
 import { resolveAttachment } from '../math/machineLayout';
+
+/**
+ * Shows a driven part at deg. A sprite on a rotation sheet (`#rot` texture) shows the nearest pre-rendered frame with no
+ * angle; any other sprite (sheet missing) is rotated by angle.
+ */
+function applyAngle(sprite: Phaser.GameObjects.Sprite, deg: number): void {
+  const frames = sprite.texture.frameTotal - 1; // Phaser counts the __BASE frame
+  if (sprite.texture.key.endsWith('#rot') && frames > 1) {
+    sprite.setFrame(rotationFrame(deg, frames));
+    sprite.setAngle(0);
+    return;
+  }
+  sprite.setAngle(deg);
+}
 
 /** Parts that turn with the hand crank. They share one crank angle state and one driven ratio/phase. */
 const CRANK_PARTS: readonly MachineComponentId[] = ['handCrank', 'crankBrace'];
@@ -91,7 +105,8 @@ export class MachineAnimator {
       // Stale angles must not snap in later: every driven part goes back to angle 0.
       for (const id of MACHINE_COMPONENT_IDS) {
         if (MACHINE_COMPONENTS[id].animation.kind !== 'driven') continue;
-        this.sprites.get(id)?.setAngle(0);
+        const sprite = this.sprites.get(id);
+        if (sprite !== undefined) applyAngle(sprite, 0);
       }
     });
   }
@@ -114,13 +129,13 @@ export class MachineAnimator {
       if (sprite === undefined) continue;
       if (!isActive(id)) {
         // Assembling: the tween owns x/y/scale/alpha, but a visible driven part keeps turning so it does not snap on landing.
-        if (anim.kind === 'driven' && sprite.visible) sprite.setAngle(this.drivenAngle(id, anim));
+        if (anim.kind === 'driven' && sprite.visible) applyAngle(sprite, this.drivenAngle(id, anim));
         continue;
       }
 
       switch (anim.kind) {
         case 'driven': {
-          sprite.setAngle(this.drivenAngle(id, anim));
+          applyAngle(sprite, this.drivenAngle(id, anim));
           break;
         }
         case 'slider': {

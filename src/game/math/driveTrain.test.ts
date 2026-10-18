@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import type { Vec2 } from '../../data/machineComponents';
+import { DRIVE_TRAIN, MACHINE_COMPONENTS } from '../../data/machineComponents';
+import type { MachineComponentId, Vec2 } from '../../data/machineComponents';
 import {
   addClickImpulse,
   stepMaster,
   partAngle,
+  rotationFrame,
   sliderCrank,
   meshPhaseError,
 } from './driveTrain';
@@ -204,6 +206,104 @@ describe('meshPhaseError', () => {
       const e = meshPhaseError(master, large, { ...small, phaseDeg: phase });
       expect(e).toBeGreaterThanOrEqual(0);
       expect(e).toBeLessThanOrEqual(0.5);
+    }
+  });
+});
+
+/** Driven ratio and phase of a component from the data; throws when it is not a driven part. */
+function drivenOf(id: MachineComponentId): { ratio: number; phaseDeg: number } {
+  const anim = MACHINE_COMPONENTS[id].animation;
+  if (anim.kind !== 'driven') throw new Error(`${id} must be driven`);
+  return anim;
+}
+
+describe('rotationFrame', () => {
+  it('maps the reference angles to their frames', () => {
+    expect(rotationFrame(0, 80)).toBe(0);
+    expect(rotationFrame(4.5, 80)).toBe(1);
+    expect(rotationFrame(-4.5, 80)).toBe(79);
+    expect(rotationFrame(359.9, 80)).toBe(0);
+    expect(rotationFrame(22.5, 80)).toBe(5);
+    expect(rotationFrame(360, 80)).toBe(0);
+    expect(rotationFrame(724.5, 80)).toBe(1);
+  });
+
+  it('returns an integer in [0, frames) across a sweep for each sheet size', () => {
+    for (const frames of [24, 80, 140, 180]) {
+      for (let deg = -720; deg <= 720; deg += 0.37) {
+        const f = rotationFrame(deg, frames);
+        expect(Number.isInteger(f)).toBe(true);
+        expect(f).toBeGreaterThanOrEqual(0);
+        expect(f).toBeLessThan(frames);
+      }
+    }
+  });
+});
+
+describe('rotation sheet gears', () => {
+  it('gives the gear pair a 140 / 80 frame ratio equal to the small gear ratio', () => {
+    expect(140 / 80).toBe(1.75);
+    expect(-drivenOf('gearSmall').ratio).toBe(1.75);
+    expect(drivenOf('gearLarge').ratio).toBe(1);
+  });
+
+  it('puts the pinion phase of 22.5 deg on frame 5 of the 80-frame sheet', () => {
+    expect(rotationFrame(drivenOf('gearSmall').phaseDeg, 80)).toBe(5);
+  });
+});
+
+describe('rotation sheet mesh pairing', () => {
+  const N_LARGE = 140;
+  const N_SMALL = 80;
+  const large: GearMesh = { ...drivenOf('gearLarge'), teeth: DRIVE_TRAIN.gears.large.teeth };
+  const small: GearMesh = { ...drivenOf('gearSmall'), teeth: DRIVE_TRAIN.gears.small.teeth };
+
+  it('shows frame k on the large gear and the meshing frame on the small gear at master k * 360 / 140', () => {
+    for (let k = 0; k < N_LARGE; k++) {
+      const master = (k * 360) / N_LARGE;
+      const largeFrame = rotationFrame(partAngle(master, large.ratio, large.phaseDeg), N_LARGE);
+      const smallFrame = rotationFrame(partAngle(master, small.ratio, small.phaseDeg), N_SMALL);
+      expect(largeFrame).toBe(k);
+      expect(smallFrame).toBe((((5 - k) % N_SMALL) + N_SMALL) % N_SMALL); // 22.5 deg = 5 frames of 4.5 deg
+    }
+  });
+
+  it('keeps the mesh error of the frame-quantised angles equal to the exact mesh error', () => {
+    for (let k = 0; k < N_LARGE; k++) {
+      const master = (k * 360) / N_LARGE;
+      const largeFrame = rotationFrame(partAngle(master, large.ratio, large.phaseDeg), N_LARGE);
+      const smallFrame = rotationFrame(partAngle(master, small.ratio, small.phaseDeg), N_SMALL);
+      // ratio 0 at master 0 makes partAngle return the quantised angle itself
+      const qLarge: GearMesh = { ratio: 0, phaseDeg: (largeFrame * 360) / N_LARGE, teeth: large.teeth };
+      const qSmall: GearMesh = { ratio: 0, phaseDeg: (smallFrame * 360) / N_SMALL, teeth: small.teeth };
+      const exact = meshPhaseError(master, large, small);
+      const quantised = meshPhaseError(0, qLarge, qSmall);
+      expect(Math.abs(quantised - exact)).toBeLessThan(1e-9);
+      expect(quantised).toBeLessThan(1e-9);
+    }
+  });
+});
+
+describe('rotation sheet shared shafts', () => {
+  const GROUPS: ReadonlyArray<{ frames: number; members: readonly MachineComponentId[] }> = [
+    { frames: 140, members: ['gearLarge', 'mainShaft'] },
+    { frames: 80, members: ['gearSmall', 'handCrank', 'crankBrace', 'crankPulley'] },
+    { frames: 180, members: ['flywheel', 'flywheelPulley'] },
+  ];
+
+  it('gives members of one shaft equal ratios', () => {
+    for (const group of GROUPS) {
+      const first = drivenOf(group.members[0]!);
+      for (const id of group.members) expect(drivenOf(id).ratio).toBe(first.ratio);
+    }
+  });
+
+  it('gives identical angles identical frames within a shaft group', () => {
+    for (const group of GROUPS) {
+      for (let deg = -720; deg <= 720; deg += 0.37) {
+        const frames = group.members.map(() => rotationFrame(deg, group.frames));
+        for (const f of frames) expect(f).toBe(frames[0]);
+      }
     }
   });
 });

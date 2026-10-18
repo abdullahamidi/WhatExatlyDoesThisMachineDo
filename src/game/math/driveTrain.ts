@@ -60,6 +60,15 @@ export function partAngle(masterDeg: number, ratio: number, phaseDeg: number): n
 }
 
 /**
+ * Index of the pre-rendered rotation frame nearest to deg, in [0, frames). frames is the sheet frame count (grid row-major,
+ * frame k = source turned k * 360 / frames degrees), so 360 deg wraps to frame 0.
+ */
+export function rotationFrame(deg: number, frames: number): number {
+  const n = ((deg % 360) + 360) % 360; // wrap to [0, 360)
+  return Math.round((n / 360) * frames) % frames; // nearest frame, rounding at the wrap lands on 0
+}
+
+/**
  * Slider-crank kinematics. pin = centre + r (cos a, sin a); slider.x = centre.x;
  * slider.y = pin.y - sqrt(max(0, L^2 - dx^2)) with dx = pin.x - centre.x.
  */
