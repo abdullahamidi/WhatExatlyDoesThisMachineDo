@@ -175,7 +175,7 @@ describe('WP9 era III machine and fx assets', () => {
   ];
 
   it('appends the 18 era III ids after machine.cableMast, in contract order', () => {
-    expect(ASSET_IDS.slice(ASSET_IDS.indexOf('machine.cableMast') + 1)).toEqual(ERA3_ENTRIES.map((e) => e.id));
+    expect(ASSET_IDS.slice(ASSET_IDS.indexOf('machine.cableMast') + 1, ASSET_IDS.indexOf('fx.smoke') + 1)).toEqual(ERA3_ENTRIES.map((e) => e.id));
   });
 
   it('has the contract file, width, height, origin and tileable none for each new id', () => {

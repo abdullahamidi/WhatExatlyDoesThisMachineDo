@@ -14,8 +14,8 @@ function emitter(id: string): SteamEmitter {
 }
 
 describe('STEAM_EMITTERS', () => {
-  it('has the four Era III emitters in contract order with unique ids', () => {
-    expect(STEAM_EMITTERS.map((e) => e.id)).toEqual(['chimney', 'relief', 'hammer', 'manifold']);
+  it('has the four Era III emitters and the Era IV calliope last, in contract order, with unique ids', () => {
+    expect(STEAM_EMITTERS.map((e) => e.id)).toEqual(['chimney', 'relief', 'hammer', 'manifold', 'calliope']);
     expect(new Set(STEAM_EMITTERS.map((e) => e.id)).size).toBe(STEAM_EMITTERS.length);
   });
 
@@ -89,6 +89,46 @@ describe('STEAM_EMITTERS', () => {
         expect(e.mode.everyMinS, e.id).toBeLessThanOrEqual(e.mode.everyMaxS);
       }
     }
+  });
+
+  it('calliope is three whistles on the resonance driver: gate pressureResonator 1, threshold 0, burst 2 x 150 ms every 5..8 s while RS/s > 1, round robin', () => {
+    const c = emitter('calliope');
+    expect(c.assetId).toBe('fx.steamPuff');
+    expect(c.at).toEqual([{ x: -72, y: -193 }, { x: -44, y: -193 }, { x: -16, y: -194 }]);
+    expect(c.gate).toEqual({ techId: 'pressureResonator', minLevel: 1 });
+    expect(c.driver).toBe('resonance');
+    expect(c.threshold).toBe(0);
+    expect(c.mode).toEqual({ kind: 'burst', count: 2, spacingMs: 150, everyMinS: 5, everyMaxS: 8, minDriver: 1, roundRobin: true });
+  });
+
+  it('roundRobin is set only on burst modes, and only on the calliope among the emitters', () => {
+    for (const e of STEAM_EMITTERS) {
+      if (e.mode.kind !== 'burst') {
+        expect('roundRobin' in e.mode, e.id).toBe(false);
+      }
+    }
+    expect(STEAM_EMITTERS.filter((e) => e.mode.kind === 'burst' && e.mode.roundRobin === true).map((e) => e.id)).toEqual(['calliope']);
+  });
+});
+
+describe('MILESTONE_BURSTS (WP10 milestone whistles)', () => {
+  it('has two entries in order: the vessel relief burst (4 puffs), then the convergence calliope burst (6 puffs)', () => {
+    expect(MILESTONE_BURSTS).toEqual([
+      { techId: 'pressureVesselBlueprint', emitter: 'relief', count: 4 },
+      { techId: 'harmonicConvergence', emitter: 'calliope', count: 6 },
+    ]);
+  });
+
+  it('each emitter exists and is a burst, and each techId is a milestone tech', () => {
+    for (const m of MILESTONE_BURSTS) {
+      expect(emitter(m.emitter).mode.kind, m.emitter).toBe('burst');
+      expect(TECHNOLOGIES[m.techId].kind, m.techId).toBe('milestone');
+      expect(TECH_IDS).toContain(m.techId);
+    }
+  });
+
+  it('MILESTONE_BURST (deprecated alias) still equals the first MILESTONE_BURSTS entry', () => {
+    expect(MILESTONE_BURSTS[0]).toEqual(MILESTONE_BURST);
   });
 });
 

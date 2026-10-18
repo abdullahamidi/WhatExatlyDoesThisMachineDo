@@ -17,8 +17,9 @@ import {
   MACHINE_RENDER,
   DRIVE_TRAIN,
   SOCKET_IDS,
+  RESONANCE_MILESTONE_FX,
 } from './machineComponents';
-import type { ConnectionPoint, MachineComponentDefinition, MachineComponentId, MachineLayer, MachineLink, SocketId, Vec2 } from './machineComponents';
+import type { ComponentAnimation, ConnectionPoint, MachineComponentDefinition, MachineComponentId, MachineLayer, MachineLink, SocketId, Vec2 } from './machineComponents';
 import { PYLON_FEEDS } from './world';
 import type { AssetId } from '../assets/assetIds';
 import { ASSET_MANIFEST } from '../assets/manifest';
@@ -70,8 +71,8 @@ function contains(box: { left: number; right: number; top: number; bottom: numbe
   return p.x >= box.left && p.x <= box.right && p.y >= box.top && p.y <= box.bottom;
 }
 
-/** Bearings and the flywheel pedestal are the only supports of driven parts. */
-const SUPPORTS: readonly MachineComponentId[] = ['bearingM', 'bearingP', 'flywheelPedestal'];
+/** Bearings, the flywheel pedestal and the era-IV servo base are the supports of driven parts. */
+const SUPPORTS: readonly MachineComponentId[] = ['bearingM', 'bearingP', 'flywheelPedestal', 'servoBase'];
 
 /** Driven parts carried by another box instead of a support: the motor pulley and the generator pulley (on the generator hub). */
 const SUPPORT_EXEMPT: ReadonlySet<MachineComponentId> = new Set<MachineComponentId>(['motorPulley', 'generatorPulley']);
@@ -331,12 +332,14 @@ describe('machine component ids', () => {
       'capacitorRack', 'sparkGap', 'transformer', 'cableMast',
       'boiler', 'chimney', 'steamManifold', 'pressureGauge', 'gaugeNeedle', 'fireboxGlow1', 'fireboxGlow2', 'fireboxGlow3',
       'inductionHeater', 'superheater', 'reliefValves', 'steamHammer', 'hammerRam', 'condenser', 'turbine', 'turbineRotor',
+      'spireTower', 'spireExciter', 'spireWave', 'coilRing1', 'coilRing2', 'coilRing3', 'coilRing4', 'calliope',
+      'servoBase', 'servoArm', 'koenigFork', 'emitterDishL', 'emitterDishR', 'dishWavesL', 'dishWavesR', 'crystal',
     ]);
   });
 
-  it('has 45 components and 30 sockets', () => {
-    expect(MACHINE_COMPONENT_IDS.length).toBe(45);
-    expect(SOCKET_IDS.length).toBe(30);
+  it('has 61 components and 45 sockets', () => {
+    expect(MACHINE_COMPONENT_IDS.length).toBe(61);
+    expect(SOCKET_IDS.length).toBe(45);
   });
 });
 
@@ -472,11 +475,19 @@ describe('machine links and connection points', () => {
     }
   });
 
-  it('connection points of driven components sit at the centre', () => {
+  it('connection points of driven components sit at the centre, except the pin ends of a pin-to-pin rod', () => {
+    const pinToPin = new Set<string>();
+    for (const link of MACHINE_LINKS) {
+      if (link.kind !== 'rod') continue;
+      if (drivenRatio(link.from.component) === null || drivenRatio(link.to.component) === null) continue;
+      pinToPin.add(`${link.from.component}.${link.from.point}`);
+      pinToPin.add(`${link.to.component}.${link.to.point}`);
+    }
     for (const def of COMPONENTS) {
       if (def.animation.kind !== 'driven') continue;
       for (const c of def.connections) {
-        expect(c.at).toEqual({ x: 0, y: 0 });
+        if (pinToPin.has(`${def.id}.${c.id}`)) continue;
+        expect(c.at, `${def.id}.${c.id}`).toEqual({ x: 0, y: 0 });
       }
     }
   });
@@ -548,7 +559,7 @@ describe('rod data', () => {
   });
 
   it('the rod link joins the crank pin to the yoke eye', () => {
-    const rods = MACHINE_LINKS.filter((l) => l.kind === 'rod');
+    const rods = MACHINE_LINKS.filter((l) => l.kind === 'rod' && l.to.component === 'pistonYoke');
     const expected: MachineLink = { from: { component: DRIVE_TRAIN.rod.crank, point: 'pin' }, to: { component: 'pistonYoke', point: 'eye' }, kind: 'rod' };
     expect(rods).toEqual([expected]);
   });
@@ -663,12 +674,14 @@ describe('era I component definitions are unchanged by WP8', () => {
     expect(Object.keys(ERA_ONE_SNAPSHOT).sort()).toEqual(MACHINE_COMPONENT_IDS.slice(0, 17).slice().sort());
   });
 
-  it('each era-I definition deep-equals the pre-WP8 snapshot', () => {
+  it('each era-I definition deep-equals the pre-WP8 snapshot (flywheelPulley belt2 and the WP10 handCrank pin are the only additions)', () => {
     for (const id of MACHINE_COMPONENT_IDS.slice(0, 17)) {
       const actual = MACHINE_COMPONENTS[id];
       const comparable = id === 'flywheelPulley'
         ? { ...actual, connections: actual.connections.filter((c) => c.id !== 'belt2') }
-        : actual;
+        : id === 'handCrank'
+          ? { ...actual, connections: actual.connections.filter((c) => c.id !== 'pin') }
+          : actual;
       expect(comparable, id).toEqual(ERA_ONE_SNAPSHOT[id]);
     }
   });

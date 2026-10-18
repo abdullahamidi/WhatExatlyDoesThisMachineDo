@@ -6,13 +6,17 @@ export const MACHINE_COMPONENT_IDS = ['supportFrame', 'bearingM', 'bearingP', 'g
   'generatorPlinth', 'generator', 'generatorPulley', 'coilStage1', 'coilStage2', 'coilStage3', 'motorRetrofitKit', 'crankDynamo',
   'capacitorRack', 'sparkGap', 'transformer', 'cableMast',
   'boiler', 'chimney', 'steamManifold', 'pressureGauge', 'gaugeNeedle', 'fireboxGlow1', 'fireboxGlow2', 'fireboxGlow3',
-  'inductionHeater', 'superheater', 'reliefValves', 'steamHammer', 'hammerRam', 'condenser', 'turbine', 'turbineRotor'] as const;
+  'inductionHeater', 'superheater', 'reliefValves', 'steamHammer', 'hammerRam', 'condenser', 'turbine', 'turbineRotor',
+  'spireTower', 'spireExciter', 'spireWave', 'coilRing1', 'coilRing2', 'coilRing3', 'coilRing4', 'calliope',
+  'servoBase', 'servoArm', 'koenigFork', 'emitterDishL', 'emitterDishR', 'dishWavesL', 'dishWavesR', 'crystal'] as const;
 export type MachineComponentId = typeof MACHINE_COMPONENT_IDS[number];
 
 export const SOCKET_IDS = ['mainHub', 'crankHub', 'flywheelHub', 'flywheelBase', 'motorMount', 'motorBase', 'motorPulleyHub', 'pistonBed', 'yokePin',
   'generatorBase', 'generatorMount', 'generatorHub', 'dynamoMount', 'rackBase', 'sparkMount', 'transformerBase', 'mastBase',
   'boilerBase', 'chimneyBase', 'superheaterSeat', 'reliefSeat', 'gaugeSeat', 'fireDoor', 'heaterSeat', 'hammerBase', 'hammerTup',
-  'condenserBase', 'turbineBase', 'turbineHub', 'manifoldSeat'] as const;
+  'condenserBase', 'turbineBase', 'turbineHub', 'manifoldSeat',
+  'spireBase', 'spireRod', 'coilRing1', 'coilRing2', 'coilRing3', 'coilRing4', 'dishL', 'dishR', 'dishWavesL', 'dishWavesR',
+  'crystalSeat', 'calliopeSeat', 'forkBase', 'servoBase', 'servoHub'] as const;
 export type SocketId = typeof SOCKET_IDS[number];
 
 export interface Vec2 { x: number; y: number }
@@ -22,8 +26,8 @@ export type MachineLayer = 'back' | 'frame' | 'mid' | 'front';
 /** Draw depth of each machine layer (relative to the machine container). */
 export const MACHINE_LAYER_DEPTH: Record<MachineLayer, number> = { back: 0, frame: 10, mid: 20, front: 30 };
 
-/** manual: click activity; automation: ME/s; combined: manual + automation; electric: EE/s (rates.perSecond.ee); thermal: PR/s (rates.perSecond.pr). */
-export type AnimationDriver = 'manual' | 'automation' | 'combined' | 'electric' | 'thermal';
+/** manual: click activity; automation: ME/s; combined: manual + automation; electric: EE/s (rates.perSecond.ee); thermal: PR/s (rates.perSecond.pr); resonance: RS/s (rates.perSecond.rs). */
+export type AnimationDriver = 'manual' | 'automation' | 'combined' | 'electric' | 'thermal' | 'resonance';
 
 export interface SpeedCurve { base: number; gain: number; min: number; max: number }
 
@@ -54,16 +58,16 @@ export interface MachineComponentDefinition {
   flipX?: boolean;                                               // mirror sprite and connection x
 }
 
-/** belt joins two belt points; rod joins two pin points; cable joins two cable points (sag: art px, default MACHINE_LINK_STYLE.cable.sagArtPx). */
+/** belt joins two belt points; rod joins two pin points (slider-crank rod, or pin-to-pin rod when both ends are driven); cable joins two cable points (sag: art px, default MACHINE_LINK_STYLE.cable.sagArtPx). */
 export interface MachineLink {
   from: { component: MachineComponentId; point: string }; to: { component: MachineComponentId; point: string };
   kind: 'belt' | 'rod' | 'cable' | 'pipe'; sag?: number;
-  // pipe only: via = ABSOLUTE machine-local corners; depth defaults to MACHINE_LINK_STYLE.pipe.depth
+  // pipe only: via = ABSOLUTE machine-local corners; depth (pipe and rod) overrides the default draw depth
   via?: Vec2[]; bore?: 4 | 2; depth?: number; pipeStyle?: 'steam' | 'water';
 }
 
 /** Machine-local art px bounding box of the whole machine. */
-export const MACHINE_BOUNDS = { left: -448, right: 448, top: -248, bottom: 8 };
+export const MACHINE_BOUNDS = { left: -448, right: 448, top: -470, bottom: 8 };
 
 /** Machine-local art px positions of every socket. */
 export const MACHINE_SOCKETS: Record<SocketId, Vec2> = {
@@ -77,6 +81,11 @@ export const MACHINE_SOCKETS: Record<SocketId, Vec2> = {
   gaugeSeat: { x: -192, y: -77 }, fireDoor: { x: -196, y: -32 }, heaterSeat: { x: -200, y: -36 }, hammerBase: { x: -334, y: 0 },
   hammerTup: { x: -334, y: -22 }, condenserBase: { x: -402, y: 0 }, turbineBase: { x: -402, y: -24 }, turbineHub: { x: -412, y: -54 },
   manifoldSeat: { x: -44, y: -168 },
+  // Era IV seats: spire (tower, exciter, rod, coil rings, dishes, crystal), calliope, fork, servo.
+  spireBase: { x: 64, y: -110 }, spireRod: { x: 64, y: -142 }, coilRing1: { x: 64, y: -157 }, coilRing2: { x: 64, y: -223 },
+  coilRing3: { x: 64, y: -274 }, coilRing4: { x: 64, y: -330 }, dishL: { x: 35, y: -360 }, dishR: { x: 93, y: -360 },
+  dishWavesL: { x: -5, y: -360 }, dishWavesR: { x: 133, y: -360 }, crystalSeat: { x: 64, y: -418 }, calliopeSeat: { x: -44, y: -178 },
+  forkBase: { x: 16, y: -110 }, servoBase: { x: 0, y: -14 }, servoHub: { x: 0, y: -24 },
 };
 
 /** Motion: manual activity decay, frame clamp and rest threshold (compares the DRIVER value, not speed). */
@@ -99,6 +108,9 @@ export const MACHINE_ASSEMBLY = {
   puffEndScale: 2.5,        // puff scale at end of life
   puffAlpha: 0.7,           // puff alpha at spawn
 } as const;
+
+/** Milestone crystal (Era IV): on the milestone tech the crystal holds frame holdFrame for holdMs; the dish waves restart at frame 0. */
+export const RESONANCE_MILESTONE_FX = { techId: 'harmonicConvergence', crystal: 'crystal', holdFrame: 2, holdMs: 1000, restart: ['dishWavesL', 'dishWavesR'] } as const;
 
 /** Drive-train config: one master angle thetaM drives every driven part. */
 export interface DriveTrainConfig {
@@ -159,6 +171,10 @@ export const MACHINE_LINKS: readonly MachineLink[] = [
   { from: { component: 'condenser', point: 'condensate' }, to: { component: 'boiler', point: 'feed' }, kind: 'pipe',
     via: [{ x: -360, y: -13 }, { x: -360, y: -3 }, { x: -308, y: -3 }, { x: -308, y: -46 }], bore: 2, depth: MACHINE_LAYER_DEPTH.mid - 1, pipeStyle: 'water' },
   { from: { component: 'motorRetrofitKit', point: 'tie' }, to: { component: 'inductionHeater', point: 'tie' }, kind: 'cable', sag: 3 },
+  // Era IV: steam to the exciter (P4) and the servo coupling rod (R1, parallel crank).
+  { from: { component: 'steamManifold', point: 'outR' }, to: { component: 'spireExciter', point: 'steam' }, kind: 'pipe',
+    via: [{ x: 48, y: -176 }, { x: 48, y: -126 }], bore: 4, pipeStyle: 'steam' },
+  { from: { component: 'servoArm', point: 'pin' }, to: { component: 'handCrank', point: 'pin' }, kind: 'rod', depth: MACHINE_LAYER_DEPTH.front + 4 },
 ];
 
 /** Static shadow ellipses / strips drawn under the machine. */
@@ -254,7 +270,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     size: { width: 48, height: 48 }, origin: { x: 0.5, y: 0.5 },
     layer: 'front',
     animation: { kind: 'driven', ratio: -1.75, phaseDeg: 0 },
-    connections: [],
+    connections: [{ id: 'pin', at: { x: 0, y: -19 }, kind: 'pin' }],   // Era IV: pin of the servo rod R1 (no radius)
     effects: [],
   },
   // Reinforced crank: strap and boss flange over the hand crank, same driven angle; axle cap (front+2) stays on top.
@@ -495,7 +511,10 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     size: { width: 96, height: 14 }, origin: { x: 0.5, y: 1 },
     layer: 'back', depthBias: 2,
     animation: { kind: 'none' },
-    connections: [{ id: 'steam', at: { x: -48, y: -8 }, kind: 'pipe' }],
+    connections: [
+      { id: 'steam', at: { x: -48, y: -8 }, kind: 'pipe' },
+      { id: 'outR', at: { x: 33, y: -8 }, kind: 'pipe' },   // Era IV: right outlet to the spire exciter (P4)
+    ],
     effects: [],
   },
   pressureGauge: {
@@ -623,6 +642,159 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     size: { width: 28, height: 28 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 2,
     animation: { kind: 'spin', driver: 'thermal', speed: { base: 60, gain: 1.5, min: 0, max: 540 } },
+    connections: [],
+    effects: [],
+  },
+  // Era IV: spire tower and exciter (resonatorSpire); the exciter takes steam from pipe P4 at its left port.
+  spireTower: {
+    id: 'spireTower', techId: 'resonatorSpire', minLevel: 1,
+    assetId: 'machine.spireTower', attach: { socket: 'spireBase', offset: { x: 0, y: 0 } },
+    size: { width: 80, height: 320 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid',
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  spireExciter: {
+    id: 'spireExciter', techId: 'resonatorSpire', minLevel: 1,
+    assetId: 'machine.spireExciter', attach: { socket: 'spireBase', offset: { x: 0, y: 0 } },
+    size: { width: 24, height: 32 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid', depthBias: 2,
+    animation: { kind: 'none' },
+    connections: [{ id: 'steam', at: { x: -12, y: -16 }, kind: 'pipe' }],
+    effects: [],
+  },
+  // Spire wave: the standing-wave rod on the spire rod seat (standingWave); eight frames at up to 12 Hz with RS/s.
+  spireWave: {
+    id: 'spireWave', techId: 'standingWave', minLevel: 1,
+    assetId: 'machine.spireWave', attach: { socket: 'spireRod', offset: { x: 0, y: 0 } },
+    size: { width: 16, height: 270 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid', depthBias: 1,
+    animation: { kind: 'frames', frames: 8, maxHz: 12, driver: 'resonance' },
+    connections: [],
+    effects: [],
+  },
+  // Coil rings: each later ring replaces the lower one with a narrower band (harmonicCoil levels 1 / 8 / 16 / 25).
+  coilRing1: {
+    id: 'coilRing1', techId: 'harmonicCoil', minLevel: 1,
+    assetId: 'machine.coilRing1', attach: { socket: 'coilRing1', offset: { x: 0, y: 0 } },
+    size: { width: 62, height: 8 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 3,
+    animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' },
+    connections: [],
+    effects: [],
+  },
+  coilRing2: {
+    id: 'coilRing2', techId: 'harmonicCoil', minLevel: 8,
+    assetId: 'machine.coilRing2', attach: { socket: 'coilRing2', offset: { x: 0, y: 0 } },
+    size: { width: 48, height: 8 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 3,
+    animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' },
+    connections: [],
+    effects: [],
+  },
+  coilRing3: {
+    id: 'coilRing3', techId: 'harmonicCoil', minLevel: 16,
+    assetId: 'machine.coilRing3', attach: { socket: 'coilRing3', offset: { x: 0, y: 0 } },
+    size: { width: 36, height: 8 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 3,
+    animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' },
+    connections: [],
+    effects: [],
+  },
+  coilRing4: {
+    id: 'coilRing4', techId: 'harmonicCoil', minLevel: 25,
+    assetId: 'machine.coilRing4', attach: { socket: 'coilRing4', offset: { x: 0, y: 0 } },
+    size: { width: 30, height: 8 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 3,
+    animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' },
+    connections: [],
+    effects: [],
+  },
+  // Calliope: three steam whistles on the manifold side of the spire; back layer, behind the machine's mid parts.
+  calliope: {
+    id: 'calliope', techId: 'pressureResonator', minLevel: 1,
+    assetId: 'machine.calliope', attach: { socket: 'calliopeSeat', offset: { x: 0, y: 0 } },
+    size: { width: 72, height: 40 }, origin: { x: 0.5, y: 1 },
+    layer: 'back', depthBias: 3,
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  // Crank servo: a servo base under a driven arm; the arm's pin couples to the hand crank by rod R1 (parallel to the crank).
+  servoBase: {
+    id: 'servoBase', techId: 'crankServo', minLevel: 1,
+    assetId: 'machine.servoBase', attach: { socket: 'servoBase', offset: { x: 0, y: 0 } },
+    size: { width: 28, height: 20 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid', depthBias: 3,
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  servoArm: {
+    id: 'servoArm', techId: 'crankServo', minLevel: 1,
+    assetId: 'machine.servoArm', attach: { socket: 'servoHub', offset: { x: 0, y: 0 } },
+    size: { width: 48, height: 48 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'front', depthBias: 3,
+    animation: { kind: 'driven', ratio: -1.75, phaseDeg: 0 },
+    connections: [{ id: 'pin', at: { x: 0, y: -19 }, kind: 'pin' }],
+    effects: [],
+  },
+  // Koenig fork: a four-frame tuning fork on the fork base, rings with the manual driver (echo crank).
+  koenigFork: {
+    id: 'koenigFork', techId: 'echoCrank', minLevel: 1,
+    assetId: 'machine.koenigFork', attach: { socket: 'forkBase', offset: { x: 0, y: 0 } },
+    size: { width: 22, height: 44 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid',
+    animation: { kind: 'frames', frames: 4, maxHz: 12, driver: 'manual' },
+    connections: [],
+    effects: [],
+  },
+  // Emitter dishes: a pair of mirrors (phaseLock); the right dish is the mirrored twin of the left.
+  emitterDishL: {
+    id: 'emitterDishL', techId: 'phaseLock', minLevel: 1,
+    assetId: 'machine.emitterDish', attach: { socket: 'dishL', offset: { x: 0, y: 0 } },
+    size: { width: 40, height: 64 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 4,
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  emitterDishR: {
+    id: 'emitterDishR', techId: 'phaseLock', minLevel: 1,
+    assetId: 'machine.emitterDish', attach: { socket: 'dishR', offset: { x: 0, y: 0 } },
+    size: { width: 40, height: 64 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 4, flipX: true,
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  // Dish waves draw after the dish: same depth, later id. The right set is the mirrored twin.
+  dishWavesL: {
+    id: 'dishWavesL', techId: 'phaseLock', minLevel: 1,
+    assetId: 'machine.dishWaves', attach: { socket: 'dishWavesL', offset: { x: 0, y: 0 } },
+    size: { width: 40, height: 64 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 4,
+    animation: { kind: 'frames', frames: 6, maxHz: 8, driver: 'resonance' },
+    connections: [],
+    effects: [],
+  },
+  dishWavesR: {
+    id: 'dishWavesR', techId: 'phaseLock', minLevel: 1,
+    assetId: 'machine.dishWaves', attach: { socket: 'dishWavesR', offset: { x: 0, y: 0 } },
+    size: { width: 40, height: 64 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 4, flipX: true,
+    animation: { kind: 'frames', frames: 6, maxHz: 8, driver: 'resonance' },
+    connections: [],
+    effects: [],
+  },
+  // Crystal: quartz in the crown of the spire (crystalLattice); tip -466 inside bounds.
+  crystal: {
+    id: 'crystal', techId: 'crystalLattice', minLevel: 1,
+    assetId: 'machine.crystal', attach: { socket: 'crystalSeat', offset: { x: 0, y: 0 } },
+    size: { width: 32, height: 48 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid', depthBias: 4,
+    animation: { kind: 'frames', frames: 4, maxHz: 4, driver: 'resonance' },
     connections: [],
     effects: [],
   },
