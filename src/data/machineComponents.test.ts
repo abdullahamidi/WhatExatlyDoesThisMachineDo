@@ -338,12 +338,18 @@ describe('machine component ids', () => {
       'inductionHeater', 'superheater', 'reliefValves', 'steamHammer', 'hammerRam', 'condenser', 'turbine', 'turbineRotor',
       'spireTower', 'spireExciter', 'spireWave', 'coilRing1', 'coilRing2', 'coilRing3', 'coilRing4', 'calliope',
       'servoBase', 'servoArm', 'koenigFork', 'emitterDishL', 'emitterDishR', 'dishWavesL', 'dishWavesR', 'crystal',
+      'nullGallery', 'nullChamber', 'nullCore', 'nullCoreGlint', 'ring1Back', 'ring2Back', 'ring3Back', 'ring4Back',
+      'ring1Front', 'ring2Front', 'ring3Front', 'ring4Front', 'ring1Bead', 'ring2Bead', 'ring3Bead', 'ring4Bead',
+      'siphonTube1L', 'siphonTube1R', 'siphonTube2L', 'siphonTube2R', 'siphonTube3L', 'siphonTube3R',
+      'siphonArcs1', 'siphonArcs2', 'siphonArcs3', 'graviticAnchorL', 'graviticAnchorR',
+      'anchorGlow1L', 'anchorGlow1R', 'anchorGlow2L', 'anchorGlow2R', 'anchorGlow3L', 'anchorGlow3R',
+      'inversionGhost', 'lensLight', 'lensColumn', 'aperture', 'namePlate',
     ]);
   });
 
-  it('has 61 components and 45 sockets', () => {
-    expect(MACHINE_COMPONENT_IDS.length).toBe(61);
-    expect(SOCKET_IDS.length).toBe(45);
+  it('has 99 components (61 through era IV plus 38 era V) and 60 sockets (45 plus 15 era V)', () => {
+    expect(MACHINE_COMPONENT_IDS.length).toBe(99);
+    expect(SOCKET_IDS.length).toBe(60);
   });
 });
 
@@ -650,14 +656,14 @@ describe('machine motion, assembly and link style constants', () => {
   });
 
   it('shadows reference existing components', () => {
-    expect(MACHINE_SHADOWS.length).toBe(7);
+    expect(MACHINE_SHADOWS.length).toBe(9);
     for (const s of MACHINE_SHADOWS) {
       expect(MACHINE_COMPONENT_IDS).toContain(s.component);
     }
   });
 
   it('the three era III shadows are the boiler, the steam hammer and the condenser strips', () => {
-    expect(MACHINE_SHADOWS.slice(4)).toEqual([
+    expect(MACHINE_SHADOWS.slice(4, 7)).toEqual([
       { component: 'boiler', x: -304, y: 0, width: 128, height: 2 },
       { component: 'steamHammer', x: -358, y: 0, width: 48, height: 2 },
       { component: 'condenser', x: -442, y: 0, width: 80, height: 2 },
@@ -770,14 +776,18 @@ describe('era II machine data', () => {
     expect(kit.right).toBeLessThanOrEqual(motor.right);
   });
 
-  it('exactly four cable links join two cable points, the CR6 ones carry sag 4 and 3 (plus the era III tie)', () => {
+  it('six cable links join two cable points: the four power cables (CR6 sag 4 and 3, era III tie) and the two era V guy cables', () => {
     const cables = MACHINE_LINKS.filter((l) => l.kind === 'cable');
-    expect(cables.length).toBe(4);
-    expect(cables).toEqual([
+    expect(cables.length).toBe(6);
+    expect(cables.slice(0, 4)).toEqual([
       { from: { component: 'generator', point: 'termR' }, to: { component: 'capacitorRack', point: 'lugL' }, kind: 'cable', sag: 4 },
       { from: { component: 'capacitorRack', point: 'lugR' }, to: { component: 'transformer', point: 'primary' }, kind: 'cable', sag: 3 },
       { from: { component: 'transformer', point: 'bushing' }, to: { component: 'cableMast', point: 'top' }, kind: 'cable' },
       { from: { component: 'motorRetrofitKit', point: 'tie' }, to: { component: 'inductionHeater', point: 'tie' }, kind: 'cable', sag: 3 },
+    ]);
+    expect(cables.slice(4)).toEqual([
+      { from: { component: 'nullChamber', point: 'eyeL' }, to: { component: 'graviticAnchorL', point: 'eye' }, kind: 'cable', sag: 6, cableStyle: 'guy' },
+      { from: { component: 'nullChamber', point: 'eyeR' }, to: { component: 'graviticAnchorR', point: 'eye' }, kind: 'cable', sag: 6, cableStyle: 'guy' },
     ]);
     for (const link of cables) {
       expect(pointOf(link.from.component, link.from.point)?.kind).toBe('cable');
@@ -1017,7 +1027,7 @@ describe('era III machine data', () => {
   });
 
   it('the era-III machine fits the bounds and the pylon feeds sit on real parts', () => {
-    expect(MACHINE_BOUNDS).toEqual({ left: -448, right: 448, top: -470, bottom: 8 });
+    expect(MACHINE_BOUNDS).toEqual({ left: -560, right: 560, top: -616, bottom: 8 });
     for (const row of ERA_THREE_TABLE) {
       const b = boundsOf(MACHINE_COMPONENTS[row.id]);
       expect(b.left, row.id).toBeGreaterThanOrEqual(MACHINE_BOUNDS.left);
@@ -1090,7 +1100,10 @@ describe('era III prefixes', () => {
 });
 
 /** Era-IV component ids: the 16 appended after the era-III block (contract C3). */
-const ERA_FOUR_COMPONENT_IDS: readonly MachineComponentId[] = MACHINE_COMPONENT_IDS.slice(45);
+const ERA_FOUR_COMPONENT_IDS: readonly MachineComponentId[] = MACHINE_COMPONENT_IDS.slice(45, 61);
+
+/** Era-V component ids: the 38 appended after the era-IV block (WP11 contract C3). */
+const ERA_FIVE_COMPONENT_IDS: readonly MachineComponentId[] = MACHINE_COMPONENT_IDS.slice(61);
 
 /** Unlock steps of era IV in order; harmonicCoil is set to each coil ring level in turn (1, 8, 16, 25). */
 const ERA_FOUR_STEPS: readonly (readonly [TechId, number])[] = [
@@ -1245,8 +1258,8 @@ describe('era IV machine data', () => {
     for (const id of RESONANCE_MILESTONE_FX.restart) expect(MACHINE_COMPONENTS[id].animation.kind, id).toBe('frames');
   });
 
-  it('the era-IV machine has 14 links in total, and P4 joins the manifold outlet to the spire exciter', () => {
-    expect(MACHINE_LINKS.length).toBe(14);
+  it('the machine has 16 links in total (14 through era IV, plus the era V guy cables G1 and G2), and P4 joins the manifold outlet to the spire exciter', () => {
+    expect(MACHINE_LINKS.length).toBe(16);
     const p4 = MACHINE_LINKS.filter((l) => l.kind === 'pipe' && l.from.component === 'steamManifold');
     expect(p4).toEqual([PIPE_P4_EXPECTED]);
     expect(pointPosition('steamManifold', 'outR')).toEqual({ x: -11, y: -176 });
@@ -1282,9 +1295,9 @@ describe('era IV machine data', () => {
 describe('era IV prefixes', () => {
   const STEPS = ERA_FOUR_STEPS.length;
 
-  it('every component is visible at the full stage', () => {
+  it('every era I-IV component is visible at the full era-IV stage (era V ids follow at index 61)', () => {
     const visible = visibleAt(levelsForEra4(STEPS));
-    for (const id of MACHINE_COMPONENT_IDS) expect(visible.has(id), id).toBe(true);
+    for (const id of MACHINE_COMPONENT_IDS.slice(0, 61)) expect(visible.has(id), id).toBe(true);
   });
 
   it('no era-IV component is visible before resonatorSpire', () => {
