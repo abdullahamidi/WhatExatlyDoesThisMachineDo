@@ -1,0 +1,172 @@
+/* New-cycle confirm dialog (WP14 T6b): BEGIN A NEW CYCLE? over the finale overlay and the system menu.
+   Sprites: ui.panel 9-slice (8 px, plain rust border without it), ui.button frame cells and ui.icons16 icon at 2x, like finale.css. */
+
+/* keep in sync with src/data/palette.ts */
+.cycle-confirm {
+  --ink:#14110f;
+  --iron:#2b2e31;
+  --iron-2:#1d1f21;
+  --rust:#8c4a2a;
+  --rust-dark:#4e2a1a;
+  --amber:#d9822b;
+  --amber-dim:#a8957a;
+  --haze:#d2bf9c;
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 16px;
+  background: rgba(0, 0, 0, .45);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(12px, 1.3vw, 15px);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--amber);
+  pointer-events: auto;
+}
+
+.cycle-confirm [hidden] {
+  display: none !important;
+}
+
+.cycle-confirm-panel {
+  box-sizing: border-box;
+  width: min(420px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 14px 18px;
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  border-image: var(--cycle-panel) 8 fill / 8px stretch;
+  image-rendering: pixelated;
+  box-shadow: 0 0 0 2px var(--ink), inset 0 0 18px rgba(0, 0, 0, .6);
+}
+
+.cycle-confirm-title {
+  margin: 0 0 8px;
+  font-size: max(12px, 1.15em);
+  font-weight: normal;
+  letter-spacing: .12em;
+  color: var(--amber);
+  overflow-wrap: anywhere;
+}
+
+.cycle-confirm-gain {
+  margin: 0 0 6px;
+  color: var(--haze);
+  overflow-wrap: anywhere;
+}
+
+.cycle-confirm-hint {
+  margin: 0 0 10px;
+  font-size: max(12px, .9em);
+  color: var(--amber-dim);
+  overflow-wrap: anywhere;
+}
+
+.cycle-confirm-lists {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.cycle-confirm-list-block {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.cycle-confirm-list-title {
+  margin: 0 0 4px;
+  padding-bottom: 2px;
+  font-size: max(12px, .85em);
+  font-weight: normal;
+  color: var(--amber-dim);
+  border-bottom: 1px solid var(--rust-dark);
+}
+
+.cycle-confirm-list {
+  margin: 0;
+  padding: 0 0 0 14px;
+  font-size: max(12px, .9em);
+  line-height: 1.35;
+  color: var(--amber);
+  overflow-wrap: anywhere;
+}
+
+.cycle-confirm-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ui.button frame cell: 0 normal, 1 hover, 2 pressed (sheet 144x48 drawn at 2x). The primary button keeps the hover frame. */
+.cycle-confirm-btn {
+  display: inline-flex;
+  align-items: stretch;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--amber);
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.cycle-confirm-btn-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: var(--cycle-button) calc(var(--frame, 0) * -48px) 0 / 144px 48px no-repeat;
+  image-rendering: pixelated;
+}
+
+.cycle-confirm-btn--primary .cycle-confirm-btn-frame,
+.cycle-confirm-btn:hover .cycle-confirm-btn-frame {
+  --frame: 1;
+}
+
+.cycle-confirm-btn:active .cycle-confirm-btn-frame {
+  --frame: 2;
+}
+
+/* ui.icons16 cell (16 px drawn at 2x), icon index set inline. */
+.cycle-confirm-btn-icon {
+  display: block;
+  width: 32px;
+  height: 32px;
+  background: var(--cycle-icons) calc(var(--icon, 0) * -32px) 0 / 160px 32px no-repeat;
+  image-rendering: pixelated;
+}
+
+.cycle-confirm-btn-label {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 2px solid var(--rust);
+  border-left: 0;
+  background: var(--iron-2);
+  color: var(--amber);
+  font-size: max(12px, 1em);
+  white-space: nowrap;
+}
+
+.cycle-confirm-btn:hover .cycle-confirm-btn-label {
+  background: var(--rust-dark);
+  color: var(--haze);
+}
+
+.cycle-confirm :focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
