@@ -113,7 +113,7 @@ describe('createSaveController', () => {
     // generatorBlueprint requires pistonArray and flywheel; the next click runs the milestone check.
     const base = createInitialState(t0);
     const session = new GameSession({
-      state: { ...base, lifetimeMe: 1000, techLevels: { ...base.techLevels, pistonArray: 1, flywheel: 1 } },
+      state: { ...base, lifetimeMe: 200000, techLevels: { ...base.techLevels, pistonArray: 1, flywheel: 1 } },
       now: () => t0,
     });
     const controller = createSaveController({

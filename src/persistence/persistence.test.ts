@@ -125,7 +125,7 @@ describe('deserialize drops unknown tech ids and clamps levels', () => {
       1,
     );
     expect(result.status).toBe('loaded');
-    expect(result.state.techLevels.gearRatio).toBe(25);
+    expect(result.state.techLevels.gearRatio).toBe(15);
     expect(result.state.techLevels.flywheel).toBe(10);
     expect(result.state.techLevels.wornMotor).toBe(1);
     expect(result.state.techLevels.handCrank).toBe(1);

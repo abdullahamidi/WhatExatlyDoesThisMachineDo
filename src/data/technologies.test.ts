@@ -89,13 +89,13 @@ describe('technology table', () => {
   it('matches the spec table for kind, baseCost, growth and maxLevel', () => {
     const expected: Record<TechId, [string, number, number | null, number | null]> = {
       handCrank: ['starting', 0, null, null],
-      gearRatio: ['repeatable', 10, 1.15, 25],
-      reinforcedCrank: ['unlock', 50, null, null],
-      flywheel: ['repeatable', 150, 1.2, 10],
-      wornMotor: ['unlock', 25, null, null],
-      motorTuning: ['repeatable', 40, 1.18, 25],
-      pistonArray: ['unlock', 250, null, null],
-      improvedPistons: ['repeatable', 120, 1.2, 25],
+      gearRatio: ['repeatable', 15, 1.3, 15],
+      reinforcedCrank: ['unlock', 2000, null, null],
+      flywheel: ['repeatable', 4000, 1.35, 10],
+      wornMotor: ['unlock', 40, null, null],
+      motorTuning: ['repeatable', 60, 1.3, 25],
+      pistonArray: ['unlock', 12000, null, null],
+      improvedPistons: ['repeatable', 6000, 1.3, 25],
       generatorBlueprint: ['milestone', 0, null, null],
     };
     for (const id of TECH_IDS) {
@@ -124,7 +124,7 @@ describe('technology table', () => {
     expect(gb.requires).toEqual([
       { type: 'tech', id: 'pistonArray', minLevel: 1 },
       { type: 'tech', id: 'flywheel', minLevel: 1 },
-      { type: 'lifetimeMe', amount: 1000 },
+      { type: 'lifetimeMe', amount: 200000 },
     ]);
   });
 

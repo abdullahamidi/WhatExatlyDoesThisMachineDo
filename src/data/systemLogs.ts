@@ -16,13 +16,13 @@ export interface SystemLogEntry {
 // Within each trigger kind the thresholds increase.
 export const SYSTEM_LOGS: readonly SystemLogEntry[] = [
   { id: 'observer-count', text: 'Log 0041: observer count unchanged.', trigger: { kind: 'playSeconds', atLeast: 120 } },
-  { id: 'unlabeled-part', text: 'Unlabeled component detected in intake. Ignored.', trigger: { kind: 'lifetimeMe', atLeast: 25 } },
+  { id: 'unlabeled-part', text: 'Unlabeled component detected in intake. Ignored.', trigger: { kind: 'lifetimeMe', atLeast: 500 } },
   { id: 'vibration-baseline', text: 'Vibration baseline drifted. Source: internal.', trigger: { kind: 'playSeconds', atLeast: 300 } },
-  { id: 'sensor-null', text: 'Sensor 7 reports nothing. Reading accepted.', trigger: { kind: 'lifetimeMe', atLeast: 120 } },
+  { id: 'sensor-null', text: 'Sensor 7 reports nothing. Reading accepted.', trigger: { kind: 'lifetimeMe', atLeast: 5000 } },
   { id: 'schedule-gap', text: 'Scheduled maintenance missed. Continuing.', trigger: { kind: 'playSeconds', atLeast: 600 } },
-  { id: 'output-ledger', text: 'Output ledger balanced. Recipient: not specified.', trigger: { kind: 'lifetimeMe', atLeast: 600 } },
+  { id: 'output-ledger', text: 'Output ledger balanced. Recipient: not specified.', trigger: { kind: 'lifetimeMe', atLeast: 30000 } },
   { id: 'power-draw', text: 'Power draw matches a load that is not present.', trigger: { kind: 'playSeconds', atLeast: 1200 } },
-  { id: 'chamber-seal', text: 'Chamber seal inspected. Inspector not logged.', trigger: { kind: 'lifetimeMe', atLeast: 2500 } },
+  { id: 'chamber-seal', text: 'Chamber seal inspected. Inspector not logged.', trigger: { kind: 'lifetimeMe', atLeast: 100000 } },
   { id: 'idle-cycle', text: 'Idle cycle logged. Cycle has no beginning.', trigger: { kind: 'playSeconds', atLeast: 2400 } },
 ];
 

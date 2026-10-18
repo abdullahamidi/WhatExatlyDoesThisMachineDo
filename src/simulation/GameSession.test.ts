@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { GameState, TechId } from '../data/types';
 import { OFFLINE_REPORT_THRESHOLD_SECONDS } from '../data/balance';
+import { TECHNOLOGIES } from '../data/technologies';
 import { GameSession } from './GameSession';
+import { costAt } from './economy/cost';
 import { createInitialState } from './state';
 import * as api from './index';
 
@@ -153,7 +155,10 @@ describe('GameSession', () => {
 
   describe('revision', () => {
     it('bumps on click, update with elapsed time, and purchase', () => {
-      const session = new GameSession({ state: withLevels({}, { me: 10, lastSimTime: 0 }), now: () => 0 });
+      const session = new GameSession({
+        state: withLevels({}, { me: costAt(TECHNOLOGIES.gearRatio, 0), lastSimTime: 0 }),
+        now: () => 0,
+      });
       session.applyOffline(0);
 
       let r = session.revision;
@@ -250,7 +255,7 @@ describe('GameSession', () => {
     });
 
     it('is recomputed after a purchase changes tech levels', () => {
-      const session = new GameSession({ state: withLevels({}, { me: 10 }), now: () => 0 });
+      const session = new GameSession({ state: withLevels({}, { me: costAt(TECHNOLOGIES.gearRatio, 0) }), now: () => 0 });
       expect(session.purchase('gearRatio').ok).toBe(true);
       expect(session.rates.perClick).toBe(2);
     });
@@ -316,41 +321,43 @@ describe('GameSession', () => {
 
     it('emits purchase and unlock on the first level, then only purchase afterwards', () => {
       const session = new GameSession({ state: createInitialState(0), now: () => 0 });
-      for (let i = 0; i < 10; i++) session.click();
-      expect(session.state.me).toBe(10);
+      const firstCost = costAt(TECHNOLOGIES.gearRatio, 0);
+      for (let i = 0; i < firstCost; i++) session.click();
+      expect(session.state.me).toBe(firstCost);
 
       const log = record(session);
       const first = session.purchase('gearRatio');
-      expect(first).toMatchObject({ ok: true, cost: 10, newLevel: 1 });
+      expect(first).toMatchObject({ ok: true, cost: firstCost, newLevel: 1 });
       expect(session.state.me).toBe(0);
       expect(session.rates.perClick).toBe(2);
-      expect(log).toEqual(['purchase:gearRatio:1:10', 'unlock:gearRatio']);
+      expect(log).toEqual([`purchase:gearRatio:1:${firstCost}`, 'unlock:gearRatio']);
 
-      for (let i = 0; i < 6; i++) session.click();
-      expect(session.state.me).toBe(12);
+      const secondCost = costAt(TECHNOLOGIES.gearRatio, 1);
+      while (session.state.me < secondCost) session.click();
+      expect(session.state.me).toBe(secondCost);
 
       log.length = 0;
       const second = session.purchase('gearRatio');
-      expect(second).toMatchObject({ ok: true, cost: 12, newLevel: 2 });
-      expect(log).toEqual(['purchase:gearRatio:2:12']);
+      expect(second).toMatchObject({ ok: true, cost: secondCost, newLevel: 2 });
+      expect(log).toEqual([`purchase:gearRatio:2:${secondCost}`]);
     });
 
     it('emits milestone events in order when a purchase completes a milestone', () => {
       const session = new GameSession({
         state: withLevels(
           { gearRatio: 3, reinforcedCrank: 1, wornMotor: 1, motorTuning: 5, pistonArray: 1 },
-          { me: 1000, lifetimeMe: 2000, lastSimTime: 0 },
+          { me: 5000, lifetimeMe: 200000, lastSimTime: 0 },
         ),
         now: () => 0,
       });
       session.applyOffline(0);
       const log = record(session);
       const result = session.purchase('flywheel');
-      expect(result).toMatchObject({ ok: true, cost: 150 });
-      expect(session.state.me).toBe(850);
+      expect(result).toMatchObject({ ok: true, cost: 4000 });
+      expect(session.state.me).toBe(1000);
       expect(session.state.techLevels.generatorBlueprint).toBe(1);
       expect(log).toEqual([
-        'purchase:flywheel:1:150',
+        'purchase:flywheel:1:4000',
         'unlock:flywheel',
         'unlock:generatorBlueprint',
         'milestone:generatorBlueprint',
@@ -390,7 +397,7 @@ describe('GameSession', () => {
   describe('reset', () => {
     it('returns to a fresh game at the given time and emits reset once', () => {
       const session = new GameSession({ state: createInitialState(0), now: () => 0 });
-      for (let i = 0; i < 10; i++) session.click();
+      for (let i = 0; i < costAt(TECHNOLOGIES.gearRatio, 0); i++) session.click();
       session.purchase('gearRatio');
       const log = record(session);
 

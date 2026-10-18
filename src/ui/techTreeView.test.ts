@@ -66,7 +66,7 @@ describe('techTreeView', () => {
 
     it('formats the level text of gearRatio', () => {
       const node = view.nodes.find((n) => n.id === 'gearRatio');
-      expect(node?.levelText).toBe('LV 0/25');
+      expect(node?.levelText).toBe('LV 0/15');
     });
 
     it('defaults the selection to gearRatio', () => {
@@ -75,34 +75,34 @@ describe('techTreeView', () => {
   });
 
   describe('gearRatio purchase states', () => {
-    it('is insufficient at ME 0 with a shortfall of 10', () => {
+    it('is insufficient at ME 0 with a shortfall of 15', () => {
       const views = viewsOf(stateWith({ me: 0 }));
       const view = buildTechTreeView(views, 0, 'gearRatio');
       expect(view.detail?.buyState).toBe('insufficient');
-      expect(view.detail?.shortfallText).toBe('NEED 10 MORE ME');
+      expect(view.detail?.shortfallText).toBe('NEED 15 MORE ME');
       expect(view.detail?.buyEnabled).toBe(true);
     });
 
-    it('is buyable at ME 10 with the cost in the label', () => {
-      const views = viewsOf(stateWith({ me: 10 }));
-      const view = buildTechTreeView(views, 10, 'gearRatio');
+    it('is buyable at ME 15 with the cost in the label', () => {
+      const views = viewsOf(stateWith({ me: 15 }));
+      const view = buildTechTreeView(views, 15, 'gearRatio');
       expect(view.detail?.buyState).toBe('buy');
-      expect(view.detail?.buyLabel).toContain('10 ME');
+      expect(view.detail?.buyLabel).toContain('15 ME');
       expect(view.detail?.buyEnabled).toBe(true);
       expect(view.detail?.shortfallText).toBeNull();
     });
 
-    it('keeps gearRatio as default selection at ME 10', () => {
-      expect(defaultSelection(viewsOf(stateWith({ me: 10 })))).toBe('gearRatio');
+    it('keeps gearRatio as default selection at ME 15', () => {
+      expect(defaultSelection(viewsOf(stateWith({ me: 15 })))).toBe('gearRatio');
     });
 
-    it('is maxed at level 25', () => {
+    it('is maxed at level 15', () => {
       const state = stateWith({
-        techLevels: { ...createInitialState(0).techLevels, gearRatio: 25 },
+        techLevels: { ...createInitialState(0).techLevels, gearRatio: 15 },
       });
       const view = buildTechTreeView(viewsOf(state), 0, 'gearRatio');
       const node = view.nodes.find((n) => n.id === 'gearRatio');
-      expect(node?.levelText).toBe('LV 25/25');
+      expect(node?.levelText).toBe('LV 15/15');
       expect(view.detail?.statusLabel).toBe('MAXED');
       expect(view.detail?.buyState).toBe('maxed');
       expect(view.detail?.buyEnabled).toBe(false);

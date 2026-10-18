@@ -8,28 +8,28 @@ const { gearRatio, motorTuning, flywheel, improvedPistons, wornMotor, pistonArra
 
 describe('costAt', () => {
   it('gearRatio grows geometrically with rounding up', () => {
-    expect([0, 1, 2, 3].map((l) => costAt(gearRatio, l))).toEqual([10, 12, 14, 16]);
+    expect([0, 1, 2, 3].map((l) => costAt(gearRatio, l))).toEqual([15, 20, 26, 33]);
   });
 
   it('motorTuning costs', () => {
-    expect(costAt(motorTuning, 0)).toBe(40);
-    expect(costAt(motorTuning, 1)).toBe(48);
+    expect(costAt(motorTuning, 0)).toBe(60);
+    expect(costAt(motorTuning, 1)).toBe(78);
   });
 
   it('flywheel costs', () => {
-    expect(costAt(flywheel, 0)).toBe(150);
-    expect(costAt(flywheel, 1)).toBe(180);
+    expect(costAt(flywheel, 0)).toBe(4000);
+    expect(costAt(flywheel, 1)).toBe(5400);
   });
 
   it('improvedPistons costs', () => {
-    expect(costAt(improvedPistons, 0)).toBe(120);
-    expect(costAt(improvedPistons, 1)).toBe(144);
+    expect(costAt(improvedPistons, 0)).toBe(6000);
+    expect(costAt(improvedPistons, 1)).toBe(7800);
   });
 
   it('unlock costs ignore the level', () => {
-    expect(costAt(wornMotor, 0)).toBe(25);
-    expect(costAt(pistonArray, 0)).toBe(250);
-    expect(costAt(wornMotor, 1)).toBe(25);
+    expect(costAt(wornMotor, 0)).toBe(40);
+    expect(costAt(pistonArray, 0)).toBe(12000);
+    expect(costAt(wornMotor, 1)).toBe(40);
   });
 
   it('starting tech is free', () => {
