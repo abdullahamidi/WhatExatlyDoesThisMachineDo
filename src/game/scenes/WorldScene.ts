@@ -4,7 +4,7 @@ import type { Hud } from '../../ui/hud';
 import type { TechTree } from '../../ui/techTree';
 import type { ModalStack } from '../../ui/modalStack';
 import { buildHudView } from '../../ui/hudView';
-import { DUST_RISING, PYLON_FEEDS } from '../../data/world';
+import { APERTURE_BEAM, DUST_RISING, PYLON_FEEDS } from '../../data/world';
 import { ParallaxBackground } from '../rendering/ParallaxBackground';
 import { PylonLine } from '../rendering/PylonLine';
 import { SteamFx } from '../rendering/SteamFx';
@@ -12,6 +12,8 @@ import { Terrain } from '../rendering/Terrain';
 import { DustField } from '../rendering/DustField';
 import { FloatingText } from '../rendering/FloatingText';
 import { CameraController } from '../rendering/CameraController';
+import { Eclipse } from '../rendering/Eclipse';
+import { ApertureBeam } from '../rendering/ApertureBeam';
 import { MachineView } from '../entities/MachineView';
 import { HandCrank } from '../entities/HandCrank';
 
@@ -26,6 +28,8 @@ export class WorldScene extends Phaser.Scene {
   private pylonLines: PylonLine[] = [];
   private steamFx: SteamFx | null = null;
   private dust: DustField | null = null;
+  private eclipse: Eclipse | null = null;
+  private beam: ApertureBeam | null = null;
 
   constructor(ctx: GameContext, ui: { hud: Hud; techTree: TechTree; modals: ModalStack }) {
     super('World');
@@ -47,6 +51,10 @@ export class WorldScene extends Phaser.Scene {
     dust.setRising(this.ctx.session.state.techLevels[DUST_RISING.techId] >= DUST_RISING.minLevel, true);
     const machine = new MachineView(this, this.ctx);
     this.machineView = machine;
+    const eclipse = new Eclipse(this, this.ctx.session);
+    this.eclipse = eclipse;
+    const beam = new ApertureBeam(this, this.ctx.session, () => this.machineView?.latchFrame(APERTURE_BEAM.component) ?? null);
+    this.beam = beam;
     const steamFx = new SteamFx(this, this.ctx.session, () => this.machineView);
     this.steamFx = steamFx;
     const floatingText = new FloatingText(this);
@@ -78,6 +86,14 @@ export class WorldScene extends Phaser.Scene {
       },
       ...pylonLines.map((line) => () => line.destroy()),
       () => {
+        this.beam = null;
+        beam.destroy();
+      },
+      () => {
+        this.eclipse = null;
+        eclipse.destroy();
+      },
+      () => {
         this.background = null;
         background.destroy();
       },
@@ -108,6 +124,8 @@ export class WorldScene extends Phaser.Scene {
     this.background?.update(this.ctx.session.state.techLevels, delta);
     for (const line of this.pylonLines) line.update(this.cameras.main, this.ctx.session.state.techLevels, delta);
     this.machineView?.update(delta);
+    this.eclipse?.update(delta);
+    this.beam?.update(delta);
     this.steamFx?.update(delta);
     // Cheap flag compare each frame: the streams only switch when the spire's level crosses its gate (or a reset).
     this.dust?.setRising(this.ctx.session.state.techLevels[DUST_RISING.techId] >= DUST_RISING.minLevel);

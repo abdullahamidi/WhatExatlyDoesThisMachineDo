@@ -1,28 +1,47 @@
 import Phaser from 'phaser';
 import type { GameSession } from '../../simulation';
-import { DRIVE_TRAIN, MACHINE_COMPONENTS, MACHINE_COMPONENT_IDS, MACHINE_MOTION, RESONANCE_MILESTONE_FX } from '../../data/machineComponents';
-import type { MachineComponentId, SpeedCurve } from '../../data/machineComponents';
+import {
+  DRIVE_TRAIN,
+  EXOTIC_MILESTONE_FX,
+  INVERSION_GHOST_FX,
+  MACHINE_COMPONENTS,
+  MACHINE_COMPONENT_IDS,
+  MACHINE_LAYER_DEPTH,
+  MACHINE_MOTION,
+  RESONANCE_MILESTONE_FX,
+  RING_GEOMETRY,
+} from '../../data/machineComponents';
+import type { ComponentAnimation, MachineComponentId, SpeedCurve } from '../../data/machineComponents';
 import { HAMMER_FX } from '../../data/steamFx';
 import { CRANK_FEEDBACK } from '../../data/world';
 import {
   addActivity,
   advancePhase,
+  alignStep,
   animationSpeed,
   clampFrameSeconds,
   decayActivity,
   driverValue,
+  echoAlpha,
   framesIndex,
   gaugeFrame,
+  latchFrame,
   lowPass,
+  milestonePhase,
+  mirrorAngle,
+  orbitFront,
+  orbitPoint,
+  orbitStep,
   reciprocateOffset,
   spinStep,
+  stageFrameOf,
   strikeCount,
   vibrateOffset,
 } from '../math/animation';
 import { addClickImpulse, partAngle, rotationFrame, sliderCrank, stepMaster } from '../math/driveTrain';
 import type { MasterState } from '../math/driveTrain';
 import { crankAngle, crankOffsetOnGearUp } from '../math/crankLink';
-import { resolveAttachment } from '../math/machineLayout';
+import { componentDepth, resolveAttachment } from '../math/machineLayout';
 
 /**
  * Shows a driven or spin part at deg. A sprite on a rotation sheet (`#rot` texture) shows the nearest pre-rendered frame with no
@@ -55,12 +74,18 @@ function drivenOf(id: MachineComponentId): { ratio: number; phaseDeg: number } {
  * Before the gears are unlocked the crank is not meshed to thetaM: clicks turn only crankState, and the motor turns
  * thetaM alone. On the moment the pinion appears, the crank angle is captured as an offset on thetaM (no snap).
  *
- * Other kinds: `vibrate` / `frames` follow the manual, automation, electric, thermal (PR/s) or resonance (RS/s) driver; `spin`
- * turns its own angle at a driver-set speed; `gauge` low-passes its driver into a needle frame; `reciprocate` strikes with
- * thetaM and counts hammer strikes (see consumeStrikes).
+ * Other kinds: `vibrate` / `frames` follow the manual, automation, electric, thermal (PR/s), resonance (RS/s) or exotic (XF/s)
+ * driver; `spin` turns its own angle at a driver-set speed; `gauge` low-passes its driver into a needle frame; `reciprocate`
+ * strikes with thetaM and counts hammer strikes (see consumeStrikes).
+ *
+ * Era V: `orbit` beads advance on their ring with the exotic driver and switch front / back depth (consumeDepthChanged);
+ * `latch` parts open once their gate holds (latchFrame); `stage` parts show the number of gates met; the inversion ghost
+ * mirrors the hand crank for the echo window after a click (INVERSION_GHOST_FX).
  *
  * Milestone FX (Era IV): on the RESONANCE_MILESTONE_FX milestone the crystal holds its hold frame for holdMs, and the dish
  * waves restart their frame clock at 0. Frame clocks are otherwise the animator clock (`elapsed`).
+ * Milestone FX (Era V): on the EXOTIC_MILESTONE_FX milestone the beads align to beadPhiDeg and hold, the null core spins
+ * faster for coreSpinMs and the anchor glows hold glowFrame for glowHoldMs.
  */
 export class MachineAnimator {
   private readonly session: GameSession;
@@ -94,9 +119,24 @@ export class MachineAnimator {
   private crystalHoldUntil = -1;
   /** Frame-clock origin of parts restarted by the milestone (absent: origin 0). Cleared on reset. */
   private readonly frameOrigins = new Map<MachineComponentId, number>();
+  /** Animator clock of the last manual click (null before the first click and after reset): drives the inversion ghost. */
+  private lastClickAt: number | null = null;
+  /** Current angle of each orbit bead (deg); absent means the bead's phi0Deg. Cleared on reset. */
+  private readonly orbitAngles = new Map<MachineComponentId, number>();
+  /** Set when a bead changed front / back depth; read and cleared by consumeDepthChanged(). */
+  private depthChanged = false;
+  /** Animator clock of the finalAlignment milestone (null until it fires; cleared on reset). */
+  private exoticMilestoneAt: number | null = null;
+  /** Bead angles captured when the finalAlignment milestone fired; the align step starts from them. */
+  private readonly exoticFrom = new Map<MachineComponentId, number>();
+  /** Latch state: 'off' = gate not met yet (frame 0), 'done' = gate already met at first sight, number = clock when the gate opened. */
+  private readonly latchStart = new Map<MachineComponentId, number | 'off' | 'done'>();
+  /** Last frame shown by each latch part (see latchFrame). */
+  private readonly latchFrames = new Map<MachineComponentId, number>();
   private readonly unsubscribeClick: () => void;
   private readonly unsubscribeReset: () => void;
   private readonly unsubscribeMilestone: () => void;
+  private readonly unsubscribeExotic: () => void;
 
   constructor(session: GameSession, sprites: ReadonlyMap<MachineComponentId, Phaser.GameObjects.Sprite>) {
     this.session = session;
@@ -112,6 +152,7 @@ export class MachineAnimator {
     }
     this.rodCrank = drivenOf(DRIVE_TRAIN.rod.crank);
     this.unsubscribeClick = session.on('click', ({ gained }) => {
+      this.lastClickAt = this.elapsed; // inversion ghost echo starts here
       this.manual = addActivity(this.manual, gained, MACHINE_MOTION.manualTauSeconds); // activity from the click
       // queued turn: thetaM while meshed to the gears, the crank-only state before that
       if (this.gearsActive) {
