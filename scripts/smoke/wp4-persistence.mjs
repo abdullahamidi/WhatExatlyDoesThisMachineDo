@@ -25,7 +25,7 @@ const save = () => page.evaluate(() => window.__wedtmd.saveNow && window.__wedtm
 try {
 await page.goto(url, { waitUntil: 'networkidle' }); await ready();
 // 1 persistence
-await crank(60); await page.click('#hud-tech', { timeout: 4000 }); await page.click('[data-tech=gearRatio]', { timeout: 4000 }); await page.click('#tech-buy', { timeout: 4000 }); await page.click('[data-tech=wornMotor]', { timeout: 4000 }); await page.click('#tech-buy', { timeout: 4000 }); await page.keyboard.press('Escape');
+await crank(60); await page.click('#hud-tech', { timeout: 4000 }); await page.waitForTimeout(250); await page.click('[data-tech=gearRatio]', { timeout: 4000 }); await page.click('#tech-buy', { timeout: 4000 }); await page.waitForTimeout(400); /* tree + achievement toast re-render after a purchase */ await page.click('[data-tech=wornMotor]', { timeout: 4000 }); await page.click('#tech-buy', { timeout: 4000 }); await page.keyboard.press('Escape');
 await save(); const before = await st();
 await page.reload({ waitUntil: 'networkidle' }); await ready(); const after = await st();
 ok('1_persist', { before, after, toasts: await toasts() });
