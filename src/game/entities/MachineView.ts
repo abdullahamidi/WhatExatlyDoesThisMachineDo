@@ -126,6 +126,7 @@ export class MachineView {
         this.settle(id, true);
         this.spawnPuff(id);
         this.shake();
+        this.ctx.feedback.partLanded.emit(id);
       },
     });
     this.assembling.set(id, tween);

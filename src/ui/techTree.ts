@@ -1,6 +1,6 @@
 import './techTree.css';
 import type { TechId } from '../data/types';
-import type { GameCommands } from '../game/context';
+import type { GameContext } from '../game/context';
 import type { GameSession } from '../simulation';
 import { buildTechTreeView, defaultSelection, purchaseFailureText } from './techTreeView';
 import type { TechDetailView, TechNodeView, TechTreeView } from './techTreeView';
@@ -89,7 +89,8 @@ function stampOf(view: TechTreeView): string {
   return [view.meText, nodes, edges, detail].join('#');
 }
 
-export function createTechTree(root: HTMLElement, session: GameSession, commands: GameCommands): TechTree {
+export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
+  const { session, commands, modals, feedback } = ctx;
   const patch = new Patcher();
 
   // ---- DOM skeleton (built once) ----
@@ -306,7 +307,7 @@ export function createTechTree(root: HTMLElement, session: GameSession, commands
     if (selected === null) selected = defaultSelection(session.getAllTechViews());
     isOpenFlag = true;
     overlay.classList.add('is-open');
-    window.addEventListener('keydown', onKeyDown);
+    modals.push('tech-tree', close);
     dirty = true;
     update();
     closeButton.focus();
@@ -316,17 +317,11 @@ export function createTechTree(root: HTMLElement, session: GameSession, commands
     if (!isOpenFlag) return;
     isOpenFlag = false;
     overlay.classList.remove('is-open');
-    window.removeEventListener('keydown', onKeyDown);
+    modals.remove('tech-tree');
     setFeedback('');
     const target = returnFocus;
     returnFocus = null;
     if (target !== null && target.isConnected) target.focus();
-  }
-
-  function onKeyDown(event: KeyboardEvent): void {
-    if (event.key !== 'Escape') return;
-    event.preventDefault();
-    close();
   }
 
   const onClose = (): void => close();
@@ -358,6 +353,7 @@ export function createTechTree(root: HTMLElement, session: GameSession, commands
     if (!result.ok) {
       setFeedback(purchaseFailureText(result.reason, Math.max(0, (before.nextCost ?? 0) - session.state.me)));
       flashDenied();
+      feedback.purchaseDenied.emit(result.reason);
       return;
     }
     // Render first: the purchase changes buyState, and render clears feedback on that change.
