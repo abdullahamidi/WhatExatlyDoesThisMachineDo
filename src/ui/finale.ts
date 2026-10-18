@@ -88,6 +88,11 @@ export function createFinaleOverlay(root: HTMLElement, deps: FinaleOverlayDeps):
   // Terminal panel: typed lines. Each line element is created on demand.
   const panel = el('div', 'finale-panel');
   panel.style.maxWidth = `${FINALE_REVEAL.panelMaxWidthPx}px`;
+  // Completed lines are mirrored to a polite live region (screen readers).
+  const live = el('div', 'finale-sr');
+  live.setAttribute('aria-live', 'polite');
+  panel.appendChild(live);
+
   const lineEls: HTMLParagraphElement[] = [];
   const writtenLines: string[] = [];
   const lineNode = (index: number): HTMLParagraphElement => {
@@ -98,11 +103,6 @@ export function createFinaleOverlay(root: HTMLElement, deps: FinaleOverlayDeps):
     panel.insertBefore(p, live);
     return p;
   };
-
-  // Completed lines are mirrored to a polite live region (screen readers).
-  const live = el('div', 'finale-sr');
-  live.setAttribute('aria-live', 'polite');
-  panel.appendChild(live);
 
   // Buttons row: KEEP IT RUNNING / BEGIN A NEW CYCLE (+ reason line when blocked).
   const buttons = el('div', 'finale-buttons');
@@ -129,19 +129,16 @@ export function createFinaleOverlay(root: HTMLElement, deps: FinaleOverlayDeps):
   let disposeFocusTrap: (() => void) | null = null;
   let mirrored = 0;
   let plateOpacity = '';
-  let skipHidden: boolean | null = null;
   let cycleDisabled: string | null = null;
   let cycleAria: string | null = null;
   let reasonText = '';
 
-  // Esc via the modal stack: sequence -> skip. choice: nothing happens, the entry is put back.
+  // Esc via the modal stack: sequence -> skip. The stack drops this entry after close() returns, so the overlay
+  // always puts it back while shown (choice: Esc does nothing).
   const onModalClose = (): void => {
     if (destroyed || !shown) return;
-    if (skippable) {
-      deps.onSkip();
-      return;
-    }
-    if (!deps.modals.has(MODAL_ID)) deps.modals.push(MODAL_ID, onModalClose);
+    if (skippable) deps.onSkip();
+    if (shown && !destroyed) deps.modals.push(MODAL_ID, onModalClose);
   };
 
   const onKeep = (): void => {
@@ -174,11 +171,12 @@ export function createFinaleOverlay(root: HTMLElement, deps: FinaleOverlayDeps):
     mirrored = 0;
     live.textContent = '';
     plateOpacity = '';
-    skipHidden = null;
     cycleDisabled = null;
     cycleAria = null;
     reasonText = '';
     cycle.classList.remove('is-disabled');
+    cycle.removeAttribute('aria-disabled');
+    cycle.removeAttribute('aria-description');
     cycleReason.textContent = '';
   };
 
@@ -216,11 +214,11 @@ export function createFinaleOverlay(root: HTMLElement, deps: FinaleOverlayDeps):
       lineNode(i).textContent = text;
     });
     // Mirror each line once it is complete, in order.
-    for (;;) {
-      const line = model.lines[mirrored];
-      if (line === undefined || line.shown < line.text.length) break;
-      live.appendChild(el('p', undefined, line.text));
+    let next = model.lines[mirrored];
+    while (next !== undefined && next.shown >= next.text.length) {
+      live.appendChild(el('p', undefined, next.text));
       mirrored++;
+      next = model.lines[mirrored];
     }
   }
 
@@ -239,7 +237,7 @@ export function createFinaleOverlay(root: HTMLElement, deps: FinaleOverlayDeps):
       cycleReason.textContent = reason;
     }
     setHidden(cycleReason, model.cycleReason === null);
-    const description = model.cycleEnabled || model.cycleReason === null ? null : model.cycleReason;
+    const description = model.cycleEnabled ? null : model.cycleReason;
     if (cycleAria !== description) {
       cycleAria = description;
       if (description === null) cycle.removeAttribute('aria-description');
@@ -266,7 +264,6 @@ export function createFinaleOverlay(root: HTMLElement, deps: FinaleOverlayDeps):
       hide();
       return;
     }
-    const wasShown = shown;
     show();
     if (!deps.modals.has(MODAL_ID)) deps.modals.push(MODAL_ID, onModalClose);
     skippable = model.skipVisible;
@@ -277,11 +274,10 @@ export function createFinaleOverlay(root: HTMLElement, deps: FinaleOverlayDeps):
       plate.style.opacity = opacity;
     }
     setHidden(skip, !model.skipVisible);
-    if (skipHidden !== !model.skipVisible) skipHidden = !model.skipVisible;
 
     renderLines(model);
     renderButtons(model);
-    if (!wasShown || model.buttons || model.skipVisible) updateFocus(model);
+    updateFocus(model);
   }
 
   function destroy(): void {

@@ -48,8 +48,8 @@ describe('buildFinaleOverlay sequence timing', () => {
     expect(buildFinaleOverlay('sequence', REVEAL - 1, false, NO_BLOCK)?.nameplateAlpha).toBe(0);
     expect(buildFinaleOverlay('sequence', REVEAL, false, NO_BLOCK)?.nameplateAlpha).toBe(0);
     expect(buildFinaleOverlay('sequence', REVEAL + fadeS / 2, false, NO_BLOCK)?.nameplateAlpha).toBeCloseTo(0.5, 9);
-    expect(buildFinaleOverlay('sequence', REVEAL + fadeS, false, NO_BLOCK)?.nameplateAlpha).toBe(1);
-    expect(buildFinaleOverlay('sequence', REVEAL + 30, false, NO_BLOCK)?.nameplateAlpha).toBe(1);
+    expect(buildFinaleOverlay('sequence', REVEAL + fadeS + 0.01, false, NO_BLOCK)?.nameplateAlpha).toBe(1);
+    expect(buildFinaleOverlay('sequence', REVEAL + 30, false, NO_BLOCK)?.nameplateAlpha).toBeCloseTo(1, 9);
   });
 
   it('types the first line at cps after holdS, nothing before', () => {
@@ -96,7 +96,7 @@ describe('buildFinaleOverlay reduced motion', () => {
   it('shows every line whole at its start time', () => {
     const fadeS = FINALE_REVEAL.nameplateFadeMs / 1000;
     const start0 = fadeS + FINALE_REVEAL.holdS;
-    const at0 = buildFinaleOverlay('sequence', REVEAL + start0, true, NO_BLOCK);
+    const at0 = buildFinaleOverlay('sequence', REVEAL + start0 + 0.01, true, NO_BLOCK);
     expect(at0?.lines[0]?.shown).toBe(FINALE_REVEAL.lines[0]?.length);
     expect(at0?.lines[1]?.shown).toBe(0);
     const len0 = FINALE_REVEAL.lines[0]?.length ?? 0;

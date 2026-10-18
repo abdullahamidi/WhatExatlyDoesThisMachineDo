@@ -1,0 +1,215 @@
+/* Finale overlay (WP13 T5): ending sequence and the KEEP IT RUNNING / BEGIN A NEW CYCLE choice. Terminal look shared with the HUD.
+   Sprites: ui.nameplate (scaled by finale.ts), ui.panel 9-slice (8 px), ui.button 24 px cells drawn at 2x, ui.icons16 16 px icons at 2x. */
+
+/* keep in sync with src/data/palette.ts */
+.finale-overlay {
+  --ink:#14110f;
+  --iron:#2b2e31;
+  --iron-2:#1d1f21;
+  --rust:#8c4a2a;
+  --rust-dark:#4e2a1a;
+  --amber:#d9822b;
+  --amber-dim:#a8957a;
+  --haze:#d2bf9c;
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+  pointer-events: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(12px, 1.3vw, 15px);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--amber);
+}
+
+.finale-overlay [hidden] {
+  display: none !important;
+}
+
+/* Top-left column under the HUD corner: name plate, terminal panel, buttons. */
+.finale-column {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+}
+
+.finale-plate {
+  background: var(--finale-plate) 0 0 / 100% 100% no-repeat;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.finale-panel {
+  box-sizing: border-box;
+  min-width: min(280px, 100%);
+  padding: 10px 14px;
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  /* 9-slice panel art (ui.panel, 8 px borders); without the var the plain border above shows. */
+  border-image: var(--finale-panel) 8 fill / 8px stretch;
+  image-rendering: pixelated;
+  box-shadow: 0 0 0 2px var(--ink), inset 0 0 18px rgba(0, 0, 0, .6);
+  pointer-events: none;
+}
+
+.finale-line {
+  margin: 0 0 6px;
+  min-height: 1.3em;
+  font-size: max(12px, 1em);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.finale-line:last-of-type {
+  margin-bottom: 0;
+}
+
+.finale-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.finale-btn {
+  display: inline-flex;
+  align-items: stretch;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--amber);
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* ui.button frame cell: 0 normal, 1 hover, 2 pressed (sheet 72x24 drawn at 2x). The primary button keeps the hover frame. */
+.finale-btn-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: var(--finale-button) calc(var(--frame, 0) * -48px) 0 / 144px 48px no-repeat;
+  image-rendering: pixelated;
+}
+
+.finale-btn--primary .finale-btn-frame,
+.finale-btn:hover .finale-btn-frame {
+  --frame: 1;
+}
+
+.finale-btn:active .finale-btn-frame {
+  --frame: 2;
+}
+
+/* ui.icons16 cell (16 px drawn at 2x), icon index set inline from FINALE_CHOICE. */
+.finale-btn-icon {
+  display: block;
+  width: 32px;
+  height: 32px;
+  background: var(--finale-icons) calc(var(--icon, 0) * -32px) 0 / 160px 32px no-repeat;
+  image-rendering: pixelated;
+}
+
+.finale-btn-label {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 2px solid var(--rust);
+  border-left: 0;
+  background: var(--iron-2);
+  color: var(--amber);
+  font-size: max(12px, 1em);
+  white-space: nowrap;
+}
+
+.finale-btn:hover .finale-btn-label {
+  background: var(--rust-dark);
+  color: var(--haze);
+}
+
+.finale-btn[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+.finale-btn[aria-disabled="true"] .finale-btn-frame {
+  --frame: 0;
+}
+
+.finale-btn[aria-disabled="true"]:hover .finale-btn-label {
+  background: var(--iron-2);
+  color: var(--amber);
+}
+
+.finale-reason {
+  max-width: 100%;
+  font-size: max(12px, .9em);
+  color: var(--amber-dim);
+  overflow-wrap: anywhere;
+}
+
+/* SKIP: sequence only, bottom-right like the HUD buttons. */
+.finale-skip {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: max(12px, 1em);
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--amber);
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.finale-skip:hover {
+  background: var(--rust-dark);
+  color: var(--haze);
+}
+
+.finale-overlay :focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+/* Screen-reader mirror of the completed lines: visually hidden. */
+.finale-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* HUD panels and toasts fade out while the finale runs (duration = --finale-fade-ms, set from FINALE_HUD in finale.ts). */
+#ui-root #hud-panel,
+#ui-root #hud-buttons,
+#ui-root #toast-stack {
+  transition: opacity var(--finale-fade-ms, 0ms) linear;
+}
+
+#ui-root.finale-active #hud-panel,
+#ui-root.finale-active #hud-buttons,
+#ui-root.finale-active #toast-stack {
+  opacity: 0;
+  pointer-events: none;
+}
