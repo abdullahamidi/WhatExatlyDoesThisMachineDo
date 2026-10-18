@@ -2,7 +2,7 @@ import type { SaveEnvelope } from '../data/types';
 import { parseEnvelope } from './codec';
 
 // Save export / import text format (WP12): base64 (standard alphabet, padded) of the UTF-8 save JSON.
-// Pure: btoa / atob / TextEncoder / TextDecoder only, no Buffer and no DOM.
+// Pure: btoa / atob / TextEncoder / TextDecoder only (no Node-only byte APIs, no DOM access).
 
 /** Largest import text accepted, in characters. A format limit, not a balance number. */
 export const MAX_IMPORT_CHARS = 1024 * 1024;

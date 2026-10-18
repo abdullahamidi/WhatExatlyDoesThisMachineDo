@@ -64,8 +64,9 @@
   padding-top: 6px;
   border-top: 1px solid var(--rust-dark);
   color: var(--amber-dim);
-  font-size: max(12px, .7em);
-  letter-spacing: .12em;
+  /* .65em / .05em: the longest line (Era V) keeps the panel right edge < 340 px, clear of the eclipse at sky px (372, 290) */
+  font-size: max(12px, .65em);
+  letter-spacing: .05em;
   overflow-wrap: anywhere;
 }
 
