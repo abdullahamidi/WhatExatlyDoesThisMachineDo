@@ -1,22 +1,48 @@
 import Phaser from 'phaser';
 import { DEPTH, CRANK_FEEDBACK, MACHINE_ANCHOR, PIXEL_SCALE } from '../../data/world';
-import { MACHINE_COMPONENTS, MACHINE_COMPONENT_IDS } from '../../data/machineComponents';
+import { MACHINE_ASSEMBLY, MACHINE_COMPONENTS, MACHINE_COMPONENT_IDS, MACHINE_LAYER_DEPTH } from '../../data/machineComponents';
 import type { MachineComponentId, Vec2 } from '../../data/machineComponents';
-import { componentDepth, isComponentVisible, machineLocalToWorld, resolveAttachment } from '../math/machineLayout';
+import { componentDepth, machineLocalToWorld, resolveAttachment } from '../math/machineLayout';
+import { connectionOffset } from '../math/machineLinks';
+import { newlyVisible, visibleComponentIds } from '../math/machineVisibility';
 import type { GameContext } from '../context';
+import { MachineAnimator } from './MachineAnimator';
+import { MachineLinks } from '../rendering/MachineLinks';
+
+/** Uniform random number in [lo, hi). Visual only. */
+function between(lo: number, hi: number): number {
+  return lo + Math.random() * (hi - lo); // lo + r * span
+}
 
 /**
  * The machine container: one sprite per component, visibility driven by tech levels.
- * Layout lives on the outer `container`; the inner `parts` container holds the sprites and is the only thing shaken.
+ * Layout lives on the outer `container`; the inner `parts` container holds the sprites and links and is the only thing shaken.
+ * Newly unlocked parts fly in (assembly tween) and puff dust on landing; motion and links are driven per frame by `update`.
  */
 export class MachineView {
   readonly container: Phaser.GameObjects.Container;
   private readonly parts: Phaser.GameObjects.Container;
   private readonly ctx: GameContext;
-  private readonly sprites = new Map<MachineComponentId, Phaser.GameObjects.Sprite>();
-  private readonly unsubscribeReset: () => void;
-  private shakeTween: Phaser.Tweens.TweenChain | null = null;
   private readonly scene: Phaser.Scene;
+  private readonly sprites = new Map<MachineComponentId, Phaser.GameObjects.Sprite>();
+  private readonly assembling = new Map<MachineComponentId, Phaser.Tweens.Tween>();
+  private readonly puffs = new Map<Phaser.GameObjects.Image, Phaser.Tweens.Tween>();
+  private readonly links: MachineLinks;
+  private readonly animator: MachineAnimator;
+  private readonly unsubscribes: Array<() => void> = [];
+  private visibleIds: Set<MachineComponentId> = new Set();
+  private shakeTween: Phaser.Tweens.TweenChain | null = null;
+
+  /** Animator gate: a part moves only while visible and not assembling. */
+  private readonly isActive = (id: MachineComponentId): boolean => this.visibleIds.has(id) && !this.assembling.has(id);
+
+  /** Link endpoint lookup: live sprite position + connection offset; null while hidden or assembling. */
+  private readonly pointOf = (component: MachineComponentId, pointId: string): Vec2 | null => {
+    if (!this.visibleIds.has(component) || this.assembling.has(component)) return null;
+    const sprite = this.sprites.get(component);
+    const off = connectionOffset(MACHINE_COMPONENTS[component], pointId);
+    return sprite !== undefined && off !== null ? { x: sprite.x + off.x, y: sprite.y + off.y } : null;
+  };
 
   constructor(scene: Phaser.Scene, ctx: GameContext) {
     this.scene = scene;
@@ -34,25 +60,152 @@ export class MachineView {
       const sprite = scene.add
         .sprite(att.x, att.y, def.assetId)
         .setOrigin(def.origin.x, def.origin.y)
-        .setDepth(componentDepth(def));
+        .setDepth(componentDepth(def))
+        .setFlipX(def.flipX === true);
       this.sprites.set(id, sprite);
       this.parts.add(sprite);
     }
+    // Links are added before the depth sort so the container orders them with the sprites.
+    this.links = new MachineLinks(scene, this.parts);
     // Container renders children in list order; sort by depth so layers stack correctly.
     this.parts.sort('depth');
+    this.animator = new MachineAnimator(ctx.session, this.sprites);
+    // Build and load: parts appear instantly, no assembly.
     this.sync();
 
-    this.unsubscribeReset = ctx.session.on('reset', () => this.sync());
+    this.unsubscribes.push(
+      ctx.session.on('unlock', () => this.refresh(true)),
+      ctx.session.on('purchase', () => this.refresh(true)),
+      ctx.session.on('reset', () => this.reset()),
+    );
   }
 
-  /** Sets each component's visibility from the current tech levels. */
+  /** Non-animated: recompute visibility from the tech levels and place every component at rest. */
   sync(): void {
-    const techLevels = this.ctx.session.state.techLevels;
+    this.stopAssemblies();
+    this.visibleIds = visibleComponentIds(this.ctx.session.state.techLevels);
+    for (const id of MACHINE_COMPONENT_IDS) this.settle(id, this.visibleIds.has(id));
+  }
+
+  /** Diffs visibility against the tech levels: hides lost parts, then assembles (or instantly settles) new ones. */
+  private refresh(animate: boolean): void {
+    const next = visibleComponentIds(this.ctx.session.state.techLevels);
+    const added = newlyVisible(this.visibleIds, next);
     for (const id of MACHINE_COMPONENT_IDS) {
-      const def = MACHINE_COMPONENTS[id];
-      const sprite = this.sprites.get(id);
-      sprite?.setVisible(isComponentVisible(def, techLevels));
+      if (next.has(id)) continue;
+      this.cancelAssembly(id);
+      this.sprites.get(id)?.setVisible(false);
     }
+    this.visibleIds = next;
+    for (const id of added) {
+      if (animate) this.startAssembly(id);
+      else this.settle(id, true);
+    }
+  }
+
+  /** Fly-in tween from above with a fade; on landing the part settles, puffs dust and the machine shakes. */
+  private startAssembly(id: MachineComponentId): void {
+    this.cancelAssembly(id);
+    const sprite = this.sprites.get(id);
+    if (sprite === undefined) return;
+    const base = resolveAttachment(MACHINE_COMPONENTS[id]);
+    sprite
+      .setVisible(true)
+      .setPosition(base.x, base.y - MACHINE_ASSEMBLY.dropArtPx)
+      .setScale(MACHINE_ASSEMBLY.startScale)
+      .setAlpha(0);
+    const tween = this.scene.tweens.add({
+      targets: sprite,
+      y: base.y,
+      scaleX: 1,
+      scaleY: 1,
+      alpha: 1,
+      duration: MACHINE_ASSEMBLY.durationMs,
+      ease: MACHINE_ASSEMBLY.ease,
+      onComplete: () => {
+        this.settle(id, true);
+        this.spawnPuff(id);
+        this.shake();
+      },
+    });
+    this.assembling.set(id, tween);
+  }
+
+  /** Exact rest state: at its base position, scale 1, alpha 1. The angle is left alone. */
+  private settle(id: MachineComponentId, visible: boolean): void {
+    this.assembling.delete(id);
+    const sprite = this.sprites.get(id);
+    if (sprite === undefined) return;
+    const base = resolveAttachment(MACHINE_COMPONENTS[id]);
+    sprite.setVisible(visible).setPosition(base.x, base.y).setScale(1).setAlpha(1);
+  }
+
+  /** Dust puffs rising from the bottom edge of a part that just landed. Bounded by puffCount per landing. */
+  private spawnPuff(id: MachineComponentId): void {
+    const def = MACHINE_COMPONENTS[id];
+    const base = resolveAttachment(def);
+    const bottomY = base.y + (1 - def.origin.y) * def.size.height; // sprite bottom edge in art px
+    for (let i = 0; i < MACHINE_ASSEMBLY.puffCount; i += 1) {
+      const spread = MACHINE_ASSEMBLY.puffSpreadArtPx;
+      const img = this.scene.add
+        .image(base.x + between(-spread, spread), bottomY, 'fx.dust')
+        .setAlpha(MACHINE_ASSEMBLY.puffAlpha)
+        .setDepth(MACHINE_LAYER_DEPTH.front + 1);
+      this.parts.add(img); // appended on top; no re-sort
+      const tween = this.scene.tweens.add({
+        targets: img,
+        y: bottomY - MACHINE_ASSEMBLY.puffRiseArtPx,
+        alpha: 0,
+        scale: MACHINE_ASSEMBLY.puffEndScale,
+        duration: MACHINE_ASSEMBLY.puffMs,
+        onComplete: () => {
+          this.puffs.delete(img);
+          img.destroy();
+        },
+      });
+      this.puffs.set(img, tween);
+    }
+  }
+
+  private cancelAssembly(id: MachineComponentId): void {
+    this.assembling.get(id)?.stop();
+    this.assembling.delete(id);
+  }
+
+  private stopAssemblies(): void {
+    for (const tween of this.assembling.values()) tween.stop();
+    this.assembling.clear();
+  }
+
+  private destroyPuffs(): void {
+    for (const [img, tween] of this.puffs) {
+      tween.stop();
+      img.destroy();
+    }
+    this.puffs.clear();
+  }
+
+  /** Session reset: clear in-flight assembly and dust, then settle every part to the fresh tech levels. */
+  private reset(): void {
+    this.stopAssemblies();
+    this.destroyPuffs();
+    this.sync();
+  }
+
+  /** Per frame: drive part motion, then redraw the shafts and belts between live part positions. */
+  update(deltaMs: number): void {
+    this.animator.update(deltaMs, this.isActive);
+    this.links.draw(this.pointOf);
+  }
+
+  isAssembling(id: MachineComponentId): boolean {
+    return this.assembling.has(id);
+  }
+
+  getComponentState(id: MachineComponentId): { visible: boolean; assembling: boolean; alpha: number; scale: number } {
+    const sprite = this.sprites.get(id);
+    if (sprite === undefined) return { visible: false, assembling: false, alpha: 0, scale: 0 };
+    return { visible: sprite.visible, assembling: this.assembling.has(id), alpha: sprite.alpha, scale: sprite.scaleX };
   }
 
   getComponentSprite(id: MachineComponentId): Phaser.GameObjects.Sprite | undefined {
@@ -87,7 +240,13 @@ export class MachineView {
   }
 
   destroy(): void {
-    this.unsubscribeReset();
+    for (const unsubscribe of this.unsubscribes) unsubscribe();
+    this.unsubscribes.length = 0;
+    // Tweens and puffs go before the container: they reference its children.
+    this.stopAssemblies();
+    this.destroyPuffs();
+    this.animator.destroy();
+    this.links.destroy();
     this.shakeTween?.stop();
     this.shakeTween = null;
     this.container.setPosition(MACHINE_ANCHOR.x, MACHINE_ANCHOR.y);
