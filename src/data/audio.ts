@@ -87,4 +87,22 @@ export const AUDIO = {
 
   // Finale flock chirps (WP13 birds): `count` short FM-ish sine sweeps from fromHz up to toHz, each sweepMs long, gapMs apart; modHz/modDepth wobble the pitch. One-shot on the sfx bus.
   chirp: { count: 3, gapMs: 140, sweepMs: 90, fromHz: 2600, toHz: 3800, modHz: 55, modDepth: 60, gain: 0.07 },
+
+  // Stamp (WP14 cycle start): low thump (sine dropping from thumpDropHz to thumpHz), short lowpassed rattle, then a
+  // metallic click (two inharmonic sines at clickHz and clickHz * clickPartialRatio). Whole cue stays under 300 ms. One-shot on the sfx bus.
+  stamp: {
+    thumpHz: 60,
+    thumpDropHz: 95,
+    thumpMs: 180,
+    thumpGain: 0.5,
+    noiseMs: 80,
+    noiseLowpassHz: 500,
+    noiseGain: 0.18,
+    clickHz: 3100,
+    clickPartialRatio: 1.52,
+    clickDelayMs: 30,
+    clickAttackMs: 1,
+    clickMs: 50,
+    clickGain: 0.12,
+  },
 } as const;

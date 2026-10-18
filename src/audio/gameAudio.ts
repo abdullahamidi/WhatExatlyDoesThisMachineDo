@@ -248,6 +248,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
           warnOnce('milestone', error);
         }
       }),
+      session.on('cycle', oneShot('cycle', (s) => s.playStamp())),
       feedback.partLanded.on(oneShot('partLanded', (s) => s.playClunk())),
       feedback.purchaseDenied.on(oneShot('purchaseDenied', (s) => s.playDeny())),
       feedback.finaleBeat.on((beat) => {

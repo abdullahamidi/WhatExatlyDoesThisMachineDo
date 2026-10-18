@@ -2,8 +2,8 @@
 // Tuning numbers come from AUDIO (src/data/audio.ts); the constants below are structural only.
 
 import { AUDIO } from '../data/audio';
-import { chirpSweeps, chordFrequencies } from './audioMath';
-import type { ChirpSweep } from './audioMath';
+import { chirpSweeps, chordFrequencies, stampPartials } from './audioMath';
+import type { ChirpSweep, StampPartial } from './audioMath';
 
 const ENVELOPE_FLOOR = 0.0001; // exponential ramps cannot target 0
 const STOP_PAD_S = 0.05; // oscillator/source stop time after its envelope ends
@@ -51,6 +51,7 @@ export interface Synth {
   playBeadTicks(delaySeconds?: number): void; // AUDIO.beadTick soft sine ticks (finalAlignment milestone, after the sting)
   playResolveChord(): void; // AUDIO.resolveChord major triad plus octave, slow attack, long decay (finale S5)
   playChirps(): void; // AUDIO.chirp FM-ish sine sweeps, `count` of them (finale flock)
+  playStamp(): void; // AUDIO.stamp low thump, lowpassed rattle and metallic click, under 300 ms (new cycle)
   suspend(): void; // context.suspend().catch(noop)
   resume(): void; // context.resume().catch(noop)
   isRunning(): boolean; // context.state === 'running'; false once closed or if the state cannot be read
@@ -549,6 +550,37 @@ function playChirpSweep(context: AudioContext, out: AudioNode, startAt: number, 
   mod.stop(endAt + STOP_PAD_S);
 }
 
+/** Stamp rattle: a short noise burst through a lowpass (dull, low), one exponential envelope. Nodes are released when it ends. */
+function playStampRattle(
+  context: AudioContext,
+  out: AudioNode,
+  noise: AudioBuffer,
+  startAt: number,
+  decay: number,
+  peak: number,
+  lowpassHz: number,
+): void {
+  const src = context.createBufferSource();
+  const env = context.createGain();
+  const lp = context.createBiquadFilter();
+  src.buffer = noise;
+  lp.type = 'lowpass';
+  lp.frequency.value = lowpassHz;
+  env.gain.setValueAtTime(peak, startAt);
+  env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, startAt + decay);
+  src.connect(lp);
+  lp.connect(env);
+  env.connect(out);
+  src.onended = () => {
+    src.disconnect();
+    lp.disconnect();
+    env.disconnect();
+  };
+  const offset = Math.random() * Math.max(0, noise.duration - decay);
+  src.start(startAt, offset);
+  src.stop(startAt + decay + STOP_PAD_S);
+}
+
 export function createSynth(context: AudioContext): Synth {
   const graph = openGraph(context);
   let closed = false;
@@ -902,6 +934,39 @@ export function createSynth(context: AudioContext): Synth {
         const t0 = context.currentTime;
         for (const sweep of chirpSweeps()) {
           playChirpSweep(context, out, t0 + sweep.startS, sweep);
+        }
+      });
+    },
+
+    playStamp(): void {
+      run('playStamp', 'sfx', (out) => {
+        const t0 = context.currentTime;
+        const s = AUDIO.stamp;
+        for (const p of stampPartials()) {
+          const startAt = t0 + p.startS;
+          switch (p.kind) {
+            case 'thump':
+              playVoice(context, out, {
+                wave: 'sine',
+                hz: p.hz,
+                dropFromHz: s.thumpDropHz,
+                startAt,
+                decay: p.durationS,
+                peak: p.gain,
+              });
+              break;
+            case 'rattle':
+              playStampRattle(context, out, getNoise(), startAt, p.durationS, p.gain, p.hz);
+              break;
+            case 'click':
+              playSineCluster(context, out, startAt, {
+                hzs: [p.hz, p.hz * s.clickPartialRatio],
+                gain: p.gain,
+                attackMs: s.clickAttackMs,
+                ms: p.durationS * 1000,
+              });
+              break;
+          }
         }
       });
     },

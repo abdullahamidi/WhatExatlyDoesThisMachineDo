@@ -20,6 +20,7 @@ import {
   servoFraction,
   servoGain,
   servoHz,
+  stampPartials,
   windAllowed,
 } from './audioMath';
 
@@ -464,6 +465,54 @@ describe('chirpSweeps', () => {
     const cfg = { count: 1, gapMs: 100, sweepMs: 50, fromHz: 1000, toHz: 2000, modHz: 10, modDepth: 5, gain: 0.1 } as const;
     expect(chirpSweeps(cfg)).toEqual([{ startS: 0, durationS: 0.05, fromHz: 1000, toHz: 2000 }]);
     expect(chirpSweeps({ ...cfg, count: 0 })).toEqual([]);
+  });
+});
+
+describe('stampPartials', () => {
+  it('lists thump, rattle, then click in that order', () => {
+    expect(stampPartials().map((p) => p.kind)).toEqual(['thump', 'rattle', 'click']);
+  });
+
+  it('thump and rattle start at the cue; the click starts after clickDelayMs', () => {
+    const [thump, rattle, click] = stampPartials();
+    expect(thump?.startS).toBe(0);
+    expect(rattle?.startS).toBe(0);
+    expect(click?.startS).toBeCloseTo(AUDIO.stamp.clickDelayMs / 1000, 9);
+  });
+
+  it('every part has finite positive timing and pitch, a gain in (0, 1], and non-negative start', () => {
+    for (const p of stampPartials()) {
+      expect(Number.isFinite(p.startS) && p.startS >= 0, p.kind).toBe(true);
+      expect(Number.isFinite(p.durationS) && p.durationS > 0, p.kind).toBe(true);
+      expect(Number.isFinite(p.hz) && p.hz > 0, p.kind).toBe(true);
+      expect(Number.isFinite(p.gain) && p.gain > 0 && p.gain <= 1, p.kind).toBe(true);
+    }
+  });
+
+  it('the whole cue ends within 300 ms', () => {
+    const end = Math.max(...stampPartials().map((p) => p.startS + p.durationS));
+    expect(end).toBeLessThanOrEqual(0.3);
+    expect(end).toBeGreaterThan(0);
+  });
+
+  it('follows the config it is given', () => {
+    const cfg = {
+      thumpHz: 50,
+      thumpMs: 100,
+      thumpGain: 0.4,
+      noiseMs: 40,
+      noiseLowpassHz: 300,
+      noiseGain: 0.1,
+      clickHz: 2000,
+      clickDelayMs: 20,
+      clickMs: 30,
+      clickGain: 0.2,
+    };
+    expect(stampPartials(cfg)).toEqual([
+      { kind: 'thump', startS: 0, durationS: 0.1, hz: 50, gain: 0.4 },
+      { kind: 'rattle', startS: 0, durationS: 0.04, hz: 300, gain: 0.1 },
+      { kind: 'click', startS: 0.02, durationS: 0.03, hz: 2000, gain: 0.2 },
+    ]);
   });
 });
 

@@ -135,6 +135,41 @@ export function chirpSweeps(cfg: ChirpConfig = AUDIO.chirp): ChirpSweep[] {
   return sweeps;
 }
 
+/** The stamp fields the envelope list reads (widened to numbers so tests can pass other configs). */
+export interface StampConfig {
+  readonly thumpHz: number;
+  readonly thumpMs: number;
+  readonly thumpGain: number;
+  readonly noiseMs: number;
+  readonly noiseLowpassHz: number;
+  readonly noiseGain: number;
+  readonly clickHz: number;
+  readonly clickDelayMs: number;
+  readonly clickMs: number;
+  readonly clickGain: number;
+}
+
+/**
+ * One stamp part. `hz` is the thump's settled pitch, the rattle's lowpass cutoff, or the click's fundamental;
+ * synth.ts reads the remaining shape (thump drop, click partial ratio, click attack) from AUDIO.stamp.
+ */
+export interface StampPartial {
+  readonly kind: 'thump' | 'rattle' | 'click';
+  readonly startS: number;
+  readonly durationS: number;
+  readonly hz: number;
+  readonly gain: number;
+}
+
+/** Stamp envelope list (WP14 cycle start): thump and rattle start together at the cue, the metallic click follows after clickDelayMs. */
+export function stampPartials(cfg: StampConfig = AUDIO.stamp): StampPartial[] {
+  return [
+    { kind: 'thump', startS: 0, durationS: cfg.thumpMs / 1000, hz: cfg.thumpHz, gain: cfg.thumpGain },
+    { kind: 'rattle', startS: 0, durationS: cfg.noiseMs / 1000, hz: cfg.noiseLowpassHz, gain: cfg.noiseGain },
+    { kind: 'click', startS: cfg.clickDelayMs / 1000, durationS: cfg.clickMs / 1000, hz: cfg.clickHz, gain: cfg.clickGain },
+  ];
+}
+
 /**
  * Wind bed allowed by the ending phase: on in 'none' and 'sequence' (the sequence is cut by the windStop beat
  * through a local flag in gameAudio); off in 'choice' and 'postgame'.
