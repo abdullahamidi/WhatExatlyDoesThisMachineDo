@@ -1,8 +1,8 @@
 import { formatNumber, formatRate } from '../utils/format';
-import { RESOURCES } from '../data/resources';
 import { PLAQUE_LINES } from '../data/story';
 import { RESOURCE_IDS } from '../data/types';
 import type { GameState, ProductionRates, ResourceId, ResourceMap, TechId } from '../data/types';
+import { resourceShort } from './revealRules';
 
 // Pure HUD view model. No DOM, no Phaser.
 
@@ -37,7 +37,7 @@ export function buildHudView(
     perSecond: formatRate(rates.perSecond.me),
     rows: HUD_ROW_IDS.map((id): HudResourceRow => ({
       id,
-      label: RESOURCES[id].short,
+      label: resourceShort(id),
       value: formatNumber(state.res[id]),
       perSecond: formatRate(rates.perSecond[id]),
       visible: state.lifetime[id] > 0 || rates.perSecond[id] > 0,
@@ -57,5 +57,5 @@ export function clickGainText(gainedAll: Readonly<ResourceMap>): string {
   };
   const parts = RESOURCE_IDS.filter((id) => gained(id) > 0);
   if (parts.every((id) => id === 'me')) return '+' + formatNumber(gained('me'));
-  return parts.map((id) => `+${formatNumber(gained(id))} ${RESOURCES[id].short}`).join('  ');
+  return parts.map((id) => `+${formatNumber(gained(id))} ${resourceShort(id)}`).join('  ');
 }

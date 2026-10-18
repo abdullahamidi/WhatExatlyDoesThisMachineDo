@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { achievementMessage, messageFor, recoveredMessage, welcomeBackMessage } from './notificationRules';
+import { setRevealed } from './revealRules';
 import type { NotificationEvent } from './notificationRules';
 import { ACHIEVEMENTS } from '../data/achievements';
 import type { AchievementId } from '../data/achievements';
@@ -258,5 +259,22 @@ describe('achievementMessage (D5)', () => {
       firstTurn: { ...ACHIEVEMENTS.firstTurn, name: 'Custom' },
     };
     expect(achievementMessage(['firstTurn'], defs)?.body).toBe('Custom');
+  });
+});
+
+describe('welcomeBackMessage with the xf reveal (WP13 D4)', () => {
+  afterEach(() => {
+    setRevealed(false);
+  });
+
+  it('names Restoration Flux as RF once revealed', () => {
+    setRevealed(true);
+    const msg = welcomeBackMessage({
+      elapsedSeconds: 7200,
+      cappedSeconds: 28800,
+      gained: { me: 0, ee: 0, pr: 0, rs: 0, xf: 3 },
+    });
+    expect(msg?.body).toContain('+3 RF');
+    expect(msg?.body).not.toContain('???');
   });
 });

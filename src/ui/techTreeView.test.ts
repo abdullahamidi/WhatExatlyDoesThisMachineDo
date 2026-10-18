@@ -15,6 +15,7 @@ import { TECHNOLOGIES } from '../data/technologies';
 import type { GameState, ResourceMap, TechDefinition, TechId, TechView } from '../data/types';
 import { TECH_IDS } from '../data/types';
 import { setDefaultNotation } from '../utils/format';
+import { setRevealed } from './revealRules';
 
 function stateWith(overrides: Partial<GameState>): GameState {
   return { ...createInitialState(0), ...overrides };
@@ -422,5 +423,56 @@ describe('techTreeView', () => {
         expect(node.ariaLabel).toBe(nodeAriaLabel(view));
       }
     });
+  });
+});
+
+describe('xf label reveal (WP13 D4)', () => {
+  afterEach(() => {
+    setRevealed(false);
+  });
+
+  // wornMotor (baseCost 40) priced in xf, era 1 so the era-I tree shows it.
+  const techs: Record<TechId, TechDefinition> = {
+    ...TECHNOLOGIES,
+    wornMotor: { ...TECHNOLOGIES.wornMotor, costRes: 'xf' },
+  };
+  const viewsFor = (state: GameState): TechView[] =>
+    getAllTechViews(state, techs).filter((v) => v.def.era === 1);
+  const rich = stateWith({ res: { ...emptyResourceMap(), me: 1e9, xf: 0 } });
+
+  it('shows RF in cost, buy, shortfall and aria texts once revealed', () => {
+    setRevealed(true);
+    const view = buildTechTreeView(viewsFor(rich), rich.res, 'wornMotor', 1);
+    expect(view.detail?.costText).toBe('40 RF');
+    expect(view.detail?.buyLabel).toBe('INSUFFICIENT RF');
+    expect(view.detail?.shortfallText).toBe('NEED 40 MORE RF');
+    expect(view.nodes.find((n) => n.id === 'wornMotor')?.costText).toBe('40 RF');
+    expect(view.nodes.find((n) => n.id === 'wornMotor')?.ariaLabel).toContain('cost 40 RF');
+  });
+
+  it('keeps ??? in the same texts while unrevealed', () => {
+    const view = buildTechTreeView(viewsFor(rich), rich.res, 'wornMotor', 1);
+    expect(view.detail?.costText).toBe('40 ???');
+    expect(view.detail?.buyLabel).toBe('INSUFFICIENT ???');
+    expect(view.detail?.shortfallText).toBe('NEED 40 MORE ???');
+  });
+
+  it('shows RF in the era V header and tab once revealed', () => {
+    setRevealed(true);
+    const view = buildTechTreeView([], emptyResourceMap(), null, 5);
+    expect(view.headerText).toBe('0 RF');
+    const eraFive: Record<TechId, TechDefinition> = {
+      ...TECHNOLOGIES,
+      wornMotor: { ...TECHNOLOGIES.wornMotor, era: 5, costRes: 'xf' },
+    };
+    const tabs = buildEraTabs(getAllTechViews(createInitialState(0), eraFive), emptyResourceMap(), 1);
+    expect(tabs.find((tab) => tab.era === 5)?.label).toBe('ERA V · RF');
+  });
+
+  it('shows RF in the insufficient failure text once revealed', () => {
+    setRevealed(true);
+    expect(purchaseFailureText('insufficient', 5, 'xf')).toBe('NEED 5 MORE RF');
+    setRevealed(false);
+    expect(purchaseFailureText('insufficient', 5, 'xf')).toBe('NEED 5 MORE ???');
   });
 });

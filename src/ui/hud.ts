@@ -1,9 +1,9 @@
 import './hud.css';
-import { RESOURCES } from '../data/resources';
 import type { ResourceId } from '../data/types';
 import type { GameContext } from '../game/context';
 import { HUD_ROW_IDS } from './hudView';
 import type { HudView, HudResourceRow } from './hudView';
+import { resourceShort } from './revealRules';
 
 export interface Hud { render(view: HudView): void; destroy(): void }
 
@@ -12,8 +12,9 @@ interface Readout { me: string; perClick: string; perSecond: string; plaque: str
 /** DOM refs and last-written values of one non-ME resource row. */
 interface ResourceRowRefs {
   row: HTMLElement;
+  label: HTMLElement;
   value: HTMLElement;
-  written: { value: string; perSecond: string; visible: boolean };
+  written: { label: string; value: string; perSecond: string; visible: boolean };
 }
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
@@ -27,12 +28,13 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
-function createRow(label: string, valueId: string, initial: string): { row: HTMLElement; value: HTMLElement } {
+function createRow(label: string, valueId: string, initial: string): { row: HTMLElement; label: HTMLElement; value: HTMLElement } {
   const row = createElement('div', { className: 'hud-row' });
-  row.appendChild(createElement('span', { className: 'hud-label', text: label }));
+  const labelEl = createElement('span', { className: 'hud-label', text: label });
+  row.appendChild(labelEl);
   const value = createElement('span', { id: valueId, className: 'hud-value', text: initial });
   row.appendChild(value);
-  return { row, value };
+  return { row, label: labelEl, value };
 }
 
 export function createHud(root: HTMLElement, commands: GameContext['commands']): Hud {
@@ -50,13 +52,15 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
   // One row per non-ME resource, hidden until the resource is used (see HudView.rows).
   const resourceRows = new Map<ResourceId, ResourceRowRefs>();
   for (const id of HUD_ROW_IDS) {
-    const built = createRow(RESOURCES[id].short, `hud-res-${id}`, '0');
+    const label = resourceShort(id);
+    const built = createRow(label, `hud-res-${id}`, '0');
     built.row.style.display = 'none';
     panel.appendChild(built.row);
     resourceRows.set(id, {
       row: built.row,
+      label: built.label,
       value: built.value,
-      written: { value: '0', perSecond: '0/s', visible: false },
+      written: { label, value: '0', perSecond: '0/s', visible: false },
     });
   }
 
@@ -102,6 +106,10 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
     const refs = resourceRows.get(rowView.id);
     if (refs === undefined) return;
     const written = refs.written;
+    if (written.label !== rowView.label) {
+      written.label = rowView.label;
+      refs.label.textContent = rowView.label;
+    }
     if (written.value !== rowView.value) {
       written.value = rowView.value;
       refs.value.textContent = rowView.value;

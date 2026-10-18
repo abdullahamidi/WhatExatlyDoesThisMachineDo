@@ -79,7 +79,10 @@ function nodeClassOf(node: TechNodeView): string {
 /** Cheap change key: equal strings mean nothing the overlay shows has changed. */
 function stampOf(view: TechTreeView, tabs: readonly EraTabView[]): string {
   const eras = tabs.map((t) => `${t.era}:${t.label}:${t.reached ? 1 : 0}:${t.selected ? 1 : 0}`).join(';');
-  const nodes = view.nodes.map((n) => `${n.id}:${n.status}:${n.levelText}:${n.affordable}:${n.selected}`).join(';');
+  // costText / ariaLabel carry the resource short labels (WP13 D4 reveal): they must be in the key too.
+  const nodes = view.nodes
+    .map((n) => `${n.id}:${n.status}:${n.levelText}:${n.affordable}:${n.selected}:${n.costText ?? ''}:${n.ariaLabel}`)
+    .join(';');
   const edges = view.edges.map((e) => `${e.key}:${e.met}`).join(';');
   const d = view.detail;
   const detail = d === null
@@ -485,6 +488,8 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     session.on('unlock', () => { dirty = true; }),
     // Notation changes re-format costs and requirement labels: rebuild on the next update.
     session.on('settings', () => { dirty = true; }),
+    // The xf reveal flag flips on ending / reset: labels re-render on the next update.
+    session.on('ending', () => { dirty = true; }),
     session.on('reset', () => {
       selectedEra = 1;
       selected = isOpenFlag ? defaultSelection(viewsOfEra(1)) : null;

@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { buildHudView, clickGainText, plaqueText } from './hudView';
+import { setRevealed } from './revealRules';
 import { createInitialState, emptyResourceMap } from '../simulation';
 import type { ProductionRates, ResourceMap, TechId } from '../data/types';
 
@@ -163,3 +164,27 @@ describe('clickGainText', () => {
   });
 });
 
+
+describe('xf label reveal (WP13 D4)', () => {
+  afterEach(() => {
+    setRevealed(false);
+  });
+
+  it('shows RF on the xf HUD row and in the click gain text once revealed', () => {
+    setRevealed(true);
+    const state = {
+      ...createInitialState(0),
+      res: { ...emptyResourceMap(), xf: 2500 },
+      lifetime: { ...emptyResourceMap(), xf: 2500 },
+    };
+    const xf = buildHudView(state, ratesOf(1, { me: 0, xf: 1500 })).rows.find((r) => r.id === 'xf');
+    expect(xf?.label).toBe('RF');
+    expect(clickGainText({ ...emptyResourceMap(), me: 5, xf: 3 })).toBe('+5 ME  +3 RF');
+  });
+
+  it('keeps the other resource labels when revealed', () => {
+    setRevealed(true);
+    const view = buildHudView(stateWithMe(0), ratesOf(1, { me: 0 }));
+    expect(view.rows.map((r) => r.label)).toEqual(['EE', 'PR', 'RS', 'RF']);
+  });
+});

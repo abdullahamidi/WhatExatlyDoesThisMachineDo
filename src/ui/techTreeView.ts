@@ -2,6 +2,7 @@ import { formatCost, formatNumber } from '../utils/format';
 import { RESOURCES } from '../data/resources';
 import { RESOURCE_IDS } from '../data/types';
 import type { PurchaseFailure, ResourceId, ResourceMap, TechId, TechStatus, TechView } from '../data/types';
+import { resourceShort } from './revealRules';
 
 // Pure view model for the TECH INDEX overlay. No DOM, no Phaser.
 
@@ -86,7 +87,7 @@ export function buildEraTabs(
       return { era, label: 'SIGNAL ?', reached: false, selected: era === selectedEra, resourceText: '' };
     }
     const eraRes = eraResourceOf(era);
-    const short = RESOURCES[eraRes].short;
+    const short = resourceShort(eraRes);
     const roman = ROMAN_ERAS[era - 1] ?? String(era);
     return {
       era,
@@ -106,7 +107,7 @@ function formatShortfall(x: number): string {
 /** Label text for the purchase failure reason shown as feedback. */
 export function purchaseFailureText(reason: PurchaseFailure, shortfall: number, res: ResourceId = 'me'): string {
   switch (reason) {
-    case 'insufficient': return `NEED ${formatShortfall(shortfall)} MORE ${RESOURCES[res].short}`;
+    case 'insufficient': return `NEED ${formatShortfall(shortfall)} MORE ${resourceShort(res)}`;
     case 'locked': return 'REQUIREMENTS UNMET';
     case 'maxed': return 'MAXIMUM LEVEL';
     case 'owned': return 'ALREADY INSTALLED';
@@ -142,7 +143,7 @@ function levelTextOf(view: TechView): string {
 
 /** Next price with unit suffix, or null when nothing is left to buy. */
 function costTextOf(view: TechView): string | null {
-  return view.nextCost === null ? null : `${formatCost(view.nextCost)} ${RESOURCES[view.def.costRes].short}`;
+  return view.nextCost === null ? null : `${formatCost(view.nextCost)} ${resourceShort(view.def.costRes)}`;
 }
 
 /** Status word of a node for its accessible name (WP12 D8). */
@@ -163,7 +164,7 @@ export function nodeAriaLabel(view: TechView): string {
     && word !== 'maxed'
     && !(word === 'purchased' && view.def.kind !== 'repeatable');
   if (hasCost && view.nextCost !== null) {
-    parts.push(`cost ${formatCost(view.nextCost)} ${RESOURCES[view.def.costRes].short}`);
+    parts.push(`cost ${formatCost(view.nextCost)} ${resourceShort(view.def.costRes)}`);
   }
   return parts.join(', ');
 }
@@ -192,7 +193,7 @@ function buyStateOf(view: TechView): BuyState {
 function buyLabelOf(state: BuyState, view: TechView, costText: string | null): string {
   switch (state) {
     case 'buy': return `PURCHASE — ${costText ?? ''}`;
-    case 'insufficient': return `INSUFFICIENT ${RESOURCES[view.def.costRes].short}`;
+    case 'insufficient': return `INSUFFICIENT ${resourceShort(view.def.costRes)}`;
     case 'locked': return 'REQUIREMENTS UNMET';
     case 'maxed': return 'MAXIMUM LEVEL';
     case 'owned': return view.def.kind === 'milestone' ? 'ACHIEVED' : 'INSTALLED';
@@ -208,7 +209,7 @@ function detailOf(view: TechView, res: Readonly<ResourceMap>): TechDetailView {
   const costRes = view.def.costRes;
   // shortfall = max(0, nextCost - res[costRes]) when the buy is blocked by money
   const shortfallText = buyState === 'insufficient' && view.nextCost !== null
-    ? `NEED ${formatShortfall(view.nextCost - res[costRes])} MORE ${RESOURCES[costRes].short}`
+    ? `NEED ${formatShortfall(view.nextCost - res[costRes])} MORE ${resourceShort(costRes)}`
     : null;
   return {
     id: view.id,
@@ -304,7 +305,7 @@ export function buildTechTreeView(
   return {
     width,
     height,
-    headerText: `${formatNumber(res[eraRes])} ${RESOURCES[eraRes].short}`,
+    headerText: `${formatNumber(res[eraRes])} ${resourceShort(eraRes)}`,
     nodes,
     edges,
     detail: selectedView ? detailOf(selectedView, res) : null,

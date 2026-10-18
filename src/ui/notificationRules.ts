@@ -11,10 +11,10 @@ import {
   WELCOME_TEXT,
 } from '../data/notifications';
 import type { ToastMessage } from '../data/notifications';
-import { RESOURCES } from '../data/resources';
 import { RESOURCE_IDS } from '../data/types';
 import type { OfflineReport, TechId } from '../data/types';
 import { formatDuration, formatNumber } from '../utils/format';
+import { resourceShort } from './revealRules';
 
 // Pure mapping from session events to toast messages (WP3, WP4). No DOM, no Phaser.
 
@@ -77,7 +77,7 @@ export function welcomeBackMessage(r: OfflineReport): ToastMessage | null {
   for (const id of RESOURCE_IDS) {
     const gain = r.gained[id];
     if (!Number.isFinite(gain) || !(gain > 0)) continue;
-    parts.push(`+${formatNumber(gain)} ${RESOURCES[id].short}`);
+    parts.push(`+${formatNumber(gain)} ${resourceShort(id)}`);
   }
   if (parts.length === 0) return null;
   if (!(r.elapsedSeconds >= WELCOME_MIN_ELAPSED_SECONDS)) return null;
