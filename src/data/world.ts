@@ -28,5 +28,5 @@ export const DUST: { maxParticles: number; frequencyMs: number; lifespanMs: [num
     alpha: [0, 0.35] /* [end, start] fade */, scale: [1, 2.5], depth: DEPTH.dust,
     spawnTopY: GROUND_Y - 520, spawnBottomY: GROUND_Y - 20 };
 export const CRANK_FEEDBACK = { degreesPerClick: 90, tweenMs: 160, shakePx: 1 /* art px */, shakeMs: 60,
-  floatRisePx: 48, floatMs: 700, floatPoolSize: 24, hitRadius: 36 /* art px, crank click area */ } as const;
-export const FLOATING_TEXT = { fontSizePx: 20, strokePx: 3, jitterX: 14, spawnOffsetY: -40 } as const;   // world px
+  floatRisePx: 40, floatMs: 1100, floatPoolSize: 24, hitRadius: 36 /* art px, crank click area */ } as const;
+export const FLOATING_TEXT = { fontSizePx: 24, strokePx: 4, jitterX: 14, spawnOffsetY: -56 } as const;   // world px

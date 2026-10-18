@@ -159,8 +159,11 @@
   cursor: pointer;
 }
 
+/* .88em with no tracking fits the longest name (19 chars, "GENERATOR BLUEPRINT") in the 152 px inner width of a 176 px node. */
 .tech-node-name {
-  font-size: .95em;
+  font-size: .88em;
+  letter-spacing: 0;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

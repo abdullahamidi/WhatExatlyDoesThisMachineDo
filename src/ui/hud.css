@@ -46,10 +46,17 @@
   padding-bottom: 4px;
 }
 
+/* Baseline alignment keeps the small labels on the same line as the large ME value. */
 .hud-row {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: 16px;
+  line-height: 1.25;
+}
+
+.hud-row + .hud-row {
+  margin-top: 2px;
 }
 
 .hud-label {

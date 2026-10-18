@@ -1,0 +1,159 @@
+--- src/game/entities/MachineAnimator.ts	2026-10-18 12:04:36.309162860 +0000
++++ /tmp/claude-0/-home-user-WhatExatlyDoesThisMachineDo/0b9fa637-9555-52ff-9a39-17f862f1fdae/scratchpad/p4/proto/src/game/entities/MachineAnimator.ts	2026-10-18 12:18:36.425843555 +0000
+@@ -17,6 +17,19 @@
+ import { crankAngle, crankOffsetOnGearUp } from '../math/crankLink';
+ import { resolveAttachment } from '../math/machineLayout';
+ 
++
++/** Shows a driven part at `deg`: picks the nearest pre-rendered RotSprite frame when the sprite uses a rotation sheet, else rotates. */
++function applyAngle(sprite: Phaser.GameObjects.Sprite, deg: number): void {
++  const frames = sprite.texture.frameTotal - 1; // Phaser counts the __BASE frame
++  if (sprite.texture.key.endsWith('#rot') && frames > 1) {
++    const norm = ((deg % 360) + 360) % 360;
++    sprite.setFrame(Math.round((norm / 360) * frames) % frames);
++    sprite.setAngle(0);
++    return;
++  }
++  sprite.setAngle(deg);
++}
++
+ /** Parts that turn with the hand crank. They share one crank angle state and one driven ratio/phase. */
+ const CRANK_PARTS: readonly MachineComponentId[] = ['handCrank', 'crankBrace'];
+ 
+@@ -91,7 +104,7 @@
+       // Stale angles must not snap in later: every driven part goes back to angle 0.
+       for (const id of MACHINE_COMPONENT_IDS) {
+         if (MACHINE_COMPONENTS[id].animation.kind !== 'driven') continue;
+-        this.sprites.get(id)?.setAngle(0);
++        { const sp = this.sprites.get(id); if (sp) applyAngle(sp, 0); }
+       }
+     });
+   }
+@@ -114,13 +127,13 @@
+       if (sprite === undefined) continue;
+       if (!isActive(id)) {
+         // Assembling: the tween owns x/y/scale/alpha, but a visible driven part keeps turning so it does not snap on landing.
+-        if (anim.kind === 'driven' && sprite.visible) sprite.setAngle(this.drivenAngle(id, anim));
++        if (anim.kind === 'driven' && sprite.visible) applyAngle(sprite, this.drivenAngle(id, anim));
+         continue;
+       }
+ 
+       switch (anim.kind) {
+         case 'driven': {
+-          sprite.setAngle(this.drivenAngle(id, anim));
++          applyAngle(sprite, this.drivenAngle(id, anim));
+           break;
+         }
+         case 'slider': {
+--- src/game/scenes/BootScene.ts	2026-10-18 09:02:47.982505548 +0000
++++ /tmp/claude-0/-home-user-WhatExatlyDoesThisMachineDo/0b9fa637-9555-52ff-9a39-17f862f1fdae/scratchpad/p4/proto/src/game/scenes/BootScene.ts	2026-10-18 12:18:36.426344127 +0000
+@@ -23,6 +23,14 @@
+         this.load.image(load.key, load.url);
+       }
+     }
++    const ROT: Record<string, [string, number, number]> = {
++      'machine.flywheel': ['flywheel', 96, 180], 'machine.gearLarge': ['gear-large', 64, 140], 'machine.gearSmall': ['gear-small', 40, 80],
++      'machine.crank': ['hand-crank', 48, 80], 'machine.crankBrace': ['crank-brace', 48, 80], 'machine.pulleyMain': ['pulley-main', 24, 140],
++      'machine.pulleyCrank': ['pulley-crank', 32, 80], 'machine.pulleyFlywheel': ['pulley-flywheel', 28, 180], 'machine.pulleyMotor': ['pulley-motor', 12, 24],
++    };
++    for (const [id, [file, w, n]] of Object.entries(ROT)) {
++      this.load.spritesheet(id + '#rot', 'assets/machine/rot/' + file + '-rot.png', { frameWidth: w, frameHeight: w, endFrame: n - 1 });
++    }
+   }
+ 
+   create(): void {
+--- src/game/entities/MachineView.ts	2026-10-18 11:05:14.181740219 +0000
++++ /tmp/claude-0/-home-user-WhatExatlyDoesThisMachineDo/0b9fa637-9555-52ff-9a39-17f862f1fdae/scratchpad/p4/proto/src/game/entities/MachineView.ts	2026-10-18 12:18:36.426843789 +0000
+@@ -96,7 +96,7 @@
+       const def = MACHINE_COMPONENTS[id];
+       const att = resolveAttachment(def);
+       const sprite = scene.add
+-        .sprite(att.x, att.y, def.assetId)
++        .sprite(att.x, att.y, scene.textures.exists(def.assetId + '#rot') && def.animation.kind === 'driven' ? def.assetId + '#rot' : def.assetId, 0)
+         .setOrigin(def.origin.x, def.origin.y)
+         .setDepth(componentDepth(def))
+         .setFlipX(def.flipX === true);
+--- src/game/rendering/FloatingText.ts	2026-10-18 08:51:55.630466770 +0000
++++ /tmp/claude-0/-home-user-WhatExatlyDoesThisMachineDo/0b9fa637-9555-52ff-9a39-17f862f1fdae/scratchpad/p4/proto/src/game/rendering/FloatingText.ts	2026-10-18 12:21:17.357855046 +0000
+@@ -22,12 +22,18 @@
+       worldPos.y + FLOATING_TEXT.spawnOffsetY,
+     );
+     textObj.setAlpha(1).setVisible(true);
++    // Rise decelerates; alpha holds near 1 for the first half, then fades (Quad.easeIn), so the number stays readable.
+     this.scene.tweens.add({
+       targets: textObj,
+       y: textObj.y - CRANK_FEEDBACK.floatRisePx,
+-      alpha: 0,
+       duration: CRANK_FEEDBACK.floatMs,
+       ease: 'Cubic.easeOut',
++    });
++    this.scene.tweens.add({
++      targets: textObj,
++      alpha: 0,
++      duration: CRANK_FEEDBACK.floatMs,
++      ease: 'Quad.easeIn',
+       onComplete: () => textObj.setVisible(false),
+     });
+   }
+@@ -54,7 +60,7 @@
+       .text(0, 0, '', {
+         fontFamily: 'monospace',
+         fontSize: FLOATING_TEXT.fontSizePx + 'px',
+-        color: PALETTE_CSS.mutedOrange,
++        color: '#ffd27a', fontStyle: 'bold',
+         stroke: PALETTE_CSS.ink,
+         strokeThickness: FLOATING_TEXT.strokePx,
+       })
+--- src/game/rendering/Terrain.ts	2026-10-18 08:52:15.142467930 +0000
++++ /tmp/claude-0/-home-user-WhatExatlyDoesThisMachineDo/0b9fa637-9555-52ff-9a39-17f862f1fdae/scratchpad/p4/proto/src/game/rendering/Terrain.ts	2026-10-18 12:28:50.176331325 +0000
+@@ -1,5 +1,5 @@
+ import Phaser from 'phaser';
+-import { WORLD, GROUND_Y, PIXEL_SCALE, GROUND_LAYER, HORIZON_STRIP } from '../../data/world';
++import { WORLD, GROUND_Y, PIXEL_SCALE, GROUND_LAYER, HORIZON_STRIP, GROUND_SHADE } from '../../data/world';
+ 
+ // Tiled ground below the horizon line plus the thin darker horizon strip.
+ export class Terrain {
+@@ -19,6 +19,21 @@
+         .setOrigin(0, 0)
+         .setDepth(GROUND_LAYER.depth + 1),
+     );
++    // Far-ground haze just under the horizon, then stacked foreground shade bands (hard steps, no gradient).
++    this.objects.push(
++      scene.add
++        .rectangle(0, GROUND_Y + HORIZON_STRIP.height, WORLD.width, GROUND_SHADE.haze.height, GROUND_SHADE.haze.color, GROUND_SHADE.haze.alpha)
++        .setOrigin(0, 0)
++        .setDepth(GROUND_LAYER.depth + 1),
++    );
++    for (const start of GROUND_SHADE.bandStarts) {
++      this.objects.push(
++        scene.add
++          .rectangle(0, GROUND_Y + start, WORLD.width, WORLD.height - GROUND_Y - start, GROUND_SHADE.color, GROUND_SHADE.alpha)
++          .setOrigin(0, 0)
++          .setDepth(GROUND_LAYER.depth + 1),
++      );
++    }
+   }
+ 
+   destroy(): void {
+--- src/assets/manifest.ts	2026-10-18 11:51:18.937809791 +0000
++++ /tmp/claude-0/-home-user-WhatExatlyDoesThisMachineDo/0b9fa637-9555-52ff-9a39-17f862f1fdae/scratchpad/p4/proto/src/assets/manifest.ts	2026-10-18 12:10:57.745716736 +0000
+@@ -14,7 +14,7 @@
+ 
+ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
+   'bg.sky': {
+-    id: 'bg.sky', file: null, width: 1280, height: 720, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
++    id: 'bg.sky', file: 'bg/sky.png', width: 1280, height: 720, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+     description: 'Hazy, desaturated sky with a bright haze band near 65% of the height.',
+   },
+   'bg.mountains': {
+--- src/data/world.ts	2026-10-18 12:09:39.261837479 +0000
++++ /tmp/claude-0/-home-user-WhatExatlyDoesThisMachineDo/0b9fa637-9555-52ff-9a39-17f862f1fdae/scratchpad/p4/proto/src/data/world.ts	2026-10-18 12:28:50.176925321 +0000
+@@ -21,6 +21,8 @@
+   { id: 'pylons',    assetId: 'bg.pylons',    scrollFactor: 0.55, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 30, alpha: 0.45, underfill: null, tint: 0xb8a98f },
+ ];
+ export const GROUND_LAYER = { assetId: 'terrain.ground', depth: DEPTH.ground } as const;   // scrollFactor 1, spans GROUND_Y..WORLD.height
++export const GROUND_SHADE = { color: PALETTE.ink, alpha: 0.07, bandStarts: [64, 128, 192] as readonly number[],
++  haze: { color: PALETTE.skyHaze, alpha: 0.35, height: 18 } } as const;   // world px below GROUND_Y
+ export const HORIZON_STRIP = { height: 6, color: PALETTE.rustDark, alpha: 0.6 } as const;  // thin darker strip at GROUND_Y
+ export const DUST: { maxParticles: number; frequencyMs: number; lifespanMs: [number, number]; speedX: [number, number];
+   speedY: [number, number]; alpha: [number, number]; scale: [number, number]; depth: number; spawnTopY: number; spawnBottomY: number } =
