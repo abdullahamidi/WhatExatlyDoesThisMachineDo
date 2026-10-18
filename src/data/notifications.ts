@@ -1,0 +1,37 @@
+import type { TechId } from './types';
+
+// Toast texts and timings (WP3). Pure data: no logic lives in this file.
+
+export type ToastTone = 'info' | 'system' | 'milestone';
+
+export interface ToastMessage {
+  key: string;
+  title: string;
+  body: string | null;
+  tone: ToastTone;
+  durationMs: number;
+}
+
+// Toast stack limits and timings (ms). Milestones stay on screen longer.
+export const TOAST_CONFIG = {
+  maxVisible: 3,
+  durationMs: 3200,
+  milestoneDurationMs: 6500,
+  fadeMs: 250,
+} as const;
+
+export const FIRST_CLICK_MESSAGE = 'Manual operation detected.';
+
+// One install line per technology, shown as the toast body on unlock or milestone.
+// Lines matching a technology flavor text are identical to it.
+export const INSTALL_LINES: Record<TechId, string> = {
+  handCrank: 'Manual operation detected.',
+  gearRatio: 'Gear mesh recalibrated. Cause: unknown.',
+  reinforcedCrank: 'This component was not designed to be replaced.',
+  flywheel: 'Rotational mass acquired. Purpose: pending.',
+  wornMotor: 'Synchronization unsuccessful.',
+  motorTuning: 'Tolerance revised. Operator identity not found.',
+  pistonArray: 'Reciprocating assembly online. Observers: none.',
+  improvedPistons: 'Stroke length exceeds specification.',
+  generatorBlueprint: 'Primary function: UNKNOWN.',
+};
