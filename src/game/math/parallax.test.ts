@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { parallaxPosition, parallaxSpan } from './parallax';
+import { parallaxPosition, parallaxSpan, isLayerVisible, fadeStep } from './parallax';
 import { clampCenter } from './camera';
 import { VIEW, WORLD, CAMERA } from '../../data/world';
+import { TECH_IDS } from '../../data/types';
+import type { TechId } from '../../data/types';
 
 describe('parallaxPosition', () => {
   it('places a sf 0.15 layer at the expected position for a non-centre focus', () => {
@@ -87,5 +89,62 @@ describe('parallaxSpan', () => {
         }
       }
     }
+  });
+});
+
+function levelsWith(id: TechId, level: number): Record<TechId, number> {
+  const out = {} as Record<TechId, number>;
+  for (const t of TECH_IDS) out[t] = 0;
+  out[id] = level;
+  return out;
+}
+
+describe('isLayerVisible', () => {
+  const gated = { visibleWhen: { techId: 'powerLines' as TechId, minLevel: 1 } };
+
+  it('is true for a layer without visibleWhen', () => {
+    expect(isLayerVisible({}, levelsWith('powerLines', 0))).toBe(true);
+  });
+
+  it('is false below the minimum level and true at and above it', () => {
+    expect(isLayerVisible(gated, levelsWith('powerLines', 0))).toBe(false);
+    expect(isLayerVisible(gated, levelsWith('powerLines', 1))).toBe(true);
+    expect(isLayerVisible(gated, levelsWith('powerLines', 3))).toBe(true);
+  });
+
+  it('ignores levels of other techs', () => {
+    expect(isLayerVisible(gated, levelsWith('generator', 5))).toBe(false);
+  });
+});
+
+describe('fadeStep', () => {
+  it('moves linearly by deltaMs / fadeMs', () => {
+    expect(fadeStep(0, 1, 300, 1500)).toBeCloseTo(0.2, 9);
+    expect(fadeStep(0.5, 0, 150, 1500)).toBeCloseTo(0.4, 9);
+    expect(fadeStep(0.2, 1, 750, 1500)).toBeCloseTo(0.7, 9);
+  });
+
+  it('clamps at the target from below and from above', () => {
+    expect(fadeStep(0.9, 1, 10000, 1500)).toBe(1);
+    expect(fadeStep(0.1, 0, 10000, 1500)).toBe(0);
+    expect(fadeStep(1, 1, 16, 1500)).toBe(1);
+    expect(fadeStep(0, 0, 16, 1500)).toBe(0);
+  });
+
+  it('jumps to the target when fadeMs is 0', () => {
+    expect(fadeStep(0, 1, 16, 0)).toBe(1);
+    expect(fadeStep(1, 0, 16, 0)).toBe(0);
+  });
+
+  it('keeps the current value for a non-finite delta', () => {
+    expect(fadeStep(0.3, 1, Number.NaN, 1500)).toBe(0.3);
+    expect(fadeStep(0.3, 0, Number.POSITIVE_INFINITY, 1500)).toBe(0.3);
+  });
+
+  it('keeps the result in [0, 1] for out-of-range targets', () => {
+    const v = fadeStep(0.5, 3, 100, 1500);
+    expect(v).toBeGreaterThanOrEqual(0);
+    expect(v).toBeLessThanOrEqual(1);
+    expect(fadeStep(0.99, 2, 1e6, 1500)).toBe(1);
   });
 });

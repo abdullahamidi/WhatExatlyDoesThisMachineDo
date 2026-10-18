@@ -1,16 +1,19 @@
 import Phaser from 'phaser';
 import type { AssetId } from './assetIds';
-import { ASSET_MANIFEST, missingTextureIds } from './manifest';
+import { ASSET_MANIFEST, missingTextureIds, sheetFrameRects } from './manifest';
 import type { Painter } from './painters/painterTypes';
-import { paintSky, paintMountains, paintSkyline, paintPylons, paintGround, paintDust } from './painters/background';
+import { paintSky, paintMountains, paintSkyline, paintPylons, paintPylonsLit, paintGround, paintDust } from './painters/background';
+import { ERA2_PAINTERS } from './painters/era2';
 import { paintFrame, paintCrank, paintGear } from './painters/machine';
 import { paintGenericPlate } from './painters/generic';
 
 const PAINTERS: Partial<Record<AssetId, Painter>> = {
+  ...ERA2_PAINTERS,
   'bg.sky': paintSky,
   'bg.mountains': paintMountains,
   'bg.skyline': paintSkyline,
   'bg.pylons': paintPylons,
+  'bg.pylonsLit': paintPylonsLit,
   'terrain.ground': paintGround,
   'fx.dust': paintDust,
   'machine.frame': paintFrame,
@@ -35,7 +38,9 @@ export function ensureFallbackTextures(scene: Phaser.Scene): AssetId[] {
     (PAINTERS[id] ?? paintGenericPlate)(g, entry);
     g.generateTexture(id, entry.width, entry.height);
     g.destroy();
-    scene.textures.get(id).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    const texture = scene.textures.get(id);
+    texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    sheetFrameRects(entry).forEach((r, i) => texture.add(i, 0, r.x, r.y, r.width, r.height));
     generated.push(id);
   }
   if (generated.length > 0) {

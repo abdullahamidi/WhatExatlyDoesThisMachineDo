@@ -157,6 +157,23 @@ export const paintPylons: Painter = (g, entry) => {
   paintWire(g, entry.width, 208, 304, 8);
 };
 
+// Lit overlay for the pylons (fallback for bg.pylonsLit): cyan lamps at both ends of every crossbar, lit insulators
+// and a dark pixel under each lamp. Nothing else is drawn. Lamps sit on the crossbar ends (left column cx-hw,
+// right column cx+hw-2 so the 2-px lamp stays inside the bar), mirrored about cx.
+export const paintPylonsLit: Painter = (g) => {
+  for (const cx of [64, 192]) {
+    rect(g, PALETTE.cyanLight, cx - 17, 55, 2, 5);
+    rect(g, PALETTE.cyanLight, cx + 15, 55, 2, 5);
+    for (const y of PYLON_CROSSBAR_YS) {
+      const hw = pylonHalfWidth(y);
+      for (const x of [cx - hw, cx + hw - 2]) {
+        rect(g, PALETTE.cyan, x, y, 2, 2);
+        rect(g, PALETTE.cyanDark, x, y + 2, 1, 1);
+      }
+    }
+  }
+};
+
 function paintSpeckles(g: Gfx, rng: () => number): void {
   for (let i = 0; i < 220; i++) {
     const r = rng();
