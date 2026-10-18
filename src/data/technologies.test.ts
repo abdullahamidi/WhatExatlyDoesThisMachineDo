@@ -619,9 +619,9 @@ describe('era IV technology table', () => {
     expect(rsThresholds).toEqual([1000, 1000000, 20000000]);
   });
 
-  it('plaque line for the convergence milestone is the last line', () => {
+  it('plaque line for the convergence milestone is the last milestone line (the ending row follows)', () => {
     expect(PLAQUE_LINES.map((line) => line.milestone)).toEqual([
-      null, 'generatorBlueprint', 'substationBlueprint', 'pressureVesselBlueprint', 'harmonicConvergence',
+      null, 'generatorBlueprint', 'substationBlueprint', 'pressureVesselBlueprint', 'harmonicConvergence', 'primaryFunction',
     ]);
     expect(PLAQUE_LINES[4]?.text).toBe('PRIMARY FUNCTION: RESTORE (TARGET: ?)');
   });
@@ -775,8 +775,9 @@ describe('era V technology table', () => {
     }
   });
 
-  it('plaque lines are unchanged by era V (five entries)', () => {
-    expect(PLAQUE_LINES).toHaveLength(5);
+  it('era V adds only the ending plaque row (six entries, WP13)', () => {
+    expect(PLAQUE_LINES).toHaveLength(6);
+    expect(PLAQUE_LINES[5]?.milestone).toBe('primaryFunction');
   });
 
   it('ending effect appears exactly once in the table, on primaryFunction as its only effect', () => {
@@ -981,9 +982,10 @@ describe('era I rows are unchanged', () => {
 
 describe('plaque lines', () => {
   it('first line is always owned, then the milestones in order', () => {
-    expect(PLAQUE_LINES).toHaveLength(5);
+    expect(PLAQUE_LINES).toHaveLength(6);
     expect(PLAQUE_LINES[0]?.milestone).toBeNull();
-    for (const line of PLAQUE_LINES.slice(1)) {
+    expect(PLAQUE_LINES[5]?.milestone).toBe('primaryFunction'); // the ending tech (unlock), revealed text
+    for (const line of PLAQUE_LINES.slice(1, 5)) {
       expect(line.milestone).not.toBeNull();
       if (line.milestone !== null) {
         expect(TECHNOLOGIES[line.milestone].kind).toBe('milestone');
@@ -998,6 +1000,7 @@ describe('plaque lines', () => {
       { milestone: 'substationBlueprint', text: 'PRIMARY FUNCTION: RES?OR?' },
       { milestone: 'pressureVesselBlueprint', text: 'PRIMARY FUNCTION: REST?RE' },
       { milestone: 'harmonicConvergence', text: 'PRIMARY FUNCTION: RESTORE (TARGET: ?)' },
+      { milestone: 'primaryFunction', text: 'PRIMARY FUNCTION: RESTORE' },
     ]);
   });
 });

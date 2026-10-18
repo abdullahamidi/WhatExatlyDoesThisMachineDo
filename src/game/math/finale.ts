@@ -8,7 +8,7 @@ import { APERTURE_BEAM, MACHINE_ANCHOR, PIXEL_SCALE, VIEW, WORLD } from '../../d
 
 // WP13 finale maths: the storyboard (ART_ERA5 §7) as pure functions of the finale clock t (seconds since the
 // ending sequence started). Every number comes from src/data/finale.ts or src/data/world.ts. No Phaser, no DOM,
-// no Math.random: sub-random values come from a sine hash of their integer inputs.
+// no random source: sub-random values come from a sine hash of their integer inputs.
 
 export type FinaleShot = 'S0' | 'S1' | 'S2' | 'S3' | 'S4' | 'S5';
 
@@ -86,7 +86,7 @@ export function easeOutCubic(k: number): number {
   return 1 - Math.pow(1 - c, 3);
 }
 
-/** Sine hash of two integers in [0, 1): deterministic, no Math.random. */
+/** Sine hash of two integers in [0, 1): deterministic, no random source. */
 function hash01(a: number, b: number): number {
   const f = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
   return f - Math.floor(f);
