@@ -6,6 +6,7 @@ import { TECH_IDS } from '../../data/types';
 import { createInitialState } from '../../simulation';
 import { componentBounds } from './machineLayout';
 import { visibleMachineBounds, boundsToWorld } from './machineBounds';
+import { MACHINE_ANCHOR } from '../../data/world';
 
 describe('visibleMachineBounds', () => {
   const initial = createInitialState(0).techLevels;
@@ -64,6 +65,7 @@ describe('boundsToWorld', () => {
 
   it('defaults to the machine anchor and pixel scale', () => {
     const b = { left: 0, top: 0, right: 0, bottom: 0 };
-    expect(boundsToWorld(b)).toEqual({ left: 1280, top: 1120, right: 1280, bottom: 1120 });
+    const { x, y } = MACHINE_ANCHOR;
+    expect(boundsToWorld(b)).toEqual({ left: x, top: y, right: x, bottom: y });
   });
 });
