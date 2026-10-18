@@ -18,3 +18,5 @@ export { getTechStatus, getTechView, getAllTechViews } from './progression/statu
 export { purchase } from './progression/purchase';
 export { evaluateMilestones } from './progression/milestones';
 export { DEFAULT_ENDING, hasEndingEffect, startEnding, advanceEnding, normalizeEnding, isRevealed, isFinaleLocked, ENDING_PHASES } from './progression/ending';
+export { DEFAULT_PRESTIGE, echoesForCycle, spentEchoes, unspentEchoes, echoMultiplier, perkStatus, buyPerk, cycleTechs, applyStartLevels, newCycleState, cycleLabel, normalizePrestige, cyclePreview } from './prestige';
+export type { EchoRules, PerkStatus, BuyPerkResult, CyclePreview } from './prestige';
