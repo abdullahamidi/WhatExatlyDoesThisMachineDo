@@ -45,7 +45,14 @@ export class WorldScene extends Phaser.Scene {
       () => background.destroy(),
     );
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      for (const dispose of this.disposables) dispose();
+      // One failing disposable must not skip the rest (e.g. the session 'reset' unsubscribe).
+      for (const dispose of this.disposables) {
+        try {
+          dispose();
+        } catch (err) {
+          console.error('[world] disposable failed during shutdown', err);
+        }
+      }
       this.disposables.length = 0;
     });
 

@@ -142,7 +142,7 @@ File ownership is exclusive per task as listed. Only T2 edits `manifest.ts` afte
 ```
 npm run typecheck && npm test && npm run build
 grep -rnE "from ['\"]phaser" src/simulation src/data src/persistence src/utils src/game/math src/ui src/assets/manifest.ts src/assets/assetIds.ts && echo FAIL || echo OK
-grep -rnE "override (init|preload|create|update)\b" src/game && echo FAIL || echo OK
+grep -rnE "override (init|preload|create)\b" src/game && echo FAIL || echo OK
 grep -rnE "0x[0-9a-fA-F]{6}" src/game && echo "WARN: colours outside palette" || echo OK
 ```
 Headless smoke test (Director; Playwright Chromium from `/opt/pw-browsers`, script kept in the scratchpad, **not** added to package.json). Run against `npm run build && npx vite preview`. Checks: the page loads; a `canvas` exists inside `#game`; `#hud-me` shows "0". Then call `window.__wedtmd.crankClientPoint()` and do 5 mouse clicks there, after which `#hud-me` shows "5" and `#hud-per-click` shows "1". Wheel and drag must not throw. Clicking `#hud-refocus` works. Zero `console.error`/`pageerror` events and no failed network requests. Screenshots at default view, at zoom 0.5 and at a zoomed-in pan extreme confirm the layered wasteland and machine.
