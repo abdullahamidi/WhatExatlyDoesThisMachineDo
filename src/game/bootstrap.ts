@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { GameContext } from './context';
 import type { PurchaseFailure } from '../data/types';
 import type { MachineComponentId } from '../data/machineComponents';
+import { MENU_TABS } from '../data/systemMenu';
 import { createSignal } from '../utils/signal';
 import { SaveManager, browserStorage } from '../persistence/saveManager';
 import { startSession } from '../persistence/startup';
@@ -83,11 +84,10 @@ export function bootstrap(): Phaser.Game {
   session.on('settings', applySettings);
 
   // SYSTEM menu tabs after SYSTEM. Each panel reaches the game only through its narrow deps.
-  // Tab labels: UI text that belongs in src/data/systemMenu.ts (MENU_TABS); kept here until that file is open.
   const panels: readonly SystemMenuPanel[] = [
     {
-      id: 'settings',
-      label: 'SETTINGS',
+      id: MENU_TABS.settings.id,
+      label: MENU_TABS.settings.label,
       mount: (host) => createSettingsPanel(host, {
         get: () => session.settings,
         update: (patch) => session.updateSettings(patch),
@@ -95,8 +95,8 @@ export function bootstrap(): Phaser.Game {
       }),
     },
     {
-      id: 'stats',
-      label: 'STATS',
+      id: MENU_TABS.stats.id,
+      label: MENU_TABS.stats.label,
       mount: (host) => createStatsPanel(host, {
         getStats: () => session.stats,
         subscribe: (fn) => joinUnsubscribes(
@@ -108,16 +108,16 @@ export function bootstrap(): Phaser.Game {
       }),
     },
     {
-      id: 'records',
-      label: 'RECORDS',
+      id: MENU_TABS.records.id,
+      label: MENU_TABS.records.label,
       mount: (host) => createAchievementsPanel(host, {
         getUnlocked: () => session.achievements,
         subscribe: (fn) => joinUnsubscribes(session.on('achievement', fn), session.on('reset', fn)),
       }),
     },
     {
-      id: 'data',
-      label: 'DATA',
+      id: MENU_TABS.data.id,
+      label: MENU_TABS.data.label,
       mount: (host) => createDataPanel(host, {
         exportString: () => saveController.exportString(),
         importString: (text) => saveController.importString(text),

@@ -1185,12 +1185,13 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   // Name plate on the girder: visible from the start (handCrank 1); frame = number of stage gates met (generator, boiler, spire, chamber).
+  // Gates = HUD plaque milestones (PLAQUE_LINES), not the machine stages.
   namePlate: {
     id: 'namePlate', techId: 'handCrank', minLevel: 1,
     assetId: 'machine.namePlate', attach: { socket: 'plateSeat', offset: { x: 0, y: 0 } },
     size: { width: 40, height: 11 }, origin: { x: 0.5, y: 1 },
     layer: 'frame', depthBias: 2,
-    animation: { kind: 'stage', frames: 6, gates: [['generator', 1], ['boiler', 1], ['resonatorSpire', 1], ['nullChamber', 1]], endingFrame: 5 },
+    animation: { kind: 'stage', frames: 6, gates: [['generatorBlueprint', 1], ['substationBlueprint', 1], ['pressureVesselBlueprint', 1], ['harmonicConvergence', 1]], endingFrame: 5 },
     connections: [],
     effects: [],
   },

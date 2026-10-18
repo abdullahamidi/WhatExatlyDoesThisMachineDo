@@ -72,7 +72,8 @@ for (const name of only) {
     }, buys);
     console.log(name, JSON.stringify(res));
   }
-  await p.waitForTimeout(2500);
+  // settle wait: env WAIT_MS overrides; Era IV+ stages (s14 and later, numeric compare) get 12 s
+  await p.waitForTimeout(+(process.env.WAIT_MS ?? (+name.slice(1).split('_')[0] >= 14 ? 12000 : 2500)));
   // era V stages: click the crank 3x so the 3 s inversion ghost shows in the shot and the frames
   if (name === 's15_era5_full' || name === 's16_primary') {
     const cp = await p.evaluate(() => window.__wedtmd.crankClientPoint());

@@ -32,4 +32,8 @@ export const MENU_TEXT = {
 // Tab bar entries. The SYSTEM tab is always first; deps.panels add tabs after it.
 export const MENU_TABS = {
   system: { id: 'system', label: 'SYSTEM' },
+  settings: { id: 'settings', label: 'SETTINGS' },
+  stats: { id: 'stats', label: 'STATS' },
+  records: { id: 'records', label: 'RECORDS' },
+  data: { id: 'data', label: 'DATA' },
 } as const;
