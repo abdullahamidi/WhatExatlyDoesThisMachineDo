@@ -3,13 +3,15 @@ import type { TechId } from './types';
 import type { MachineComponentId, Vec2 } from './machineComponents';
 import { PALETTE } from './palette';
 export const VIEW = { width: 1280, height: 720 } as const;
-export const WORLD = { width: 2560, height: 1440 } as const;
-export const GROUND_Y = 1120;                                   // world y of the ground/horizon line
+export const WORLD = { width: 3840, height: 2160 } as const;
+export const GROUND_Y = 1680;                                   // world y of the ground/horizon line
 export const PIXEL_SCALE = 2;                                   // art px -> world px
-export const MACHINE_ANCHOR = { x: 1280, y: GROUND_Y } as const;
-export const CAMERA = { focus: { x: 1280, y: GROUND_Y - 160 }, defaultZoom: 1, maxZoom: 2,
+export const MACHINE_ANCHOR = { x: 1920, y: GROUND_Y } as const;
+export const CAMERA = { focus: { x: 1920, y: GROUND_Y - 160 }, defaultZoom: 1, maxZoom: 2, minZoom: 0.5,
   wheelZoomFactor: 1.1, wheelStepCooldownMs: 80, dragThresholdPx: 4, refocusMs: 450,
-  fitMarginPx: 72, autoFrame: true, hudTopInsetPx: 240 } as const;   // minZoom is derived: minZoomToFit(VIEW, WORLD) === 0.5; fitMarginPx: world px kept clear around the machine when auto-framing; hudTopInsetPx: screen px under the HUD panel, the machine top is kept below it when auto-framing
+  fitMarginPx: 72, autoFrame: true, hudTopInsetPx: 240 } as const;   // minZoom explicit (below 0.5 one art px is smaller than a screen px); fitMarginPx: world px kept clear around the machine when auto-framing; hudTopInsetPx: screen px under the HUD panel, the machine top is kept below it when auto-framing
+/** World x the tiled background patterns are phased to: the pre-WP11 machine anchor, so eras I-IV backgrounds stay pixel-identical. */
+export const PATTERN_ORIGIN_X = 1280;
 export const DEPTH = { background: -100, ground: 0, machine: 100, dust: 200, floatingText: 300 } as const;
 export const PARALLAX_BOTTOM_MARGIN = 200;                      // world px the non-sky layer textures extend below the ground line (hidden behind the ground)
 export const PARALLAX_FADE_MS = 1500;                           // ms for a parallax layer to fade in or out when its visibility changes
@@ -45,10 +47,12 @@ export const GROUND_SHADE: { color: number; alpha: number; bandStarts: readonly 
     haze: { color: PALETTE.skyHaze, alpha: 0.3, height: 18 } };   // world px below GROUND_Y; haze under the horizon strip, bands are hard steps
 export const HORIZON_STRIP = { height: 6, color: PALETTE.rustDark, alpha: 0.6 } as const;  // thin darker strip at GROUND_Y
 export const DUST: { maxParticles: number; frequencyMs: number; lifespanMs: [number, number]; speedX: [number, number];
-  speedY: [number, number]; alpha: [number, number]; scale: [number, number]; depth: number; spawnTopY: number; spawnBottomY: number } =
+  speedY: [number, number]; alpha: [number, number]; scale: [number, number]; depth: number; spawnTopY: number; spawnBottomY: number;
+  spawnHalfWidth: number } =
   { maxParticles: 60, frequencyMs: 250, lifespanMs: [6000, 11000], speedX: [10, 30], speedY: [-4, 4],
     alpha: [0, 0.35] /* [end, start] fade */, scale: [1, 2.5], depth: DEPTH.dust,
-    spawnTopY: GROUND_Y - 520, spawnBottomY: GROUND_Y - 20 };
+    spawnTopY: GROUND_Y - 520, spawnBottomY: GROUND_Y - 20,
+    spawnHalfWidth: 1280 /* dust spawns in MACHINE_ANCHOR.x +- spawnHalfWidth */ };
 /** Rising dust once the spire stands (Era IV): mote speedY [-18, -6] world px/s, spawn top GROUND_Y - 900. */
 export const DUST_RISING: { techId: TechId; minLevel: number; speedY: [number, number]; spawnTopY: number } =
   { techId: 'resonatorSpire', minLevel: 1, speedY: [-18, -6], spawnTopY: GROUND_Y - 900 };

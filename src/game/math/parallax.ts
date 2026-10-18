@@ -1,5 +1,6 @@
 import type { Vec2 } from '../../data/machineComponents';
 import type { TechId } from '../../data/types';
+import { CAMERA, PATTERN_ORIGIN_X } from '../../data/world';
 import type { Size } from './camera';
 
 /** Inputs of parallaxStrip: one tiled layer and the screen/world it is placed in. */
@@ -12,6 +13,8 @@ export interface ParallaxStripInput {
   view: Size;
   focus: Vec2;
   minZoom: number;
+  phaseShiftPx?: number; // tile pattern phase (layerPhase); geometry changes only when periodPx is given too
+  periodPx?: number;     // strip px one tile repeats over (layerPhase)
 }
 
 /** Strip geometry in parallax space, exactly as ParallaxBackground places the tiled sprite. */
@@ -66,14 +69,71 @@ export function parallaxSpan(worldLen: number, viewLen: number, minZoom: number,
 }
 
 // Tiled strip of a parallax layer: x from parallaxSpan, bottom from parallaxPosition, height from the art.
+// With both phaseShiftPx and periodPx the strip starts one period early and shifted by the phase, so its tile
+// boundaries sit where the pattern is phased to (see patternShift); without them the geometry is unchanged.
 export function parallaxStrip(input: ParallaxStripInput): ParallaxStrip {
   const sf = input.scrollFactor;
   const span = parallaxSpan(input.world.width, input.view.width, input.minZoom, sf);
   const pos = parallaxPosition({ x: 0, y: input.bottomY }, input.focus, input.view, sf);
+  const { phaseShiftPx, periodPx } = input;
+  if (phaseShiftPx === undefined || periodPx === undefined) {
+    return {
+      left: span.min,
+      bottom: pos.y,
+      width: span.max - span.min,
+      height: input.artHeight * input.scale,
+    };
+  }
   return {
-    left: span.min,
+    left: span.min - periodPx + phaseShiftPx,
     bottom: pos.y,
-    width: span.max - span.min,
+    width: span.max - span.min + periodPx,
     height: input.artHeight * input.scale,
   };
+}
+
+// Pattern phase of a tiled layer: where its tile boundaries sit (in [0, periodPx)) so that they stay put
+// when the camera focus moves from PATTERN_ORIGIN_X to CAMERA.focus.x. Exact multiples and bad input give 0.
+export function patternShift(scrollFactor: number, focusX: number, originX: number, periodPx: number): number {
+  const offset = scrollFactor * (focusX - originX);
+  if (!Number.isFinite(offset) || !Number.isFinite(periodPx) || !(periodPx > 0)) return 0;
+  const m = ((offset % periodPx) + periodPx) % periodPx;
+  return m === 0 ? 0 : m; // also turns -0 into 0
+}
+
+// Tile period (art width * scale) and pattern phase of a tiled layer, shared by every renderer so they agree.
+export function layerPhase(scrollFactor: number, artWidth: number, scale: number): { periodPx: number; phaseShiftPx: number } {
+  const periodPx = artWidth * scale;
+  return { periodPx, phaseShiftPx: patternShift(scrollFactor, CAMERA.focus.x, PATTERN_ORIGIN_X, periodPx) };
+}
+
+// Opacity of a layer from its stages: the max alpha over the stages whose tech level is met; 0 when none is.
+export function stageAlpha(
+  stages: readonly { techId: TechId; minLevel: number; alpha: number }[],
+  levels: Readonly<Record<TechId, number>>,
+): number {
+  let out = 0;
+  for (const s of stages) {
+    if ((levels[s.techId] ?? 0) >= s.minLevel) out = Math.max(out, s.alpha);
+  }
+  return out;
+}
+
+// Frame of a latch-like sprite from its stages: the frame of the LAST met stage in list order; 0 when none is.
+export function stageFrame(
+  stages: readonly { techId: TechId; minLevel: number; frame: number }[],
+  levels: Readonly<Record<TechId, number>>,
+): number {
+  let out = 0;
+  for (const s of stages) {
+    if ((levels[s.techId] ?? 0) >= s.minLevel) out = s.frame;
+  }
+  return out;
+}
+
+// Sky-art px -> the screen position it takes when the camera is at scroll factor 0: zoom about the view centre.
+export function skyPxToScrollZero(p: Vec2, view: Size, minZoom: number): Vec2 {
+  const cx = view.width / 2;
+  const cy = view.height / 2;
+  return { x: cx + (p.x - cx) / minZoom, y: cy + (p.y - cy) / minZoom };
 }

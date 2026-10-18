@@ -8,6 +8,11 @@ export function minZoomToFit(view: Size, world: Size): number {
   return Math.max(view.width / world.width, view.height / world.height);
 }
 
+// min zoom the camera may use: the fit-to-world minimum, never below the explicit floor (CAMERA.minZoom)
+export function effectiveMinZoom(view: Size, world: Size, floor: number): number {
+  return Math.max(floor, minZoomToFit(view, world));
+}
+
 // clamp zoom into [min, max]
 export function clampZoom(z: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, z));

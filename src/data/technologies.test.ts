@@ -11,6 +11,7 @@ const ERA_ONE_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 1);
 const ERA_TWO_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 2);
 const ERA_THREE_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 3);
 const ERA_FOUR_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 4);
+const ERA_FIVE_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 5);
 
 // Projection of a definition onto the C1 columns.
 const project = (def: TechDefinition): unknown => ({
@@ -34,7 +35,7 @@ describe('technology table', () => {
   });
 
   it('TECH_LIST follows TECH_IDS order', () => {
-    expect(TECH_LIST).toHaveLength(36);
+    expect(TECH_LIST).toHaveLength(46);
     expect(TECH_LIST.map((t) => t.id)).toEqual([...TECH_IDS]);
   });
 
@@ -164,6 +165,16 @@ describe('technology table', () => {
       standingWave: ['repeatable', 100000, 1.3, 20],
       crystalLattice: ['unlock', 1500000, null, null],
       harmonicConvergence: ['milestone', 0, null, null],
+      nullChamber: ['unlock', 8000000, null, null],
+      containmentRing: ['repeatable', 300, 1.25, 25],
+      resonantSiphon: ['repeatable', 10000000, 1.35, 20],
+      graviticAnchor: ['repeatable', 1500000, 1.5, 10],
+      inversionCrank: ['unlock', 4000, null, null],
+      lensArray: ['unlock', 12000, null, null],
+      horizonField: ['repeatable', 40000, 1.3, 20],
+      skyAperture: ['unlock', 10000000, null, null],
+      finalAlignment: ['milestone', 0, null, null],
+      primaryFunction: ['unlock', 500000000, null, null],
     };
     for (const id of TECH_IDS) {
       const [kind, baseCost, growth, maxLevel] = expected[id];
@@ -313,7 +324,7 @@ describe('era II technology table', () => {
   });
 
   it('era is 1 to 4 for every tech', () => {
-    for (const id of TECH_IDS) expect([1, 2, 3, 4]).toContain(TECHNOLOGIES[id].era);
+    for (const id of TECH_IDS) expect([1, 2, 3, 4, 5]).toContain(TECHNOLOGIES[id].era);
   });
 });
 
@@ -448,8 +459,8 @@ describe('era III technology table', () => {
     }
   });
 
-  it('appends the two pressure logs at the end of SYSTEM_LOGS (before the era IV logs)', () => {
-    expect(SYSTEM_LOGS.slice(-5, -3)).toEqual([
+  it('appends the two pressure logs before the era IV and era V logs', () => {
+    expect(SYSTEM_LOGS.slice(-8, -6)).toEqual([
       { id: 'pressure-rising', text: 'Pressure rising. Safe limit field left blank.', trigger: { kind: 'lifetime', res: 'pr', atLeast: 1000 } },
       { id: 'steam-rain', text: 'Steam tastes of rain. Logged as error.', trigger: { kind: 'lifetime', res: 'pr', atLeast: 1000000 } },
     ]);
@@ -598,8 +609,8 @@ describe('era IV technology table', () => {
     expect(INSTALL_LINES.harmonicConvergence).toBe(TECHNOLOGIES.harmonicConvergence.flavor);
   });
 
-  it('appends the three signal logs last, with increasing rs thresholds', () => {
-    expect(SYSTEM_LOGS.slice(-3)).toEqual([
+  it('appends the three signal logs before the era V logs, with increasing rs thresholds', () => {
+    expect(SYSTEM_LOGS.slice(-6, -3)).toEqual([
       { id: 'sync-success', text: 'Synchronization successful.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 1000 } },
       { id: 'signal-below', text: 'Frequency matches a signal from below the ground.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 1000000 } },
       { id: 'observer-one', text: 'Observer count: 1.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 20000000 } },
@@ -613,6 +624,199 @@ describe('era IV technology table', () => {
       null, 'generatorBlueprint', 'substationBlueprint', 'pressureVesselBlueprint', 'harmonicConvergence',
     ]);
     expect(PLAQUE_LINES[4]?.text).toBe('PRIMARY FUNCTION: RESTORE (TARGET: ?)');
+  });
+});
+
+describe('era V technology table', () => {
+  it('matches the C1 table exactly', () => {
+    const expected = {
+      nullChamber: {
+        id: 'nullChamber', kind: 'unlock', era: 5, costRes: 'rs', baseCost: 8000000, growth: null, maxLevel: null,
+        tree: { col: 0, row: 1 }, branch: 'convergence',
+        effects: [{ type: 'convert', amount: 0.1, res: 'xf' }],
+        requires: [{ type: 'tech', id: 'harmonicConvergence', minLevel: 1 }],
+      },
+      containmentRing: {
+        id: 'containmentRing', kind: 'repeatable', era: 5, costRes: 'xf', baseCost: 300, growth: 1.25, maxLevel: 25,
+        tree: { col: 1, row: 0 }, branch: 'mechanical',
+        effects: [{ type: 'convert', amount: 0.05, res: 'xf' }],
+        requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
+      },
+      resonantSiphon: {
+        id: 'resonantSiphon', kind: 'repeatable', era: 5, costRes: 'rs', baseCost: 10000000, growth: 1.35, maxLevel: 20,
+        tree: { col: 1, row: 2 }, branch: 'automation',
+        effects: [{ type: 'autoAdd', amount: 2, res: 'xf' }],
+        requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
+      },
+      graviticAnchor: {
+        id: 'graviticAnchor', kind: 'repeatable', era: 5, costRes: 'me', baseCost: 1500000, growth: 1.5, maxLevel: 10,
+        tree: { col: 2, row: 2 }, branch: 'origin',
+        effects: [{ type: 'rateMult', factor: 1.1, res: 'all' }],
+        requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
+      },
+      inversionCrank: {
+        id: 'inversionCrank', kind: 'unlock', era: 5, costRes: 'xf', baseCost: 4000, growth: null, maxLevel: null,
+        tree: { col: 2, row: 0 }, branch: 'origin',
+        effects: [{ type: 'clickEcho', seconds: 3, res: 'xf' }],
+        requires: [{ type: 'tech', id: 'containmentRing', minLevel: 3 }],
+      },
+      lensArray: {
+        id: 'lensArray', kind: 'unlock', era: 5, costRes: 'xf', baseCost: 12000, growth: null, maxLevel: null,
+        tree: { col: 2, row: 1 }, branch: 'mechanical',
+        effects: [{ type: 'rateMult', factor: 2, res: 'xf' }],
+        requires: [{ type: 'tech', id: 'containmentRing', minLevel: 5 }],
+      },
+      horizonField: {
+        id: 'horizonField', kind: 'repeatable', era: 5, costRes: 'xf', baseCost: 40000, growth: 1.3, maxLevel: 20,
+        tree: { col: 3, row: 1 }, branch: 'mechanical',
+        effects: [{ type: 'autoPct', percent: 15, res: 'xf' }],
+        requires: [{ type: 'tech', id: 'lensArray', minLevel: 1 }],
+      },
+      skyAperture: {
+        id: 'skyAperture', kind: 'unlock', era: 5, costRes: 'xf', baseCost: 10000000, growth: null, maxLevel: null,
+        tree: { col: 4, row: 1 }, branch: 'automation',
+        effects: [{ type: 'rateMult', factor: 3, res: 'all' }],
+        requires: [
+          { type: 'tech', id: 'horizonField', minLevel: 5 },
+          { type: 'tech', id: 'graviticAnchor', minLevel: 3 },
+        ],
+      },
+      finalAlignment: {
+        id: 'finalAlignment', kind: 'milestone', era: 5, costRes: 'xf', baseCost: 0, growth: null, maxLevel: null,
+        tree: { col: 5, row: 1 }, branch: 'convergence',
+        effects: [{ type: 'none' }],
+        requires: [
+          { type: 'tech', id: 'skyAperture', minLevel: 1 },
+          { type: 'tech', id: 'inversionCrank', minLevel: 1 },
+          { type: 'lifetime', res: 'xf', amount: 200000000 },
+        ],
+      },
+      primaryFunction: {
+        id: 'primaryFunction', kind: 'unlock', era: 5, costRes: 'xf', baseCost: 500000000, growth: null, maxLevel: null,
+        tree: { col: 6, row: 1 }, branch: 'convergence',
+        effects: [{ type: 'ending' }],
+        requires: [{ type: 'tech', id: 'finalAlignment', minLevel: 1 }],
+      },
+    };
+    expect(ERA_FIVE_IDS).toEqual([
+      'nullChamber', 'containmentRing', 'resonantSiphon', 'graviticAnchor', 'inversionCrank',
+      'lensArray', 'horizonField', 'skyAperture', 'finalAlignment', 'primaryFunction',
+    ]);
+    for (const id of ERA_FIVE_IDS) {
+      expect(project(TECHNOLOGIES[id])).toEqual(expected[id as keyof typeof expected]);
+    }
+  });
+
+  it('era-V descriptions and flavors match the C1 texts', () => {
+    expect(TECHNOLOGIES.nullChamber.description).toBe('A lantern on the spire holds a sphere of nothing. Converts RS into ???.');
+    expect(TECHNOLOGIES.nullChamber.flavor).toBe('Chamber sealed around nothing. Nothing is rising.');
+    expect(TECHNOLOGIES.containmentRing.description).toBe('Another ring around the core. More ??? from the same resonance.');
+    expect(TECHNOLOGIES.resonantSiphon.description).toBe('Glass siphons arc resonance into the core. +2 ???/s per level.');
+    expect(TECHNOLOGIES.graviticAnchor.description).toBe('Piles at both ends guy the crown to the ground. x1.1 all production per level.');
+    expect(TECHNOLOGIES.inversionCrank.description).toBe('Every turn leaves a turn going the other way. Clicks echo 3s of ???.');
+    expect(TECHNOLOGIES.lensArray.description).toBe('Three lenses gather the core into one line. Doubles ??? production.');
+    expect(TECHNOLOGIES.horizonField.description).toBe('The horizon glows on every side. +15% ??? production per level.');
+    expect(TECHNOLOGIES.skyAperture.description).toBe('The crown opens to the sky. x3 all production.');
+    expect(TECHNOLOGIES.finalAlignment.description).toBe('Every ring, lens and anchor now points the same way.');
+    expect(TECHNOLOGIES.finalAlignment.flavor).toBe('Alignment complete. Awaiting operator.');
+    expect(TECHNOLOGIES.primaryFunction.description).toBe('Engage the primary function.');
+  });
+
+  it('every era-V tech is reachable from handCrank', () => {
+    const reachable = new Set<TechId>(['handCrank']);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const id of TECH_IDS) {
+        if (reachable.has(id)) continue;
+        const techReqs = TECHNOLOGIES[id].requires.filter((r) => r.type === 'tech');
+        if (techReqs.every((r) => r.type === 'tech' && reachable.has(r.id))) {
+          reachable.add(id);
+          changed = true;
+        }
+      }
+    }
+    for (const id of ERA_FIVE_IDS) expect(reachable.has(id)).toBe(true);
+  });
+
+  it('every era-V prerequisite chain contains harmonicConvergence', () => {
+    const deps = (id: TechId): TechId[] =>
+      TECHNOLOGIES[id].requires.flatMap((r) => (r.type === 'tech' ? [r.id] : []));
+    for (const id of ERA_FIVE_IDS) {
+      const seen = new Set<TechId>();
+      const stack: TechId[] = [...deps(id)];
+      while (stack.length > 0) {
+        const next = stack.pop();
+        if (next === undefined || seen.has(next)) continue;
+        seen.add(next);
+        stack.push(...deps(next));
+      }
+      expect(seen.has('harmonicConvergence')).toBe(true);
+    }
+  });
+
+  it('tree positions are unique within era 5', () => {
+    const keys = ERA_FIVE_IDS.map((id) => `${TECHNOLOGIES[id].tree.col},${TECHNOLOGIES[id].tree.row}`);
+    expect(new Set(keys).size).toBe(ERA_FIVE_IDS.length);
+  });
+
+  it('costRes: me only on graviticAnchor, rs on nullChamber and resonantSiphon, xf on the other seven', () => {
+    const rsCost: readonly TechId[] = ['nullChamber', 'resonantSiphon'];
+    for (const id of ERA_FIVE_IDS) {
+      const expectedRes = id === 'graviticAnchor' ? 'me' : rsCost.includes(id) ? 'rs' : 'xf';
+      expect(TECHNOLOGIES[id].costRes).toBe(expectedRes);
+    }
+    expect(ERA_FIVE_IDS.filter((id) => TECHNOLOGIES[id].costRes === 'me')).toEqual(['graviticAnchor']);
+  });
+
+  it('era-V names fit the tree node (19 characters or fewer)', () => {
+    for (const id of ERA_FIVE_IDS) {
+      expect(TECHNOLOGIES[id].name.length).toBeLessThanOrEqual(19);
+    }
+  });
+
+  it('plaque lines are unchanged by era V (five entries)', () => {
+    expect(PLAQUE_LINES).toHaveLength(5);
+  });
+
+  it('ending effect appears exactly once in the table, on primaryFunction as its only effect', () => {
+    const ending = TECH_IDS.flatMap((id) =>
+      TECHNOLOGIES[id].effects.filter((e) => e.type === 'ending').map(() => id),
+    );
+    expect(ending).toEqual(['primaryFunction']);
+    expect(TECHNOLOGIES.primaryFunction.effects).toEqual([{ type: 'ending' }]);
+  });
+
+  it('install lines: exact era-V texts, every tech has one, all unique, at most 60 characters', () => {
+    expect(INSTALL_LINES.nullChamber).toBe('Chamber sealed around nothing. Nothing is rising.');
+    expect(INSTALL_LINES.containmentRing).toBe('Ring aligned. The core did not touch it.');
+    expect(INSTALL_LINES.resonantSiphon).toBe('Siphon primed. It drinks the hum.');
+    expect(INSTALL_LINES.graviticAnchor).toBe('Anchor driven. The ground pulled back.');
+    expect(INSTALL_LINES.inversionCrank).toBe('The crank turned twice. Once backwards.');
+    expect(INSTALL_LINES.lensArray).toBe('Lenses focused. Target: upward.');
+    expect(INSTALL_LINES.horizonField).toBe('Horizon brightened. Sun not consulted.');
+    expect(INSTALL_LINES.skyAperture).toBe('Aperture open. The sky looked back.');
+    expect(INSTALL_LINES.finalAlignment).toBe('Alignment complete. Awaiting operator.');
+    expect(INSTALL_LINES.primaryFunction).toBe('Primary function engaged.');
+    for (const id of TECH_IDS) {
+      expect(INSTALL_LINES[id].length).toBeGreaterThan(0);
+      expect(INSTALL_LINES[id].length).toBeLessThanOrEqual(60);
+    }
+    expect(new Set(TECH_IDS.map((id) => INSTALL_LINES[id])).size).toBe(TECH_IDS.length);
+    expect(INSTALL_LINES.nullChamber).toBe(TECHNOLOGIES.nullChamber.flavor);
+    expect(INSTALL_LINES.finalAlignment).toBe(TECHNOLOGIES.finalAlignment.flavor);
+  });
+
+  it('appends the three xf logs last, with increasing xf thresholds', () => {
+    expect(SYSTEM_LOGS.slice(-3)).toEqual([
+      { id: 'units-unknown', text: 'Units not recognised. Continuing.', trigger: { kind: 'lifetime', res: 'xf', atLeast: 1000 } },
+      { id: 'cycle-0041', text: 'Cycle 0041 nearly complete.', trigger: { kind: 'lifetime', res: 'xf', atLeast: 1000000 } },
+      { id: 'operator-located', text: 'Operator identity: located.', trigger: { kind: 'lifetime', res: 'xf', atLeast: 100000000 } },
+    ]);
+    const xfThresholds = SYSTEM_LOGS.flatMap((e) =>
+      e.trigger.kind === 'lifetime' && e.trigger.res === 'xf' ? [e.trigger.atLeast] : [],
+    );
+    expect(xfThresholds).toEqual([1000, 1000000, 100000000]);
   });
 });
 
