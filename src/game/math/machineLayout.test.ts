@@ -39,11 +39,14 @@ describe('resolveAttachment', () => {
 
 describe('machineLocalToWorld', () => {
   it('maps the machine origin onto the ground anchor', () => {
-    expect(machineLocalToWorld({ x: 0, y: 0 })).toEqual({ x: 1280, y: 1120 });
+    expect(machineLocalToWorld({ x: 0, y: 0 })).toEqual({ x: MACHINE_ANCHOR.x, y: MACHINE_ANCHOR.y });
   });
 
   it('maps the crank hub local point to world px', () => {
-    expect(machineLocalToWorld({ x: -70, y: -62 })).toEqual({ x: 1140, y: 996 });
+    expect(machineLocalToWorld({ x: -70, y: -62 })).toEqual({
+      x: MACHINE_ANCHOR.x - 70 * PIXEL_SCALE,
+      y: MACHINE_ANCHOR.y - 62 * PIXEL_SCALE,
+    });
   });
 
   it('honours a custom anchor and scale', () => {

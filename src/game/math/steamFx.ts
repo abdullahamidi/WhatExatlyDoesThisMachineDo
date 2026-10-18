@@ -1,5 +1,6 @@
-import type { EmitterMode } from '../../data/steamFx';
+import type { EmitterMode, SteamEmitter } from '../../data/steamFx';
 import type { Vec2 } from '../../data/machineComponents';
+import type { TechId } from '../../data/types';
 
 /** Puff timing as the renderer reads it; STEAM_FX satisfies this structurally. */
 export interface PuffFx {
@@ -29,6 +30,19 @@ function clamp01(x: number): number {
 /** Maps -0 to 0 so expectations and draw offsets never carry a negative zero. */
 function noNegZero(x: number): number {
   return x === 0 ? 0 : x;
+}
+
+/**
+ * Whether an emitter runs at these tech levels: its gate is met and its optional `until` is not yet met
+ * (an emitter with `until` goes quiet once that tech reaches its minLevel).
+ */
+export function emitterActive(
+  emitter: Pick<SteamEmitter, 'gate' | 'until'>,
+  techLevels: Readonly<Record<TechId, number>>,
+): boolean {
+  if (techLevels[emitter.gate.techId] < emitter.gate.minLevel) return false;
+  const until = emitter.until;
+  return until === undefined || techLevels[until.techId] < until.minLevel;
 }
 
 /**

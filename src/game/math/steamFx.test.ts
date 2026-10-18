@@ -1,12 +1,29 @@
 import { describe, it, expect } from 'vitest';
-import { emitterRate, stepEmitter, burstDelaySeconds, puffState, burstPoints } from './steamFx';
+import { emitterActive, emitterRate, stepEmitter, burstDelaySeconds, puffState, burstPoints } from './steamFx';
 import type { PuffFx } from './steamFx';
 import type { Vec2 } from '../../data/machineComponents';
+import { STEAM_EMITTERS } from '../../data/steamFx';
+import type { SteamEmitter } from '../../data/steamFx';
+import { TECH_IDS } from '../../data/types';
+import type { TechId } from '../../data/types';
 
-// Local literals shaped like the data contract (no runtime import of src/data/steamFx).
+// Local literals shaped like the data contract (the pure-maths cases avoid the data; the emitterActive
+// acceptance cases at the end read the real STEAM_EMITTERS).
 const CHIMNEY_RATE = { kind: 'rate', base: 0.4, perLog: 0.3, min: 0.4, max: 2 } as const;
 const BURST = { kind: 'burst', count: 4, spacingMs: 120, everyMinS: 6, everyMaxS: 9, minDriver: 50 } as const;
 const STRIKE = { kind: 'strike' } as const;
+
+/** Every tech at level 0, with `over` applied. */
+function levels(over: Partial<Record<TechId, number>> = {}): Record<TechId, number> {
+  const base = Object.fromEntries(TECH_IDS.map((id) => [id, 0])) as Record<TechId, number>;
+  return { ...base, ...over };
+}
+
+function emitterNamed(id: string): SteamEmitter {
+  const found = STEAM_EMITTERS.find((e) => e.id === id);
+  if (!found) throw new Error(`missing emitter ${id}`);
+  return found;
+}
 
 const PUFF: PuffFx = {
   lifeMs: 1200,
@@ -17,6 +34,45 @@ const PUFF: PuffFx = {
   scaleTo: 1.5,
   fadeFrom: 0.75,
 };
+
+describe('emitterActive', () => {
+  const gated = { gate: { techId: 'boiler', minLevel: 1 } } as const;
+  const gatedUntil = { ...gated, until: { techId: 'pressureResonator', minLevel: 1 } } as const;
+
+  it('is active when the gate is met and there is no until', () => {
+    expect(emitterActive(gated, levels({ boiler: 1 }))).toBe(true);
+    expect(emitterActive(gated, levels({ boiler: 3 }))).toBe(true);
+  });
+
+  it('is inactive while the gate is unmet', () => {
+    expect(emitterActive(gated, levels())).toBe(false);
+    expect(emitterActive(gatedUntil, levels())).toBe(false);
+  });
+
+  it('stays active while the until tech is below its minLevel, and goes quiet once it reaches it', () => {
+    expect(emitterActive(gatedUntil, levels({ boiler: 1, pressureResonator: 0 }))).toBe(true);
+    expect(emitterActive(gatedUntil, levels({ boiler: 1, pressureResonator: 1 }))).toBe(false);
+    expect(emitterActive(gatedUntil, levels({ boiler: 1, pressureResonator: 2 }))).toBe(false);
+  });
+
+  it('manifold is active before pressureResonator 1 and inactive at pressureResonator 1', () => {
+    const manifold = emitterNamed('manifold');
+    expect(emitterActive(manifold, levels({ boiler: 1, pressureResonator: 0 }))).toBe(true);
+    expect(emitterActive(manifold, levels({ boiler: 1, pressureResonator: 1 }))).toBe(false);
+  });
+
+  it('manifold stays inactive without its boiler gate, whatever pressureResonator is', () => {
+    expect(emitterActive(emitterNamed('manifold'), levels({ pressureResonator: 0 }))).toBe(false);
+  });
+
+  it('calliope is active at pressureResonator 1 (its gate, no until)', () => {
+    expect(emitterActive(emitterNamed('calliope'), levels({ pressureResonator: 1 }))).toBe(true);
+  });
+
+  it('calliope is inactive at pressureResonator 0', () => {
+    expect(emitterActive(emitterNamed('calliope'), levels({ pressureResonator: 0 }))).toBe(false);
+  });
+});
 
 describe('emitterRate', () => {
   it('clamps the chimney curve at its minimum for an idle driver', () => {

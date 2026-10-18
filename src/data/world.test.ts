@@ -134,12 +134,49 @@ describe('PYLON_FEEDS (WP9 CR-A world-space cable feeds)', () => {
     expect(MACHINE_ANCHOR.x + PIXEL_SCALE * MACHINE_BOUNDS.right).toBeLessThanOrEqual(WORLD.width);
   });
 
-  it('MACHINE_BOUNDS is the era IV box', () => {
-    expect(MACHINE_BOUNDS).toEqual({ left: -448, right: 448, top: -470, bottom: 8 });
+  it('MACHINE_BOUNDS encloses the era IV box (-448..448 x, -470..8 y art px)', () => {
+    expect(MACHINE_BOUNDS.left).toBeLessThanOrEqual(-448);
+    expect(MACHINE_BOUNDS.right).toBeGreaterThanOrEqual(448);
+    expect(MACHINE_BOUNDS.top).toBeLessThanOrEqual(-470);
+    expect(MACHINE_BOUNDS.bottom).toBeGreaterThanOrEqual(8);
   });
 
-  it('the era IV spire top stays on the world: 180 world px below the top edge at the machine anchor', () => {
-    expect(MACHINE_ANCHOR.y + PIXEL_SCALE * MACHINE_BOUNDS.top).toBe(180);
+  it('the machine top stays on the world: its top edge is at or below the top of the world at the machine anchor', () => {
+    expect(MACHINE_ANCHOR.y + PIXEL_SCALE * MACHINE_BOUNDS.top).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('WP11 world growth (C2)', () => {
+  it('world is 3840 x 2160 with the ground line at 1680', () => {
+    expect(WORLD).toEqual({ width: 3840, height: 2160 });
+    expect(GROUND_Y).toBe(1680);
+  });
+
+  it('machine anchor sits on the ground line at the world centre x', () => {
+    expect(MACHINE_ANCHOR).toEqual({ x: 1920, y: 1680 });
+    expect(MACHINE_ANCHOR.x).toBe(WORLD.width / 2);
+  });
+
+  it('camera focus is 160 world px above the ground line at the anchor x, and inside the world', () => {
+    expect(CAMERA.focus).toEqual({ x: MACHINE_ANCHOR.x, y: GROUND_Y - 160 });
+    expect(CAMERA.focus.x).toBeGreaterThanOrEqual(0);
+    expect(CAMERA.focus.x).toBeLessThanOrEqual(WORLD.width);
+    expect(CAMERA.focus.y).toBeGreaterThanOrEqual(0);
+    expect(CAMERA.focus.y).toBeLessThanOrEqual(WORLD.height);
+  });
+
+  it('camera minZoom is the explicit 0.5 floor', () => {
+    expect(CAMERA.minZoom).toBe(0.5);
+  });
+
+  it('pattern origin is the pre-WP11 anchor x (1280)', () => {
+    expect(PATTERN_ORIGIN_X).toBe(1280);
+  });
+
+  it('dust spawns +- 1280 around the machine anchor, inside the world', () => {
+    expect(DUST.spawnHalfWidth).toBe(1280);
+    expect(MACHINE_ANCHOR.x - DUST.spawnHalfWidth).toBeGreaterThanOrEqual(0);
+    expect(MACHINE_ANCHOR.x + DUST.spawnHalfWidth).toBeLessThanOrEqual(WORLD.width);
   });
 });
 

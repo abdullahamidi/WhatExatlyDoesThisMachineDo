@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   minZoomToFit,
+  effectiveMinZoom,
   clampZoom,
   clampCenter,
   zoomAroundPoint,
@@ -22,10 +23,23 @@ import { TECHNOLOGIES } from '../../data/technologies';
 import { createInitialState } from '../../simulation';
 import { visibleMachineBounds, boundsToWorld } from './machineBounds';
 
-describe('minZoomToFit / clampZoom', () => {
-  it('derives the fit-to-world minimum zoom', () => {
-    expect(minZoomToFit(VIEW, WORLD)).toBe(0.5);
+// Pre-WP11 game world (2560 x 1440, anchor 1280 / 1120, focus 1280 / 960): the geometry tests below keep their literal numbers.
+const OLD_WORLD = { width: 2560, height: 1440 } as const;
+const OLD_ANCHOR = { x: 1280, y: 1120 } as const;
+const OLD_FOCUS = { x: 1280, y: 960 } as const;
+
+describe('minZoomToFit / effectiveMinZoom / clampZoom', () => {
+  it('derives the fit-to-world minimum zoom (one third for the 3840 x 2160 world)', () => {
+    expect(minZoomToFit(VIEW, WORLD)).toBeCloseTo(1 / 3, 9);
     expect(CAMERA.maxZoom).toBe(2);
+  });
+
+  it('effectiveMinZoom keeps the explicit floor for the game world', () => {
+    expect(effectiveMinZoom(VIEW, WORLD, CAMERA.minZoom)).toBe(0.5);
+  });
+
+  it('effectiveMinZoom is the fit minimum when it exceeds the floor', () => {
+    expect(effectiveMinZoom({ width: 1280, height: 720 }, { width: 1280, height: 720 }, 0.25)).toBe(1);
   });
 
   it('clamps zoom into [min, max]', () => {
@@ -38,17 +52,17 @@ describe('minZoomToFit / clampZoom', () => {
 describe('clampCenter', () => {
   it('clamps to the world edges at zoom 1', () => {
     expect(clampCenter({ x: -500, y: -500 }, 1, VIEW, WORLD)).toEqual({ x: 640, y: 360 });
-    expect(clampCenter({ x: 9999, y: 9999 }, 1, VIEW, WORLD)).toEqual({ x: 1920, y: 1080 });
+    expect(clampCenter({ x: 9999, y: 9999 }, 1, VIEW, WORLD)).toEqual({ x: 3200, y: 1800 });
   });
 
   it('clamps to the smaller visible rect at zoom 2', () => {
     expect(clampCenter({ x: -1, y: -1 }, 2, VIEW, WORLD)).toEqual({ x: 320, y: 180 });
-    expect(clampCenter({ x: 99999, y: 99999 }, 2, VIEW, WORLD)).toEqual({ x: 2240, y: 1260 });
+    expect(clampCenter({ x: 99999, y: 99999 }, 2, VIEW, WORLD)).toEqual({ x: 3520, y: 1980 });
   });
 
-  it('centres the world when the view covers it (zoom 0.5)', () => {
-    expect(clampCenter({ x: -300, y: 4000 }, 0.5, VIEW, WORLD)).toEqual({ x: 1280, y: 720 });
-    expect(clampCenter({ x: 1, y: 1 }, 0.5, VIEW, WORLD)).toEqual({ x: 1280, y: 720 });
+  it('centres the world when the view covers it (zoom 0.5, pre-WP11 world)', () => {
+    expect(clampCenter({ x: -300, y: 4000 }, 0.5, VIEW, OLD_WORLD)).toEqual({ x: 1280, y: 720 });
+    expect(clampCenter({ x: 1, y: 1 }, 0.5, VIEW, OLD_WORLD)).toEqual({ x: 1280, y: 720 });
   });
 
   it('keeps the visible rect inside the world for a grid of centres', () => {
@@ -272,8 +286,8 @@ describe('fitView', () => {
     minZoom: 0.5,
     maxZoom: 2,
     defaultZoom: 1,
-    defaultCenter: { x: 1280, y: 960 },
-    world: WORLD,
+    defaultCenter: { ...OLD_FOCUS },
+    world: OLD_WORLD,
   };
 
   /** Era-I levels: every era-I tech at its max (null max = 1), era-II techs at 0. */
@@ -294,8 +308,14 @@ describe('fitView', () => {
   });
 
   it('returns the default view for the full era-I machine bounds', () => {
-    const b = boundsToWorld(visibleMachineBounds(eraOneMaxed()));
+    const b = boundsToWorld(visibleMachineBounds(eraOneMaxed()), OLD_ANCHOR);
     expect(fitView(b, VIEW, FIT)).toEqual({ center: { x: 1280, y: 960 }, zoom: 1 });
+  });
+
+  it('returns the default view at the game focus for the full era-I machine bounds in the 3840 x 2160 world', () => {
+    const b = boundsToWorld(visibleMachineBounds(eraOneMaxed()));
+    const game = { ...FIT, defaultCenter: { x: CAMERA.focus.x, y: CAMERA.focus.y }, world: WORLD };
+    expect(fitView(b, VIEW, game)).toEqual({ center: { x: CAMERA.focus.x, y: CAMERA.focus.y }, zoom: 1 });
   });
 
   it('fits a 1232-wide bounds at zoom 0.75', () => {
@@ -342,8 +362,8 @@ describe('fitView HUD top inset', () => {
     minZoom: 0.5,
     maxZoom: 2,
     defaultZoom: 1,
-    defaultCenter: { x: CAMERA.focus.x, y: CAMERA.focus.y },
-    world: WORLD,
+    defaultCenter: { ...OLD_FOCUS },
+    world: OLD_WORLD,
   };
   // s10 boiler-only machine bounds in world px (x 662..2168 per WP9 s10; zoom 0.75, unshifted centre y 882)
   const S10: Bounds = { left: 662, top: 635, right: 2168, bottom: 1129 };

@@ -20,6 +20,7 @@ export interface SteamEmitter {
   assetId: 'fx.steamPuff' | 'fx.smoke';
   at: Vec2[];                                                    // machine-local art px spawn points
   gate: { techId: TechId; minLevel: number };
+  until?: { techId: TechId; minLevel: number };                  // optional: quiet once this tech reaches minLevel
   driver: AnimationDriver;
   threshold: number;                                             // driver value below which the emitter stays quiet
   mode: EmitterMode;
@@ -38,7 +39,7 @@ export const STEAM_EMITTERS: readonly SteamEmitter[] = [
     driver: 'thermal', threshold: 0, mode: { kind: 'strike' } },
   // Steam manifold: leaks from the three branch stubs while the automation driver runs.
   { id: 'manifold', assetId: 'fx.steamPuff', at: [{ x: -72, y: -182 }, { x: -44, y: -182 }, { x: -16, y: -182 }], gate: { techId: 'boiler', minLevel: 1 },
-    driver: 'automation', threshold: 5, mode: { kind: 'rate', base: 0.3, perLog: 0.2, min: 0.3, max: 1.5 } },
+    until: { techId: 'pressureResonator', minLevel: 1 }, driver: 'automation', threshold: 5, mode: { kind: 'rate', base: 0.3, perLog: 0.2, min: 0.3, max: 1.5 } },
   // Calliope: three whistles on the manifold; one whistle per burst, round robin, while RS/s > 1. Spawn 4 px above each bell cap (art review: puffs at the mouth slid up the bell face and merged with the manifold stud leaks).
   { id: 'calliope', assetId: 'fx.steamPuff', at: [{ x: -72, y: -211 }, { x: -44, y: -216 }, { x: -16, y: -221 }], gate: { techId: 'pressureResonator', minLevel: 1 },
     driver: 'resonance', threshold: 0, mode: { kind: 'burst', count: 2, spacingMs: 150, everyMinS: 5, everyMaxS: 8, minDriver: 1, roundRobin: true } },
