@@ -4,7 +4,7 @@ import {
   patternShift, layerPhase, stageAlpha, stageFrame, skyPxToScrollZero,
 } from './parallax';
 import { clampCenter, effectiveMinZoom } from './camera';
-import { VIEW, WORLD, CAMERA, PARALLAX_LAYERS, GROUND_LAYER, PIXEL_SCALE, PATTERN_ORIGIN_X } from '../../data/world';
+import { VIEW, WORLD, CAMERA, PARALLAX_LAYERS, PIXEL_SCALE, PATTERN_ORIGIN_X } from '../../data/world';
 import { TECH_IDS } from '../../data/types';
 import type { TechId } from '../../data/types';
 
