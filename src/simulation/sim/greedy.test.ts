@@ -148,6 +148,15 @@ describe('runGreedy', () => {
     expect(fast.maxValue).toEqual(reference.maxValue);
   });
 
+  it('stopAt ends the run on the step that first owns the tech, matching the full run up to there', () => {
+    const full = runGreedy(options(1500));
+    const stopped = runGreedy({ ...options(1500), stopAt: 'gearRatio' });
+    expect(stopped.firstAt.gearRatio).toBe(4);
+    expect(stopped.firstAt.wornMotor).toBe(Infinity);
+    expect(stopped.final.totalClicks).toBe(16);
+    expect(stopped.purchases).toEqual(full.purchases.filter((p) => p.t <= 4));
+  });
+
   it('era I exact first-purchase times hold on the optimised harness', () => {
     const run = runGreedy(options(1500));
     expect(run.firstAt.gearRatio).toBe(4);

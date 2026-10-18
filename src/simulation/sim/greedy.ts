@@ -19,6 +19,8 @@ export interface GreedyOptions {
   buyIntervalSeconds: number;
   initial?: GameState;
   techs?: Record<TechId, TechDefinition>;
+  /** Stop after the step that first owns this tech (default: run the full `seconds`). */
+  stopAt?: TechId;
 }
 
 export interface GreedyResult {
@@ -97,6 +99,7 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
       track(rates.perSecond[r]);
       track(rates.perClick[r]);
     }
+    if (o.stopAt !== undefined && state.techLevels[o.stopAt] >= 1) break;
   }
 
   return { firstAt, maxValue, final: state, purchases };

@@ -35,5 +35,6 @@ export const MENU_TABS = {
   settings: { id: 'settings', label: 'SETTINGS' },
   stats: { id: 'stats', label: 'STATS' },
   records: { id: 'records', label: 'RECORDS' },
+  memory: { id: 'memory', label: 'MEMORY' },
   data: { id: 'data', label: 'DATA' },
 } as const;
