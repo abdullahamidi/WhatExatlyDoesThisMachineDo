@@ -334,3 +334,64 @@ describe('fitView', () => {
     }
   });
 });
+
+describe('fitView HUD top inset', () => {
+  const FIT: FitViewOptions = {
+    margin: 72,
+    pixelScale: 2,
+    minZoom: 0.5,
+    maxZoom: 2,
+    defaultZoom: 1,
+    defaultCenter: { x: CAMERA.focus.x, y: CAMERA.focus.y },
+    world: WORLD,
+  };
+  // s10 boiler-only machine bounds in world px (x 662..2168 per WP9 s10; zoom 0.75, unshifted centre y 882)
+  const S10: Bounds = { left: 662, top: 635, right: 2168, bottom: 1129 };
+
+  /** Screen y of the bounds top for a fitted view. */
+  function topScreenY(b: Bounds, center: { x: number; y: number }, zoom: number): number {
+    return (b.top - center.y) * zoom + VIEW.height / 2;
+  }
+
+  it('keeps the s10 machine top at or below the HUD inset', () => {
+    const inset = CAMERA.hudTopInsetPx;
+    const out = fitView(S10, VIEW, { ...FIT, hudTopInsetPx: inset });
+    expect(out.zoom).toBe(0.75);
+    expect(topScreenY(S10, out.center, out.zoom)).toBeGreaterThanOrEqual(inset - 1e-9);
+    expect(topScreenY(S10, out.center, out.zoom)).toBeCloseTo(inset, 6);
+  });
+
+  it('leaves the s10 view unshifted without the inset (crown under the HUD, screen y 175)', () => {
+    const out = fitView(S10, VIEW, FIT);
+    expect(out.zoom).toBe(0.75);
+    expect(out.center.y).toBe(882);
+    expect(topScreenY(S10, out.center, out.zoom)).toBeCloseTo(174.75, 6);
+  });
+
+  it('keeps the zoom 0.5 case unchanged (world-sized bounds, centred)', () => {
+    const b: Bounds = { left: 0, top: 0, right: 2600, bottom: 100 };
+    expect(fitView(b, VIEW, { ...FIT, hudTopInsetPx: 240 })).toEqual({ center: { x: 1280, y: 720 }, zoom: 0.5 });
+    expect(fitView(b, VIEW, FIT)).toEqual({ center: { x: 1280, y: 720 }, zoom: 0.5 });
+  });
+
+  it('does not move a fitted view whose top already clears the inset', () => {
+    const b: Bounds = { left: 1000, top: 700, right: 2232, bottom: 900 }; // zoom 0.75, top screen y 285
+    expect(fitView(b, VIEW, { ...FIT, hudTopInsetPx: 240 })).toEqual(fitView(b, VIEW, FIT));
+    expect(fitView(b, VIEW, FIT).zoom).toBe(0.75);
+  });
+
+  it('never pushes the machine base (plus margin) below the screen to clear the HUD', () => {
+    // tall machine: top under the HUD and base already near the bottom edge
+    const b = { left: 900, right: 1660, top: 500, bottom: 1100 };
+    const out = fitView(b, VIEW, { ...FIT, hudTopInsetPx: 240 });
+    const plain = fitView(b, VIEW, FIT);
+    const bottom = (c: { center: { y: number }; zoom: number }): number => (b.bottom - c.center.y) * c.zoom + VIEW.height / 2;
+    expect(out.center.y).toBeLessThan(plain.center.y); // it does move up
+    expect(bottom(out)).toBeLessThanOrEqual(VIEW.height - FIT.margin + 1e-9);
+  });
+
+  it('does not move when the base has no room below', () => {
+    const b = { left: 900, right: 1660, top: 380, bottom: 1180 };
+    expect(fitView(b, VIEW, { ...FIT, hudTopInsetPx: 240 })).toEqual(fitView(b, VIEW, FIT));
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parallaxToWorld, nearestPylonAnchor, pylonAnchorPoint, cableParabola } from './pylonLine';
+import { parallaxToWorld, nearestPylonAnchor, pylonAnchorPoint, pylonCableStart, cableParabola } from './pylonLine';
 import type { PylonAnchorInput } from './pylonLine';
 
 /** Base input: one anchor at the tile's bottom-left-ish corner, square tile, sf 1, no scroll, strip at 0. */
@@ -200,5 +200,27 @@ describe('cableParabola', () => {
 
   it('uses at least one segment', () => {
     expect(cableParabola({ x: 0, y: 0 }, { x: 1, y: 1 }, 0, 0)).toHaveLength(2);
+  });
+});
+
+describe('pylonCableStart (leadTo)', () => {
+  it('is the feed point when no leadTo is set', () => {
+    expect(pylonCableStart({ x: 532, y: 980 }, null)).toEqual({ x: 532, y: 980 });
+  });
+
+  it('is the leadTo point when set', () => {
+    expect(pylonCableStart({ x: 532, y: 980 }, { x: 532, y: 932 })).toEqual({ x: 532, y: 932 });
+  });
+
+  it('makes the anchor choice start from leadTo, not the feed point', () => {
+    // anchor A (x 1024, y 1000) is nearest the feed point; anchor B (x 1024, y 488) is nearest the lead above it
+    const anchorsArt = [{ x: 0, y: 256 }, { x: 0, y: 0 }];
+    const feedPoint = { x: 1010, y: 1010 };
+    const lead = { x: 1010, y: 480 };
+    const fromFeed = nearestPylonAnchor(input({ from: pylonCableStart(feedPoint, null), anchorsArt }));
+    const fromLead = nearestPylonAnchor(input({ from: pylonCableStart(feedPoint, lead), anchorsArt }));
+    expect(fromFeed?.ref.index).toBe(0);
+    expect(fromLead?.ref.index).toBe(1);
+    expect(fromLead?.point.y).toBeCloseTo(488, 9);
   });
 });

@@ -115,10 +115,11 @@ export interface FitViewOptions {
   defaultZoom: number;
   defaultCenter: Vec2;
   world: Size;
+  hudTopInsetPx?: number; // screen px under the HUD panel (default 0); the fitted machine top is kept below it
 }
 
 // default view when b already fits it (with margin); otherwise the largest grid zoom that fits b, capped at
-// defaultZoom, centred on b and clamped inside the world
+// defaultZoom, centred on b, moved up when its top would sit under the HUD inset, and clamped inside the world
 export function fitView(b: Bounds, view: Size, o: FitViewOptions): { center: Vec2; zoom: number } {
   const defaultCenter = clampCenter(o.defaultCenter, o.defaultZoom, view, o.world);
   if (boundsInView(b, viewBounds(defaultCenter, o.defaultZoom, view), o.margin)) {
@@ -130,5 +131,13 @@ export function fitView(b: Bounds, view: Size, o: FitViewOptions): { center: Vec
   const step = zoomStep(o.pixelScale);
   const zoom = clampZoom(Math.floor(fit / step + 1e-9) * step, o.minZoom, Math.min(o.maxZoom, o.defaultZoom));
   const centre = { x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 };
+  const inset = o.hudTopInsetPx ?? 0;
+  const topScreenY = (b.top - centre.y) * zoom + view.height / 2; // screen y of the machine top before the HUD shift
+  if (topScreenY < inset) {
+    // move the view up so the top clears the HUD, but never push the machine base (plus margin) off the bottom
+    const bottomScreenY = (b.bottom - centre.y) * zoom + view.height / 2;
+    const room = Math.max(0, view.height - o.margin - bottomScreenY);
+    centre.y -= Math.min(inset - topScreenY, room) / zoom;
+  }
   return { center: clampCenter(centre, zoom, view, o.world), zoom };
 }

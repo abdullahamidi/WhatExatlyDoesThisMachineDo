@@ -1,6 +1,6 @@
 import type { AssetId } from '../assets/assetIds';
 import type { TechId } from './types';
-import type { MachineComponentId } from './machineComponents';
+import type { MachineComponentId, Vec2 } from './machineComponents';
 import { PALETTE } from './palette';
 export const VIEW = { width: 1280, height: 720 } as const;
 export const WORLD = { width: 2560, height: 1440 } as const;
@@ -9,7 +9,7 @@ export const PIXEL_SCALE = 2;                                   // art px -> wor
 export const MACHINE_ANCHOR = { x: 1280, y: GROUND_Y } as const;
 export const CAMERA = { focus: { x: 1280, y: GROUND_Y - 160 }, defaultZoom: 1, maxZoom: 2,
   wheelZoomFactor: 1.1, wheelStepCooldownMs: 80, dragThresholdPx: 4, refocusMs: 450,
-  fitMarginPx: 72, autoFrame: true } as const;   // minZoom is derived: minZoomToFit(VIEW, WORLD) === 0.5; fitMarginPx: world px kept clear around the machine when auto-framing
+  fitMarginPx: 72, autoFrame: true, hudTopInsetPx: 240 } as const;   // minZoom is derived: minZoomToFit(VIEW, WORLD) === 0.5; fitMarginPx: world px kept clear around the machine when auto-framing; hudTopInsetPx: screen px under the HUD panel, the machine top is kept below it when auto-framing
 export const DEPTH = { background: -100, ground: 0, machine: 100, dust: 200, floatingText: 300 } as const;
 export const PARALLAX_BOTTOM_MARGIN = 200;                      // world px the non-sky layer textures extend below the ground line (hidden behind the ground)
 export const PARALLAX_FADE_MS = 1500;                           // ms for a parallax layer to fade in or out when its visibility changes
@@ -32,10 +32,11 @@ export const PYLON_LINE = {
   sagFraction: 0.06, thicknessPx: 2, depthOffset: 1,
 } as const;
 /** A world-space cable feed from a machine part to the pylon line (CR-A). side 'left' = only anchors left of the part; 'any' = right of it (the mast). */
-export interface PylonFeed { id: string; component: MachineComponentId; point: string; side: 'any' | 'left'; gate?: { techId: TechId; minLevel: number } }
+export interface PylonFeed { id: string; component: MachineComponentId; point: string; side: 'any' | 'left'; gate?: { techId: TechId; minLevel: number };
+  leadTo?: Vec2 }   // leadTo: machine-local art px; a 1 px cable runs from point up to leadTo and the catenary starts there
 export const PYLON_FEEDS: readonly PylonFeed[] = [
   { id: 'mast', component: 'cableMast', point: 'top', side: 'any' },
-  { id: 'turbine', component: 'turbine', point: 'export', side: 'left', gate: { techId: 'turbine', minLevel: 1 } },
+  { id: 'turbine', component: 'turbine', point: 'export', side: 'left', gate: { techId: 'turbine', minLevel: 1 }, leadTo: { x: -374, y: -94 } },
 ];
 export const GROUND_LAYER = { assetId: 'terrain.ground', depth: DEPTH.ground } as const;   // scrollFactor 1, spans GROUND_Y..WORLD.height
 export const GROUND_SHADE: { color: number; alpha: number; bandStarts: readonly number[];

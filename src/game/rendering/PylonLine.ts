@@ -9,7 +9,7 @@ import { minZoomToFit } from '../math/camera';
 import { parallaxStrip, isLayerVisible, fadeStep } from '../math/parallax';
 import { machineLocalToWorld } from '../math/machineLayout';
 import { resolveConnectionPoint } from '../math/machineLinks';
-import { cableParabola, nearestPylonAnchor, pylonAnchorPoint } from '../math/pylonLine';
+import { cableParabola, nearestPylonAnchor, pylonAnchorPoint, pylonCableStart } from '../math/pylonLine';
 import type { PylonAnchorInput, PylonAnchorRef } from '../math/pylonLine';
 
 /** Polyline steps of the cable; a rendering resolution, not a balancing value. */
@@ -27,7 +27,9 @@ interface PylonStrip {
 /** Everything needed to draw the cable; null in the class when the layer or the feed point is missing. */
 interface ActivePylonLine {
   strip: PylonStrip;
-  start: Vec2;
+  feedPoint: Vec2;  // world point of the feed (the export)
+  lead: Vec2 | null; // world point of PylonFeed.leadTo, when set
+  start: Vec2;      // catenary start: lead when set, else feedPoint
 }
 
 function pylonStrip(def: ParallaxLayerDef): PylonStrip {
@@ -56,8 +58,11 @@ function pylonStrip(def: ParallaxLayerDef): PylonStrip {
 // moves with the pylons layer parallax, its near end moves with the machine. Visibility and fade follow the
 // pylonsLit layer and the feed's tech gate, and the fade-in waits until the feed's part has finished
 // assembling. The anchor is chosen once on first light and kept.
+// A feed with leadTo also gets a 1 px lead from the feed point up to leadTo, drawn at machine cable depth (over the
+// machine casing) on its own Graphics; the catenary then starts at leadTo.
 export class PylonLine {
   private readonly graphics: Phaser.GameObjects.Graphics;
+  private readonly leadGraphics: Phaser.GameObjects.Graphics;
   private readonly active: ActivePylonLine | null;
   private readonly feed: PylonFeed;
   private readonly componentAssembling: () => boolean;
@@ -77,7 +82,18 @@ export class PylonLine {
       .graphics()
       .setScrollFactor(1)
       .setDepth((def?.depth ?? DEPTH.background) + PYLON_LINE.depthOffset);
-    this.active = def !== undefined && point !== null ? { strip: pylonStrip(def), start: machineLocalToWorld(point) } : null;
+    // machine container depth + the cable depth MachineLinks uses inside the machine
+    this.leadGraphics = scene.add
+      .graphics()
+      .setScrollFactor(1)
+      .setDepth(DEPTH.machine + MACHINE_LINK_STYLE.cable.depth);
+    if (def !== undefined && point !== null) {
+      const feedPoint = machineLocalToWorld(point);
+      const lead = feed.leadTo === undefined ? null : machineLocalToWorld(feed.leadTo);
+      this.active = { strip: pylonStrip(def), feedPoint, lead, start: pylonCableStart(feedPoint, lead) };
+    } else {
+      this.active = null;
+    }
     this.feed = feed;
     this.componentAssembling = componentAssembling;
     // Already lit at load: no fade-in.
@@ -99,6 +115,7 @@ export class PylonLine {
     if (this.fade === 0) {
       if (this.lastKey !== null) {
         this.graphics.clear();
+        this.leadGraphics.clear();
         this.lastKey = null;
       }
       if (target === 0) this.pinned = null; // layer hidden again (session reset): the next light picks anew
@@ -110,13 +127,32 @@ export class PylonLine {
     this.draw(active, { x: camera.scrollX, y: camera.scrollY }, this.fade);
   }
 
-  /** Destroys the Graphics object; safe to call twice. */
+  /** Destroys the Graphics objects; safe to call twice. */
   destroy(): void {
     if (this.graphics.scene) this.graphics.destroy(); // Phaser clears scene on destroy
+    if (this.leadGraphics.scene) this.leadGraphics.destroy();
     this.lastKey = null;
   }
 
+  /** Lead from the feed point up to leadTo: 1 art px core with 2x2 highlight caps, like the machine cables. */
+  private drawLead(active: ActivePylonLine, fade: number): void {
+    const { feedPoint, lead } = active;
+    const g = this.leadGraphics;
+    g.clear();
+    if (lead === null) return;
+    const style = MACHINE_LINK_STYLE.cable;
+    g.setAlpha(fade);
+    g.lineStyle(PIXEL_SCALE, style.core, 1); // one art px wide
+    g.beginPath();
+    g.moveTo(feedPoint.x, feedPoint.y);
+    g.lineTo(lead.x, lead.y);
+    g.strokePath();
+    g.fillStyle(style.hi, 1);
+    for (const p of [feedPoint, lead]) g.fillRect(p.x - 1, p.y - 1, 2, 2); // 2x2 end caps
+  }
+
   private draw(active: ActivePylonLine, scroll: Vec2, fade: number): void {
+    this.drawLead(active, fade);
     const { strip, start } = active;
     const style = MACHINE_LINK_STYLE.cable;
     const input: PylonAnchorInput = {

@@ -156,6 +156,7 @@ export class CameraController {
       defaultZoom: CAMERA.defaultZoom,
       defaultCenter: { x: CAMERA.focus.x, y: CAMERA.focus.y },
       world: WORLD,
+      hudTopInsetPx: CAMERA.hudTopInsetPx,
     });
   }
 

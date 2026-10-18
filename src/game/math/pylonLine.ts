@@ -92,6 +92,11 @@ export function pylonAnchorPoint(input: PylonAnchorInput, ref: PylonAnchorRef): 
   return anchorWorld(input, ref.tile, a);
 }
 
+/** Where a feed's catenary starts: its lead-to point (world space) when set, else the feed point itself. */
+export function pylonCableStart(feedPoint: Vec2, leadTo: Vec2 | null): Vec2 {
+  return leadTo ?? feedPoint;
+}
+
 /**
  * Parabolic cable from a to b with `segments` (min 1) equal steps: y = a.y + (b.y - a.y) t + 4 sag t (1 - t).
  * Returns segments + 1 points; first and last are exactly a and b.

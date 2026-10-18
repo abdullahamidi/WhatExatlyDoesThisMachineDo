@@ -76,6 +76,10 @@ describe('camera auto-frame and pylon line', () => {
     expect(CAMERA.autoFrame).toBe(true);
   });
 
+  it('auto-frame keeps the machine top 240 px below the top of the view (HUD inset)', () => {
+    expect(CAMERA.hudTopInsetPx).toBe(240);
+  });
+
   it('parallax fade lasts 1500 ms', () => {
     expect(PARALLAX_FADE_MS).toBe(1500);
   });
@@ -108,6 +112,11 @@ describe('PYLON_FEEDS (WP9 CR-A world-space cable feeds)', () => {
     const turbine = PYLON_FEEDS[1];
     expect(turbine?.side).toBe('left');
     expect(turbine?.gate).toEqual({ techId: 'turbine', minLevel: 1 });
+  });
+
+  it('the turbine feed leads its cable up from the export to (-374, -94) above the casing', () => {
+    expect(PYLON_FEEDS[1]?.leadTo).toEqual({ x: -374, y: -94 });
+    expect(PYLON_FEEDS[0]?.leadTo).toBeUndefined();
   });
 
   it('each feed names an existing component and one of its connection points', () => {
