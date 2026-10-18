@@ -25,9 +25,9 @@ const logState = (createdAt: number, overrides: Partial<ResourceMap> = {}) => ({
 });
 
 describe('SYSTEM_LOGS table', () => {
-  it('has 8 to 14 entries with unique ids', () => {
+  it('has 8 to 17 entries with unique ids', () => {
     expect(SYSTEM_LOGS.length).toBeGreaterThanOrEqual(8);
-    expect(SYSTEM_LOGS.length).toBeLessThanOrEqual(14);
+    expect(SYSTEM_LOGS.length).toBeLessThanOrEqual(17);
     const ids = new Set(SYSTEM_LOGS.map((e) => e.id));
     expect(ids.size).toBe(SYSTEM_LOGS.length);
   });
@@ -61,7 +61,7 @@ describe('seedTracker', () => {
     expect(tracker.shown.size).toBe(0);
     expect(tracker.lastShownAt).toBe(T0);
 
-    const later = seedTracker(logState(T0, { me: 1e9, ee: 1e9, pr: 1e9 }), T0 + 1e9);
+    const later = seedTracker(logState(T0, { me: 1e9, ee: 1e9, pr: 1e9, rs: 1e9 }), T0 + 1e9);
     expect(later.shown.size).toBe(SYSTEM_LOGS.length);
     expect(later.lastShownAt).toBe(T0 + 1e9);
   });
@@ -85,14 +85,14 @@ describe('nextSystemLog', () => {
 
   it('returns null inside the minimum gap', () => {
     const t = seedTracker(fresh, T0);
-    const ahead = logState(T0, { me: 1e9, ee: 1e9, pr: 1e9 });
+    const ahead = logState(T0, { me: 1e9, ee: 1e9, pr: 1e9, rs: 1e9 });
     expect(nextSystemLog(t, ahead, T0 + minGapMs - 1)).toBeNull();
   });
 
   it('returns exactly one eligible entry after the gap, in table order', () => {
     const t = seedTracker(fresh, T0);
     const now = T0 + minGapMs;
-    const ahead = logState(T0, { me: 1e9, ee: 1e9, pr: 1e9 });
+    const ahead = logState(T0, { me: 1e9, ee: 1e9, pr: 1e9, rs: 1e9 });
     const result = nextSystemLog(t, ahead, now);
     expect(result).not.toBeNull();
     expect(result?.entry).toBe(SYSTEM_LOGS[0]);
@@ -108,7 +108,7 @@ describe('nextSystemLog', () => {
   });
 
   it('never repeats an entry over 50 calls spaced by the gap', () => {
-    const ahead = logState(T0, { me: 1e9, ee: 1e9, pr: 1e9 });
+    const ahead = logState(T0, { me: 1e9, ee: 1e9, pr: 1e9, rs: 1e9 });
     let t: SystemLogTracker = seedTracker(fresh, T0);
     const seen: string[] = [];
     for (let i = 1; i <= 50; i++) {
@@ -125,14 +125,14 @@ describe('nextSystemLog', () => {
     const t = seedTracker(fresh, T0);
     const before = [...t.shown];
     const beforeLast = t.lastShownAt;
-    nextSystemLog(t, logState(T0, { me: 1e9, ee: 1e9, pr: 1e9 }), T0 + minGapMs);
+    nextSystemLog(t, logState(T0, { me: 1e9, ee: 1e9, pr: 1e9, rs: 1e9 }), T0 + minGapMs);
     expect([...t.shown]).toEqual(before);
     expect(t.lastShownAt).toBe(beforeLast);
   });
 
   it('honours a custom gap', () => {
     const t = seedTracker(fresh, T0);
-    const ahead = logState(T0, { me: 1e9, ee: 1e9, pr: 1e9 });
+    const ahead = logState(T0, { me: 1e9, ee: 1e9, pr: 1e9, rs: 1e9 });
     expect(nextSystemLog(t, ahead, T0 + 10, { minGapMs: 10 })).not.toBeNull();
     expect(nextSystemLog(t, ahead, T0 + 9, { minGapMs: 10 })).toBeNull();
   });

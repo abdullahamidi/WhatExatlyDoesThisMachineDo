@@ -286,9 +286,10 @@ describe('techTreeView', () => {
     it('buildEraTabs: locked era II shows the SIGNAL ? placeholder', () => {
       const views = getAllTechViews(createInitialState(0), ERA_TWO_LOCKED);
       const tabs = buildEraTabs(views, emptyResourceMap(), 1);
-      expect(tabs).toHaveLength(3);
+      expect(tabs).toHaveLength(4);
       expect(tabs[1]).toEqual({ era: 2, label: 'SIGNAL ?', reached: false, selected: false, resourceText: '' });
       expect(tabs[2]).toEqual({ era: 3, label: 'SIGNAL ?', reached: false, selected: false, resourceText: '' });
+      expect(tabs[3]).toEqual({ era: 4, label: 'SIGNAL ?', reached: false, selected: false, resourceText: '' });
     });
 
     it('buildEraTabs: reached era II shows ERA II · EE with the EE balance', () => {
@@ -301,12 +302,12 @@ describe('techTreeView', () => {
     it('buildEraTabs: selected follows the argument', () => {
       const views = getAllTechViews(createInitialState(0), ERA_TWO_AVAILABLE);
       const tabs = buildEraTabs(views, emptyResourceMap(), 2);
-      expect(tabs.map((t) => t.selected)).toEqual([false, true, false]);
+      expect(tabs.map((t) => t.selected)).toEqual([false, true, false, false]);
     });
 
     it('buildEraTabs: one tab per era present in the views, ascending', () => {
       const views = getAllTechViews(createInitialState(0), ERA_TWO_AVAILABLE);
-      expect(buildEraTabs(views, emptyResourceMap(), 1).map((t) => t.era)).toEqual([1, 2, 3]);
+      expect(buildEraTabs(views, emptyResourceMap(), 1).map((t) => t.era)).toEqual([1, 2, 3, 4]);
       const eraTwoOnly = views.filter((v) => v.def.era === 2);
       expect(buildEraTabs(eraTwoOnly, emptyResourceMap(), 2).map((t) => t.era)).toEqual([2]);
     });

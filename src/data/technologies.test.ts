@@ -456,6 +456,166 @@ describe('era III technology table', () => {
   });
 });
 
+describe('era IV technology table', () => {
+  it('matches the C1 table exactly', () => {
+    const expected = {
+      resonatorSpire: {
+        id: 'resonatorSpire', kind: 'unlock', era: 4, costRes: 'pr', baseCost: 1500000, growth: null, maxLevel: null,
+        tree: { col: 0, row: 1 }, branch: 'convergence',
+        effects: [{ type: 'convert', amount: 0.2, res: 'rs' }],
+        requires: [{ type: 'tech', id: 'pressureVesselBlueprint', minLevel: 1 }],
+      },
+      harmonicCoil: {
+        id: 'harmonicCoil', kind: 'repeatable', era: 4, costRes: 'rs', baseCost: 200, growth: 1.3, maxLevel: 25,
+        tree: { col: 1, row: 0 }, branch: 'mechanical',
+        effects: [{ type: 'convert', amount: 0.1, res: 'rs' }],
+        requires: [{ type: 'tech', id: 'resonatorSpire', minLevel: 1 }],
+      },
+      pressureResonator: {
+        id: 'pressureResonator', kind: 'repeatable', era: 4, costRes: 'pr', baseCost: 1000000, growth: 1.35, maxLevel: 20,
+        tree: { col: 1, row: 2 }, branch: 'automation',
+        effects: [{ type: 'autoAdd', amount: 3, res: 'rs' }],
+        requires: [{ type: 'tech', id: 'resonatorSpire', minLevel: 1 }],
+      },
+      crankServo: {
+        id: 'crankServo', kind: 'repeatable', era: 4, costRes: 'me', baseCost: 300000, growth: 1.5, maxLevel: 10,
+        tree: { col: 2, row: 2 }, branch: 'origin',
+        effects: [{ type: 'autoClick', perSecond: 1 }],
+        requires: [{ type: 'tech', id: 'resonatorSpire', minLevel: 1 }],
+      },
+      echoCrank: {
+        id: 'echoCrank', kind: 'unlock', era: 4, costRes: 'rs', baseCost: 10000, growth: null, maxLevel: null,
+        tree: { col: 2, row: 0 }, branch: 'origin',
+        effects: [
+          { type: 'clickEcho', seconds: 2, res: 'rs' },
+          { type: 'clickMult', factor: 5 },
+        ],
+        requires: [{ type: 'tech', id: 'harmonicCoil', minLevel: 3 }],
+      },
+      phaseLock: {
+        id: 'phaseLock', kind: 'unlock', era: 4, costRes: 'rs', baseCost: 50000, growth: null, maxLevel: null,
+        tree: { col: 2, row: 1 }, branch: 'mechanical',
+        effects: [{ type: 'rateMult', factor: 1.25, res: 'all' }],
+        requires: [{ type: 'tech', id: 'harmonicCoil', minLevel: 5 }],
+      },
+      standingWave: {
+        id: 'standingWave', kind: 'repeatable', era: 4, costRes: 'rs', baseCost: 100000, growth: 1.3, maxLevel: 20,
+        tree: { col: 3, row: 1 }, branch: 'mechanical',
+        effects: [{ type: 'autoPct', percent: 15, res: 'rs' }],
+        requires: [{ type: 'tech', id: 'phaseLock', minLevel: 1 }],
+      },
+      crystalLattice: {
+        id: 'crystalLattice', kind: 'unlock', era: 4, costRes: 'rs', baseCost: 1500000, growth: null, maxLevel: null,
+        tree: { col: 4, row: 1 }, branch: 'automation',
+        effects: [
+          { type: 'rateMult', factor: 2, res: 'pr' },
+          { type: 'rateMult', factor: 2, res: 'ee' },
+        ],
+        requires: [{ type: 'tech', id: 'standingWave', minLevel: 3 }],
+      },
+      harmonicConvergence: {
+        id: 'harmonicConvergence', kind: 'milestone', era: 4, costRes: 'rs', baseCost: 0, growth: null, maxLevel: null,
+        tree: { col: 5, row: 1 }, branch: 'convergence',
+        effects: [{ type: 'none' }],
+        requires: [
+          { type: 'tech', id: 'crystalLattice', minLevel: 1 },
+          { type: 'tech', id: 'echoCrank', minLevel: 1 },
+          { type: 'lifetime', res: 'rs', amount: 30000000 },
+        ],
+      },
+    };
+    expect(ERA_FOUR_IDS).toEqual([
+      'resonatorSpire', 'harmonicCoil', 'pressureResonator', 'crankServo', 'echoCrank',
+      'phaseLock', 'standingWave', 'crystalLattice', 'harmonicConvergence',
+    ]);
+    for (const id of ERA_FOUR_IDS) {
+      expect(project(TECHNOLOGIES[id])).toEqual(expected[id as keyof typeof expected]);
+    }
+  });
+
+  it('era-IV texts match the spec', () => {
+    expect(TECHNOLOGIES.resonatorSpire.description).toBe('A lattice tower over a steam oscillator. Converts PR into resonance.');
+    expect(TECHNOLOGIES.resonatorSpire.flavor).toBe('Tower raised. It was already humming.');
+    expect(TECHNOLOGIES.harmonicCoil.description).toBe('Toroidal winding on the tower. More RS from the same pressure.');
+    expect(TECHNOLOGIES.pressureResonator.description).toBe('Steam whistles on the manifold. +3 RS/s per level.');
+    expect(TECHNOLOGIES.crankServo.description).toBe('A gearbox turns the crank for you. +1 crank/s per level, offline too.');
+    expect(TECHNOLOGIES.echoCrank.description).toBe('A fork rings with every turn. Clicks echo 2s of RS; x5 manual ME.');
+    expect(TECHNOLOGIES.phaseLock.description).toBe('Twin mirrors broadcast the locked phase. x1.25 all production.');
+    expect(TECHNOLOGIES.standingWave.description).toBe('The rod holds its note. +15% RS production per level.');
+    expect(TECHNOLOGIES.crystalLattice.description).toBe('Quartz in the crown. Doubles PR and EE production.');
+    expect(TECHNOLOGIES.harmonicConvergence.description).toBe('Every part of the machine now rings at one frequency.');
+    expect(TECHNOLOGIES.harmonicConvergence.flavor).toBe('All frequencies agree. Agreement logged.');
+  });
+
+  it('era-IV techs without a given flavor have none', () => {
+    for (const id of ['harmonicCoil', 'pressureResonator', 'crankServo', 'echoCrank', 'phaseLock', 'standingWave', 'crystalLattice'] as const) {
+      expect(TECHNOLOGIES[id].flavor).toBeUndefined();
+    }
+  });
+
+  it('era-IV names fit the tree node (19 characters or fewer)', () => {
+    for (const id of ERA_FOUR_IDS) {
+      expect(TECHNOLOGIES[id].name.length).toBeLessThanOrEqual(19);
+    }
+    expect(TECHNOLOGIES.harmonicConvergence.name).toBe('Convergence');
+  });
+
+  it('era-IV tree positions are unique', () => {
+    const keys = ERA_FOUR_IDS.map((id) => `${TECHNOLOGIES[id].tree.col},${TECHNOLOGIES[id].tree.row}`);
+    expect(new Set(keys).size).toBe(ERA_FOUR_IDS.length);
+  });
+
+  it('costRes: me only on crankServo, pr on resonatorSpire and pressureResonator, rs on the rest', () => {
+    const prCost: readonly TechId[] = ['resonatorSpire', 'pressureResonator'];
+    for (const id of ERA_FOUR_IDS) {
+      const expectedRes = id === 'crankServo' ? 'me' : prCost.includes(id) ? 'pr' : 'rs';
+      expect(TECHNOLOGIES[id].costRes).toBe(expectedRes);
+    }
+    expect(ERA_FOUR_IDS.filter((id) => TECHNOLOGIES[id].costRes === 'me')).toEqual(['crankServo']);
+  });
+
+  it('autoClick appears exactly once in the table, on crankServo with perSecond 1', () => {
+    const auto = TECH_IDS.flatMap((id) =>
+      TECHNOLOGIES[id].effects.filter((e) => e.type === 'autoClick').map((e) => ({ id, effect: e })),
+    );
+    expect(auto).toEqual([{ id: 'crankServo', effect: { type: 'autoClick', perSecond: 1 } }]);
+  });
+
+  it('install lines match the WP10 texts, are unique and fit 60 characters', () => {
+    expect(INSTALL_LINES.resonatorSpire).toBe('Tower raised. It was already humming.');
+    expect(INSTALL_LINES.harmonicCoil).toBe('Coil wound. The tower rang a note lower.');
+    expect(INSTALL_LINES.pressureResonator).toBe('Whistles fitted. Nobody pulled the cord.');
+    expect(INSTALL_LINES.crankServo).toBe('Operator input automated. Operator retained.');
+    expect(INSTALL_LINES.echoCrank).toBe('The fork answers every turn of the crank.');
+    expect(INSTALL_LINES.phaseLock).toBe('Phase locked. To what, not specified.');
+    expect(INSTALL_LINES.standingWave).toBe('The wave stopped moving. The tower did not.');
+    expect(INSTALL_LINES.crystalLattice).toBe('Crystal seated. It was cut for this socket.');
+    expect(INSTALL_LINES.harmonicConvergence).toBe('All frequencies agree. Agreement logged.');
+    const lines = ERA_FOUR_IDS.map((id) => INSTALL_LINES[id]);
+    expect(new Set(lines).size).toBe(ERA_FOUR_IDS.length);
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(60);
+    expect(INSTALL_LINES.resonatorSpire).toBe(TECHNOLOGIES.resonatorSpire.flavor);
+    expect(INSTALL_LINES.harmonicConvergence).toBe(TECHNOLOGIES.harmonicConvergence.flavor);
+  });
+
+  it('appends the three signal logs last, with increasing rs thresholds', () => {
+    expect(SYSTEM_LOGS.slice(-3)).toEqual([
+      { id: 'sync-success', text: 'Synchronization successful.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 1000 } },
+      { id: 'signal-below', text: 'Frequency matches a signal from below the ground.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 1000000 } },
+      { id: 'observer-one', text: 'Observer count: 1.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 20000000 } },
+    ]);
+    const rsThresholds = SYSTEM_LOGS.flatMap((e) => (e.trigger.kind === 'lifetime' && e.trigger.res === 'rs' ? [e.trigger.atLeast] : []));
+    expect(rsThresholds).toEqual([1000, 1000000, 20000000]);
+  });
+
+  it('plaque line for the convergence milestone is the last line', () => {
+    expect(PLAQUE_LINES.map((line) => line.milestone)).toEqual([
+      null, 'generatorBlueprint', 'substationBlueprint', 'pressureVesselBlueprint', 'harmonicConvergence',
+    ]);
+    expect(PLAQUE_LINES[4]?.text).toBe('PRIMARY FUNCTION: RESTORE (TARGET: ?)');
+  });
+});
+
 describe('era I rows are unchanged', () => {
   // Copied from the era-I table at HEAD before WP8.
   const ERA_ONE_LITERAL: Record<string, TechDefinition> = {
