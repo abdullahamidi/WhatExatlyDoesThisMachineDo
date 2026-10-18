@@ -18,6 +18,7 @@ describe('normalizeSettings defaults', () => {
     const valid: SettingsState = {
       muted: true, masterVolume: 40, sfxVolume: 0, ambientVolume: 75,
       notation: 'engineering', reducedMotion: true, screenShake: false, statusMarkers: true, uiScale: 150,
+      confirmNewCycle: false,
     };
     expect(normalizeSettings(valid)).toEqual(valid);
   });
@@ -45,6 +46,7 @@ describe('normalizeSettings per field', () => {
     ['screenShake', 'false'], ['screenShake', null],
     ['statusMarkers', 1], ['statusMarkers', 'on'],
     ['uiScale', '125'], ['uiScale', null], ['uiScale', { value: 125 }],
+    ['confirmNewCycle', 'no'], ['confirmNewCycle', 0], ['confirmNewCycle', null],
   ];
 
   it.each(badTypes)('wrong type for %s (%j) falls back to default', (field, bad) => {
@@ -57,6 +59,7 @@ describe('normalizeSettings per field', () => {
     const base: SettingsState = {
       muted: true, masterVolume: 30, sfxVolume: 31, ambientVolume: 32,
       notation: 'scientific', reducedMotion: true, screenShake: false, statusMarkers: true, uiScale: 125,
+      confirmNewCycle: false,
     };
     const out = normalizeSettings({ [field]: bad }, base);
     expect(out[field]).toEqual(base[field]);
@@ -192,6 +195,12 @@ describe('settings data sanity', () => {
     expect(D.reducedMotion).toBe(false);
     expect(D.statusMarkers).toBe(false);
     expect(D.muted).toBe(false);
+  });
+
+  it('confirm new cycle is on by default and keeps a valid boolean', () => {
+    expect(D.confirmNewCycle).toBe(true);
+    expect(normalizeSettings({ confirmNewCycle: false }).confirmNewCycle).toBe(false);
+    expect(normalizeSettings({ confirmNewCycle: true }).confirmNewCycle).toBe(true);
   });
 });
 

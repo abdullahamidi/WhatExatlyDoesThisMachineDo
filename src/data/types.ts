@@ -1,4 +1,5 @@
 import type { AchievementId } from './achievements';
+import type { PerkId } from './prestige';
 export const TECH_IDS = ['handCrank','gearRatio','reinforcedCrank','flywheel','wornMotor',
   'motorTuning','pistonArray','improvedPistons','generatorBlueprint',
   'generator','copperWinding','motorRetrofit','dynamoCrank','capacitorBank','sparkGap','transformer','powerLines','substationBlueprint',
@@ -59,6 +60,7 @@ export interface SettingsState {
   screenShake: boolean;                 // default true; ignored (off) while reducedMotion
   statusMarkers: boolean;               // default false
   uiScale: UiScale;                     // default 100
+  confirmNewCycle: boolean;             // default true (WP14): BEGIN A NEW CYCLE asks for confirmation first
 }
 export interface StatsState {
   activeSeconds: number; offlineSeconds: number; longestOfflineSeconds: number;
@@ -69,6 +71,8 @@ export interface StatsState {
   startedAt: number;                    // epoch ms
 }
 export interface AchievementsState { unlocked: Partial<Record<AchievementId, number>> }   // id -> epoch ms
+/** New-cycle prestige (WP14): cycle counter, lifetime Echoes earned, owned Memory perks in PERK_IDS order. */
+export interface PrestigeState { cycle: number /* int >= 1 */; echoesEarned: number /* int >= 0, lifetime total */; perks: PerkId[] }
 export interface ProductionRates { perClick: ResourceMap; perSecond: ResourceMap }
 export type TechStatus = 'locked' | 'available' | 'purchased';
 export interface RequirementView { req: Requirement; met: boolean; label: string }

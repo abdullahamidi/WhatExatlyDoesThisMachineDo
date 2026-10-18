@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS_VALUES: SettingsState = {
   screenShake: true,
   statusMarkers: false,
   uiScale: 100,
+  confirmNewCycle: true,
 };
 
 // Volume sliders: integer percent. `step` must divide `max - min`.
@@ -47,6 +48,7 @@ export const SETTINGS_LABELS = {
   screenShake: 'SCREEN SHAKE',
   screenShakeLocked: 'OFF (REDUCED MOTION)',
   statusMarkers: 'STATUS MARKERS',
+  confirmNewCycle: 'CONFIRM NEW CYCLE',
   on: 'ON',
   off: 'OFF',
   keyCrank: 'SPACE / ENTER',

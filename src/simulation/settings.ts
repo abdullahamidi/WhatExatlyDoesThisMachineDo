@@ -46,6 +46,7 @@ export function normalizeSettings(raw: unknown, base?: SettingsState): SettingsS
     screenShake: pickBoolean(src['screenShake'], fallback.screenShake),
     statusMarkers: pickBoolean(src['statusMarkers'], fallback.statusMarkers),
     uiScale: pickUiScale(src['uiScale'], fallback.uiScale),
+    confirmNewCycle: pickBoolean(src['confirmNewCycle'], fallback.confirmNewCycle),
   };
 }
 
