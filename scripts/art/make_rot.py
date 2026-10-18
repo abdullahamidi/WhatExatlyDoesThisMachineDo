@@ -1,4 +1,5 @@
-# Pre-render RotSprite rotation sheets. Frame k = source rotated clockwise by k*360/N deg about the canvas centre corner.
+# Pre-render RotSprite rotation sheets. Usage: make_rot.py OUT_DIR [SRC_DIR] [PARTS_JSON]
+# Frame k = source rotated clockwise by k*360/N deg about the canvas centre corner.
 import sys, json, math
 import numpy as np
 from PIL import Image
@@ -11,6 +12,9 @@ PARTS = {  # file: frames over 360 deg
     'flywheel': 180, 'gear-large': 140, 'gear-small': 80, 'hand-crank': 80, 'crank-brace': 80,
     'pulley-main': 140, 'pulley-crank': 80, 'pulley-flywheel': 180, 'pulley-motor': 24,
 }
+# optional: argv[2] = source dir, argv[3] = JSON {file: frames} (e.g. era parts); defaults = era I set above
+if len(sys.argv) > 2: SRC = sys.argv[2].rstrip('/') + '/'
+if len(sys.argv) > 3: PARTS = json.loads(sys.argv[3])
 UP = 3; K = 2 ** UP
 meta = {}
 for name, n in PARTS.items():
