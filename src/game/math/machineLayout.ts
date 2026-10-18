@@ -14,9 +14,9 @@ export function machineLocalToWorld(p: Vec2, anchor: Vec2 = MACHINE_ANCHOR, scal
   return { x: anchor.x + p.x * scale, y: anchor.y + p.y * scale }; // anchor + p * scale
 }
 
-/** A component is visible once its tech level reaches minLevel. */
+/** A component is visible once its tech level reaches minLevel, or once any alsoVisibleWith tech reaches its minLevel. */
 export function isComponentVisible(def: MachineComponentDefinition, techLevels: Readonly<Record<TechId, number>>): boolean {
-  return techLevels[def.techId] >= def.minLevel; // level >= minLevel
+  return techLevels[def.techId] >= def.minLevel || (def.alsoVisibleWith ?? []).some((a) => techLevels[a.techId] >= a.minLevel); // level >= minLevel, or any alternative
 }
 
 /** Draw depth of a component: layer depth plus its optional sub-layer bias (default 0). */

@@ -66,10 +66,11 @@ describe('WP6 machine assets', () => {
     { id: 'machine.motorPlinth', width: 48, height: 10, origin: { x: 0.5, y: 1 } },
     { id: 'machine.pistonBlock', width: 96, height: 58, origin: { x: 0.5, y: 1 } },
     { id: 'machine.pistonYoke', width: 80, height: 16, origin: { x: 0.5, y: 0.75 } },
+    { id: 'machine.crankBrace', width: 48, height: 48, origin: { x: 0.5, y: 0.5 } },
   ];
 
-  it('has the contract width, height and origin for each of the 9 new machine ids', () => {
-    expect(NEW_MACHINE_ENTRIES.length).toBe(9);
+  it('has the contract width, height and origin for each of the 10 new machine ids', () => {
+    expect(NEW_MACHINE_ENTRIES.length).toBe(10);
     for (const want of NEW_MACHINE_ENTRIES) {
       const entry = ASSET_MANIFEST[want.id];
       expect(entry.width, want.id).toBe(want.width);

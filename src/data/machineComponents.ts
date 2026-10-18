@@ -1,7 +1,7 @@
 import type { TechId } from './types';
 import type { AssetId } from '../assets/assetIds';
 
-export const MACHINE_COMPONENT_IDS = ['supportFrame', 'bearingM', 'bearingP', 'gearLarge', 'mainShaft', 'gearSmall', 'crankPulley', 'handCrank',
+export const MACHINE_COMPONENT_IDS = ['supportFrame', 'bearingM', 'bearingP', 'gearLarge', 'mainShaft', 'gearSmall', 'crankPulley', 'handCrank', 'crankBrace',
   'flywheelPedestal', 'flywheel', 'flywheelPulley', 'motorPlinth', 'wornMotor', 'motorPulley', 'pistonYoke', 'pistonArray'] as const;
 export type MachineComponentId = typeof MACHINE_COMPONENT_IDS[number];
 
@@ -33,6 +33,7 @@ export interface ProductionEffect { kind: 'vibrate' | 'glow' | 'dust' | 'steam';
 
 export interface MachineComponentDefinition {
   id: MachineComponentId; techId: TechId; minLevel: number;      // visible when techLevels[techId] >= minLevel
+  alsoVisibleWith?: { techId: TechId; minLevel: number }[];      // or when any of these tech levels is reached too
   assetId: AssetId; attach: { socket: SocketId | null; offset: Vec2 };   // socket null = machine origin
   size: { width: number; height: number };                       // art px, equals the manifest dims of assetId
   origin: Vec2;                                                  // normalised pivot of the sprite
@@ -132,7 +133,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   bearingM: {
-    id: 'bearingM', techId: 'handCrank', minLevel: 1,
+    id: 'bearingM', techId: 'gearRatio', minLevel: 1, alsoVisibleWith: [{ techId: 'wornMotor', minLevel: 1 }],
     assetId: 'machine.bearingPlate', attach: { socket: 'mainHub', offset: { x: 0, y: 0 } },
     size: { width: 16, height: 16 }, origin: { x: 0.5, y: 0.5 },
     layer: 'frame', depthBias: 1,
@@ -151,7 +152,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
   },
   // Main drive: large gear and main pulley / crank disc on the main hub (audit role: main shaft M, theta M).
   gearLarge: {
-    id: 'gearLarge', techId: 'reinforcedCrank', minLevel: 1,
+    id: 'gearLarge', techId: 'gearRatio', minLevel: 1,
     assetId: 'machine.gearLarge', attach: { socket: 'mainHub', offset: { x: 0, y: 0 } },
     size: { width: 64, height: 64 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid',
@@ -160,7 +161,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   mainShaft: {
-    id: 'mainShaft', techId: 'handCrank', minLevel: 1,
+    id: 'mainShaft', techId: 'gearRatio', minLevel: 1, alsoVisibleWith: [{ techId: 'wornMotor', minLevel: 1 }],
     assetId: 'machine.pulleyMain', attach: { socket: 'mainHub', offset: { x: 0, y: 0 } },
     size: { width: 24, height: 24 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 2,
@@ -195,6 +196,16 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.crank', attach: { socket: 'crankHub', offset: { x: 0, y: 0 } },
     size: { width: 48, height: 48 }, origin: { x: 0.5, y: 0.5 },
     layer: 'front',
+    animation: { kind: 'driven', ratio: -1.75, phaseDeg: 0 },
+    connections: [],
+    effects: [],
+  },
+  // Reinforced crank: strap and boss flange over the hand crank, same driven angle; axle cap (front+2) stays on top.
+  crankBrace: {
+    id: 'crankBrace', techId: 'reinforcedCrank', minLevel: 1,
+    assetId: 'machine.crankBrace', attach: { socket: 'crankHub', offset: { x: 0, y: 0 } },
+    size: { width: 48, height: 48 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'front', depthBias: 1,
     animation: { kind: 'driven', ratio: -1.75, phaseDeg: 0 },
     connections: [],
     effects: [],

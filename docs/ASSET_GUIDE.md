@@ -37,12 +37,13 @@ Machine-local depths are relative to the machine container, which sits at world 
 | `terrain.ground` | `terrain/ground.png` | 256 x 128 | 0, 0 (top-left) | xy | none | ground layer, world depth 0 | Cracked sand ground tile that tiles in both directions. |
 | `fx.dust` | none (`file: null`, procedural) | 4 x 4 | 0.5, 0.5 (centre) | none | none | dust field emitter, world depth 200; landing puffs at machine-local depth 31 | Single dust mote particle drifting over the wasteland. |
 | `machine.frame` | `machine/support-frame.png` | 200 x 110 | 0.5, 1 (bottom-centre) | none | none | machine layer `frame`, depth 10 | Riveted, rusty support frame whose base sits on the ground line. |
-| `machine.crank` | `machine/hand-crank.png` | 48 x 48 | 0.5, 0.5 (centre) | none | none | machine layer `front`, depth 30 | Hand crank with its hub at the centre; the player clicks it to work the machine. |
-| `machine.gearSmall` | `machine/gear-small.png` | 40 x 40 | 0.5, 0.5 (centre) | none | none | machine layer `mid`, depth 20 | Small toothed gear meshed into the drive train. |
-| `machine.gearLarge` | `machine/gear-large.png` | 64 x 64 | 0.5, 0.5 (centre) | none | none | machine layer `mid`, depth 20 | Large reinforced toothed gear that slows and steadies the drive. |
+| `machine.crank` | `machine/hand-crank.png` | 48 x 48 | 0.5, 0.5 (centre) | none | none | machine layer `front`, depth 30 | Hand crank with its hub at the centre; the player clicks it to work the machine. Slim crank arm with r5.5 boss and wooden knob at r≈18. |
+| `machine.gearSmall` | `machine/gear-small.png` | 40 x 40 | 0.5, 0.5 (centre) | none | none | machine layer `mid`, depth 20 | Small toothed gear meshed into the drive train. Solid recessed web, teeth one value step lighter than the frame. |
+| `machine.gearLarge` | `machine/gear-large.png` | 64 x 64 | 0.5, 0.5 (centre) | none | none | machine layer `mid`, depth 20 | Large reinforced toothed gear that slows and steadies the drive. Solid recessed web, teeth one value step lighter than the frame. |
 | `machine.flywheel` | `machine/flywheel.png` | 96 x 96 | 0.5, 0.5 (centre) | none | none | machine layer `mid`, depth 20 | Heavy flywheel that stores momentum for the machine. |
 | `machine.motor` | `machine/worn-motor.png` | 64 x 48 | 0.5, 0.5 (centre) | none | none | machine layer `mid`, depth 20 | Worn electric motor bolted to the frame, shaking as it runs. |
 | `machine.piston` | `machine/piston-array.png` | 96 x 64 | 0.5, 1 (bottom-centre) | none | none | machine layer `back`, depth 0 | Piston array whose base sits at the bottom of the sprite, pumping up and down. |
+| `machine.crankBrace` | `machine/crank-brace.png` | 48 x 48 | 0.5, 0.5 (centre) | none | none | machine layer `front`, depth 31 | Riveted doubler strap and bolted boss flange that overlay the hand crank. |
 | `fx.steam` | `fx/steam.png` | 16 x 16 | 0.5, 0.5 (centre) | none | none | reserved: no renderer yet (steam effect is data only) | Steam puff particle released by working pistons. |
 
 Layer/depth sources: `src/data/world.ts` (`PARALLAX_LAYERS`, `GROUND_LAYER`, `DUST.depth`, `DEPTH`) and
@@ -86,7 +87,8 @@ Layer/depth sources: `src/data/world.ts` (`PARALLAX_LAYERS`, `GROUND_LAYER`, `DU
   `[assets] failed to load <key> <url>` (console warning). The procedural texture for that id is generated
   instead and the game keeps running.
 - Dedicated painters: `bg.sky`, `bg.mountains`, `bg.skyline`, `bg.pylons`, `terrain.ground`, `fx.dust`,
-  `machine.frame`, `machine.crank`, `machine.gearSmall`, `machine.gearLarge`. All other ids use the generic rust
+  `machine.frame`, `machine.crank`, `machine.gearSmall`, `machine.gearLarge`. `machine.crankBrace` uses the gear
+  painter (`paintGear`). All other ids use the generic rust
   plate with an X (`paintGenericPlate`): `machine.flywheel`, `machine.motor`, `machine.piston`, `fx.steam`.
 - Generated ids are logged once: `[assets] generated fallback textures: <ids>`.
 

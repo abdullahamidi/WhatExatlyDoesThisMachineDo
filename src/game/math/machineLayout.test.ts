@@ -61,17 +61,34 @@ describe('machineLocalToWorld', () => {
 describe('isComponentVisible', () => {
   const levels = createInitialState(0).techLevels;
 
-  it('shows the frame, bearings, main shaft and hand crank at the start', () => {
-    for (const id of ['supportFrame', 'bearingM', 'bearingP', 'mainShaft', 'handCrank'] as const) {
+  it('shows the frame, one bearing and the hand crank at the start', () => {
+    for (const id of ['supportFrame', 'bearingP', 'handCrank'] as const) {
       expect(isComponentVisible(MACHINE_COMPONENTS[id], levels)).toBe(true);
     }
-    for (const id of ['gearLarge', 'gearSmall', 'crankPulley', 'flywheelPedestal', 'flywheel', 'flywheelPulley', 'motorPlinth', 'wornMotor', 'motorPulley', 'pistonYoke', 'pistonArray'] as const) {
+    for (const id of ['bearingM', 'mainShaft', 'gearLarge', 'gearSmall', 'crankBrace', 'crankPulley', 'flywheelPedestal', 'flywheel', 'flywheelPulley', 'motorPlinth', 'wornMotor', 'motorPulley', 'pistonYoke', 'pistonArray'] as const) {
       expect(isComponentVisible(MACHINE_COMPONENTS[id], levels)).toBe(false);
     }
   });
 
   it('shows the small gear once gearRatio is owned', () => {
     expect(isComponentVisible(MACHINE_COMPONENTS.gearSmall, { ...levels, gearRatio: 1 })).toBe(true);
+  });
+
+  it('shows the large gear and main shaft with gearRatio, not reinforcedCrank', () => {
+    const gearOnly = { ...levels, gearRatio: 1 };
+    expect(isComponentVisible(MACHINE_COMPONENTS.gearLarge, gearOnly)).toBe(true);
+    expect(isComponentVisible(MACHINE_COMPONENTS.mainShaft, gearOnly)).toBe(true);
+    expect(isComponentVisible(MACHINE_COMPONENTS.gearLarge, { ...levels, reinforcedCrank: 1 })).toBe(false);
+  });
+
+  it('shows the main shaft once the worn motor drives it, even without gearRatio', () => {
+    expect(isComponentVisible(MACHINE_COMPONENTS.mainShaft, { ...levels, wornMotor: 1 })).toBe(true);
+    expect(isComponentVisible(MACHINE_COMPONENTS.bearingM, { ...levels, wornMotor: 1 })).toBe(true);
+  });
+
+  it('shows the crank brace once reinforcedCrank is owned', () => {
+    expect(isComponentVisible(MACHINE_COMPONENTS.crankBrace, levels)).toBe(false);
+    expect(isComponentVisible(MACHINE_COMPONENTS.crankBrace, { ...levels, reinforcedCrank: 1 })).toBe(true);
   });
 
   it('shows the worn motor once wornMotor is owned', () => {

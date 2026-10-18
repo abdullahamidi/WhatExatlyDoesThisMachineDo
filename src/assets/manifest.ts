@@ -75,7 +75,7 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   },
   'machine.pulleyCrank': {
     id: 'machine.pulleyCrank', file: 'machine/pulley-crank.png', width: 32, height: 32, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
-    description: 'Flat-belt pulley seen face-on with a crowned rim, five spokes and a hub.',
+    description: 'Small flat-belt pulley (r8, centred in a 32×32 canvas) with crowned rim and solid three-rib web; belt rides inside the pinion root.',
   },
   'machine.pulleyFlywheel': {
     id: 'machine.pulleyFlywheel', file: 'machine/pulley-flywheel.png', width: 28, height: 28, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
@@ -96,6 +96,10 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   'machine.pistonYoke': {
     id: 'machine.pistonYoke', file: 'machine/piston-yoke.png', width: 80, height: 16, origin: { x: 0.5, y: 0.75 }, tileable: 'none',
     description: 'Horizontal steel crosshead bar with a centre pin eye and three plunger rods rising from it.',
+  },
+  'machine.crankBrace': {
+    id: 'machine.crankBrace', file: 'machine/crank-brace.png', width: 48, height: 48, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Riveted doubler strap and bolted boss flange that overlay the hand crank.',
   },
   'fx.steam': {
     id: 'fx.steam', file: 'fx/steam.png', width: 16, height: 16, origin: { x: 0.5, y: 0.5 }, tileable: 'none',

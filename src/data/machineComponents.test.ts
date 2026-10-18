@@ -81,12 +81,17 @@ function levelsForPrefix(n: number): Record<TechId, number> {
   return levels;
 }
 
-/** Ids of components whose tech level reaches their minLevel. */
+/** Ids of components whose tech level reaches their minLevel, or any alsoVisibleWith minLevel (same rule as isComponentVisible). */
 function visibleAt(levels: Record<TechId, number>): Set<MachineComponentId> {
   return new Set(MACHINE_COMPONENT_IDS.filter((id) => {
     const def = MACHINE_COMPONENTS[id];
-    return levels[def.techId] >= def.minLevel;
+    return levels[def.techId] >= def.minLevel || (def.alsoVisibleWith ?? []).some((a) => levels[a.techId] >= a.minLevel);
   }));
+}
+
+/** Techs that can make a component visible: its own techId plus every alsoVisibleWith techId. */
+function techsOf(def: MachineComponentDefinition): TechId[] {
+  return [def.techId, ...(def.alsoVisibleWith ?? []).map((a) => a.techId)];
 }
 
 /** True when the driven part's static attachment point sits on a visible support. */
@@ -109,13 +114,13 @@ describe('machine component ids', () => {
 
   it('canonical order is the contract list', () => {
     expect(MACHINE_COMPONENT_IDS).toEqual([
-      'supportFrame', 'bearingM', 'bearingP', 'gearLarge', 'mainShaft', 'gearSmall', 'crankPulley', 'handCrank',
+      'supportFrame', 'bearingM', 'bearingP', 'gearLarge', 'mainShaft', 'gearSmall', 'crankPulley', 'handCrank', 'crankBrace',
       'flywheelPedestal', 'flywheel', 'flywheelPulley', 'motorPlinth', 'wornMotor', 'motorPulley', 'pistonYoke', 'pistonArray',
     ]);
   });
 
-  it('has 16 components and 9 sockets', () => {
-    expect(MACHINE_COMPONENT_IDS.length).toBe(16);
+  it('has 17 components and 9 sockets', () => {
+    expect(MACHINE_COMPONENT_IDS.length).toBe(17);
     expect(SOCKET_IDS.length).toBe(9);
   });
 });
@@ -350,9 +355,10 @@ describe('support and unlock coherence', () => {
 
   it('every link joins techs that are equal or ordered by requirement', () => {
     for (const link of MACHINE_LINKS) {
-      const a = MACHINE_COMPONENTS[link.from.component].techId;
-      const b = MACHINE_COMPONENTS[link.to.component].techId;
-      expect(a === b || dependsOn(a, b) || dependsOn(b, a)).toBe(true);
+      const fromTechs = techsOf(MACHINE_COMPONENTS[link.from.component]);
+      const toTechs = techsOf(MACHINE_COMPONENTS[link.to.component]);
+      const coherent = fromTechs.some((a) => toTechs.some((b) => a === b || dependsOn(a, b) || dependsOn(b, a)));
+      expect(coherent).toBe(true);
     }
   });
 
@@ -367,8 +373,13 @@ describe('support and unlock coherence', () => {
       }
     }
     const first = visibleAt(levelsForPrefix(1));
-    expect(first.has('mainShaft')).toBe(true);
-    expect(first.has('bearingM')).toBe(true);
+    expect(first.has('mainShaft')).toBe(false);
+    expect(first.has('bearingM')).toBe(false);
+    for (let n = 2; n <= UNLOCK_ORDER.length; n++) {
+      const visible = visibleAt(levelsForPrefix(n));
+      expect(visible.has('mainShaft')).toBe(true);
+      expect(visible.has('bearingM')).toBe(true);
+    }
   });
 });
 

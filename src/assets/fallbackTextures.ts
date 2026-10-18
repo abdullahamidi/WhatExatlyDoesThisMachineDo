@@ -21,6 +21,7 @@ const PAINTERS: Partial<Record<AssetId, Painter>> = {
   'machine.pulleyMain': paintGear,
   'machine.pulleyCrank': paintGear,
   'machine.pulleyFlywheel': paintGear,
+  'machine.crankBrace': paintGear,
 };
 
 // Generates a procedural texture for every manifest id that the scene does not already have.
