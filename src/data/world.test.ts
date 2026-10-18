@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_PULSE, CAMERA, DEPTH, PARALLAX_FADE_MS, PYLON_LINE, PYLON_FEEDS, MACHINE_ANCHOR, PIXEL_SCALE, DUST, DUST_RISING, PATTERN_ORIGIN_X, VIEW, ECLIPSE, APERTURE_BEAM } from './world';
 import type { ParallaxLayerDef } from './world';
+import { PALETTE } from './palette';
 import { TOAST_CONFIG } from './notifications';
 import { MACHINE_BOUNDS, MACHINE_COMPONENTS, MACHINE_SOCKETS } from './machineComponents';
 import { TECH_IDS } from './types';
@@ -48,10 +49,10 @@ describe('PARALLAX_LAYERS haze', () => {
 });
 
 describe('PARALLAX_LAYERS Era II pylons', () => {
-  it('pylonsLit is the last Era II layer (only the Era V sky layers follow it) and is gated on powerLines level 1', () => {
+  it('pylonsLit is the last Era II layer (only the Era V and WP13 restored sky layers follow it) and is gated on powerLines level 1', () => {
     const ids = PARALLAX_LAYERS.map((l) => l.id);
     expect(ids.indexOf('pylonsLit')).toBe(ids.indexOf('pylons') + 1);
-    expect(ids.slice(ids.indexOf('pylonsLit') + 1)).toEqual(['skyViolet', 'horizonGlow']);
+    expect(ids.slice(ids.indexOf('pylonsLit') + 1)).toEqual(['skyViolet', 'horizonGlow', 'skyRestored', 'mountainsRestored', 'skylineRestored']);
     expect(layer('pylonsLit').visibleWhen).toEqual({ techId: 'powerLines', minLevel: 1 });
   });
 
@@ -349,6 +350,63 @@ describe('WP11 aperture beam (C3)', () => {
     const count = ASSET_MANIFEST['machine.aperture'].frame?.count ?? 0;
     expect(APERTURE_BEAM.minLatchFrame).toBeGreaterThanOrEqual(0);
     expect(APERTURE_BEAM.minLatchFrame).toBeLessThan(count);
+  });
+});
+
+describe('WP13 finale layers (C3)', () => {
+  const RESTORED_TWINS: Record<string, string> = { skyRestored: 'sky', mountainsRestored: 'mountains', skylineRestored: 'skyline' };
+
+  it('appends the three restored rows after the Era V rows, with the contract numbers', () => {
+    expect(PARALLAX_LAYERS.slice(-3).map((l) => l.id)).toEqual(['skyRestored', 'mountainsRestored', 'skylineRestored']);
+    expect(layer('skyRestored')).toEqual({
+      id: 'skyRestored', assetId: 'bg.skyRestored', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 4, alpha: 1, underfill: null,
+      finale: { track: 'sky', dir: 'in' },
+    });
+    expect(layer('mountainsRestored')).toEqual({
+      id: 'mountainsRestored', assetId: 'bg.mountainsRestored', scrollFactor: 0.15, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 11,
+      alpha: 0.45, underfill: PALETTE.green0, finale: { track: 'mountains', dir: 'in' },
+    });
+    expect(layer('skylineRestored')).toEqual({
+      id: 'skylineRestored', assetId: 'bg.skylineRestored', scrollFactor: 0.3, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 21,
+      alpha: 0.4, underfill: PALETTE.grayDark, finale: { track: 'skyline', dir: 'in' },
+    });
+  });
+
+  it('each restored row twins its ruined row: same scrollFactor, bottomY and manifest art size', () => {
+    for (const [restoredId, ruinedId] of Object.entries(RESTORED_TWINS)) {
+      const r = layer(restoredId);
+      const ruined = layer(ruinedId);
+      expect(r.scrollFactor, restoredId).toBe(ruined.scrollFactor);
+      expect(r.bottomY, restoredId).toBe(ruined.bottomY);
+      expect(ASSET_MANIFEST[r.assetId].width, restoredId).toBe(ASSET_MANIFEST[ruined.assetId].width);
+      expect(ASSET_MANIFEST[r.assetId].height, restoredId).toBe(ASSET_MANIFEST[ruined.assetId].height);
+    }
+  });
+
+  it('a finale field sits on exactly the four old rows and the three restored rows, with the contract track and direction', () => {
+    const tagged = PARALLAX_LAYERS.filter((l) => l.finale !== undefined).map((l) => [l.id, l.finale]);
+    expect(tagged).toEqual([
+      ['mountains', { track: 'mountains', dir: 'out' }],
+      ['skyline', { track: 'skyline', dir: 'out' }],
+      ['skyViolet', { track: 'sky', dir: 'out' }],
+      ['horizonGlow', { track: 'glow', dir: 'out' }],
+      ['skyRestored', { track: 'sky', dir: 'in' }],
+      ['mountainsRestored', { track: 'mountains', dir: 'in' }],
+      ['skylineRestored', { track: 'skyline', dir: 'in' }],
+    ]);
+  });
+
+  it('no finale row is combined with visibleWhen', () => {
+    for (const l of PARALLAX_LAYERS) {
+      if (l.finale !== undefined) expect(l.visibleWhen, l.id).toBeUndefined();
+    }
+  });
+
+  it('depth order is skyViolet (+1) < eclipse (+2) < horizonGlow (+3) < skyRestored (+4) < mountains (+10) < mountainsRestored (+11)', () => {
+    expect(layer('skyRestored').depth).toBe(DEPTH.background + 4);
+    expect(layer('mountainsRestored').depth).toBe(DEPTH.background + 11);
+    const order = [layer('skyViolet').depth, ECLIPSE.depth, layer('horizonGlow').depth, layer('skyRestored').depth, layer('mountains').depth, layer('mountainsRestored').depth];
+    for (let i = 1; i < order.length; i++) expect(order[i]).toBeGreaterThan(order[i - 1] as number);
   });
 });
 

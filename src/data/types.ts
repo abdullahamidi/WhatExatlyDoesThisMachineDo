@@ -39,11 +39,15 @@ export interface TechDefinition {
   description: string; flavor?: string;
   tree: { col: number; row: number };      // layout hint for WP3 tech UI
 }
+/** Finale progress (WP13): none -> sequence (cinematic) -> choice (KEEP / NEW CYCLE) -> postgame. */
+export type EndingPhase = 'none' | 'sequence' | 'choice' | 'postgame';
+export interface EndingState { phase: EndingPhase; engagedAt: number | null }   // engagedAt = lastSimTime at the ending purchase
 export interface GameState {
   res: ResourceMap; lifetime: ResourceMap; totalClicks: number;
   techLevels: Record<TechId, number>;      // 0 = not owned; unlock/milestone owned = 1
   lastSimTime: number;                     // epoch ms of last simulated point
   createdAt: number;
+  ending: EndingState;                     // WP13; additive save field (v2), default { phase: 'none', engagedAt: null }
 }
 export type NumberNotation = 'suffix' | 'scientific' | 'engineering';
 export type UiScale = 100 | 125 | 150;

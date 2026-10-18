@@ -19,6 +19,7 @@ import { evaluateAchievements } from './achievements';
 import { computeRates } from './production/rates';
 import { advance, applyClick, applyOffline as applyOfflineState } from './production/tick';
 import { evaluateMilestones } from './progression/milestones';
+import { advanceEnding, startEnding } from './progression/ending';
 import { purchase as purchaseTech } from './progression/purchase';
 import { getAllTechViews, getTechView } from './progression/status';
 import { createInitialState } from './state';
@@ -144,7 +145,8 @@ export class GameSession {
   /**
    * Buys one level of a technology. On failure nothing changes and no events fire.
    * On success emits 'purchase', then 'unlock' if the tech was at level 0, then runs the milestone
-   * check and the achievement check.
+   * check and the achievement check, and last starts the finale (emits 'ending' with phase
+   * 'sequence') when an ending tech has just been bought.
    */
   purchase(id: TechId): PurchaseResult {
     const result = purchaseTech(this.current, id);
@@ -164,6 +166,7 @@ export class GameSession {
     }
     this.checkMilestones();
     this.checkAchievements();
+    this.checkEnding();
     return result;
   }
 
@@ -242,6 +245,22 @@ export class GameSession {
     this.emitter.emit('reset', {});
   }
 
+  /**
+   * Finale: sequence -> choice (the cinematic has run its course or was skipped). Emits 'ending'
+   * with phase 'choice'. Returns false and emits nothing when the phase is not 'sequence'.
+   */
+  finishEndingSequence(): boolean {
+    return this.stepEnding('choice');
+  }
+
+  /**
+   * Finale: choice -> postgame ([KEEP IT RUNNING]). Emits 'ending' with phase 'postgame'.
+   * Returns false and emits nothing when the phase is not 'choice'.
+   */
+  keepRunning(): boolean {
+    return this.stepEnding('postgame');
+  }
+
   /** Sets the muted flag. Same as updateSettings({ muted }). */
   setMuted(muted: boolean): void {
     this.updateSettings({ muted });
@@ -298,6 +317,23 @@ export class GameSession {
       this.emitter.emit('unlock', { id });
       this.emitter.emit('milestone', { id });
     }
+  }
+
+  /** Starts the finale when an ending tech was just bought. Emits 'ending' { phase: 'sequence' } once. */
+  private checkEnding(): void {
+    const next = startEnding(this.current);
+    if (next === this.current) return;
+    this.setState(next);
+    this.emitter.emit('ending', { phase: next.ending.phase });
+  }
+
+  /** Applies one legal ending step; emits 'ending' only when the step happened. */
+  private stepEnding(to: 'choice' | 'postgame'): boolean {
+    const next = advanceEnding(this.current, to);
+    if (next === this.current) return false;
+    this.setState(next);
+    this.emitter.emit('ending', { phase: next.ending.phase });
+    return true;
   }
 
   /**

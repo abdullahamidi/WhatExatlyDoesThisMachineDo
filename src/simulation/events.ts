@@ -1,5 +1,5 @@
 import type { AchievementId } from '../data/achievements';
-import type { OfflineReport, ResourceId, ResourceMap, SettingsState, TechId } from '../data/types';
+import type { EndingPhase, OfflineReport, ResourceId, ResourceMap, SettingsState, TechId } from '../data/types';
 
 /** Payloads of every event a GameSession emits. */
 export interface SessionEvents {
@@ -11,6 +11,7 @@ export interface SessionEvents {
   reset: Record<string, never>;
   settings: SettingsState;           // emitted when ANY settings field changes (once per updateSettings call)
   achievement: { ids: AchievementId[] };  // one per evaluation that unlocked >= 1, ids in list order; fires last
+  ending: { phase: EndingPhase };     // WP13: emitted on startEnding / finishEndingSequence / keepRunning; fires after achievement
 }
 
 export type Listener<K extends keyof SessionEvents> = (payload: SessionEvents[K]) => void;

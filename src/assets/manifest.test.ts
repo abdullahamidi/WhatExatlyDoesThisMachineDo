@@ -425,9 +425,8 @@ const ERA5_ENTRIES: ReadonlyArray<{
 ];
 
 describe('WP11 era V machine and fx assets', () => {
-  it('appends the 30 era V ids after the era IV ids, in contract order (30 new ids, 98 total)', () => {
-    expect(ASSET_IDS.length).toBe(98);
-    expect(ASSET_IDS.slice(-30)).toEqual(ERA5_ENTRIES.map((e) => e.id));
+  it('appends the 30 era V ids after the era IV ids, in contract order (ids 68..97; WP13 ids follow)', () => {
+    expect(ASSET_IDS.slice(68, 98)).toEqual(ERA5_ENTRIES.map((e) => e.id));
   });
 
   it('has the contract file, whole-image width and height, origin and tileable none for each new id', () => {
@@ -527,6 +526,81 @@ describe('WP11 era V machine and fx assets', () => {
       { x: 32, y: 0, width: 16, height: 32 },
       { x: 48, y: 0, width: 16, height: 32 },
     ]);
+  });
+});
+
+// WP13 restored world, finale fx and UI: file, whole-image size, origin, tiling and frame sheet per ART_ERA5 §11 / WP13 C3.
+const WP13_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; height: number; origin: { x: number; y: number };
+  tileable: 'none' | 'x' | 'xy'; frame?: { width: number; height: number; count: number } }> = [
+  { id: 'bg.skyRestored', file: 'finale/sky-restored.png', width: 1280, height: 720, origin: { x: 0.5, y: 0.5 }, tileable: 'none' },
+  { id: 'bg.mountainsRestored', file: 'finale/mountains-restored.png', width: 512, height: 256, origin: { x: 0, y: 1 }, tileable: 'x' },
+  { id: 'bg.skylineRestored', file: 'finale/skyline-restored.png', width: 512, height: 320, origin: { x: 0, y: 1 }, tileable: 'x' },
+  { id: 'bg.regrowth1', file: 'finale/regrowth-1.png', width: 512, height: 32, origin: { x: 0, y: 1 }, tileable: 'x' },
+  { id: 'bg.regrowth2', file: 'finale/regrowth-2.png', width: 512, height: 32, origin: { x: 0, y: 1 }, tileable: 'x' },
+  { id: 'bg.regrowth3', file: 'finale/regrowth-3.png', width: 512, height: 32, origin: { x: 0, y: 1 }, tileable: 'x' },
+  { id: 'terrain.groundGreen', file: 'terrain/ground-green.png', width: 256, height: 128, origin: { x: 0, y: 0 }, tileable: 'xy' },
+  { id: 'fx.beamWhite', file: 'fx/beam-white.png', width: 64, height: 32, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 16, height: 32, count: 4 } },
+  { id: 'fx.seed', file: 'fx/seed.png', width: 32, height: 8, origin: { x: 0.5, y: 0.5 }, tileable: 'none', frame: { width: 8, height: 8, count: 4 } },
+  { id: 'fx.bird', file: 'fx/bird.png', width: 16, height: 5, origin: { x: 0.5, y: 0.5 }, tileable: 'none', frame: { width: 8, height: 5, count: 2 } },
+  { id: 'ui.nameplate', file: 'ui/nameplate.png', width: 136, height: 24, origin: { x: 0, y: 0 }, tileable: 'none' },
+  { id: 'ui.panel', file: 'ui/panel.png', width: 24, height: 24, origin: { x: 0, y: 0 }, tileable: 'none' },
+  { id: 'ui.button', file: 'ui/button.png', width: 72, height: 24, origin: { x: 0, y: 0 }, tileable: 'none', frame: { width: 24, height: 24, count: 3 } },
+  { id: 'ui.icons16', file: 'ui/icons16.png', width: 80, height: 16, origin: { x: 0, y: 0 }, tileable: 'none', frame: { width: 16, height: 16, count: 5 } },
+];
+
+describe('WP13 restored world, finale fx and UI assets', () => {
+  it('appends the 14 WP13 ids after the era V ids, in contract order (112 total)', () => {
+    expect(ASSET_IDS.length).toBe(112);
+    expect(ASSET_IDS.slice(98)).toEqual(WP13_ENTRIES.map((e) => e.id));
+  });
+
+  it('has the contract file, whole-image size, origin and tiling for each new id', () => {
+    for (const want of WP13_ENTRIES) {
+      const entry = ASSET_MANIFEST[want.id];
+      expect(entry.file, want.id).toBe(want.file);
+      expect(entry.width, want.id).toBe(want.width);
+      expect(entry.height, want.id).toBe(want.height);
+      expect(entry.origin, want.id).toEqual(want.origin);
+      expect(entry.tileable, want.id).toBe(want.tileable);
+      expect(entry.description.trim().length, want.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('has exactly the contract frame (or none) for each new id', () => {
+    for (const want of WP13_ENTRIES) {
+      expect(ASSET_MANIFEST[want.id].frame, want.id).toEqual(want.frame);
+    }
+  });
+
+  it('has a disk file for every WP13 entry and a unique png path per id', () => {
+    const files = Object.keys(import.meta.glob('/public/assets/**/*.png'));
+    for (const want of WP13_ENTRIES) {
+      expect(files, want.id).toContain(`/public/assets/${want.file}`);
+    }
+    const paths = WP13_ENTRIES.map((e) => e.file);
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+
+  it('cuts every frame sheet into frame.count cells that tile the whole image exactly', () => {
+    for (const want of WP13_ENTRIES) {
+      const frame = want.frame;
+      if (frame === undefined) continue;
+      const rects = sheetFrameRects(ASSET_MANIFEST[want.id]);
+      expect(rects.length, want.id).toBe(frame.count);
+      expect(want.width % frame.width, want.id).toBe(0);
+      expect(rects.every((r) => r.width === frame.width && r.height === frame.height), want.id).toBe(true);
+    }
+    expect(sheetFrameRects(ASSET_MANIFEST['ui.icons16']).map((r) => r.x)).toEqual([0, 16, 32, 48, 64]);
+    expect(sheetFrameRects(ASSET_MANIFEST['fx.seed']).map((r) => r.x)).toEqual([0, 8, 16, 24]);
+  });
+
+  it('plans the WP13 sheets as spritesheets with their frame, and the others as images', () => {
+    const loads = planAssetLoads();
+    for (const want of WP13_ENTRIES) {
+      const load = loads.find((l) => l.key === want.id);
+      expect(load?.kind, want.id).toBe(want.frame === undefined ? 'image' : 'spritesheet');
+      expect(load?.frame, want.id).toEqual(want.frame);
+    }
   });
 });
 

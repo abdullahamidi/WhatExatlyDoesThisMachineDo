@@ -1,5 +1,6 @@
 import { TECH_IDS } from '../data/types';
 import type { GameState, SettingsState, TechId } from '../data/types';
+import { DEFAULT_ENDING } from './progression/ending';
 import { emptyResourceMap } from './resources';
 import { normalizeSettings } from './settings';
 
@@ -17,5 +18,6 @@ export function createInitialState(nowMs: number): GameState {
     techLevels,
     lastSimTime: nowMs,
     createdAt: nowMs,
+    ending: { ...DEFAULT_ENDING },
   };
 }

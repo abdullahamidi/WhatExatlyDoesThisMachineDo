@@ -38,7 +38,7 @@ const defaultScheduler: Scheduler = {
 
 /**
  * Owns all writes to the save after boot: the periodic autosave, saves on purchase, milestone,
- * achievement and settings changes, the manual save, the reset and the player import.
+ * achievement, ending and settings changes, the manual save, the reset and the player import.
  * Holds no economy state of its own.
  */
 export function createSaveController(o: {
@@ -122,6 +122,9 @@ export function createSaveController(o: {
           saveNow();
         }),
         session.on('achievement', () => {
+          saveNow();
+        }),
+        session.on('ending', () => {
           saveNow();
         }),
       ];

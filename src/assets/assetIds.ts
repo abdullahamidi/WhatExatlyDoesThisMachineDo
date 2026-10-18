@@ -16,5 +16,7 @@ export const ASSET_IDS = ['bg.sky','bg.mountains','bg.skyline','bg.pylons','terr
   'machine.siphonTube','machine.siphonArcs1','machine.siphonArcs2','machine.siphonArcs3',
   'machine.graviticAnchor','machine.anchorGlow1','machine.anchorGlow2','machine.anchorGlow3',
   'machine.inversionGhost','machine.lensLight','machine.lensColumn','machine.aperture','machine.namePlate',
-  'bg.skyViolet','bg.eclipse','bg.horizonGlow','fx.beam'] as const;
+  'bg.skyViolet','bg.eclipse','bg.horizonGlow','fx.beam',
+  'bg.skyRestored','bg.mountainsRestored','bg.skylineRestored','bg.regrowth1','bg.regrowth2','bg.regrowth3','terrain.groundGreen',
+  'fx.beamWhite','fx.seed','fx.bird','ui.nameplate','ui.panel','ui.button','ui.icons16'] as const;
 export type AssetId = typeof ASSET_IDS[number];

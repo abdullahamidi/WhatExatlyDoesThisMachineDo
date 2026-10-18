@@ -2,6 +2,7 @@ import type { AssetId } from '../assets/assetIds';
 import type { TechId } from './types';
 import type { MachineComponentId, Vec2 } from './machineComponents';
 import { PALETTE } from './palette';
+import type { FinaleTrackId } from './finale';
 export const VIEW = { width: 1280, height: 720 } as const;
 export const WORLD = { width: 3840, height: 2160 } as const;
 export const GROUND_Y = 1680;                                   // world y of the ground/horizon line
@@ -22,17 +23,27 @@ export interface ParallaxLayerDef { id: string; assetId: AssetId; scrollFactor: 
   underfill: number | null;   // colour of a rectangle filled below the texture so panning shows no gap
   tint?: number;              // tint: haze colour multiplied into the layer (audit S3 #14)
   visibleWhen?: { techId: TechId; minLevel: number };   // layer shown only when this tech level is reached (default: always)
+  finale?: { track: FinaleTrackId; dir: 'in' | 'out' };   // WP13 finale: alpha multiplier from the track value (in = v, out = 1 - v); combines with visibleWhen / alphaStages
   alphaStages?: readonly { techId: TechId; minLevel: number; alpha: number }[] }   // target alpha = stageAlpha() (max alpha over met stages, 0 if none); fades PARALLAX_FADE_MS; never combined with visibleWhen
 export const PARALLAX_LAYERS: readonly ParallaxLayerDef[] = [
   { id: 'sky',       assetId: 'bg.sky',       scrollFactor: 0,    bottomY: VIEW.height,                       depth: DEPTH.background,      alpha: 1,    underfill: null },
-  { id: 'mountains', assetId: 'bg.mountains', scrollFactor: 0.15, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 10, alpha: 0.45, underfill: PALETTE.industrialGray },
-  { id: 'skyline',   assetId: 'bg.skyline',   scrollFactor: 0.3,  bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 20, alpha: 0.4,  underfill: PALETTE.grayDark },
+  { id: 'mountains', assetId: 'bg.mountains', scrollFactor: 0.15, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 10, alpha: 0.45, underfill: PALETTE.industrialGray, finale: { track: 'mountains', dir: 'out' } },
+  { id: 'skyline',   assetId: 'bg.skyline',   scrollFactor: 0.3,  bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 20, alpha: 0.4,  underfill: PALETTE.grayDark, finale: { track: 'skyline', dir: 'out' } },
   { id: 'pylons',    assetId: 'bg.pylons',    scrollFactor: 0.55, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 30, alpha: 0.45, underfill: null, tint: 0xb8a98f },
   { id: 'pylonsLit', assetId: 'bg.pylonsLit', scrollFactor: 0.55, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 31, alpha: 0.7, underfill: null, visibleWhen: { techId: 'powerLines', minLevel: 1 } },
   { id: 'skyViolet', assetId: 'bg.skyViolet', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 1, alpha: 1, underfill: null,
-    alphaStages: [{ techId: 'nullChamber', minLevel: 1, alpha: 0.25 }, { techId: 'lensArray', minLevel: 1, alpha: 0.5 }, { techId: 'horizonField', minLevel: 5, alpha: 0.75 }, { techId: 'skyAperture', minLevel: 1, alpha: 1 }] },
+    alphaStages: [{ techId: 'nullChamber', minLevel: 1, alpha: 0.25 }, { techId: 'lensArray', minLevel: 1, alpha: 0.5 }, { techId: 'horizonField', minLevel: 5, alpha: 0.75 }, { techId: 'skyAperture', minLevel: 1, alpha: 1 }],
+    finale: { track: 'sky', dir: 'out' } },
   { id: 'horizonGlow', assetId: 'bg.horizonGlow', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 3, alpha: 1, underfill: null,
-    alphaStages: [{ techId: 'horizonField', minLevel: 1, alpha: 0.35 }, { techId: 'horizonField', minLevel: 10, alpha: 0.55 }, { techId: 'horizonField', minLevel: 20, alpha: 0.75 }] },
+    alphaStages: [{ techId: 'horizonField', minLevel: 1, alpha: 0.35 }, { techId: 'horizonField', minLevel: 10, alpha: 0.55 }, { techId: 'horizonField', minLevel: 20, alpha: 0.75 }],
+    finale: { track: 'glow', dir: 'out' } },
+  // WP13 restored world: twins of sky / mountains / skyline (same scrollFactor, bottomY and art size), faded in by the finale track.
+  { id: 'skyRestored', assetId: 'bg.skyRestored', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 4, alpha: 1, underfill: null,
+    finale: { track: 'sky', dir: 'in' } },
+  { id: 'mountainsRestored', assetId: 'bg.mountainsRestored', scrollFactor: 0.15, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 11, alpha: 0.45, underfill: PALETTE.green0,
+    finale: { track: 'mountains', dir: 'in' } },
+  { id: 'skylineRestored', assetId: 'bg.skylineRestored', scrollFactor: 0.3, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 21, alpha: 0.4, underfill: PALETTE.grayDark,
+    finale: { track: 'skyline', dir: 'in' } },
 ];
 /** Era V eclipse sprite in the sky (sky px, origin centre): frame 0 = the baked sun, hidden; stages step the frame up as techs arrive; diamond = the one-off flash frame. */
 export const ECLIPSE = { assetId: 'bg.eclipse', skyPx: { x: 372, y: 290 }, depth: DEPTH.background + 2,

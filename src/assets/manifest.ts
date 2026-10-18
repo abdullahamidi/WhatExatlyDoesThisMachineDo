@@ -451,6 +451,68 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     frame: { width: 16, height: 32, count: 4 },
     description: 'Four-frame aperture beam tile: a pale vertical shaft of light, one 16-px slice per frame.',
   },
+  // WP13 restored world, finale fx and UI (delivered PNGs under finale/, terrain/, fx/ and ui/; ART_ERA5 §11).
+  'bg.skyRestored': {
+    id: 'bg.skyRestored', file: 'finale/sky-restored.png', width: 1280, height: 720, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Restored clear sky in hard stepped strata, screen-fixed, faded in by the finale track over the violet sky.',
+  },
+  'bg.mountainsRestored': {
+    id: 'bg.mountainsRestored', file: 'finale/mountains-restored.png', width: 512, height: 256, origin: { x: 0, y: 1 }, tileable: 'x',
+    description: 'Far ridge recoloured green with foothills; tiles horizontally, same footprint as bg.mountains.',
+  },
+  'bg.skylineRestored': {
+    id: 'bg.skylineRestored', file: 'finale/skyline-restored.png', width: 512, height: 320, origin: { x: 0, y: 1 }, tileable: 'x',
+    description: 'Restored city skyline on the same footprints as bg.skyline; tiles horizontally, period = width.',
+  },
+  'bg.regrowth1': {
+    id: 'bg.regrowth1', file: 'finale/regrowth-1.png', width: 512, height: 32, origin: { x: 0, y: 1 }, tileable: 'x',
+    description: 'Regrowth strip, stage 1 of 3 (succession order, ART_ERA5 §1); tiles horizontally, period = width.',
+  },
+  'bg.regrowth2': {
+    id: 'bg.regrowth2', file: 'finale/regrowth-2.png', width: 512, height: 32, origin: { x: 0, y: 1 }, tileable: 'x',
+    description: 'Regrowth strip, stage 2 of 3 (succession order, ART_ERA5 §1); tiles horizontally, period = width.',
+  },
+  'bg.regrowth3': {
+    id: 'bg.regrowth3', file: 'finale/regrowth-3.png', width: 512, height: 32, origin: { x: 0, y: 1 }, tileable: 'x',
+    description: 'Regrowth strip, stage 3 of 3 (succession order, ART_ERA5 §1); tiles horizontally, period = width.',
+  },
+  'terrain.groundGreen': {
+    id: 'terrain.groundGreen', file: 'terrain/ground-green.png', width: 256, height: 128, origin: { x: 0, y: 0 }, tileable: 'xy',
+    description: 'Green recolour of terrain.ground with the same seams; tiles in both directions.',
+  },
+  'fx.beamWhite': {
+    id: 'fx.beamWhite', file: 'fx/beam-white.png', width: 64, height: 32, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 16, height: 32, count: 4 },
+    description: 'Four-frame white beam tile: the pale light shaft of the finale, one 16-px slice per frame.',
+  },
+  'fx.seed': {
+    id: 'fx.seed', file: 'fx/seed.png', width: 32, height: 8, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 8, height: 8, count: 4 },
+    description: 'Four-frame seed mote drifting over the restored ground; one 8-px cell per frame.',
+  },
+  'fx.bird': {
+    id: 'fx.bird', file: 'fx/bird.png', width: 16, height: 5, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 8, height: 5, count: 2 },
+    description: 'Two-frame bird silhouette (wing up / down) for the flocks over the restored world.',
+  },
+  'ui.nameplate': {
+    id: 'ui.nameplate', file: 'ui/nameplate.png', width: 136, height: 24, origin: { x: 0, y: 0 }, tileable: 'none',
+    description: 'Finale nameplate, drawn once and shown three times in the top-left corner (ART_ERA5 §10).',
+  },
+  'ui.panel': {
+    id: 'ui.panel', file: 'ui/panel.png', width: 24, height: 24, origin: { x: 0, y: 0 }, tileable: 'none',
+    description: 'Nine-slice terminal panel frame for the finale overlay (ART_ERA5 §8).',
+  },
+  'ui.button': {
+    id: 'ui.button', file: 'ui/button.png', width: 72, height: 24, origin: { x: 0, y: 0 }, tileable: 'none',
+    frame: { width: 24, height: 24, count: 3 },
+    description: 'Three-frame finale button sheet, 24-px cells (ART_ERA5 §8).',
+  },
+  'ui.icons16': {
+    id: 'ui.icons16', file: 'ui/icons16.png', width: 80, height: 16, origin: { x: 0, y: 0 }, tileable: 'none',
+    frame: { width: 16, height: 16, count: 5 },
+    description: 'Five 16-px icons for the finale buttons (ART_ERA5 §8).',
+  },
 };
 
 export interface AssetLoad {

@@ -1,9 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { GameState, SettingsState } from '../data/types';
 import { AUTOSAVE_INTERVAL_MS, SAVE_KEY, SAVE_PREIMPORT_KEY } from '../data/balance';
+import { TECHNOLOGIES } from '../data/technologies';
 import { GameSession } from '../simulation';
 import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
 import { emptyResourceMap } from '../simulation/resources';
+import { costAt } from '../simulation/economy/cost';
 import { deserialize } from './codec';
 import { encodeSave } from './exchange';
 import { MemoryStorage, SaveManager } from './saveManager';
@@ -368,5 +370,53 @@ describe('createSaveController', () => {
     } finally {
       warn.mockRestore();
     }
+  });
+});
+
+describe('finale saves (WP13)', () => {
+  it("'ending' events write a save at each step: sequence on purchase, then choice, then postgame", () => {
+    const storage = new CountingStorage();
+    const base = createInitialState(t0);
+    const xf = costAt(TECHNOLOGIES.primaryFunction, 0);
+    const session = new GameSession({
+      state: {
+        ...base,
+        lastSimTime: t0,
+        techLevels: { ...base.techLevels, finalAlignment: 1 },
+        res: { ...base.res, xf },
+        lifetime: { ...base.lifetime, xf },
+      },
+      now: () => t0,
+    });
+    const controller = createSaveController({
+      session,
+      saveManager: new SaveManager(storage),
+      now: () => t0,
+      scheduler: new FakeScheduler(),
+    });
+    controller.start();
+
+    // Raw JSON: a loaded 'sequence' is normalized to 'choice', so read what was written.
+    const storedEnding = (): unknown => (JSON.parse(storage.getItem(SAVE_KEY) ?? 'null') as { state: { ending: unknown } }).state.ending;
+
+    expect(session.purchase('primaryFunction').ok).toBe(true);
+    expect(storedEnding()).toEqual({ phase: 'sequence', engagedAt: t0 });
+
+    const beforeChoice = writesOf(storage);
+    expect(session.finishEndingSequence()).toBe(true);
+    expect(writesOf(storage) - beforeChoice).toBe(1);
+    expect(storedEnding()).toEqual({ phase: 'choice', engagedAt: t0 });
+
+    expect(session.keepRunning()).toBe(true);
+    expect(storedEnding()).toEqual({ phase: 'postgame', engagedAt: t0 });
+  });
+
+  it('a refused ending step writes nothing', () => {
+    const { session, controller, storage } = setup();
+    controller.start();
+    const before = writesOf(storage);
+    expect(session.finishEndingSequence()).toBe(false);
+    expect(session.keepRunning()).toBe(false);
+    expect(writesOf(storage)).toBe(before);
   });
 });

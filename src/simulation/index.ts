@@ -17,3 +17,4 @@ export { isRequirementMet, requirementsMet, requirementLabel } from './progressi
 export { getTechStatus, getTechView, getAllTechViews } from './progression/status';
 export { purchase } from './progression/purchase';
 export { evaluateMilestones } from './progression/milestones';
+export { DEFAULT_ENDING, hasEndingEffect, startEnding, advanceEnding, normalizeEnding, isRevealed, isFinaleLocked, ENDING_PHASES } from './progression/ending';

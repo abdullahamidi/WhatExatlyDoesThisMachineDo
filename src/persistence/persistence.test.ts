@@ -15,6 +15,8 @@ import { deserialize, serialize } from './codec';
 import { MemoryStorage, SaveManager, browserStorage } from './saveManager';
 import type { KeyValueStorage } from './saveManager';
 import v1Save from './fixtures/v1-save.json';
+import v2Primary from './fixtures/v2-wp11-primary.json';
+import { DEFAULT_ENDING } from '../simulation/progression/ending';
 
 const withLevels = (levels: Partial<Record<TechId, number>>, extra: Partial<GameState> = {}): GameState => {
   const s = createInitialState(0);
@@ -629,6 +631,7 @@ describe('era V save compatibility (WP11)', () => {
         totalClicks: 11,
         lastSimTime: 1000,
         createdAt: 500,
+        ending: { phase: 'choice', engagedAt: null },
       },
     );
     const result = deserialize(serialize(state, { ...DEFAULT_SETTINGS, muted: false }, 2000), 3000);
@@ -648,6 +651,85 @@ describe('era V save compatibility (WP11)', () => {
     const result = deserialize(serialize(state, { ...DEFAULT_SETTINGS, muted: false }, 2000), 3000);
     expect(result.status).toBe('loaded');
     expect(result.state.techLevels.primaryFunction).toBe(1);
+  });
+});
+
+describe('finale save compatibility (WP13)', () => {
+  const settings: SettingsState = { ...DEFAULT_SETTINGS, muted: false };
+
+  it('a save without an ending block and without primaryFunction loads as loaded with phase none', () => {
+    const parsed = JSON.parse(serialize(withLevels({ gearRatio: 2 }), settings, 2000)) as { state: Record<string, unknown> };
+    delete parsed.state['ending'];
+    const result = deserialize(JSON.stringify(parsed), 3000);
+    expect(result.status).toBe('loaded');
+    expect(result.state.ending).toEqual(DEFAULT_ENDING);
+    expect(result.state.techLevels.gearRatio).toBe(2);
+  });
+
+  it('the WP11 fixture (primaryFunction 1, no ending block) loads at the choice with its other data', () => {
+    const result = deserialize(JSON.stringify(v2Primary), 3000);
+    expect(result.status).toBe('loaded');
+    expect(result.state.techLevels.primaryFunction).toBe(1);
+    expect(result.state.ending).toEqual({ phase: 'choice', engagedAt: null });
+    expect(result.state.totalClicks).toBe(48231);
+    expect(result.stats.purchases).toBe(120);
+    expect(result.achievements.unlocked.firstTurn).toBe(1799000100000);
+  });
+
+  it('a saved sequence resumes at the choice and keeps engagedAt', () => {
+    const state = withLevels(
+      { primaryFunction: 1 },
+      { ending: { phase: 'sequence', engagedAt: 1000 }, lastSimTime: 1000, createdAt: 500 },
+    );
+    const result = deserialize(serialize(state, settings, 2000), 3000);
+    expect(result.status).toBe('loaded');
+    expect(result.state.ending).toEqual({ phase: 'choice', engagedAt: 1000 });
+  });
+
+  it('a saved choice and a saved postgame round trip losslessly', () => {
+    for (const ending of [{ phase: 'choice', engagedAt: 40 }, { phase: 'postgame', engagedAt: 4321 }] as const) {
+      const state = withLevels(
+        { primaryFunction: 1, finalAlignment: 1 },
+        { res: resources({ xf: 5 }), lifetime: resources({ xf: 5 }), ending: { ...ending }, lastSimTime: 1000, createdAt: 500 },
+      );
+      const result = deserialize(serialize(state, settings, 2000), 3000);
+      expect(result.status).toBe('loaded');
+      expect(result.state).toEqual(state);
+    }
+  });
+
+  it('an ending phase without the ending tech owned resets to DEFAULT', () => {
+    const state = withLevels({}, { ending: { phase: 'choice', engagedAt: 5 }, lastSimTime: 1000, createdAt: 500 });
+    const result = deserialize(serialize(state, settings, 2000), 3000);
+    expect(result.status).toBe('loaded');
+    expect(result.state.ending).toEqual(DEFAULT_ENDING);
+  });
+
+  it('a wrong-typed ending block recovers the save (fresh state, status recovered)', () => {
+    const badEndings: unknown[] = [
+      'sequence',
+      5,
+      null,
+      [],
+      { phase: 'x', engagedAt: null },
+      { phase: 'choice' },
+      { phase: 'choice', engagedAt: 'soon' },
+      { phase: 'sequence', engagedAt: {} },
+    ];
+    for (const bad of badEndings) {
+      const parsed = JSON.parse(serialize(withLevels({ gearRatio: 2 }), settings, 2000)) as { state: Record<string, unknown> };
+      parsed.state['ending'] = bad;
+      const result = deserialize(JSON.stringify(parsed), 3000);
+      expect(result.status).toBe('recovered');
+      expect(result.state.ending).toEqual(DEFAULT_ENDING);
+    }
+  });
+
+  it('a v1 fixture still migrates with phase none, and SAVE_VERSION stays 2', () => {
+    expect(SAVE_VERSION).toBe(2);
+    const result = deserialize(JSON.stringify(v1Save), 5);
+    expect(result.status).toBe('migrated');
+    expect(result.state.ending).toEqual(DEFAULT_ENDING);
   });
 });
 

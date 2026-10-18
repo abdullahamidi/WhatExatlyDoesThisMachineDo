@@ -60,6 +60,30 @@ describe('PALETTE_CSS', () => {
     expect(PALETTE.dusk3).toBe(0x7d6a72);
   });
 
+  it('has the eight WP13 finale keys: restored sky skyClear0..3 and regrowth green0..3', () => {
+    expect(PALETTE_CSS.skyClear0).toBe('#3f6690');
+    expect(PALETTE_CSS.skyClear1).toBe('#6f9fc8');
+    expect(PALETTE_CSS.skyClear2).toBe('#a8d0e8');
+    expect(PALETTE_CSS.skyClear3).toBe('#d6ecf0');
+    expect(PALETTE_CSS.green0).toBe('#2e4a36');
+    expect(PALETTE_CSS.green1).toBe('#5f8a4a');
+    expect(PALETTE_CSS.green2).toBe('#8fb46a');
+    expect(PALETTE_CSS.green3).toBe('#c2d68a');
+    expect(PALETTE.skyClear0).toBe(0x3f6690);
+    expect(PALETTE.skyClear1).toBe(0x6f9fc8);
+    expect(PALETTE.skyClear2).toBe(0xa8d0e8);
+    expect(PALETTE.skyClear3).toBe(0xd6ecf0);
+    expect(PALETTE.green0).toBe(0x2e4a36);
+    expect(PALETTE.green1).toBe(0x5f8a4a);
+    expect(PALETTE.green2).toBe(0x8fb46a);
+    expect(PALETTE.green3).toBe(0xc2d68a);
+  });
+
+  it('has 8 more keys than the pre-WP13 palette (27 + 8 = 35 keys, CSS mirrors them)', () => {
+    expect(Object.keys(PALETTE).length).toBe(35);
+    expect(Object.keys(PALETTE_CSS).length).toBe(35);
+  });
+
   it('no two palette keys share a value', () => {
     const values = Object.values(PALETTE);
     expect(new Set(values).size).toBe(values.length);

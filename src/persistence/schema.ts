@@ -1,6 +1,8 @@
 import { RESOURCE_IDS, TECH_IDS } from '../data/types';
 import type {
   AchievementsState,
+  EndingPhase,
+  EndingState,
   GameState,
   ResourceMap,
   SaveEnvelope,
@@ -16,6 +18,7 @@ import { createInitialState } from '../simulation/state';
 import { normalizeSettings } from '../simulation/settings';
 import { emptyResourceMap } from '../simulation/resources';
 import { deriveStats } from '../simulation/stats';
+import { DEFAULT_ENDING, ENDING_PHASES, normalizeEnding } from '../simulation/progression/ending';
 
 /** Current save schema version. v2 stores per-resource maps (`state.res`, `state.lifetime`). */
 export const SAVE_VERSION = 2;
@@ -153,6 +156,27 @@ function readResourceMap(
   return { ok: true, value: out };
 }
 
+function isEndingPhase(value: unknown): value is EndingPhase {
+  return typeof value === 'string' && (ENDING_PHASES as readonly string[]).includes(value);
+}
+
+/**
+ * Reads the finale block (WP13). Missing -> DEFAULT_ENDING; present must be
+ * `{ phase: one of the four phases, engagedAt: finite number | null }`, otherwise the save is an error.
+ * The load rule (normalizeEnding) runs later, once the tech levels are known.
+ */
+function readEnding(input: unknown): Parsed<EndingState> {
+  if (input === undefined) return { ok: true, value: { ...DEFAULT_ENDING } };
+  if (!isPlainObject(input)) return fail('"ending" must be an object');
+  const phase = input['phase'];
+  if (!isEndingPhase(phase)) return fail('"ending.phase" must be none, sequence, choice or postgame');
+  const engagedAt = input['engagedAt'];
+  if (engagedAt !== null && !isFiniteNumber(engagedAt)) {
+    return fail('"ending.engagedAt" must be a finite number or null');
+  }
+  return { ok: true, value: { phase, engagedAt } };
+}
+
 function readState(
   input: unknown,
   nowMs: number,
@@ -171,6 +195,8 @@ function readState(
   if (!createdAt.ok) return createdAt;
   const techLevels = readTechLevels(input['techLevels'], techs);
   if (!techLevels.ok) return techLevels;
+  const ending = readEnding(input['ending']);
+  if (!ending.ok) return ending;
   const lifetimeMap = emptyResourceMap();
   for (const id of RESOURCE_IDS) {
     lifetimeMap[id] = Math.max(lifetime.value[id], res.value[id]);
@@ -184,6 +210,7 @@ function readState(
       techLevels: techLevels.value,
       lastSimTime: lastSimTime.value,
       createdAt: createdAt.value,
+      ending: normalizeEnding(ending.value, techLevels.value),
     },
   };
 }
