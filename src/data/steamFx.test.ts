@@ -26,6 +26,15 @@ describe('STEAM_EMITTERS', () => {
     }
   });
 
+  it('only the manifold has an until gate, and every until tech is a known tech at level 1 or more', () => {
+    expect(STEAM_EMITTERS.filter((e) => e.until !== undefined).map((e) => e.id)).toEqual(['manifold']);
+    for (const e of STEAM_EMITTERS) {
+      if (e.until === undefined) continue;
+      expect(TECH_IDS).toContain(e.until.techId);
+      expect(e.until.minLevel, e.id).toBeGreaterThanOrEqual(1);
+    }
+  });
+
   it('every spawn point lies inside MACHINE_BOUNDS and every emitter has at least one point', () => {
     for (const e of STEAM_EMITTERS) {
       expect(e.at.length, e.id).toBeGreaterThanOrEqual(1);
@@ -73,6 +82,7 @@ describe('STEAM_EMITTERS', () => {
     expect(m.assetId).toBe('fx.steamPuff');
     expect(m.at).toEqual([{ x: -72, y: -182 }, { x: -44, y: -182 }, { x: -16, y: -182 }]);
     expect(m.gate).toEqual({ techId: 'boiler', minLevel: 1 });
+    expect(m.until).toEqual({ techId: 'pressureResonator', minLevel: 1 });
     expect(m.driver).toBe('automation');
     expect(m.threshold).toBe(5);
     expect(m.mode).toEqual({ kind: 'rate', base: 0.3, perLog: 0.2, min: 0.3, max: 1.5 });

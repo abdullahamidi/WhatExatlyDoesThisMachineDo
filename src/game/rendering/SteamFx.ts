@@ -8,7 +8,7 @@ import type { GameSession } from '../../simulation';
 import type { MachineView } from '../entities/MachineView';
 import { driverValue } from '../math/animation';
 import { machineLocalToWorld } from '../math/machineLayout';
-import { burstDelaySeconds, burstPoints, emitterRate, puffState, stepEmitter } from '../math/steamFx';
+import { burstDelaySeconds, burstPoints, emitterActive, emitterRate, puffState, stepEmitter } from '../math/steamFx';
 
 /** Per-emitter run state. Cleared on session reset and while the emitter's gate is unmet. */
 interface EmitterState {
@@ -112,11 +112,10 @@ export class SteamFx {
     if (image.scene) image.destroy(); // Phaser clears scene on destroy
   }
 
-  // Runs one emitter for this frame. A locked emitter resets its run state and stays quiet.
+  // Runs one emitter for this frame. An inactive emitter (gate unmet, or its until tech reached) resets its run state and stays quiet.
   private stepLane(lane: Lane, dt: number, machine: MachineView | null): void {
     const { emitter, state } = lane;
-    const gate = emitter.gate;
-    if (this.session.state.techLevels[gate.techId] < gate.minLevel) {
+    if (!emitterActive(emitter, this.session.state.techLevels)) {
       state.acc = 0;
       state.nextBurstAt = null;
       return;
@@ -202,6 +201,7 @@ export class SteamFx {
       const { emitter } = lane;
       const mode = emitter.mode;
       if (emitter.gate.techId !== id || mode.kind !== 'burst') continue;
+      if (!emitterActive(emitter, this.session.state.techLevels)) continue;
       const count = mode.roundRobin === true ? mode.count * emitter.at.length : mode.count;
       this.scheduleBurst(emitter, count, mode.spacingMs, startAt);
     }
