@@ -1,11 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { ACHIEVEMENTS, ACHIEVEMENT_LIST } from '../data/achievements';
 import type { AchievementDefinition } from '../data/achievements';
-import type { AchievementsState, StatsState, TechId } from '../data/types';
+import type { AchievementsState, PrestigeState, StatsState, TechId } from '../data/types';
 import { conditionMet, evaluateAchievements } from './achievements';
 import type { ReadonlyGameStateLike } from './achievements';
+import { DEFAULT_PRESTIGE } from './prestige';
 import { createInitialState } from './state';
 import { emptyResourceMap } from './resources';
+
+function prestigeOf(echoesEarned: number, perks: PrestigeState['perks'] = [], cycle = 2): PrestigeState {
+  return { cycle, echoesEarned, perks };
+}
 
 function makeStats(over: Partial<StatsState> = {}): StatsState {
   return {
@@ -102,6 +107,27 @@ describe('conditionMet', () => {
     // repeatable techs count once, however many levels
     expect(conditionMet(cond, stateWithTechs({ gearRatio: 5 }), makeStats())).toBe(false);
   });
+
+  it('prestige echoesEarned compares the lifetime Echo total with >=', () => {
+    const cond = { type: 'prestige' as const, key: 'echoesEarned' as const, atLeast: 9 };
+    expect(conditionMet(cond, state, makeStats(), prestigeOf(8))).toBe(false);
+    expect(conditionMet(cond, state, makeStats(), prestigeOf(9))).toBe(true);
+    expect(conditionMet(cond, state, makeStats(), prestigeOf(10))).toBe(true);
+  });
+
+  it('prestige perksOwned counts the owned perks', () => {
+    const cond = { type: 'prestige' as const, key: 'perksOwned' as const, atLeast: 5 };
+    expect(conditionMet(cond, state, makeStats(), prestigeOf(20, ['muscleMemory', 'residualCharge']))).toBe(false);
+    expect(conditionMet(cond, state, makeStats(), prestigeOf(20, ['muscleMemory', 'residualCharge', 'longSilence', 'servoRecall', 'ledger']))).toBe(true);
+  });
+
+  it('prestige conditions default to DEFAULT_PRESTIGE (no Echoes, no perks)', () => {
+    const echoes = { type: 'prestige' as const, key: 'echoesEarned' as const, atLeast: 9 };
+    const keeper = { type: 'prestige' as const, key: 'perksOwned' as const, atLeast: 5 };
+    expect(conditionMet(echoes, state, makeStats())).toBe(false);
+    expect(conditionMet(keeper, state, makeStats())).toBe(false);
+    expect(conditionMet(echoes, state, makeStats(), DEFAULT_PRESTIGE)).toBe(false);
+  });
 });
 
 describe('evaluateAchievements', () => {
@@ -162,6 +188,18 @@ describe('evaluateAchievements', () => {
     expect(withDefault.unlocked).toEqual(withList.unlocked);
     expect(withDefault.unlocked).toContain('newCycle');
     expect(withDefault.unlocked).toContain('longSilence');
+  });
+
+  it('unlocks the prestige rows only when the prestige argument is passed', () => {
+    const stats = makeStats({ cycles: 2 });
+    const none = evaluateAchievements(createInitialState(0), stats, EMPTY, 1);
+    expect(none.unlocked).not.toContain('echoes');
+    expect(none.unlocked).not.toContain('keeper');
+    const earned = prestigeOf(9, ['muscleMemory', 'residualCharge', 'longSilence', 'servoRecall', 'ledger']);
+    const withPrestige = evaluateAchievements(createInitialState(0), stats, EMPTY, 7, ACHIEVEMENT_LIST, earned);
+    expect(withPrestige.unlocked).toContain('echoes');
+    expect(withPrestige.unlocked).toContain('keeper');
+    expect(withPrestige.achievements.unlocked).toMatchObject({ echoes: 7, keeper: 7 });
   });
 
   it('records nowMs as the timestamp of every new unlock', () => {

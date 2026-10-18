@@ -9,8 +9,8 @@ import { runGreedy } from './sim/greedy';
 import type { GreedyResult } from './sim/greedy';
 
 // Achievement reachability (WP12 T10). A deterministic greedy run (profile A of
-// balance.sim.test.ts) must unlock every cosmetic achievement except the three that depend on
-// cycles / offline time, which a single online run cannot produce. No clock, no randomness.
+// balance.sim.test.ts) must unlock every cosmetic achievement except the rows that depend on
+// cycles / Echoes / offline time, which a single online run cannot produce. No clock, no randomness.
 // Re-run: npx vitest run src/simulation/achievements.sim.test.ts
 
 const MAIN_SECONDS = 17400;
@@ -19,8 +19,10 @@ const CLICKS_PER_SECOND = 4;
 // Profile A (same as balance.sim.test.ts): 4 clicks/s, 1 s step, 1 s buy interval.
 const PROFILE_A = { seconds: MAIN_SECONDS, clicksPerSecond: CLICKS_PER_SECOND, stepSeconds: 1, buyIntervalSeconds: 1 };
 
-// Cycle and offline rows: not reachable in one online run (no cycle, no offline time).
-const NOT_IN_ONLINE_RUN: ReadonlySet<AchievementId> = new Set<AchievementId>(['newCycle', 'shortNap', 'longSilence']);
+// Cycle, Echo and offline rows: not reachable in one online run (no cycle, no Echoes, no offline time).
+const NOT_IN_ONLINE_RUN: ReadonlySet<AchievementId> = new Set<AchievementId>([
+  'newCycle', 'shortNap', 'longSilence', 'echoes', 'keeper',
+]);
 
 const EXPECTED_UNLOCKED: readonly AchievementId[] = ACHIEVEMENT_IDS.filter((id) => !NOT_IN_ONLINE_RUN.has(id));
 
@@ -43,11 +45,11 @@ beforeAll(() => {
 });
 
 describe('achievement reachability (one greedy online run, profile A)', () => {
-  it('unlocks every achievement except the cycle and offline rows, in list order', () => {
+  it('unlocks every achievement except the cycle, Echo and offline rows, in list order', () => {
     expect(result.unlocked).toEqual(EXPECTED_UNLOCKED);
   });
 
-  it('keeps newCycle, shortNap and longSilence locked', () => {
+  it('keeps newCycle, shortNap, longSilence, echoes and keeper locked', () => {
     for (const id of NOT_IN_ONLINE_RUN) {
       expect(result.achievements.unlocked[id]).toBeUndefined();
     }

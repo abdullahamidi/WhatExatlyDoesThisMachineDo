@@ -3,8 +3,10 @@ import type { AchievementCondition, AchievementDefinition, AchievementId } from 
 import { RESOURCE_IDS, TECH_IDS } from '../data/types';
 import type { AchievementsState, GameState, StatsState, TechId } from '../data/types';
 import { TECHNOLOGIES } from '../data/technologies';
+import type { PrestigeState } from '../data/types';
+import { DEFAULT_PRESTIGE } from './prestige';
 
-// Achievement conditions and evaluation (WP12, C3). Pure: no clock, no storage.
+// Achievement conditions and evaluation (WP12, C3; WP14 C4 prestige rows). Pure: no clock, no storage.
 
 /** Minimal state view a condition needs: only the tech levels. */
 export interface ReadonlyGameStateLike {
@@ -38,6 +40,7 @@ export function conditionMet(
   c: AchievementCondition,
   state: GameState | ReadonlyGameStateLike,
   stats: StatsState,
+  prestige: PrestigeState = DEFAULT_PRESTIGE,
 ): boolean {
   switch (c.type) {
     case 'stat':
@@ -52,6 +55,10 @@ export function conditionMet(
       return stats.maxPerSecond[c.res] >= c.atLeast;
     case 'techsOwned':
       return countTechsOwned(state) >= c.atLeast;
+    case 'prestige': {
+      const value = c.key === 'perksOwned' ? prestige.perks.length : prestige.echoesEarned;
+      return value >= c.atLeast;
+    }
   }
 }
 
@@ -66,11 +73,12 @@ export function evaluateAchievements(
   current: AchievementsState,
   nowMs: number,
   defs: readonly AchievementDefinition[] = ACHIEVEMENT_LIST,
+  prestige: PrestigeState = DEFAULT_PRESTIGE,
 ): AchievementEvaluation {
   const unlocked: AchievementId[] = [];
   for (const def of defs) {
     if (current.unlocked[def.id] !== undefined || unlocked.includes(def.id)) continue;
-    if (conditionMet(def.condition, state, stats)) unlocked.push(def.id);
+    if (conditionMet(def.condition, state, stats, prestige)) unlocked.push(def.id);
   }
   if (unlocked.length === 0) return { achievements: current, unlocked };
 

@@ -9,6 +9,7 @@ export const ACHIEVEMENT_IDS = [
   'eraElectric', 'noGrid', 'kilowatt', 'eraThermal', 'ratingExceeded', 'rollingBoil', 'eraResonance',
   'convergence', 'harmonics', 'eraExotic', 'alignment', 'restoration', 'newCycle',
   'shortNap', 'longSilence', 'automation', 'servoChorus', 'sevenDigits', 'thirteenDigits', 'bigNumber',
+  'echoes', 'keeper',
 ] as const;
 export type AchievementId = typeof ACHIEVEMENT_IDS[number];
 
@@ -17,7 +18,8 @@ export type AchievementCondition =
   | { type: 'tech'; id: TechId; minLevel: number }
   | { type: 'lifetime'; res: ResourceId | 'any'; atLeast: number }
   | { type: 'maxRate'; res: ResourceId; atLeast: number }
-  | { type: 'techsOwned'; atLeast: number };
+  | { type: 'techsOwned'; atLeast: number }
+  | { type: 'prestige'; key: 'echoesEarned' | 'perksOwned'; atLeast: number };
 
 export interface AchievementDefinition {
   id: AchievementId;
@@ -165,6 +167,14 @@ export const ACHIEVEMENTS: Readonly<Record<AchievementId, AchievementDefinition>
   bigNumber: {
     id: 'bigNumber', name: 'Gauge In The Red', description: 'Reach 5 billion of any resource.', icon: 14,
     condition: { type: 'lifetime', res: 'any', atLeast: 5e9 },
+  },
+  echoes: {
+    id: 'echoes', name: 'Echo Chamber', description: 'Gather nine Echoes across finished cycles.', icon: 11, secret: true,
+    condition: { type: 'prestige', key: 'echoesEarned', atLeast: 9 },
+  },
+  keeper: {
+    id: 'keeper', name: 'Keeper', description: 'Own all five Memory perks.', icon: 15, secret: true,
+    condition: { type: 'prestige', key: 'perksOwned', atLeast: 5 },
   },
 };
 

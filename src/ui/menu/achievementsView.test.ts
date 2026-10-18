@@ -121,18 +121,18 @@ describe('achievementCards: sprite geometry', () => {
 });
 
 describe('counterText', () => {
-  it('total is the 31 rows of the list', () => {
-    expect(ACHIEVEMENT_LIST.length).toBe(31);
-    expect(counterText(none)).toBe('0/31 LOGGED');
+  it('total is the 33 rows of the list', () => {
+    expect(ACHIEVEMENT_LIST.length).toBe(33);
+    expect(counterText(none)).toBe('0/33 LOGGED');
   });
 
   it('counts unlocked known ids', () => {
-    expect(counterText({})).toBe('0/31 LOGGED');
-    expect(counterText({ firstTurn: 1, steadyHand: 2 })).toBe('2/31 LOGGED');
+    expect(counterText({})).toBe('0/33 LOGGED');
+    expect(counterText({ firstTurn: 1, steadyHand: 2 })).toBe('2/33 LOGGED');
   });
 
   it('ignores unknown ids', () => {
-    expect(counterText({ nope: 1 } as AchievementsState['unlocked'])).toBe('0/31 LOGGED');
+    expect(counterText({ nope: 1 } as AchievementsState['unlocked'])).toBe('0/33 LOGGED');
   });
 
   it('uses the given total', () => {

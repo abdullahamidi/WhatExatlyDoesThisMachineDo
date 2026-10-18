@@ -28,14 +28,15 @@ function techIdsOf(c: AchievementCondition): TechId[] {
 }
 
 describe('achievement table', () => {
-  it('has 31 ids in the contract order', () => {
-    expect(ACHIEVEMENT_IDS).toHaveLength(31);
+  it('has 33 ids in the contract order', () => {
+    expect(ACHIEVEMENT_IDS).toHaveLength(33);
     expect([...ACHIEVEMENT_IDS]).toEqual([
       'firstTurn', 'steadyHand', 'tireless', 'unrelenting', 'shiftWorker', 'wornMotor', 'fullStroke', 'blueprint',
       'tinkerer', 'engineer', 'fullIndex',
       'eraElectric', 'noGrid', 'kilowatt', 'eraThermal', 'ratingExceeded', 'rollingBoil', 'eraResonance',
       'convergence', 'harmonics', 'eraExotic', 'alignment', 'restoration', 'newCycle',
       'shortNap', 'longSilence', 'automation', 'servoChorus', 'sevenDigits', 'thirteenDigits', 'bigNumber',
+      'echoes', 'keeper',
     ]);
   });
 
@@ -51,7 +52,7 @@ describe('achievement table', () => {
 
   it('ACHIEVEMENT_LIST follows ACHIEVEMENT_IDS order', () => {
     expect(ACHIEVEMENT_LIST.map((d) => d.id)).toEqual([...ACHIEVEMENT_IDS]);
-    expect(ACHIEVEMENT_LIST).toHaveLength(31);
+    expect(ACHIEVEMENT_LIST).toHaveLength(33);
   });
 
   it('every bold ART §9 id carries its suggested icon', () => {
@@ -77,9 +78,16 @@ describe('achievement table', () => {
     }
   });
 
-  it('exactly the four spec secret rows are secret', () => {
+  it('exactly the four spec secret rows plus the two prestige rows are secret', () => {
     const secret = ACHIEVEMENT_LIST.filter((d) => d.secret === true).map((d) => d.id).sort();
-    expect(secret).toEqual(['alignment', 'eraExotic', 'newCycle', 'restoration']);
+    expect(secret).toEqual(['alignment', 'echoes', 'eraExotic', 'keeper', 'newCycle', 'restoration']);
+  });
+
+  it('prestige rows: echoes = 9 Echoes earned (icon 11), keeper = 5 perks owned (icon 15)', () => {
+    expect(ACHIEVEMENTS.echoes.icon).toBe(11);
+    expect(ACHIEVEMENTS.echoes.condition).toEqual({ type: 'prestige', key: 'echoesEarned', atLeast: 9 });
+    expect(ACHIEVEMENTS.keeper.icon).toBe(15);
+    expect(ACHIEVEMENTS.keeper.condition).toEqual({ type: 'prestige', key: 'perksOwned', atLeast: 5 });
   });
 
   it('every tech referenced by a condition exists', () => {
