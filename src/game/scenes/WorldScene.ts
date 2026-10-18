@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { GameContext } from '../context';
 import type { Hud } from '../../ui/hud';
+import type { TechTree } from '../../ui/techTree';
 import { buildHudView } from '../../ui/hudView';
 import { ParallaxBackground } from '../rendering/ParallaxBackground';
 import { Terrain } from '../rendering/Terrain';
@@ -13,14 +14,15 @@ import { HandCrank } from '../entities/HandCrank';
 // Builds the wasteland, machine and camera; reads session state each frame and pushes it to the HUD.
 export class WorldScene extends Phaser.Scene {
   private readonly ctx: GameContext;
-  private readonly hud: Hud;
+  private readonly ui: { hud: Hud; techTree: TechTree };
   private readonly disposables: Array<() => void> = [];
   private lastRevision = -1;
+  private machineView: MachineView | null = null;
 
-  constructor(ctx: GameContext, hud: Hud) {
+  constructor(ctx: GameContext, ui: { hud: Hud; techTree: TechTree }) {
     super('World');
     this.ctx = ctx;
-    this.hud = hud;
+    this.ui = ui;
   }
 
   create(): void {
@@ -28,6 +30,7 @@ export class WorldScene extends Phaser.Scene {
     const terrain = new Terrain(this);
     const dust = new DustField(this);
     const machine = new MachineView(this, this.ctx);
+    this.machineView = machine;
     const floatingText = new FloatingText(this);
     const crank = new HandCrank(this, this.ctx, machine, floatingText);
     const camera = new CameraController(this);
@@ -39,7 +42,10 @@ export class WorldScene extends Phaser.Scene {
       () => camera.destroy(),
       () => crank.destroy(),
       () => floatingText.destroy(),
-      () => machine.destroy(),
+      () => {
+        this.machineView = null;
+        machine.destroy();
+      },
       () => dust.destroy(),
       () => terrain.destroy(),
       () => background.destroy(),
@@ -59,15 +65,24 @@ export class WorldScene extends Phaser.Scene {
     this.renderHud();
   }
 
+  /** The machine view, or null before `create` and after its teardown. */
+  getMachine(): MachineView | null {
+    return this.machineView;
+  }
+
   // Required here: Phaser's Scene typings declare update(time, delta), unlike create/preload/init.
-  override update(): void {
+  override update(_time: number, delta: number): void {
     this.ctx.session.update();
+    this.machineView?.update(delta);
     if (this.ctx.session.revision !== this.lastRevision) this.renderHud();
+    this.ui.techTree.update();
+    // Phaser also handles window-level mouse events, so a DOM overlay alone does not shield the canvas.
+    this.input.enabled = !this.ui.techTree.isOpen();
   }
 
   private renderHud(): void {
     const session = this.ctx.session;
     this.lastRevision = session.revision;
-    this.hud.render(buildHudView(session.state, session.rates));
+    this.ui.hud.render(buildHudView(session.state, session.rates));
   }
 }

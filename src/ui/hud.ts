@@ -40,8 +40,7 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
   const buttons = createElement('div', { id: 'hud-buttons', className: 'hud-buttons' });
   const techButton = createElement('button', { id: 'hud-tech', className: 'hud-btn', text: 'TECH INDEX' });
   techButton.type = 'button';
-  techButton.setAttribute('aria-disabled', 'true');
-  techButton.title = 'TECH INDEX — ACCESS PENDING';
+  techButton.title = 'Open the technology index';
   const refocusButton = createElement('button', { id: 'hud-refocus', className: 'hud-btn', text: 'REFOCUS' });
   refocusButton.type = 'button';
   refocusButton.title = 'Re-centre the camera on the machine';

@@ -95,8 +95,3 @@
   outline: 2px solid var(--amber);
   outline-offset: 2px;
 }
-
-.hud-btn[aria-disabled="true"] {
-  opacity: .55;
-  cursor: help;
-}

@@ -3,6 +3,8 @@ import { GameSession, createInitialState } from '../simulation';
 import type { GameContext } from './context';
 import { createSignal } from '../utils/signal';
 import { createHud } from '../ui/hud';
+import { createToasts, connectNotifications } from '../ui/toasts';
+import { createTechTree } from '../ui/techTree';
 import { VIEW } from '../data/world';
 import { PALETTE_CSS } from '../data/palette';
 import { BootScene } from './scenes/BootScene';
@@ -19,6 +21,9 @@ export function bootstrap(): Phaser.Game {
   const root = document.getElementById('ui-root');
   if (!root) throw new Error('#ui-root missing');
   const hud = createHud(root, ctx.commands);
+  const toasts = createToasts(root);
+  connectNotifications(session, toasts);
+  const techTree = createTechTree(root, session, ctx.commands);
 
   const game = new Phaser.Game({
     type: Phaser.AUTO,
@@ -30,8 +35,8 @@ export function bootstrap(): Phaser.Game {
     roundPixels: true,
     input: { mouse: { preventDefaultWheel: true } },
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-    scene: [new BootScene(), new WorldScene(ctx, hud)],
+    scene: [new BootScene(), new WorldScene(ctx, { hud, techTree })],
   });
-  installDebugHook(session, game);
+  installDebugHook(session, game, techTree);
   return game;
 }
