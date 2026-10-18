@@ -70,7 +70,12 @@ export function bootstrap(): Phaser.Game {
   saveController.start();
 
   // D9: a brand-new save starts with reduced motion when the OS asks for it. Read here only.
-  if (startup.load.status === 'new' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true) {
+  // Skipped after a read error: the 'settings' save would overwrite a possibly good stored save.
+  if (
+    startup.load.status === 'new' &&
+    startup.load.error === undefined &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
+  ) {
     session.updateSettings({ reducedMotion: true });
   }
   // Settings applier: once now and on every 'settings' event. Notation is the module default read by the

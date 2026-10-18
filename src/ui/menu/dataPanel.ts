@@ -213,6 +213,10 @@ export function createDataPanel(host: HTMLElement, deps: DataPanelDeps): DataPan
       if (destroyed) return;
       paintImport();
     },
+    hide(): void {
+      if (destroyed) return;
+      cancelImport();
+    },
     destroy(): void {
       if (destroyed) return;
       destroyed = true;
