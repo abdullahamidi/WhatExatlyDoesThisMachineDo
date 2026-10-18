@@ -1,0 +1,114 @@
+/* Toast stack for the industrial terminal HUD. Pointer events pass through the stack. */
+
+/* keep in sync with src/data/palette.ts */
+#toast-stack {
+  --ink:#14110f;
+  --iron:#2b2e31;
+  --iron-2:#1d1f21;
+  --rust:#8c4a2a;
+  --rust-dark:#4e2a1a;
+  --amber:#d9822b;
+  --amber-dim:#a8957a;
+  --haze:#d2bf9c;
+}
+
+#toast-stack {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.toast {
+  position: relative;
+  max-width: min(560px, 92vw);
+  padding: 8px 14px;
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  box-shadow: 0 0 0 2px var(--ink), inset 0 0 14px rgba(0, 0, 0, .6);
+  color: var(--amber);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(12px, 1.4vw, 16px);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  text-align: center;
+  /* Matches TOAST_CONFIG.fadeMs (250 ms). */
+  transition: opacity 250ms ease-out;
+  animation: toast-in 200ms ease-out;
+}
+
+.toast::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .22) 0 1px, transparent 1px 3px);
+}
+
+.toast.is-fading {
+  opacity: 0;
+}
+
+.toast-title {
+  color: var(--amber);
+  text-shadow: 0 0 6px rgba(217, 130, 43, .55);
+}
+
+.toast-body {
+  margin-top: 4px;
+  color: var(--amber-dim);
+  font-size: .8em;
+}
+
+.toast-body[hidden] {
+  display: none;
+}
+
+.toast--system {
+  border-left: 6px solid var(--haze);
+}
+
+.toast--milestone {
+  border-color: var(--amber);
+  background: linear-gradient(180deg, rgba(217, 130, 43, .22), var(--iron-2));
+  padding: 12px 18px;
+  animation: toast-in 200ms ease-out, toast-pulse 1600ms ease-in-out infinite;
+}
+
+.toast--milestone .toast-title {
+  font-size: 1.2em;
+  color: var(--haze);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px var(--ink), 0 0 6px 0 rgba(217, 130, 43, .35);
+  }
+  50% {
+    box-shadow: 0 0 0 2px var(--ink), 0 0 18px 4px rgba(217, 130, 43, .75);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .toast--milestone {
+    animation: none;
+  }
+}
