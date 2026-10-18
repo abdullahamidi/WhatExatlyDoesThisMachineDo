@@ -1,0 +1,112 @@
+/* SYSTEM menu modal. Terminal look shared with the HUD and TECH INDEX. Esc is handled by the shared modal stack. */
+
+/* keep in sync with src/data/palette.ts */
+#system-menu {
+  --ink:#14110f;
+  --iron:#2b2e31;
+  --iron-2:#1d1f21;
+  --rust:#8c4a2a;
+  --rust-dark:#4e2a1a;
+  --amber:#d9822b;
+  --amber-dim:#a8957a;
+  --haze:#d2bf9c;
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: none;
+  pointer-events: auto;
+  background: rgba(8, 6, 5, .78);
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(11px, 1.3vw, 15px);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--amber);
+}
+
+#system-menu.is-open {
+  display: flex;
+}
+
+#system-menu [hidden] {
+  display: none !important;
+}
+
+#system-panel {
+  position: relative;
+  box-sizing: border-box;
+  width: min(420px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  box-shadow: 0 0 0 2px var(--ink), inset 0 0 18px rgba(0, 0, 0, .6);
+}
+
+#system-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .22) 0 1px, transparent 1px 3px);
+}
+
+#sys-title {
+  margin: 0;
+  padding-bottom: 6px;
+  font-size: 1.2em;
+  color: var(--amber);
+  text-shadow: 0 0 6px rgba(217, 130, 43, .55);
+  border-bottom: 1px solid var(--rust-dark);
+}
+
+.sys-btn {
+  font-family: inherit;
+  font-size: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: var(--amber);
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.sys-btn:hover {
+  background: var(--rust-dark);
+  color: var(--haze);
+}
+
+.sys-btn:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+#sys-reset.is-armed {
+  background: var(--rust-dark);
+  color: var(--haze);
+  animation: sys-reset-pulse 1.2s ease-in-out infinite;
+}
+
+#sys-feedback {
+  min-height: 1.4em;
+  color: var(--amber-dim);
+}
+
+#sys-close {
+  align-self: flex-end;
+}
+
+@keyframes sys-reset-pulse {
+  0%, 100% { border-color: var(--rust); }
+  50% { border-color: var(--haze); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #sys-reset.is-armed {
+    animation: none;
+  }
+}
