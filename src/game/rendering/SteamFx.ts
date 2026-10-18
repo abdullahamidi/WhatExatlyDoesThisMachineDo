@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { MILESTONE_BURST, STEAM_EMITTERS, STEAM_FX } from '../../data/steamFx';
+import { MILESTONE_BURSTS, STEAM_EMITTERS, STEAM_FX } from '../../data/steamFx';
 import type { EmitterMode, SteamEmitter } from '../../data/steamFx';
 import { MACHINE_MOTION } from '../../data/machineComponents';
 import type { MachineComponentId, Vec2 } from '../../data/machineComponents';
@@ -8,7 +8,7 @@ import type { GameSession } from '../../simulation';
 import type { MachineView } from '../entities/MachineView';
 import { driverValue } from '../math/animation';
 import { machineLocalToWorld } from '../math/machineLayout';
-import { burstDelaySeconds, emitterRate, puffState, stepEmitter } from '../math/steamFx';
+import { burstDelaySeconds, burstPoints, emitterRate, puffState, stepEmitter } from '../math/steamFx';
 
 /** Per-emitter run state. Cleared on session reset and while the emitter's gate is unmet. */
 interface EmitterState {
@@ -16,6 +16,7 @@ interface EmitterState {
   nextBurstAt: number | null;    // burst emitters: clock time of the next burst, null while the driver is below its floor
   burstIndex: number;            // burst emitters: index fed to burstDelaySeconds
   counter: number;               // rate emitters: round-robin index over the spawn points
+  burstPoint: number;            // round-robin burst emitters: index of the point the next periodic burst fires from
 }
 
 /** An emitter paired with its run state, in STEAM_EMITTERS order. */
@@ -48,7 +49,7 @@ const RATE_EMITTER_PART: Readonly<Record<string, MachineComponentId>> = {
 };
 
 function freshState(): EmitterState {
-  return { acc: 0, nextBurstAt: null, burstIndex: 0, counter: 0 };
+  return { acc: 0, nextBurstAt: null, burstIndex: 0, counter: 0, burstPoint: 0 };
 }
 
 /** Local spawn point `index` round-robin over `points`, or undefined when there are none. */
@@ -57,8 +58,8 @@ function pointAt(points: readonly Vec2[], index: number): Vec2 | undefined {
   return points[index % points.length];
 }
 
-// World-space steam and smoke puffs for the era III machine: boiler chimney, relief valves, steam hammer
-// strikes and the manifold leaks. Emitter rates and gates come from data (STEAM_EMITTERS); the pure maths
+// World-space steam and smoke puffs for the era III machine (boiler chimney, relief valves, steam hammer
+// strikes, manifold leaks) and the era IV calliope whistles. Emitter rates and gates come from data (STEAM_EMITTERS); the pure maths
 // lives in math/steamFx. Puffs come from a bounded pool of images that are hidden while free.
 export class SteamFx {
   private readonly scene: Phaser.Scene;
@@ -121,7 +122,7 @@ export class SteamFx {
       return;
     }
     const rates = this.session.rates.perSecond;
-    const v = driverValue(emitter.driver, 0, rates.me, rates.ee, rates.pr);
+    const v = driverValue(emitter.driver, 0, rates.me, rates.ee, rates.pr, rates.rs);
     const mode = emitter.mode;
     switch (mode.kind) {
       case 'rate': {
@@ -145,7 +146,11 @@ export class SteamFx {
         if (v >= emitter.threshold && v > mode.minDriver) {
           if (state.nextBurstAt === null) state.nextBurstAt = this.clock + this.nextBurstGap(state, mode);
           if (this.clock >= state.nextBurstAt) {
-            this.scheduleBurst(emitter, mode.count, mode.spacingMs, this.clock);
+            // Round robin: every puff of this periodic burst comes from one point; the point advances per burst.
+            const roundRobin = mode.roundRobin === true;
+            const single = roundRobin ? state.burstPoint : null;
+            if (roundRobin) state.burstPoint += 1;
+            this.scheduleBurst(emitter, mode.count, mode.spacingMs, this.clock, single);
             state.nextBurstAt = this.clock + this.nextBurstGap(state, mode);
           }
         } else {
@@ -180,34 +185,38 @@ export class SteamFx {
     this.lastStrikes = strikes;
   }
 
-  // Queues `count` puffs on the emitter's points, puff i at startAt + i * spacingMs.
-  private scheduleBurst(emitter: SteamEmitter, count: number, spacingMs: number, startAt: number): void {
-    for (let i = 0; i < count; i += 1) {
-      const point = pointAt(emitter.at, i);
-      if (point === undefined) continue;
+  // Queues the puffs of one burst, puff i at startAt + i * spacingMs. single null: puff i at point i % n;
+  // single k: every puff at point k (round robin, one whistle per burst).
+  private scheduleBurst(emitter: SteamEmitter, count: number, spacingMs: number, startAt: number, single: number | null = null): void {
+    const pts = burstPoints(emitter.at, count, single);
+    pts.forEach((point, i) => {
       this.scheduled.push({ at: startAt + (i * spacingMs) / 1000, point, assetId: emitter.assetId });
-    }
+    });
   }
 
-  // A tech bought with a burst emitter fires one burst, after the valve has landed.
+  // A tech bought with a burst emitter fires one burst, after the valve has landed. A round-robin emitter
+  // fires every whistle once (count per point), so the purchase reads as one whistle per point.
   private onUnlock(id: string): void {
     const startAt = this.clock + STEAM_FX.purchaseBurstDelayMs / 1000;
     for (const lane of this.lanes) {
       const { emitter } = lane;
       const mode = emitter.mode;
       if (emitter.gate.techId !== id || mode.kind !== 'burst') continue;
-      this.scheduleBurst(emitter, mode.count, mode.spacingMs, startAt);
+      const count = mode.roundRobin === true ? mode.count * emitter.at.length : mode.count;
+      this.scheduleBurst(emitter, count, mode.spacingMs, startAt);
     }
   }
 
-  // The milestone whistle: a short burst from the named emitter, starting now.
+  // Milestone whistles: a short burst from each named emitter, starting now (MILESTONE_BURSTS order).
   private onMilestone(id: string): void {
-    if (id !== MILESTONE_BURST.techId) return;
-    const lane = this.lanes.find((l) => l.emitter.id === MILESTONE_BURST.emitter);
-    if (lane === undefined) return;
-    const mode = lane.emitter.mode;
-    if (mode.kind !== 'burst') return;
-    this.scheduleBurst(lane.emitter, MILESTONE_BURST.count, mode.spacingMs, this.clock);
+    for (const m of MILESTONE_BURSTS) {
+      if (m.techId !== id) continue;
+      const lane = this.lanes.find((l) => l.emitter.id === m.emitter);
+      if (lane === undefined) continue;
+      const mode = lane.emitter.mode;
+      if (mode.kind !== 'burst') continue;
+      this.scheduleBurst(lane.emitter, m.count, mode.spacingMs, this.clock, null);
+    }
   }
 
   // Hides and pools every puff, drops queued puffs and zeroes all run state.

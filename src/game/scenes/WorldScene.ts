@@ -4,7 +4,7 @@ import type { Hud } from '../../ui/hud';
 import type { TechTree } from '../../ui/techTree';
 import type { ModalStack } from '../../ui/modalStack';
 import { buildHudView } from '../../ui/hudView';
-import { PYLON_FEEDS } from '../../data/world';
+import { DUST_RISING, PYLON_FEEDS } from '../../data/world';
 import { ParallaxBackground } from '../rendering/ParallaxBackground';
 import { PylonLine } from '../rendering/PylonLine';
 import { SteamFx } from '../rendering/SteamFx';
@@ -25,6 +25,7 @@ export class WorldScene extends Phaser.Scene {
   private background: ParallaxBackground | null = null;
   private pylonLines: PylonLine[] = [];
   private steamFx: SteamFx | null = null;
+  private dust: DustField | null = null;
 
   constructor(ctx: GameContext, ui: { hud: Hud; techTree: TechTree; modals: ModalStack }) {
     super('World');
@@ -41,6 +42,9 @@ export class WorldScene extends Phaser.Scene {
     this.pylonLines = pylonLines;
     const terrain = new Terrain(this);
     const dust = new DustField(this);
+    this.dust = dust;
+    // A loaded save with the spire already standing shows its rising dust at once.
+    dust.setRising(this.ctx.session.state.techLevels[DUST_RISING.techId] >= DUST_RISING.minLevel, true);
     const machine = new MachineView(this, this.ctx);
     this.machineView = machine;
     const steamFx = new SteamFx(this, this.ctx.session, () => this.machineView);
@@ -64,7 +68,10 @@ export class WorldScene extends Phaser.Scene {
         this.machineView = null;
         machine.destroy();
       },
-      () => dust.destroy(),
+      () => {
+        this.dust = null;
+        dust.destroy();
+      },
       () => terrain.destroy(),
       () => {
         this.pylonLines = [];
@@ -102,6 +109,8 @@ export class WorldScene extends Phaser.Scene {
     for (const line of this.pylonLines) line.update(this.cameras.main, this.ctx.session.state.techLevels, delta);
     this.machineView?.update(delta);
     this.steamFx?.update(delta);
+    // Cheap flag compare each frame: the streams only switch when the spire's level crosses its gate (or a reset).
+    this.dust?.setRising(this.ctx.session.state.techLevels[DUST_RISING.techId] >= DUST_RISING.minLevel);
     if (this.ctx.session.revision !== this.lastRevision) this.renderHud();
     this.ui.techTree.update();
     // Phaser also handles window-level mouse events, so a DOM overlay alone does not shield the canvas.
