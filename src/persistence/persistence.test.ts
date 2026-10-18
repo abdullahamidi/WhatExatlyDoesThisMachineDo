@@ -405,6 +405,42 @@ describe('v1 fixture', () => {
   });
 });
 
+describe('era III save compatibility (WP9)', () => {
+  const ERA_THREE_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 3);
+
+  it('a v2 save without any era III keys loads as loaded with every era III level at 0', () => {
+    const base = withLevels(
+      { gearRatio: 4, wornMotor: 1, substationBlueprint: 1 },
+      { res: resources({ me: 5 }), lastSimTime: 1000, createdAt: 500 },
+    );
+    const parsed = JSON.parse(serialize(base, { muted: false }, 2000)) as {
+      state: { techLevels: Partial<Record<TechId, number>> };
+    };
+    for (const id of ERA_THREE_IDS) delete parsed.state.techLevels[id];
+
+    const result = deserialize(JSON.stringify(parsed), 3000);
+    expect(result.status).toBe('loaded');
+    for (const id of ERA_THREE_IDS) expect(result.state.techLevels[id]).toBe(0);
+    expect(result.state.techLevels.gearRatio).toBe(4);
+    expect(result.state.techLevels.substationBlueprint).toBe(1);
+  });
+
+  it('a round trip with era III levels set is lossless', () => {
+    const state = withLevels(
+      { boiler: 1, firebox: 12, condenser: 5, reliefValves: 1, pressureVesselBlueprint: 1 },
+      {
+        res: resources({ pr: 1234.5, ee: 3 }),
+        lifetime: resources({ pr: 6000000, ee: 9 }),
+        lastSimTime: 1000,
+        createdAt: 500,
+      },
+    );
+    const result = deserialize(serialize(state, { muted: false }, 2000), 3000);
+    expect(result.status).toBe('loaded');
+    expect(result.state).toEqual(state);
+  });
+});
+
 describe('validateEnvelope', () => {
   it('rejects non-objects, unmigrated and future versions', () => {
     expect(validateEnvelope(null, 1).ok).toBe(false);

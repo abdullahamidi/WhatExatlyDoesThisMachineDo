@@ -60,6 +60,38 @@ describe('startSession', () => {
     expect(result.offline.gained.me).toBeCloseTo(perSecond * OFFLINE_CAP_SECONDS, 6);
   });
 
+  it('(c2) relief valves extend the offline cap to 12 h: a 14 h gap is capped at 43200 s', () => {
+    const storage = new MemoryStorage();
+    const state = withLevels({ wornMotor: 1, reliefValves: 1 }, { lastSimTime: t0 - 14 * HOUR_MS });
+    const perSecond = computeRates(state).perSecond.me;
+    storage.setItem(SAVE_KEY, serialize(state, { muted: false }, t0 - 14 * HOUR_MS));
+
+    const result = startSession(new SaveManager(storage), t0, clock);
+    expect(result.offline.elapsedSeconds).toBe(50400);
+    expect(result.offline.cappedSeconds).toBe(43200);
+    expect(result.offline.gained.me).toBeCloseTo(perSecond * 43200, 6);
+  });
+
+  it('(c3) relief valves: a 10 h gap is not capped (36000 s)', () => {
+    const storage = new MemoryStorage();
+    const state = withLevels({ wornMotor: 1, reliefValves: 1 }, { lastSimTime: t0 - 10 * HOUR_MS });
+    storage.setItem(SAVE_KEY, serialize(state, { muted: false }, t0 - 10 * HOUR_MS));
+
+    const result = startSession(new SaveManager(storage), t0, clock);
+    expect(result.offline.elapsedSeconds).toBe(36000);
+    expect(result.offline.cappedSeconds).toBe(36000);
+  });
+
+  it('(c4) without relief valves a 14 h gap stays capped at 28800 s', () => {
+    const storage = new MemoryStorage();
+    const state = withLevels({ wornMotor: 1 }, { lastSimTime: t0 - 14 * HOUR_MS });
+    storage.setItem(SAVE_KEY, serialize(state, { muted: false }, t0 - 14 * HOUR_MS));
+
+    const result = startSession(new SaveManager(storage), t0, clock);
+    expect(result.offline.elapsedSeconds).toBe(50400);
+    expect(result.offline.cappedSeconds).toBe(OFFLINE_CAP_SECONDS);
+  });
+
   it('(d) a corrupt save is recovered, backed up and replaced by a fresh state', () => {
     const storage = new MemoryStorage();
     storage.setItem(SAVE_KEY, '{broken');
