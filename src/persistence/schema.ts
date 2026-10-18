@@ -1,16 +1,33 @@
-import { TECH_IDS } from '../data/types';
-import type { GameState, SaveEnvelope, SettingsState, TechDefinition, TechId } from '../data/types';
+import { RESOURCE_IDS, TECH_IDS } from '../data/types';
+import type { GameState, ResourceMap, SaveEnvelope, SettingsState, TechDefinition, TechId } from '../data/types';
 import { TECHNOLOGIES } from '../data/technologies';
 import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
+import { emptyResourceMap } from '../simulation/resources';
 
-/** Current save schema version. */
-export const SAVE_VERSION = 1;
+/** Current save schema version. v2 stores per-resource maps (`state.res`, `state.lifetime`). */
+export const SAVE_VERSION = 2;
 
 /** MIGRATIONS[n] migrates a version-n envelope to version n+1. */
 export type Migration = (data: unknown) => unknown;
 
-/** Registered migrations. Empty for v1. */
-export const MIGRATIONS: Record<number, Migration> = {};
+/**
+ * v1 -> v2: the single `me` / `lifetimeMe` fields move into the `res` / `lifetime` resource maps.
+ * Values are copied untouched so validation still rejects bad saves. Never throws; never mutates input.
+ */
+export function migrateV1ToV2(data: unknown): unknown {
+  if (!isPlainObject(data)) return data;
+  const state = data['state'];
+  if (!isPlainObject(state)) return data;
+  const { me, lifetimeMe, ...rest } = state;
+  const res: Plain = {};
+  const lifetime: Plain = {};
+  if (me !== undefined) res['me'] = me;
+  if (lifetimeMe !== undefined) lifetime['me'] = lifetimeMe;
+  return { ...data, state: { ...rest, res, lifetime } };
+}
+
+/** Registered migrations, keyed by the version they migrate from. */
+export const MIGRATIONS: Record<number, Migration> = { 1: migrateV1ToV2 };
 
 type Plain = Record<string, unknown>;
 type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -39,7 +56,7 @@ function readNumber(source: Plain, key: string, fallback: number, min?: number):
 
 /**
  * Brings raw save data up to SAVE_VERSION by running migrations in order.
- * Returns the migrated object and whether any migration ran.
+ * Returns the migrated object and whether a migration ran.
  */
 export function migrate(
   data: unknown,
@@ -96,16 +113,43 @@ function readTechLevels(
   return { ok: true, value: levels };
 }
 
+/**
+ * Reads a per-resource map. Missing map -> `fallback` copy; missing key -> `fallback[id]`;
+ * present keys must be finite and >= 0. Unknown keys are dropped.
+ */
+function readResourceMap(
+  input: Plain,
+  key: 'res' | 'lifetime',
+  fallback: Readonly<ResourceMap>,
+): Parsed<ResourceMap> {
+  const raw = input[key];
+  if (raw === undefined) return { ok: true, value: { ...fallback } };
+  if (!isPlainObject(raw)) return fail(`"${key}" must be an object`);
+  const out = emptyResourceMap();
+  for (const id of RESOURCE_IDS) {
+    const value = raw[id];
+    if (value === undefined) {
+      out[id] = fallback[id];
+      continue;
+    }
+    if (!isFiniteNumber(value) || value < 0) {
+      return fail(`"${key}.${id}" must be a finite number >= 0`);
+    }
+    out[id] = value;
+  }
+  return { ok: true, value: out };
+}
+
 function readState(
   input: unknown,
   nowMs: number,
   techs: Readonly<Record<TechId, TechDefinition>>,
 ): Parsed<GameState> {
   if (!isPlainObject(input)) return fail('"state" must be an object');
-  const me = readNumber(input, 'me', 0, 0);
-  if (!me.ok) return me;
-  const lifetimeMe = readNumber(input, 'lifetimeMe', me.value, 0);
-  if (!lifetimeMe.ok) return lifetimeMe;
+  const res = readResourceMap(input, 'res', emptyResourceMap());
+  if (!res.ok) return res;
+  const lifetime = readResourceMap(input, 'lifetime', res.value);
+  if (!lifetime.ok) return lifetime;
   const totalClicks = readNumber(input, 'totalClicks', 0, 0);
   if (!totalClicks.ok) return totalClicks;
   const lastSimTime = readNumber(input, 'lastSimTime', nowMs);
@@ -114,11 +158,15 @@ function readState(
   if (!createdAt.ok) return createdAt;
   const techLevels = readTechLevels(input['techLevels'], techs);
   if (!techLevels.ok) return techLevels;
+  const lifetimeMap = emptyResourceMap();
+  for (const id of RESOURCE_IDS) {
+    lifetimeMap[id] = Math.max(lifetime.value[id], res.value[id]);
+  }
   return {
     ok: true,
     value: {
-      me: me.value,
-      lifetimeMe: Math.max(lifetimeMe.value, me.value),
+      res: res.value,
+      lifetime: lifetimeMap,
       totalClicks: Math.floor(totalClicks.value),
       techLevels: techLevels.value,
       lastSimTime: lastSimTime.value,
