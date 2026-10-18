@@ -1,0 +1,24 @@
+{
+  "machineMeanMs": 4,
+  "machineMaxMs": 20,
+  "uiMeanMs": 2,
+  "uiMaxMs": 8,
+  "finaleMeanMs": 2,
+  "displayObjects": 500,
+  "techTreeOpenMs": 8,
+  "heapMb": 150,
+  "heapGrowthMb": 8,
+  "bootMs": 3000,
+  "liveVoices": 48,
+  "musicVoices": 8,
+  "peakDbfs": -1,
+  "frameP95Ms": 17,
+  "cycleDisplayPct": 10,
+  "bundle": {
+    "appRawKb": 340,
+    "appGzipKb": 100,
+    "phaserKb": 1500,
+    "cssKb": 30,
+    "publicAssetsKb": 8000
+  }
+}

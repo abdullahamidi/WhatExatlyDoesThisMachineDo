@@ -1,14 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { AUDIO } from '../data/audio';
-import type { EndingPhase } from '../data/types';
+import type { BedId } from '../data/audio';
+import { MUSIC } from '../data/music';
+import { TECH_IDS } from '../data/types';
+import type { EndingPhase, TechId } from '../data/types';
 import type { LevelSnapshot } from './audioMath';
 import {
+  ambientPeakSum,
   activityLevel,
   arcRate,
+  bedTrim,
   boilerGain,
   busGain,
   chirpSweeps,
   chordFrequencies,
+  currentEra,
   droneGain,
   gearTickRate,
   humFrequency,
@@ -23,6 +29,10 @@ import {
   stampPartials,
   windAllowed,
 } from './audioMath';
+import { musicContribution } from './musicMath';
+
+const BEDS: BedId[] = ['hum', 'gear', 'mains', 'boiler', 'pad', 'servo', 'drone', 'wind'];
+const ERAS = [1, 2, 3, 4, 5] as const;
 
 const SAMPLE_INPUTS = [0, -5, NaN, Infinity, 1e12, 0.001, 1];
 
@@ -382,7 +392,7 @@ describe('servo maths', () => {
 });
 
 describe('levelsChanged', () => {
-  const BASE: LevelSnapshot = { master: 0.5, wind: true, sfxBus: 1, ambientBus: 0.5 };
+  const BASE: LevelSnapshot = { master: 0.5, wind: true, sfxBus: 1, ambientBus: 0.5, musicBus: 0.42 };
 
   it('is true when nothing was applied yet', () => {
     expect(levelsChanged(null, BASE)).toBe(true);
