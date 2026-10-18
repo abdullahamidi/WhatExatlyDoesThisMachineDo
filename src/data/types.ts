@@ -1,6 +1,7 @@
 export const TECH_IDS = ['handCrank','gearRatio','reinforcedCrank','flywheel','wornMotor',
   'motorTuning','pistonArray','improvedPistons','generatorBlueprint',
-  'generator','copperWinding','motorRetrofit','dynamoCrank','capacitorBank','sparkGap','transformer','powerLines','substationBlueprint'] as const;
+  'generator','copperWinding','motorRetrofit','dynamoCrank','capacitorBank','sparkGap','transformer','powerLines','substationBlueprint',
+  'boiler','firebox','inductionHeater','steamHammer','superheater','condenser','turbine','reliefValves','pressureVesselBlueprint'] as const;
 export type TechId = typeof TECH_IDS[number];
 export const RESOURCE_IDS = ['me', 'ee', 'pr', 'rs', 'xf'] as const;
 export type ResourceId = typeof RESOURCE_IDS[number];
@@ -20,6 +21,7 @@ export type Effect =                                      // repeatable effects 
   | { type: 'rateMult'; factor: number; res: ResourceId | 'all' } // multiplicative per-second
   | { type: 'convert'; amount: number; res: ResourceId }  // source = RESOURCES[res].source
   | { type: 'clickEcho'; seconds: number; res: ResourceId } // per click = seconds*lvl * perSecond[res]
+  | { type: 'offlineHours'; hours: number } // adds hours * level to the offline cap
   | { type: 'none' };
 export type Requirement =
   | { type: 'tech'; id: TechId; minLevel: number }

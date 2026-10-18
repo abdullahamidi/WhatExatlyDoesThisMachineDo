@@ -54,4 +54,13 @@ export const INSTALL_LINES: Record<TechId, string> = {
   transformer: 'Voltage changed. Ratio chosen by something.',
   powerLines: 'Conductors raised toward a grid. Grid: not found.',
   substationBlueprint: 'Grid handshake... no response from grid.',
+  boiler: 'Pressure detected. Vessel rating: unlisted.',
+  firebox: 'Fuel source not on the manifest. Burning anyway.',
+  inductionHeater: 'Current turned to heat. Heat did not object.',
+  steamHammer: 'Impact logged. Target: the ground.',
+  superheater: 'Steam exceeds the temperature it was asked for.',
+  condenser: 'Water returned. Some of it was not ours.',
+  turbine: 'Output sent back up the line. Line accepted.',
+  reliefValves: 'Relief valves fitted. Relief not expected.',
+  pressureVesselBlueprint: 'Containment rating exceeded by design.',
 };

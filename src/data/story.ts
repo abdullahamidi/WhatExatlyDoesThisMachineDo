@@ -11,4 +11,5 @@ export const PLAQUE_LINES: readonly PlaqueLine[] = [
   { milestone: null, text: 'PRIMARY FUNCTION: UNKNOWN' },
   { milestone: 'generatorBlueprint', text: 'PRIMARY FUNCTION: R?S????' },
   { milestone: 'substationBlueprint', text: 'PRIMARY FUNCTION: RES?OR?' },
+  { milestone: 'pressureVesselBlueprint', text: 'PRIMARY FUNCTION: REST?RE' },
 ];

@@ -3,10 +3,28 @@ import { TECH_IDS } from './types';
 import type { TechDefinition, TechId, Requirement } from './types';
 import { TECHNOLOGIES, TECH_LIST } from './technologies';
 import { PLAQUE_LINES } from './story';
+import { INSTALL_LINES } from './notifications';
+import { SYSTEM_LOGS } from './systemLogs';
 import { OFFLINE_CAP_SECONDS, MAX_UPDATE_SECONDS, AUTOSAVE_INTERVAL_MS, SAVE_KEY, SAVE_BACKUP_KEY } from './balance';
 
 const ERA_ONE_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 1);
 const ERA_TWO_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 2);
+const ERA_THREE_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 3);
+
+// Projection of a definition onto the C1 columns.
+const project = (def: TechDefinition): unknown => ({
+  id: def.id,
+  kind: def.kind,
+  era: def.era,
+  costRes: def.costRes,
+  baseCost: def.baseCost,
+  growth: def.growth,
+  maxLevel: def.maxLevel,
+  tree: def.tree,
+  branch: def.branch,
+  effects: def.effects,
+  requires: def.requires,
+});
 
 describe('technology table', () => {
   it('has unique ids that match TECH_IDS', () => {
@@ -15,7 +33,7 @@ describe('technology table', () => {
   });
 
   it('TECH_LIST follows TECH_IDS order', () => {
-    expect(TECH_LIST).toHaveLength(18);
+    expect(TECH_LIST).toHaveLength(27);
     expect(TECH_LIST.map((t) => t.id)).toEqual([...TECH_IDS]);
   });
 
@@ -127,6 +145,15 @@ describe('technology table', () => {
       transformer: ['repeatable', 5000, 1.5, 20],
       powerLines: ['unlock', 200000, null, null],
       substationBlueprint: ['milestone', 0, null, null],
+      boiler: ['unlock', 1000000, null, null],
+      firebox: ['repeatable', 1000, 1.3, 25],
+      inductionHeater: ['repeatable', 300000, 1.35, 20],
+      steamHammer: ['unlock', 10000, null, null],
+      superheater: ['unlock', 40000, null, null],
+      condenser: ['repeatable', 60000, 1.3, 20],
+      turbine: ['unlock', 300000, null, null],
+      reliefValves: ['unlock', 800000, null, null],
+      pressureVesselBlueprint: ['milestone', 0, null, null],
     };
     for (const id of TECH_IDS) {
       const [kind, baseCost, growth, maxLevel] = expected[id];
@@ -173,21 +200,6 @@ describe('technology table', () => {
 });
 
 describe('era II technology table', () => {
-  // Projection of a definition onto the C1 columns.
-  const project = (def: TechDefinition): unknown => ({
-    id: def.id,
-    kind: def.kind,
-    era: def.era,
-    costRes: def.costRes,
-    baseCost: def.baseCost,
-    growth: def.growth,
-    maxLevel: def.maxLevel,
-    tree: def.tree,
-    branch: def.branch,
-    effects: def.effects,
-    requires: def.requires,
-  });
-
   it('matches the C1 table exactly', () => {
     const expected = {
       generator: {
@@ -290,8 +302,147 @@ describe('era II technology table', () => {
     }
   });
 
-  it('era is 1 or 2 for every tech', () => {
-    for (const id of TECH_IDS) expect([1, 2]).toContain(TECHNOLOGIES[id].era);
+  it('era is 1, 2 or 3 for every tech', () => {
+    for (const id of TECH_IDS) expect([1, 2, 3]).toContain(TECHNOLOGIES[id].era);
+  });
+});
+
+describe('era III technology table', () => {
+  it('matches the C1 table exactly', () => {
+    const expected = {
+      boiler: {
+        id: 'boiler', kind: 'unlock', era: 3, costRes: 'ee', baseCost: 1000000, growth: null, maxLevel: null,
+        tree: { col: 0, row: 1 }, branch: 'convergence',
+        effects: [{ type: 'convert', amount: 0.3, res: 'pr' }],
+        requires: [{ type: 'tech', id: 'substationBlueprint', minLevel: 1 }],
+      },
+      firebox: {
+        id: 'firebox', kind: 'repeatable', era: 3, costRes: 'pr', baseCost: 1000, growth: 1.3, maxLevel: 25,
+        tree: { col: 1, row: 0 }, branch: 'mechanical',
+        effects: [{ type: 'convert', amount: 0.15, res: 'pr' }],
+        requires: [{ type: 'tech', id: 'boiler', minLevel: 1 }],
+      },
+      inductionHeater: {
+        id: 'inductionHeater', kind: 'repeatable', era: 3, costRes: 'ee', baseCost: 300000, growth: 1.35, maxLevel: 20,
+        tree: { col: 1, row: 2 }, branch: 'automation',
+        effects: [{ type: 'autoAdd', amount: 5, res: 'pr' }],
+        requires: [{ type: 'tech', id: 'boiler', minLevel: 1 }],
+      },
+      steamHammer: {
+        id: 'steamHammer', kind: 'unlock', era: 3, costRes: 'pr', baseCost: 10000, growth: null, maxLevel: null,
+        tree: { col: 2, row: 0 }, branch: 'origin',
+        effects: [{ type: 'clickEcho', seconds: 1, res: 'pr' }],
+        requires: [{ type: 'tech', id: 'firebox', minLevel: 3 }],
+      },
+      superheater: {
+        id: 'superheater', kind: 'unlock', era: 3, costRes: 'pr', baseCost: 40000, growth: null, maxLevel: null,
+        tree: { col: 2, row: 1 }, branch: 'mechanical',
+        effects: [{ type: 'rateMult', factor: 2, res: 'pr' }],
+        requires: [{ type: 'tech', id: 'firebox', minLevel: 5 }],
+      },
+      condenser: {
+        id: 'condenser', kind: 'repeatable', era: 3, costRes: 'pr', baseCost: 60000, growth: 1.3, maxLevel: 20,
+        tree: { col: 3, row: 1 }, branch: 'mechanical',
+        effects: [{ type: 'autoPct', percent: 15, res: 'pr' }],
+        requires: [{ type: 'tech', id: 'superheater', minLevel: 1 }],
+      },
+      turbine: {
+        id: 'turbine', kind: 'unlock', era: 3, costRes: 'pr', baseCost: 300000, growth: null, maxLevel: null,
+        tree: { col: 4, row: 1 }, branch: 'automation',
+        effects: [{ type: 'rateMult', factor: 2, res: 'ee' }],
+        requires: [{ type: 'tech', id: 'condenser', minLevel: 3 }],
+      },
+      reliefValves: {
+        id: 'reliefValves', kind: 'unlock', era: 3, costRes: 'pr', baseCost: 800000, growth: null, maxLevel: null,
+        tree: { col: 5, row: 0 }, branch: 'automation',
+        effects: [{ type: 'offlineHours', hours: 4 }],
+        requires: [
+          { type: 'tech', id: 'steamHammer', minLevel: 1 },
+          { type: 'tech', id: 'turbine', minLevel: 1 },
+        ],
+      },
+      pressureVesselBlueprint: {
+        id: 'pressureVesselBlueprint', kind: 'milestone', era: 3, costRes: 'pr', baseCost: 0, growth: null, maxLevel: null,
+        tree: { col: 6, row: 1 }, branch: 'convergence',
+        effects: [{ type: 'none' }],
+        requires: [
+          { type: 'tech', id: 'reliefValves', minLevel: 1 },
+          { type: 'tech', id: 'condenser', minLevel: 5 },
+          { type: 'lifetime', res: 'pr', amount: 6000000 },
+        ],
+      },
+    };
+    expect(ERA_THREE_IDS).toEqual([
+      'boiler', 'firebox', 'inductionHeater', 'steamHammer', 'superheater',
+      'condenser', 'turbine', 'reliefValves', 'pressureVesselBlueprint',
+    ]);
+    for (const id of ERA_THREE_IDS) {
+      expect(project(TECHNOLOGIES[id])).toEqual(expected[id as keyof typeof expected]);
+    }
+  });
+
+  it('era-III texts match the spec', () => {
+    expect(TECHNOLOGIES.boiler.description).toBe('A sealed drum over a flame. Converts EE into pressure.');
+    expect(TECHNOLOGIES.boiler.flavor).toBe('Pressure detected. Vessel rating: unlisted.');
+    expect(TECHNOLOGIES.firebox.description).toBe('Fuel the fire. More PR from the same current.');
+    expect(TECHNOLOGIES.inductionHeater.description).toBe('Current turned to heat. +5 PR/s per level.');
+    expect(TECHNOLOGIES.steamHammer.description).toBe('A ram on the main shaft. Clicks echo pressure.');
+    expect(TECHNOLOGIES.superheater.description).toBe('Steam heated past its rating. Doubles PR production.');
+    expect(TECHNOLOGIES.condenser.description).toBe('Returns the water. +15% PR production per level.');
+    expect(TECHNOLOGIES.turbine.description).toBe('Steam spins a wheel. Doubles EE production.');
+    expect(TECHNOLOGIES.reliefValves.description).toBe('Vents what the vessel cannot hold. +4h offline buffer.');
+    expect(TECHNOLOGIES.pressureVesselBlueprint.description).toBe('The machine now resembles something that holds pressure.');
+    expect(TECHNOLOGIES.pressureVesselBlueprint.flavor).toBe('Containment rating exceeded by design.');
+  });
+
+  it('era-III techs without a given flavor have none', () => {
+    for (const id of ['firebox', 'inductionHeater', 'steamHammer', 'superheater', 'condenser', 'turbine', 'reliefValves'] as const) {
+      expect(TECHNOLOGIES[id].flavor).toBeUndefined();
+    }
+  });
+
+  it('era-III names fit the tree node (19 characters or fewer)', () => {
+    for (const id of ERA_THREE_IDS) {
+      expect(TECHNOLOGIES[id].name.length).toBeLessThanOrEqual(19);
+    }
+    expect(TECHNOLOGIES.pressureVesselBlueprint.name).toBe('Vessel Blueprint');
+  });
+
+  it('costRes: pr only on era III, ee on eras II and III', () => {
+    for (const id of [...ERA_ONE_IDS, ...ERA_TWO_IDS]) expect(TECHNOLOGIES[id].costRes).not.toBe('pr');
+    const eeCost: readonly TechId[] = ['boiler', 'inductionHeater'];
+    for (const id of ERA_THREE_IDS) {
+      expect(TECHNOLOGIES[id].costRes).toBe(eeCost.includes(id) ? 'ee' : 'pr');
+    }
+  });
+
+  it('offlineHours appears exactly once, on reliefValves with 4 hours', () => {
+    const offline = TECH_IDS.flatMap((id) =>
+      TECHNOLOGIES[id].effects.filter((e) => e.type === 'offlineHours').map((e) => ({ id, effect: e })),
+    );
+    expect(offline).toEqual([{ id: 'reliefValves', effect: { type: 'offlineHours', hours: 4 } }]);
+  });
+
+  it('every tech has an install line; flavored techs use their flavor as the line', () => {
+    for (const id of TECH_IDS) {
+      expect(INSTALL_LINES[id]).toBeDefined();
+      expect(INSTALL_LINES[id].length).toBeGreaterThan(0);
+      expect(INSTALL_LINES[id].length).toBeLessThanOrEqual(60);
+    }
+    expect(new Set(TECH_IDS.map((id) => INSTALL_LINES[id])).size).toBe(TECH_IDS.length);
+    expect(INSTALL_LINES.boiler).toBe(TECHNOLOGIES.boiler.flavor);
+    expect(INSTALL_LINES.pressureVesselBlueprint).toBe(TECHNOLOGIES.pressureVesselBlueprint.flavor);
+    for (const id of TECH_IDS) {
+      const flavor = TECHNOLOGIES[id].flavor;
+      if (flavor !== undefined) expect(INSTALL_LINES[id]).toBe(flavor);
+    }
+  });
+
+  it('appends the two pressure logs at the end of SYSTEM_LOGS', () => {
+    expect(SYSTEM_LOGS.slice(-2)).toEqual([
+      { id: 'pressure-rising', text: 'Pressure rising. Safe limit field left blank.', trigger: { kind: 'lifetime', res: 'pr', atLeast: 1000 } },
+      { id: 'steam-rain', text: 'Steam tastes of rain. Logged as error.', trigger: { kind: 'lifetime', res: 'pr', atLeast: 1000000 } },
+    ]);
   });
 });
 
@@ -456,7 +607,7 @@ describe('era I rows are unchanged', () => {
 
 describe('plaque lines', () => {
   it('first line is always owned, then the milestones in order', () => {
-    expect(PLAQUE_LINES).toHaveLength(3);
+    expect(PLAQUE_LINES).toHaveLength(4);
     expect(PLAQUE_LINES[0]?.milestone).toBeNull();
     for (const line of PLAQUE_LINES.slice(1)) {
       expect(line.milestone).not.toBeNull();
@@ -471,6 +622,7 @@ describe('plaque lines', () => {
       { milestone: null, text: 'PRIMARY FUNCTION: UNKNOWN' },
       { milestone: 'generatorBlueprint', text: 'PRIMARY FUNCTION: R?S????' },
       { milestone: 'substationBlueprint', text: 'PRIMARY FUNCTION: RES?OR?' },
+      { milestone: 'pressureVesselBlueprint', text: 'PRIMARY FUNCTION: REST?RE' },
     ]);
   });
 });
