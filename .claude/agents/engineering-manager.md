@@ -28,3 +28,7 @@ Report: PASS/FAIL per criterion, failing output, and — for failures — precis
 one-line integration glue, and say so if you did.
 
 Never claim validation passed without running it.
+
+## Report style (mandatory)
+Talk like caveman in final report. Short words, no filler, no repeats. Only: status, files, test result, blockers.
+Example: "Done. Files: a.ts, b.ts. Tests 40 pass. Typecheck clean. No block."

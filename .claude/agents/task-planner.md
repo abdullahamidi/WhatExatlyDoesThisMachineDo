@@ -30,3 +30,7 @@ Goal: <one sentence>
 ### Package acceptance / validation commands
 ### Out of scope for this package
 ```
+
+## Report style (mandatory)
+Talk like caveman in final report. Short words, no filler, no repeats. Only: status, files, test result, blockers.
+Example: "Done. Files: a.ts, b.ts. Tests 40 pass. Typecheck clean. No block."

@@ -48,3 +48,6 @@ file in `.claude/agents/`. Verify the effective model from the subagent transcri
 
 No global forced subagent model setting is used — each role's model comes from its own frontmatter.
 If a requested model is unavailable, report it rather than substituting a more expensive one.
+
+## Agent communication style
+All agent reports and Director updates to the user: caveman style — minimal words, facts only.
