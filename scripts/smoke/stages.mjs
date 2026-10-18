@@ -16,7 +16,7 @@ const S16 = [...S15, 'primaryFunction'];
 const PARTS = ['boiler', 'chimney', 'steamManifold', 'pressureGauge', 'gaugeNeedle', 'fireboxGlow1', 'fireboxGlow2', 'fireboxGlow3', 'inductionHeater', 'superheater', 'reliefValves', 'steamHammer', 'hammerRam', 'condenser', 'turbine', 'turbineRotor'];
 // the 16 Era IV machine parts (WP10 C3), reported for s12_spire / s13_era4_full
 const PARTS4 = ['spireTower', 'spireExciter', 'spireWave', 'coilRing1', 'coilRing2', 'coilRing3', 'coilRing4', 'calliope', 'servoBase', 'servoArm', 'koenigFork', 'emitterDishL', 'emitterDishR', 'dishWavesL', 'dishWavesR', 'crystal'];
-// the 38 Era V machine parts (WP11 C3), reported for s14_null / s15_era5_full / s16_primary
+// the 38 Era V machine parts (WP11 C3), reported for s14_null / s15_era5_full / s16_postgame
 const PARTS5 = ['nullGallery', 'nullChamber', 'nullCore', 'nullCoreGlint', 'ring1Back', 'ring2Back', 'ring3Back', 'ring4Back', 'ring1Front', 'ring2Front', 'ring3Front', 'ring4Front', 'ring1Bead', 'ring2Bead', 'ring3Bead', 'ring4Bead', 'siphonTube1L', 'siphonTube1R', 'siphonTube2L', 'siphonTube2R', 'siphonTube3L', 'siphonTube3R', 'siphonArcs1', 'siphonArcs2', 'siphonArcs3', 'graviticAnchorL', 'graviticAnchorR', 'anchorGlow1L', 'anchorGlow1R', 'anchorGlow2L', 'anchorGlow2R', 'anchorGlow3L', 'anchorGlow3R', 'inversionGhost', 'lensLight', 'lensColumn', 'aperture', 'namePlate'];
 const PERF = process.env.PERF === '1';
 const stages = {
@@ -36,7 +36,7 @@ const stages = {
   s13_era4_full: S13,
   s14_null: S14,
   s15_era5_full: S15,
-  s16_primary: S16,
+  s16_postgame: S16,
 };
 const only = process.env.ONLY ? process.env.ONLY.split(',') : Object.keys(stages);
 const b = await chromium.launch();
@@ -72,10 +72,15 @@ for (const name of only) {
     }, buys);
     console.log(name, JSON.stringify(res));
   }
-  // settle wait: env WAIT_MS overrides; Era IV+ stages (s14 and later, numeric compare) get 12 s
-  await p.waitForTimeout(+(process.env.WAIT_MS ?? (+name.slice(1).split('_')[0] >= 14 ? 12000 : 2500)));
+  // s16_postgame: skip the finale, click KEEP IT RUNNING (postgame), then the 2.5 s settle below
+  if (name === 's16_postgame') {
+    await p.evaluate(() => window.__wedtmd?.skipFinale?.());
+    await p.locator('button', { hasText: 'KEEP IT RUNNING' }).first().click({ timeout: 5000 }).catch(e => errors.push(name + ':keep ' + String(e).split('\n')[0]));
+  }
+  // settle wait: env WAIT_MS overrides; s16_postgame waits 2.5 s; Era IV+ stages (s14 and later, numeric compare) get 12 s
+  await p.waitForTimeout(+(process.env.WAIT_MS ?? (name === 's16_postgame' ? 2500 : (+name.slice(1).split('_')[0] >= 14 ? 12000 : 2500))));
   // era V stages: click the crank 3x so the 3 s inversion ghost shows in the shot and the frames
-  if (name === 's15_era5_full' || name === 's16_primary') {
+  if (name === 's15_era5_full' || name === 's16_postgame') {
     const cp = await p.evaluate(() => window.__wedtmd.crankClientPoint());
     for (let i = 0; i < 3; i++) await p.mouse.click(cp.x, cp.y);
     await p.waitForTimeout(150);
@@ -94,7 +99,7 @@ for (const name of only) {
   if (name === 's12_spire' || name === 's13_era4_full') {
     console.log(name, 'parts4', JSON.stringify(await p.evaluate((ids) => Object.fromEntries(ids.map(i => [i, window.__wedtmd.componentState(i)?.visible ?? null])), PARTS4)));
   }
-  if (name === 's14_null' || name === 's15_era5_full' || name === 's16_primary') {
+  if (name === 's14_null' || name === 's15_era5_full' || name === 's16_postgame') {
     console.log(name, 'parts5', JSON.stringify(await p.evaluate((ids) => Object.fromEntries(ids.map(i => [i, window.__wedtmd.componentState(i)?.visible ?? null])), PARTS5)));
   }
   for (let f = 0; f < nframes; f++) {
