@@ -23,7 +23,7 @@ def streak(a, x0, y, w, k, rnd, step=3):
 # ---------------------------------------------------------------- Era V sky: dusk violet bands + 360 deg eclipse horizon glow
 def sky_violet():
     a = bands([(0, 109, 'x0'), (110, 209, 'd0'), (210, 319, 'd1'), (320, 429, 'd2'), (430, 519, 'd3'),
-               (520, 579, 'k1'), (580, 629, 'r5'), (630, 659, 'a0'), (660, 719, 'r5')])
+               (520, 589, 'k1'), (590, 643, 'r5'), (644, 667, 'a0'), (668, 719, 'r5')])
     rnd = random.Random(5)
     # band edges broken by short steps (no straight ruler lines over 1280 px)
     for (y, k_up, k_dn) in ((110, 'x0', 'd0'), (210, 'd0', 'd1'), (320, 'd1', 'd2'), (430, 'd2', 'd3'), (520, 'd3', 'k1'), (580, 'k1', 'r5')):
