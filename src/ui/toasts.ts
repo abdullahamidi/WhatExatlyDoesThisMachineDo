@@ -2,7 +2,7 @@ import './toasts.css';
 import { TOAST_CONFIG } from '../data/notifications';
 import type { ToastMessage, ToastTone } from '../data/notifications';
 import type { GameSession } from '../simulation';
-import { messageFor, welcomeBackMessage } from './notificationRules';
+import { achievementMessage, messageFor, welcomeBackMessage } from './notificationRules';
 import type { NotificationEvent } from './notificationRules';
 
 // Toast stack (WP3). DOM only: no Phaser. Text is always written with textContent.
@@ -163,6 +163,14 @@ export function connectNotifications(session: GameSession, toasts: Toasts): () =
   return () => {
     for (const unsubscribe of unsubscribers) unsubscribe();
   };
+}
+
+// Shows one coalesced record toast per 'achievement' event (WP12 D5). Empty or unknown-only lists stay silent.
+export function connectAchievements(session: GameSession, toasts: Toasts): () => void {
+  return session.on('achievement', ({ ids }) => {
+    const msg = achievementMessage(ids);
+    if (msg !== null) toasts.show(msg);
+  });
 }
 
 // Shows a welcome-back toast for every later 'offline' event (tab return). The boot-time report is

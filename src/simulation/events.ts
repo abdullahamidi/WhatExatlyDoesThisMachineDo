@@ -1,3 +1,4 @@
+import type { AchievementId } from '../data/achievements';
 import type { OfflineReport, ResourceId, ResourceMap, SettingsState, TechId } from '../data/types';
 
 /** Payloads of every event a GameSession emits. */
@@ -8,7 +9,8 @@ export interface SessionEvents {
   milestone: { id: TechId };
   offline: OfflineReport;
   reset: Record<string, never>;
-  settings: SettingsState;           // emitted only when the muted flag actually changes
+  settings: SettingsState;           // emitted when ANY settings field changes (once per updateSettings call)
+  achievement: { ids: AchievementId[] };  // one per evaluation that unlocked >= 1, ids in list order; fires last
 }
 
 export type Listener<K extends keyof SessionEvents> = (payload: SessionEvents[K]) => void;

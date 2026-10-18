@@ -1,0 +1,131 @@
+/* SETTINGS tab (inside #system-menu, which defines the --amber / --haze / --rust palette vars). */
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: max(12px, 1em);
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.settings-heading {
+  margin: 0;
+  padding-bottom: 4px;
+  font-size: 1em;
+  font-weight: normal;
+  color: var(--amber-dim);
+  border-bottom: 1px solid var(--rust-dark);
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-label {
+  font-size: max(12px, 1em);
+  color: var(--amber);
+}
+
+.settings-value {
+  min-width: 5.5em;
+  text-align: right;
+  font-size: max(12px, 1em);
+  color: var(--haze);
+}
+
+.settings-panel input[type="range"] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--amber);
+  cursor: pointer;
+}
+
+.settings-radio {
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 3fr);
+}
+
+.settings-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.settings-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: max(12px, 1em);
+  color: var(--amber);
+  cursor: pointer;
+}
+
+.settings-choice input[type="radio"] {
+  margin: 0;
+  accent-color: var(--amber);
+  cursor: pointer;
+}
+
+.settings-toggle {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: inherit;
+  font-size: max(12px, 1em);
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: var(--amber);
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.settings-toggle[aria-pressed="true"] {
+  background: var(--rust-dark);
+  color: var(--haze);
+}
+
+.settings-toggle:hover:not(:disabled) {
+  background: var(--rust-dark);
+  color: var(--haze);
+}
+
+.settings-toggle:disabled {
+  cursor: not-allowed;
+  color: var(--amber-dim);
+  border-color: var(--rust-dark);
+}
+
+.settings-state {
+  font-weight: bold;
+}
+
+.settings-keys {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: max(12px, 1em);
+  color: var(--haze);
+}
+
+.settings-panel input:focus-visible,
+.settings-panel button:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}

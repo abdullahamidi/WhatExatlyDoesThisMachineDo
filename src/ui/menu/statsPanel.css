@@ -1,0 +1,32 @@
+/* STATS tab (inside #system-menu, which defines the --amber / --haze / --rust palette vars). */
+
+.stats-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  font-size: max(12px, 1em);
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--rust-dark);
+}
+
+.stats-label {
+  margin: 0;
+  color: var(--amber-dim);
+  overflow-wrap: anywhere;
+}
+
+.stats-value {
+  margin: 0;
+  text-align: right;
+  color: var(--haze);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}

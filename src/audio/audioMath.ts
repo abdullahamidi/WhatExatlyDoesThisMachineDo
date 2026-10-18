@@ -1,6 +1,7 @@
 // Pure mapping from production rate (ME/s) to audio parameters. No DOM, no WebAudio.
 
 import { AUDIO } from '../data/audio';
+import { VOLUME_RANGE } from '../data/settings';
 
 /** Clamp x into [lo, hi]; NaN falls back to lo; -0 comes back as +0. */
 function clampRange(x: number, lo: number, hi: number): number {
@@ -101,7 +102,13 @@ export function servoHz(level: number, maxLevel: number, cfg: typeof AUDIO.servo
   return lerp(cfg.minHz, cfg.maxHz, servoFraction(level, maxLevel));
 }
 
-/** Master target: 0 when muted or locked, else base (default AUDIO.masterGain). */
-export function masterTarget(muted: boolean, unlocked: boolean, base: number = AUDIO.masterGain): number {
-  return muted || !unlocked ? 0 : base;
+/** Bus gain from a volume percent: clamped to the volume range, then divided by its max; non-finite -> 1 (unity). */
+export function busGain(volumePct: number): number {
+  if (!Number.isFinite(volumePct)) return 1;
+  return clampRange(volumePct, VOLUME_RANGE.min, VOLUME_RANGE.max) / VOLUME_RANGE.max;
+}
+
+/** Master target: 0 when muted or locked, else base (default AUDIO.masterGain) times volume01 (default 1). */
+export function masterTarget(muted: boolean, unlocked: boolean, base: number = AUDIO.masterGain, volume01 = 1): number {
+  return muted || !unlocked ? 0 : base * volume01;
 }

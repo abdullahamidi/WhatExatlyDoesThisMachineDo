@@ -17,8 +17,15 @@ const MAX_ARCS_PER_CALL = 8; // scheduling cap per scheduleArcs call
 const RELAY_CLICKS = 2; // relay purchase plays this many clicks
 const SWELL_STOP_RAMP_S = 0.005; // reversed swell drops to silence over this long at its hard stop
 
+/** Volume buses under the master: one-shots go to `sfx`, persistent loops and scheduled series to `ambient`. */
+export type AudioBus = 'sfx' | 'ambient';
+
+/** Where a call is routed: the master itself or one of the buses. */
+type AudioRoute = 'master' | AudioBus;
+
 export interface Synth {
   setMaster(target: number, rampSeconds: number): void;
+  setBusGain(bus: AudioBus, gain: number, rampSeconds: number): void; // bus level, ramped toward gain (0..1) over rampSeconds
   playCrank(): void; // AUDIO.crank ratchet: `ticks` short bursts, `tickGapMs` apart
   playPurchase(): void; // AUDIO.purchase light thunk
   playClunk(): void; // AUDIO.clunk sine thump + noise burst (part landed)
@@ -111,13 +118,26 @@ interface ClusterSpec {
   ms: number;
 }
 
-/** Creates the master bus at gain 0 wired to the destination. Returns null if WebAudio refuses. */
-function openMaster(context: AudioContext): GainNode | null {
+/** The output graph: master (gain 0 until unlocked) and the two buses (unity) feeding it. */
+interface Graph {
+  master: GainNode;
+  sfx: GainNode;
+  ambient: GainNode;
+}
+
+/** Creates the master bus at gain 0 wired to the destination, with the sfx and ambient buses under it. Returns null if WebAudio refuses. */
+function openGraph(context: AudioContext): Graph | null {
   try {
     const master = context.createGain();
     master.gain.value = 0;
     master.connect(context.destination);
-    return master;
+    const sfx = context.createGain();
+    sfx.gain.value = 1;
+    sfx.connect(master);
+    const ambient = context.createGain();
+    ambient.gain.value = 1;
+    ambient.connect(master);
+    return { master, sfx, ambient };
   } catch (err) {
     console.warn('[synth] audio graph unavailable; sound disabled', err);
     return null;
@@ -486,7 +506,7 @@ function playSwellVoice(context: AudioContext, out: AudioNode, noise: AudioBuffe
 }
 
 export function createSynth(context: AudioContext): Synth {
-  const master = openMaster(context);
+  const graph = openGraph(context);
   let closed = false;
   let nextTickTime = 0;
   let nextArcTime = 0;
@@ -506,11 +526,11 @@ export function createSynth(context: AudioContext): Synth {
     console.warn(`[synth] ${name} failed`, err);
   }
 
-  /** Runs one public method body: no-op when closed or without a graph, errors never escape. */
-  function run(name: string, fn: (out: GainNode) => void): void {
-    if (closed || master === null) return;
+  /** Runs one public method body on its route (master or bus): no-op when closed or without a graph, errors never escape. */
+  function run(name: string, route: AudioRoute, fn: (out: GainNode) => void): void {
+    if (closed || graph === null) return;
     try {
-      fn(master);
+      fn(graph[route]);
     } catch (err) {
       warnOnce(name, err);
     }
@@ -523,7 +543,7 @@ export function createSynth(context: AudioContext): Synth {
 
   return {
     setMaster(target: number, rampSeconds: number): void {
-      run('setMaster', (out) => {
+      run('setMaster', 'master', (out) => {
         const now = context.currentTime;
         const to = Number.isFinite(target) && target > 0 ? target : 0;
         const ramp = Number.isFinite(rampSeconds) && rampSeconds > 0 ? rampSeconds : 0;
@@ -533,8 +553,19 @@ export function createSynth(context: AudioContext): Synth {
       });
     },
 
+    setBusGain(bus: AudioBus, gain: number, rampSeconds: number): void {
+      run('setBusGain', bus, (out) => {
+        const now = context.currentTime;
+        const to = Number.isFinite(gain) && gain > 0 ? gain : 0;
+        const ramp = Number.isFinite(rampSeconds) && rampSeconds > 0 ? rampSeconds : 0;
+        out.gain.cancelScheduledValues(now);
+        out.gain.setValueAtTime(out.gain.value, now);
+        out.gain.setTargetAtTime(to, now, ramp);
+      });
+    },
+
     playCrank(): void {
-      run('playCrank', (out) => {
+      run('playCrank', 'sfx', (out) => {
         const c = AUDIO.crank;
         const t0 = context.currentTime;
         for (let i = 0; i < c.ticks; i++) {
@@ -550,7 +581,7 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     playPurchase(): void {
-      run('playPurchase', (out) => {
+      run('playPurchase', 'sfx', (out) => {
         const p = AUDIO.purchase;
         playVoice(context, out, {
           wave: 'sine',
@@ -564,7 +595,7 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     playClunk(): void {
-      run('playClunk', (out) => {
+      run('playClunk', 'sfx', (out) => {
         const k = AUDIO.clunk;
         const t0 = context.currentTime;
         const decay = k.decayMs / 1000;
@@ -574,7 +605,7 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     playDeny(): void {
-      run('playDeny', (out) => {
+      run('playDeny', 'sfx', (out) => {
         const d = AUDIO.deny;
         const t0 = context.currentTime;
         const pulse = d.ms / 1000;
@@ -592,7 +623,7 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     playSting(): void {
-      run('playSting', (out) => {
+      run('playSting', 'sfx', (out) => {
         const s = AUDIO.sting;
         const t0 = context.currentTime;
         const step = s.noteMs / 1000;
@@ -609,7 +640,7 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     setHum(hz: number, gain: number): void {
-      run('setHum', (out) => {
+      run('setHum', 'ambient', (out) => {
         const freq = Number.isFinite(hz) && hz >= 1 ? hz : 1;
         const amp = Number.isFinite(gain) && gain > 0 ? gain : 0;
         hum = ensureHum(context, out, freq, hum);
@@ -621,7 +652,7 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     scheduleGearTicks(ticksPerSecond: number): void {
-      run('scheduleGearTicks', (out) => {
+      run('scheduleGearTicks', 'ambient', (out) => {
         if (!Number.isFinite(ticksPerSecond) || ticksPerSecond <= 0) {
           nextTickTime = 0;
           return;
@@ -646,7 +677,7 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     setWind(on: boolean): void {
-      run('setWind', (out) => {
+      run('setWind', 'ambient', (out) => {
         const w = AUDIO.wind;
         wind = ensureWind(context, out, wind, getNoise());
         const now = context.currentTime;
@@ -657,7 +688,7 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     setMains(gain: number): void {
-      run('setMains', (out) => {
+      run('setMains', 'ambient', (out) => {
         const amp = Number.isFinite(gain) && gain > 0 ? gain : 0;
         if (mains === null && amp === 0) return; // silent and never started: no nodes needed
         mains = ensureMains(context, out, mains);
@@ -666,7 +697,7 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     scheduleArcs(perSecond: number): void {
-      run('scheduleArcs', (out) => {
+      run('scheduleArcs', 'ambient', (out) => {
         if (!Number.isFinite(perSecond) || perSecond <= 0) {
           nextArcTime = 0;
           return;
@@ -685,7 +716,7 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     playRelay(): void {
-      run('playRelay', (out) => {
+      run('playRelay', 'sfx', (out) => {
         const r = AUDIO.relay;
         const t0 = context.currentTime;
         for (let i = 0; i < RELAY_CLICKS; i++) {
@@ -701,7 +732,7 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     setBoiler(gain: number): void {
-      run('setBoiler', (out) => {
+      run('setBoiler', 'ambient', (out) => {
         const amp = Number.isFinite(gain) && gain > 0 ? gain : 0;
         if (boiler === null && amp === 0) return; // silent and never started: no nodes needed
         boiler = ensureBoiler(context, out, boiler, getNoise());
@@ -710,20 +741,20 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     playHiss(): void {
-      run('playHiss', (out) => {
+      run('playHiss', 'sfx', (out) => {
         playHissBurst(context, out, getNoise(), context.currentTime);
       });
     },
 
     playWhistle(delaySeconds = 0): void {
-      run('playWhistle', (out) => {
+      run('playWhistle', 'sfx', (out) => {
         const delay = Number.isFinite(delaySeconds) && delaySeconds > 0 ? delaySeconds : 0;
         playWhistleTone(context, out, context.currentTime + delay);
       });
     },
 
     setPad(gain: number): void {
-      run('setPad', (out) => {
+      run('setPad', 'ambient', (out) => {
         const amp = Number.isFinite(gain) && gain > 0 ? gain : 0;
         if (pad === null && amp === 0) return; // silent and never started: no nodes needed
         pad = ensurePad(context, out, pad);
@@ -735,7 +766,7 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     playForkPing(): void {
-      run('playForkPing', (out) => {
+      run('playForkPing', 'sfx', (out) => {
         const f = AUDIO.forkPing;
         const t0 = context.currentTime;
         const decay = f.ms / 1000;
@@ -751,7 +782,7 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     setServo(gain: number, hz: number): void {
-      run('setServo', (out) => {
+      run('setServo', 'ambient', (out) => {
         const amp = Number.isFinite(gain) && gain > 0 ? gain : 0;
         if (servo === null && amp === 0) return; // silent and never started: no nodes needed
         const freq = Number.isFinite(hz) && hz >= 1 ? hz : 1;
@@ -763,7 +794,7 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     playChord(delaySeconds = 0): void {
-      run('playChord', (out) => {
+      run('playChord', 'sfx', (out) => {
         const c = AUDIO.chord;
         const delay = Number.isFinite(delaySeconds) && delaySeconds > 0 ? delaySeconds : 0;
         playSineCluster(context, out, context.currentTime + delay, {
@@ -776,7 +807,7 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     setDrone(gain: number): void {
-      run('setDrone', (out) => {
+      run('setDrone', 'ambient', (out) => {
         const amp = Number.isFinite(gain) && gain > 0 ? gain : 0;
         if (drone === null && amp === 0) return; // silent and never started: no nodes needed
         drone = ensureDrone(context, out, drone);
@@ -788,13 +819,13 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     playSwell(): void {
-      run('playSwell', (out) => {
+      run('playSwell', 'sfx', (out) => {
         playSwellVoice(context, out, getNoise(), context.currentTime);
       });
     },
 
     playBeadTicks(delaySeconds = 0): void {
-      run('playBeadTicks', (out) => {
+      run('playBeadTicks', 'sfx', (out) => {
         const b = AUDIO.beadTick;
         const delay = Number.isFinite(delaySeconds) && delaySeconds > 0 ? delaySeconds : 0;
         const t0 = context.currentTime + delay;
@@ -811,13 +842,13 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     suspend(): void {
-      run('suspend', () => {
+      run('suspend', 'master', () => {
         context.suspend().catch(() => undefined);
       });
     },
 
     resume(): void {
-      run('resume', () => {
+      run('resume', 'master', () => {
         context.resume().catch(() => undefined);
       });
     },

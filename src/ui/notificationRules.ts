@@ -1,5 +1,8 @@
 import { TECHNOLOGIES } from '../data/technologies';
+import { ACHIEVEMENTS } from '../data/achievements';
+import type { AchievementDefinition, AchievementId } from '../data/achievements';
 import {
+  ACHIEVEMENT_TEXT,
   FIRST_CLICK_MESSAGE,
   INSTALL_LINES,
   RECOVERED_TEXT,
@@ -99,6 +102,35 @@ export function recoveredMessage(): ToastMessage {
     body: RECOVERED_TEXT.body,
     tone: 'system',
     durationMs: TOAST_CONFIG.welcomeDurationMs,
+  };
+}
+
+// Coalesced achievement toast (WP12 D5): one message for the ids unlocked in one evaluation.
+// 1 id -> the record name; 2+ ids -> the count and the first two names. Unknown ids are ignored.
+// Returns null when nothing resolves (the caller then shows nothing). Secret ids show their real name.
+export function achievementMessage(
+  ids: readonly AchievementId[],
+  defs: Readonly<Record<AchievementId, AchievementDefinition>> = ACHIEVEMENTS,
+): ToastMessage | null {
+  const names: string[] = [];
+  for (const id of ids) {
+    const def: AchievementDefinition | undefined = defs[id];
+    if (def !== undefined) names.push(def.name);
+  }
+  if (names.length === 0) return null;
+  const [first = '', second = ''] = names;
+  const title = names.length === 1
+    ? ACHIEVEMENT_TEXT.title
+    : `${names.length} ${ACHIEVEMENT_TEXT.multiTitleSuffix}`;
+  const body = names.length === 1
+    ? first
+    : `${first}${ACHIEVEMENT_TEXT.nameSeparator}${second}${ACHIEVEMENT_TEXT.ellipsis}`;
+  return {
+    key: ACHIEVEMENT_TEXT.key,
+    title,
+    body,
+    tone: 'system',
+    durationMs: TOAST_CONFIG.durationMs,
   };
 }
 

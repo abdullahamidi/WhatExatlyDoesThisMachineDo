@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { messageFor, recoveredMessage, welcomeBackMessage } from './notificationRules';
+import { achievementMessage, messageFor, recoveredMessage, welcomeBackMessage } from './notificationRules';
 import type { NotificationEvent } from './notificationRules';
+import { ACHIEVEMENTS } from '../data/achievements';
+import type { AchievementId } from '../data/achievements';
 import {
+  ACHIEVEMENT_TEXT,
   FIRST_CLICK_MESSAGE,
   INSTALL_LINES,
   RECOVERED_TEXT,
@@ -197,5 +200,63 @@ describe('recoveredMessage', () => {
     expect(msg.title).toBe(RECOVERED_TEXT.title);
     expect(msg.body).toBe(RECOVERED_TEXT.body);
     expect(msg.durationMs).toBe(TOAST_CONFIG.welcomeDurationMs);
+  });
+});
+
+describe('achievementMessage (D5)', () => {
+  it('returns null for an empty list', () => {
+    expect(achievementMessage([])).toBeNull();
+  });
+
+  it('returns null when no id resolves to a definition', () => {
+    expect(achievementMessage(['nope' as AchievementId])).toBeNull();
+    expect(achievementMessage(['nope' as AchievementId, 'bogus' as AchievementId])).toBeNull();
+  });
+
+  it('one id: record title and the name as body', () => {
+    const msg = achievementMessage(['firstTurn']);
+    expect(msg).toEqual({
+      key: ACHIEVEMENT_TEXT.key,
+      title: 'RECORD LOGGED',
+      body: 'First Turn',
+      tone: 'system',
+      durationMs: TOAST_CONFIG.durationMs,
+    });
+  });
+
+  it('two ids: count title and the first two names with an ellipsis', () => {
+    const msg = achievementMessage(['firstTurn', 'steadyHand']);
+    expect(msg?.title).toBe('2 RECORDS LOGGED');
+    expect(msg?.body).toBe('First Turn, Steady Hand…');
+    expect(msg?.tone).toBe('system');
+  });
+
+  it('three ids: count title and only the first two names in list order', () => {
+    const msg = achievementMessage(['firstTurn', 'steadyHand', 'tireless']);
+    expect(msg?.title).toBe('3 RECORDS LOGGED');
+    expect(msg?.body).toBe('First Turn, Steady Hand…');
+    expect(msg?.key).toBe('achievement');
+  });
+
+  it('a secret id shows its real name', () => {
+    const msg = achievementMessage(['eraExotic']);
+    expect(msg?.body).toBe(ACHIEVEMENTS.eraExotic.name);
+    expect(msg?.body).not.toBe('???');
+  });
+
+  it('ignores unknown ids and counts only resolved ones', () => {
+    const msg = achievementMessage(['nope' as AchievementId, 'firstTurn']);
+    expect(msg?.title).toBe('RECORD LOGGED');
+    expect(msg?.body).toBe('First Turn');
+    const two = achievementMessage(['nope' as AchievementId, 'firstTurn', 'steadyHand']);
+    expect(two?.title).toBe('2 RECORDS LOGGED');
+  });
+
+  it('uses a custom definitions table when given', () => {
+    const defs = {
+      ...ACHIEVEMENTS,
+      firstTurn: { ...ACHIEVEMENTS.firstTurn, name: 'Custom' },
+    };
+    expect(achievementMessage(['firstTurn'], defs)?.body).toBe('Custom');
   });
 });

@@ -83,3 +83,36 @@ export const INSTALL_LINES: Record<TechId, string> = {
   finalAlignment: 'Alignment complete. Awaiting operator.',
   primaryFunction: 'Primary function engaged.',
 };
+
+// Achievement toast (WP12 D5) and RECORDS panel texts.
+export const ACHIEVEMENT_TEXT = {
+  key: 'achievement',
+  title: 'RECORD LOGGED',
+  multiTitleSuffix: 'RECORDS LOGGED',
+  nameSeparator: ', ',
+  ellipsis: '…',
+  logged: 'LOGGED',
+  locked: 'LOCKED',
+  hiddenName: '???',
+  hiddenDescription: 'CLASSIFIED',
+} as const;
+
+// Badge sprite layout (ART_ERA5 §9): frames per sheet (badges 384 px / 24 = 16, icons16 80 px / 16 = 5),
+// draw scale (x2 badges, x1 lock icon).
+export const BADGE_VIEW = { badgeFrames: 16, iconFrames: 5, scale: 2, lockScale: 1 } as const;
+
+// SYSTEM menu DATA tab texts (WP12 T8).
+export const DATA_LABELS = {
+  exportTitle: 'EXPORT',
+  exportButton: 'EXPORT SAVE',
+  exportField: 'SAVE STRING (READ-ONLY)',
+  copied: 'COPIED',
+  selectAndCopy: 'SELECT AND COPY',
+  importTitle: 'IMPORT',
+  importField: 'PASTE SAVE STRING',
+  importHint: 'IMPORT REPLACES THE CURRENT SAVE. THE OLD SAVE IS BACKED UP FIRST.',
+  importIdle: 'IMPORT SAVE',
+  importArmed: 'CONFIRM: REPLACE SAVE?',
+  importCancel: 'CANCEL',
+  importEmpty: 'PASTE A SAVE STRING FIRST',
+} as const;

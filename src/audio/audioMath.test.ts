@@ -4,6 +4,7 @@ import {
   activityLevel,
   arcRate,
   boilerGain,
+  busGain,
   droneGain,
   gearTickRate,
   humFrequency,
@@ -134,6 +135,36 @@ describe('masterTarget', () => {
   it('honours a custom base', () => {
     expect(masterTarget(false, true, 0.7)).toBeCloseTo(0.7, 9);
     expect(masterTarget(true, true, 0.7)).toBe(0);
+  });
+
+  it('scales the base by the master volume', () => {
+    expect(masterTarget(false, true, AUDIO.masterGain, 0)).toBe(0);
+    expect(masterTarget(false, true, AUDIO.masterGain, 0.5)).toBeCloseTo(AUDIO.masterGain * 0.5, 9);
+    expect(masterTarget(false, true, AUDIO.masterGain, 1)).toBeCloseTo(AUDIO.masterGain, 9);
+  });
+
+  it('keeps mute and lock at 0 whatever the volume', () => {
+    expect(masterTarget(true, true, AUDIO.masterGain, 1)).toBe(0);
+    expect(masterTarget(false, false, AUDIO.masterGain, 1)).toBe(0);
+  });
+});
+
+describe('busGain', () => {
+  it('maps percent to a unit gain', () => {
+    expect(busGain(0)).toBe(0);
+    expect(busGain(50)).toBeCloseTo(0.5, 9);
+    expect(busGain(100)).toBe(1);
+  });
+
+  it('clamps out-of-range percents', () => {
+    expect(busGain(150)).toBe(1);
+    expect(busGain(-10)).toBe(0);
+  });
+
+  it('treats non-finite input as unity', () => {
+    expect(busGain(NaN)).toBe(1);
+    expect(busGain(Infinity)).toBe(1);
+    expect(busGain(-Infinity)).toBe(1);
   });
 });
 

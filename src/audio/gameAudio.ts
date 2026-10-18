@@ -5,10 +5,11 @@
 // a silent no-op. Never throws into the game.
 
 import { AUDIO } from '../data/audio';
+import type { SettingsState } from '../data/types';
 import { TECHNOLOGIES } from '../data/technologies';
 import type { GameFeedback } from '../game/context';
 import type { GameSession } from '../simulation';
-import { arcRate, boilerGain, droneGain, gearTickRate, humFrequency, humGain, mainsGain, masterTarget, padGain, servoGain, servoHz } from './audioMath';
+import { arcRate, boilerGain, busGain, droneGain, gearTickRate, humFrequency, humGain, mainsGain, masterTarget, padGain, servoGain, servoHz } from './audioMath';
 import { createSynth } from './synth';
 import type { Synth } from './synth';
 
@@ -80,25 +81,30 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     };
   }
 
-  /** Applies the mute flag to the master bus and the wind bed. */
-  function applyMute(muted: boolean): void {
+  /**
+   * Master target (mute, master volume), wind bed and the sfx / ambient bus levels from the settings. Live and idempotent.
+   * Never resumes the context: callers decide that.
+   */
+  function applyLevels(settings: Readonly<SettingsState>): void {
     const s = synth;
     if (!s) return;
-    s.setMaster(masterTarget(muted, true), AUDIO.rampSeconds);
-    s.setWind(!muted);
-    if (!muted && isVisible()) s.resume();
+    s.setMaster(masterTarget(settings.muted, true, AUDIO.masterGain, busGain(settings.masterVolume)), AUDIO.rampSeconds);
+    s.setWind(!settings.muted);
+    s.setBusGain('sfx', busGain(settings.sfxVolume), AUDIO.rampSeconds);
+    s.setBusGain('ambient', busGain(settings.ambientVolume), AUDIO.rampSeconds);
   }
 
   /**
    * Update loop: hum and gear ticks follow the current ME/s; mains and arcs follow EE/s; the boiler roar follows PR/s;
    * the resonance pad follows RS/s (owned spire only); the servo whirr follows the crank servo level;
-   * the sub-bass drone follows XF/s (owned nullChamber only).
+   * the sub-bass drone follows XF/s (owned nullChamber only). The volume levels are re-applied each tick.
    * Muted keeps the hum pitch and drops only its gain.
    */
   function tick(): void {
     try {
       const s = synth;
       if (!s) return;
+      applyLevels(session.settings);
       const ps = session.rates.perSecond.me;
       const ee = session.rates.perSecond.ee;
       const pr = session.rates.perSecond.pr;
@@ -221,7 +227,8 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
       feedback.purchaseDenied.on(oneShot('purchaseDenied', (s) => s.playDeny())),
       session.on('settings', (settings) => {
         try {
-          applyMute(settings.muted);
+          applyLevels(settings);
+          if (!settings.muted && isVisible()) synth?.resume();
         } catch (error) {
           warnOnce('settings', error);
         }
@@ -244,9 +251,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     unlocked = true;
 
     try {
-      const muted = session.settings.muted;
-      handle.synth.setMaster(masterTarget(muted, true), AUDIO.rampSeconds);
-      handle.synth.setWind(!muted);
+      applyLevels(session.settings);
       timer = target.setInterval(tick, AUDIO.updateIntervalMs);
       doc?.addEventListener('visibilitychange', onVisibility);
       handle.context.addEventListener('statechange', onStateChange);
