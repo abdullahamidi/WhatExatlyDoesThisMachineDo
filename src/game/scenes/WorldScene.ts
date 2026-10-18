@@ -5,6 +5,7 @@ import type { TechTree } from '../../ui/techTree';
 import type { ModalStack } from '../../ui/modalStack';
 import { buildHudView } from '../../ui/hudView';
 import { ParallaxBackground } from '../rendering/ParallaxBackground';
+import { PylonLine } from '../rendering/PylonLine';
 import { Terrain } from '../rendering/Terrain';
 import { DustField } from '../rendering/DustField';
 import { FloatingText } from '../rendering/FloatingText';
@@ -20,6 +21,7 @@ export class WorldScene extends Phaser.Scene {
   private lastRevision = -1;
   private machineView: MachineView | null = null;
   private background: ParallaxBackground | null = null;
+  private pylonLine: PylonLine | null = null;
 
   constructor(ctx: GameContext, ui: { hud: Hud; techTree: TechTree; modals: ModalStack }) {
     super('World');
@@ -30,6 +32,8 @@ export class WorldScene extends Phaser.Scene {
   create(): void {
     const background = new ParallaxBackground(this, this.ctx.session.state.techLevels);
     this.background = background;
+    const pylonLine = new PylonLine(this, this.ctx.session.state.techLevels);
+    this.pylonLine = pylonLine;
     const terrain = new Terrain(this);
     const dust = new DustField(this);
     const machine = new MachineView(this, this.ctx);
@@ -51,6 +55,10 @@ export class WorldScene extends Phaser.Scene {
       },
       () => dust.destroy(),
       () => terrain.destroy(),
+      () => {
+        this.pylonLine = null;
+        pylonLine.destroy();
+      },
       () => {
         this.background = null;
         background.destroy();
@@ -80,6 +88,7 @@ export class WorldScene extends Phaser.Scene {
   override update(_time: number, delta: number): void {
     this.ctx.session.update();
     this.background?.update(this.ctx.session.state.techLevels, delta);
+    this.pylonLine?.update(this.cameras.main, this.ctx.session.state.techLevels, delta);
     this.machineView?.update(delta);
     if (this.ctx.session.revision !== this.lastRevision) this.renderHud();
     this.ui.techTree.update();
