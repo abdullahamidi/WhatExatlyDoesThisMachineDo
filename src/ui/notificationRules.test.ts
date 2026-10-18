@@ -10,6 +10,7 @@ import {
 } from '../data/notifications';
 import { TECHNOLOGIES } from '../data/technologies';
 import { TECH_IDS } from '../data/types';
+import type { OfflineReport, ResourceMap } from '../data/types';
 import { formatDuration, formatNumber } from '../utils/format';
 
 describe('INSTALL_LINES', () => {
@@ -106,10 +107,16 @@ describe('messageFor titles', () => {
 });
 
 describe('welcomeBackMessage', () => {
-  const report = (elapsedSeconds: number, cappedSeconds: number, gained: number) => ({
+  // ME gain plus optional gains for the other resources (all zero unless overridden).
+  const report = (
+    elapsedSeconds: number,
+    cappedSeconds: number,
+    me: number,
+    extra: Partial<ResourceMap> = {},
+  ): OfflineReport => ({
     elapsedSeconds,
     cappedSeconds,
-    gained,
+    gained: { me, ee: 0, pr: 0, rs: 0, xf: 0, ...extra },
   });
 
   it('stays silent when nothing was gained', () => {
@@ -146,6 +153,38 @@ describe('welcomeBackMessage', () => {
   it('adds the cap note when the absence exceeded the cap', () => {
     const msg = welcomeBackMessage(report(36000, 28800, 5));
     expect(msg?.body).toContain('capped at 8h');
+  });
+
+  it('lists every resource with a gain in RESOURCE_IDS order', () => {
+    const msg = welcomeBackMessage(report(7200, 28800, 1500, { ee: 20 }));
+    expect(msg?.body).toBe(
+      `Unattended for ${formatDuration(7200)}. +1.5K ME, +20 EE accumulated.`,
+    );
+  });
+
+  it('shows a message when only a non-ME resource gained', () => {
+    const msg = welcomeBackMessage(report(7200, 28800, 0, { ee: 20 }));
+    expect(msg).not.toBeNull();
+    expect(msg?.body).toContain('+20 EE');
+    expect(msg?.body).not.toContain('ME');
+  });
+
+  it('uses the ??? short name for Unknown Flux', () => {
+    const msg = welcomeBackMessage(report(7200, 28800, 0, { xf: 3 }));
+    expect(msg?.body).toContain('+3 ???');
+  });
+
+  it('stays silent when every gain is zero', () => {
+    expect(welcomeBackMessage(report(7200, 28800, 0, { ee: 0, pr: 0, rs: 0, xf: 0 }))).toBeNull();
+  });
+
+  it('ignores non-finite or negative gains on other resources', () => {
+    const msg = welcomeBackMessage(report(7200, 28800, 5, { ee: Infinity, pr: Number.NaN, rs: -3 }));
+    expect(msg?.body).toContain('+5 ME accumulated.');
+    expect(msg?.body).not.toContain('EE');
+    expect(msg?.body).not.toContain('PR');
+    expect(msg?.body).not.toContain('RS');
+    expect(welcomeBackMessage(report(7200, 28800, 0, { ee: Infinity }))).toBeNull();
   });
 });
 

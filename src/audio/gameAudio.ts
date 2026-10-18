@@ -93,7 +93,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     try {
       const s = synth;
       if (!s) return;
-      const ps = session.rates.perSecond;
+      const ps = session.rates.perSecond.me;
       if (session.settings.muted) {
         s.setHum(humFrequency(ps), 0);
         s.scheduleGearTicks(0);

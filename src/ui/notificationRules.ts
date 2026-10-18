@@ -8,6 +8,8 @@ import {
   WELCOME_TEXT,
 } from '../data/notifications';
 import type { ToastMessage } from '../data/notifications';
+import { RESOURCES } from '../data/resources';
+import { RESOURCE_IDS } from '../data/types';
 import type { OfflineReport, TechId } from '../data/types';
 import { formatDuration, formatNumber } from '../utils/format';
 
@@ -66,10 +68,17 @@ export function messageFor(event: NotificationEvent): ToastMessage | null {
 }
 
 // Welcome-back toast after an offline catch-up, or null when the absence was too short or earned nothing.
+// Lists every resource with a finite positive gain, in RESOURCE_IDS order (ME only: identical to the old text).
 export function welcomeBackMessage(r: OfflineReport): ToastMessage | null {
-  if (!(r.gained > 0)) return null;
+  const parts: string[] = [];
+  for (const id of RESOURCE_IDS) {
+    const gain = r.gained[id];
+    if (!Number.isFinite(gain) || !(gain > 0)) continue;
+    parts.push(`+${formatNumber(gain)} ${RESOURCES[id].short}`);
+  }
+  if (parts.length === 0) return null;
   if (!(r.elapsedSeconds >= WELCOME_MIN_ELAPSED_SECONDS)) return null;
-  let body = `Unattended for ${formatDuration(r.elapsedSeconds)}. +${formatNumber(r.gained)} ME accumulated.`;
+  let body = `Unattended for ${formatDuration(r.elapsedSeconds)}. ${parts.join(', ')} accumulated.`;
   if (r.elapsedSeconds > r.cappedSeconds) {
     body += ` Buffer capped at ${formatDuration(r.cappedSeconds)}.`;
   }

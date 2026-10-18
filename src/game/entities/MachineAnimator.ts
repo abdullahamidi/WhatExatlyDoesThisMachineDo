@@ -115,7 +115,7 @@ export class MachineAnimator {
   update(deltaMs: number, isActive: (id: MachineComponentId) => boolean): void {
     const dt = clampFrameSeconds(deltaMs, MACHINE_MOTION.maxFrameSeconds);
     this.manual = decayActivity(this.manual, dt, MACHINE_MOTION.manualTauSeconds); // activity fades when idle
-    const dv = driverValue('combined', this.manual, this.session.rates.perSecond);
+    const dv = driverValue('combined', this.manual, this.session.rates.perSecond.me);
     const degPerSec = dv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(DRIVE_TRAIN.masterSpeed, dv); // rest below threshold
     this.syncGearing(isActive('gearSmall'));
     this.master = stepMaster(this.master, degPerSec, DRIVE_TRAIN.masterDirection, dt, DRIVE_TRAIN.clickTauSeconds);
@@ -146,7 +146,7 @@ export class MachineAnimator {
           break;
         }
         case 'vibrate': {
-          const vdv = driverValue(anim.driver, this.manual, this.session.rates.perSecond);
+          const vdv = driverValue(anim.driver, this.manual, this.session.rates.perSecond.me);
           const speed = vdv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, vdv); // rest below threshold
           const base = resolveAttachment(MACHINE_COMPONENTS[id]);
           if (speed === 0) {
@@ -191,7 +191,7 @@ export class MachineAnimator {
 
   /** Current driver inputs: manual activity and automation rate (ME/s). */
   getDriverValues(): { manual: number; automation: number } {
-    return { manual: this.manual, automation: this.session.rates.perSecond };
+    return { manual: this.manual, automation: this.session.rates.perSecond.me };
   }
 
   /** Removes the session subscriptions. */

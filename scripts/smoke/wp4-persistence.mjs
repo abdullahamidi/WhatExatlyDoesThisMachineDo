@@ -19,7 +19,7 @@ page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 const ready = async () => { await page.waitForFunction(() => window.__wedtmd && window.__wedtmd.componentState && window.__wedtmd.componentState('handCrank'), null, { timeout: 15000 }); await page.waitForTimeout(400); };
 const txt = s => page.$eval(s, e => e.textContent.trim()).catch(() => null);
 const toasts = () => page.$$eval('.toast', ts => ts.map(t => t.textContent.trim()));
-const st = () => page.evaluate(() => { const s = window.__wedtmd.session; return { me: s.state.me, clicks: s.state.totalClicks, lv: { ...s.state.techLevels }, ps: s.rates.perSecond, muted: s.settings.muted }; });
+const st = () => page.evaluate(() => { const s = window.__wedtmd.session; return { me: s.state.res.me, clicks: s.state.totalClicks, lv: { ...s.state.techLevels }, ps: s.rates.perSecond.me, muted: s.settings.muted }; });
 const crank = async n => { const p = await page.evaluate(() => window.__wedtmd.crankClientPoint()); for (let i = 0; i < n; i++) { await page.mouse.click(p.x, p.y); await page.waitForTimeout(30); } };
 const save = () => page.evaluate(() => window.__wedtmd.saveNow && window.__wedtmd.saveNow());
 try {

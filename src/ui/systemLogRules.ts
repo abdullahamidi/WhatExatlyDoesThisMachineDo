@@ -1,6 +1,7 @@
 import { SYSTEM_LOGS, SYSTEM_LOG_CONFIG, SYSTEM_LOG_TITLE } from '../data/systemLogs';
 import type { SystemLogEntry, SystemLogTrigger } from '../data/systemLogs';
 import type { ToastMessage } from '../data/notifications';
+import type { ResourceMap } from '../data/types';
 
 // Pure scheduler for rare system-log toasts (WP4). No DOM, no Phaser, no mutation of inputs.
 
@@ -11,13 +12,13 @@ export interface SystemLogTracker {
 
 // Minimal state slice the rules read.
 interface LogState {
-  lifetimeMe: number;
+  lifetime: Readonly<ResourceMap>;
   createdAt: number;
 }
 
 // True when the trigger condition holds for this state at nowMs.
 function triggerMet(trigger: SystemLogTrigger, s: LogState, nowMs: number): boolean {
-  if (trigger.kind === 'lifetimeMe') return s.lifetimeMe >= trigger.atLeast;
+  if (trigger.kind === 'lifetime') return s.lifetime[trigger.res] >= trigger.atLeast;
   // playSeconds: time since the save was created.
   return (nowMs - s.createdAt) / 1000 >= trigger.atLeast;
 }
