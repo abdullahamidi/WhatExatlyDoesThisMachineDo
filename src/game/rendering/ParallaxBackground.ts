@@ -4,7 +4,7 @@ import type { ParallaxLayerDef } from '../../data/world';
 import type { TechId } from '../../data/types';
 import { ASSET_MANIFEST } from '../../assets/manifest';
 import { minZoomToFit } from '../math/camera';
-import { parallaxPosition, parallaxSpan, isLayerVisible, fadeStep } from '../math/parallax';
+import { parallaxSpan, parallaxStrip, isLayerVisible, fadeStep } from '../math/parallax';
 
 // Any layer part that can change alpha and visibility.
 type FadePart = Phaser.GameObjects.Components.AlphaSingle & Phaser.GameObjects.Components.Visible;
@@ -43,15 +43,22 @@ export class ParallaxBackground {
             .setDisplaySize(VIEW.width / minZoom, VIEW.height / minZoom),
         );
       } else {
-        const entry = ASSET_MANIFEST[def.assetId];
         const sf = def.scrollFactor;
-        const spanX = parallaxSpan(WORLD.width, VIEW.width, minZoom, sf);
+        const geometry = parallaxStrip({
+          scrollFactor: sf,
+          bottomY: def.bottomY,
+          artHeight: ASSET_MANIFEST[def.assetId].height,
+          scale: PIXEL_SCALE,
+          world: WORLD,
+          view: VIEW,
+          focus: CAMERA.focus,
+          minZoom,
+        });
         const spanY = parallaxSpan(WORLD.height, VIEW.height, minZoom, sf);
-        const pos = parallaxPosition({ x: 0, y: def.bottomY }, CAMERA.focus, VIEW, sf);
 
         const strip = track(
           scene.add
-            .tileSprite(spanX.min, pos.y, spanX.max - spanX.min, entry.height * PIXEL_SCALE, def.assetId)
+            .tileSprite(geometry.left, geometry.bottom, geometry.width, geometry.height, def.assetId)
             .setOrigin(0, 1)
             .setTileScale(PIXEL_SCALE, PIXEL_SCALE)
             .setScrollFactor(sf)
@@ -63,10 +70,10 @@ export class ParallaxBackground {
         }
 
         // Solid fill below the strip so panning never reveals a gap.
-        if (def.underfill !== null && spanY.max - pos.y > 0) {
+        if (def.underfill !== null && spanY.max - geometry.bottom > 0) {
           track(
             scene.add
-              .rectangle(spanX.min, pos.y, spanX.max - spanX.min, spanY.max - pos.y, def.underfill)
+              .rectangle(geometry.left, geometry.bottom, geometry.width, spanY.max - geometry.bottom, def.underfill)
               .setOrigin(0, 0)
               .setScrollFactor(sf)
               .setDepth(def.depth)

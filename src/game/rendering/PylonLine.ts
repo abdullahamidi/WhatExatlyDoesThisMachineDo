@@ -6,10 +6,11 @@ import type { Vec2 } from '../../data/machineComponents';
 import type { TechId } from '../../data/types';
 import { ASSET_MANIFEST } from '../../assets/manifest';
 import { minZoomToFit } from '../math/camera';
-import { parallaxPosition, parallaxSpan, isLayerVisible, fadeStep } from '../math/parallax';
+import { parallaxStrip, isLayerVisible, fadeStep } from '../math/parallax';
 import { machineLocalToWorld } from '../math/machineLayout';
 import { resolveConnectionPoint } from '../math/machineLinks';
-import { cableParabola, nearestPylonAnchor } from '../math/pylonLine';
+import { cableParabola, nearestPylonAnchor, pylonAnchorPoint } from '../math/pylonLine';
+import type { PylonAnchorInput, PylonAnchorRef } from '../math/pylonLine';
 
 /** Polyline steps of the cable; a rendering resolution, not a balancing value. */
 const CABLE_SEGMENTS = 24;
@@ -20,6 +21,7 @@ interface PylonStrip {
   stripLeftX: number;
   bottomObjY: number;
   tilePx: number;
+  tileHeightPx: number;
 }
 
 /** Everything needed to draw the cable; null in the class when the layer or the mast point is missing. */
@@ -29,23 +31,43 @@ interface ActivePylonLine {
 }
 
 function pylonStrip(def: ParallaxLayerDef): PylonStrip {
-  const sf = def.scrollFactor;
-  const minZoom = minZoomToFit(VIEW, WORLD);
-  const spanX = parallaxSpan(WORLD.width, VIEW.width, minZoom, sf);
-  const pos = parallaxPosition({ x: 0, y: def.bottomY }, CAMERA.focus, VIEW, sf);
-  return { def, stripLeftX: spanX.min, bottomObjY: pos.y, tilePx: ASSET_MANIFEST[def.assetId].width };
+  const entry = ASSET_MANIFEST[def.assetId];
+  const geometry = parallaxStrip({
+    scrollFactor: def.scrollFactor,
+    bottomY: def.bottomY,
+    artHeight: entry.height,
+    scale: PIXEL_SCALE,
+    world: WORLD,
+    view: VIEW,
+    focus: CAMERA.focus,
+    minZoom: minZoomToFit(VIEW, WORLD),
+  });
+  return {
+    def,
+    stripLeftX: geometry.left,
+    bottomObjY: geometry.bottom,
+    tilePx: entry.width,
+    tileHeightPx: entry.height,
+  };
 }
 
-// Thin cyan cable from the cable mast top to the nearest lit pylon insulator (CR7).
+// Thin cyan cable from the cable mast top to the lit pylon insulator it is pinned to (CR7).
 // It lives in world space, outside the machine texture: its far end moves with the pylons layer parallax,
-// its near end moves with the machine. Visibility and fade follow the pylonsLit layer.
+// its near end moves with the machine. Visibility and fade follow the pylonsLit layer, and the fade-in
+// waits until the cable mast has finished assembling. The anchor is chosen once on first light and kept.
 export class PylonLine {
   private readonly graphics: Phaser.GameObjects.Graphics;
   private readonly active: ActivePylonLine | null;
+  private readonly mastAssembling: () => boolean;
   private fade: number;
   private lastKey: string | null = null;
+  private pinned: PylonAnchorRef | null = null; // chosen on first light; cleared once the layer hides
 
-  constructor(scene: Phaser.Scene, techLevels: Readonly<Record<TechId, number>>) {
+  constructor(
+    scene: Phaser.Scene,
+    techLevels: Readonly<Record<TechId, number>>,
+    mastAssembling: () => boolean = () => false,
+  ) {
     const def = PARALLAX_LAYERS.find((layer) => layer.id === 'pylonsLit');
     const top = resolveConnectionPoint(MACHINE_COMPONENTS.cableMast, 'top');
     this.graphics = scene.add
@@ -53,6 +75,7 @@ export class PylonLine {
       .setScrollFactor(1)
       .setDepth((def?.depth ?? DEPTH.background) + PYLON_LINE.depthOffset);
     this.active = def !== undefined && top !== null ? { strip: pylonStrip(def), mast: machineLocalToWorld(top) } : null;
+    this.mastAssembling = mastAssembling;
     // Already lit at load: no fade-in.
     this.fade = def !== undefined && isLayerVisible(def, techLevels) ? 1 : 0;
   }
@@ -61,13 +84,14 @@ export class PylonLine {
   update(camera: Phaser.Cameras.Scene2D.Camera, techLevels: Readonly<Record<TechId, number>>, deltaMs: number): void {
     const active = this.active;
     if (active === null) return;
-    const target = isLayerVisible(active.strip.def, techLevels) ? 1 : 0;
+    const target = isLayerVisible(active.strip.def, techLevels) && !this.mastAssembling() ? 1 : 0;
     this.fade = fadeStep(this.fade, target, deltaMs, PARALLAX_FADE_MS);
     if (this.fade === 0) {
       if (this.lastKey !== null) {
         this.graphics.clear();
         this.lastKey = null;
       }
+      if (target === 0) this.pinned = null; // layer hidden again (session reset): the next light picks anew
       return;
     }
     const key = `${camera.scrollX},${camera.scrollY},${this.fade}`;
@@ -85,16 +109,19 @@ export class PylonLine {
   private draw(active: ActivePylonLine, scroll: Vec2, fade: number): void {
     const { strip, mast } = active;
     const style = MACHINE_LINK_STYLE.cable;
-    const anchor = nearestPylonAnchor({
+    const input: PylonAnchorInput = {
       from: mast,
       anchorsArt: PYLON_LINE.anchorsArt,
       tilePx: strip.tilePx,
+      tileHeightPx: strip.tileHeightPx,
       scale: PIXEL_SCALE,
       scrollFactor: strip.def.scrollFactor,
       stripLeftX: strip.stripLeftX,
       bottomObjY: strip.bottomObjY,
       scroll,
-    });
+    };
+    if (this.pinned === null) this.pinned = nearestPylonAnchor(input)?.ref ?? null; // first light: choose once
+    const anchor = this.pinned === null ? null : pylonAnchorPoint(input, this.pinned);
     this.graphics.clear();
     if (anchor === null) return;
 

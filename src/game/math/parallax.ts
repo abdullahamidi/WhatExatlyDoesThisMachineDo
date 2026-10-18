@@ -2,6 +2,26 @@ import type { Vec2 } from '../../data/machineComponents';
 import type { TechId } from '../../data/types';
 import type { Size } from './camera';
 
+/** Inputs of parallaxStrip: one tiled layer and the screen/world it is placed in. */
+export interface ParallaxStripInput {
+  scrollFactor: number;
+  bottomY: number;   // layer bottom in world px (as PARALLAX_LAYERS define it)
+  artHeight: number; // art px
+  scale: number;     // art px -> strip px
+  world: Size;
+  view: Size;
+  focus: Vec2;
+  minZoom: number;
+}
+
+/** Strip geometry in parallax space, exactly as ParallaxBackground places the tiled sprite. */
+export interface ParallaxStrip {
+  left: number;   // left edge x
+  bottom: number; // bottom edge y (sprite origin is bottom-left)
+  width: number;  // tiled width: spans the widest visible rect at minZoom
+  height: number; // strip px
+}
+
 // True when the layer has no visibleWhen, or the tech level has reached its minLevel.
 export function isLayerVisible(
   def: { visibleWhen?: { techId: TechId; minLevel: number } },
@@ -42,5 +62,18 @@ export function parallaxSpan(worldLen: number, viewLen: number, minZoom: number,
   return {
     min: (1 - sf) * half * (1 - inv),
     max: sf * worldLen + (1 - sf) * half * (1 + inv),
+  };
+}
+
+// Tiled strip of a parallax layer: x from parallaxSpan, bottom from parallaxPosition, height from the art.
+export function parallaxStrip(input: ParallaxStripInput): ParallaxStrip {
+  const sf = input.scrollFactor;
+  const span = parallaxSpan(input.world.width, input.view.width, input.minZoom, sf);
+  const pos = parallaxPosition({ x: 0, y: input.bottomY }, input.focus, input.view, sf);
+  return {
+    left: span.min,
+    bottom: pos.y,
+    width: span.max - span.min,
+    height: input.artHeight * input.scale,
   };
 }

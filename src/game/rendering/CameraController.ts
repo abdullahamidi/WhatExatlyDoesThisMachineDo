@@ -33,6 +33,7 @@ export class CameraController {
   private center: Vec2;
   private zoom: number;
   private drag: DragState | null = null;
+  private autoFrameSkipped = false; // a purchase/unlock refocus was skipped while dragging; replayed on release
   private refocusTween: Phaser.Tweens.Tween | null = null;
   private lastWheelMs = Number.NEGATIVE_INFINITY; // performance.now() of the last applied wheel step
   private readonly unsubscribes: Array<() => void> = [];
@@ -42,6 +43,7 @@ export class CameraController {
     if (currentlyOver.length > 0) return;
     if (!pointer.leftButtonDown() && !pointer.middleButtonDown()) return;
     this.drag = { startCenter: { ...this.center }, startX: pointer.x, startY: pointer.y, active: false };
+    this.autoFrameSkipped = false;
   };
 
   private readonly pointermove = (pointer: Phaser.Input.Pointer): void => {
@@ -49,6 +51,10 @@ export class CameraController {
     const dx = pointer.x - this.drag.startX;
     const dy = pointer.y - this.drag.startY;
     if (!this.drag.active && Math.hypot(dx, dy) <= CAMERA.dragThresholdPx) return;
+    if (!this.drag.active) {
+      // the view may have moved since pointerdown (an in-flight refocus): drag from where it is now
+      this.drag.startCenter = { ...this.center };
+    }
     this.drag.active = true;
     this.cancelRefocus();
     this.center = clampCenter(dragToCenter(this.drag.startCenter, { x: dx, y: dy }, this.zoom), this.zoom, VIEW, WORLD);
@@ -56,11 +62,11 @@ export class CameraController {
   };
 
   private readonly pointerup = (): void => {
-    this.drag = null;
+    this.endDrag();
   };
 
   private readonly pointerupoutside = (): void => {
-    this.drag = null;
+    this.endDrag();
   };
 
   private readonly wheel = (
@@ -115,6 +121,7 @@ export class CameraController {
   refocus(): void {
     this.cancelRefocus();
     this.drag = null;
+    this.autoFrameSkipped = false; // this refocus supersedes any skipped auto-frame
     this.animateTo(this.target());
   }
 
@@ -130,6 +137,7 @@ export class CameraController {
     }
     this.unsubscribes.length = 0;
     this.drag = null;
+    this.autoFrameSkipped = false;
   }
 
   // Camera framing for the current machine: the default view when the machine fits it, otherwise the fitted view.
@@ -152,11 +160,23 @@ export class CameraController {
   }
 
   // Purchases and unlocks grow the machine: refocus only when the machine no longer fits the current view.
+  // During an active drag the refocus is deferred to the pointer release (see endDrag).
   private autoFrame(): void {
-    if (this.drag?.active === true) return;
+    if (this.drag?.active === true) {
+      this.autoFrameSkipped = true;
+      return;
+    }
     const machine = boundsToWorld(visibleMachineBounds(this.session.state.techLevels));
     if (boundsInView(machine, viewBounds(this.center, this.zoom, VIEW), CAMERA.fitMarginPx)) return;
     this.animateTo(this.target());
+  }
+
+  // Ends the drag on pointer release; an auto-frame skipped during the drag runs now.
+  private endDrag(): void {
+    this.drag = null;
+    if (!this.autoFrameSkipped) return;
+    this.autoFrameSkipped = false;
+    this.autoFrame();
   }
 
   // Tweens center/zoom from the current view to the given one (drag state untouched).

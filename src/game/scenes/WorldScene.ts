@@ -32,7 +32,7 @@ export class WorldScene extends Phaser.Scene {
   create(): void {
     const background = new ParallaxBackground(this, this.ctx.session.state.techLevels);
     this.background = background;
-    const pylonLine = new PylonLine(this, this.ctx.session.state.techLevels);
+    const pylonLine = new PylonLine(this, this.ctx.session.state.techLevels, () => this.machineView?.isAssembling('cableMast') === true);
     this.pylonLine = pylonLine;
     const terrain = new Terrain(this);
     const dust = new DustField(this);

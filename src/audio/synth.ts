@@ -403,6 +403,7 @@ export function createSynth(context: AudioContext): Synth {
     setMains(gain: number): void {
       run('setMains', (out) => {
         const amp = Number.isFinite(gain) && gain > 0 ? gain : 0;
+        if (mains === null && amp === 0) return; // silent and never started: no nodes needed
         mains = ensureMains(context, out, mains);
         mains.gain.gain.setTargetAtTime(amp, context.currentTime, PARAM_TIME_CONSTANT_S);
       });

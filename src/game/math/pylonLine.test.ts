@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { parallaxToWorld, nearestPylonAnchor, cableParabola } from './pylonLine';
+import { parallaxToWorld, nearestPylonAnchor, pylonAnchorPoint, cableParabola } from './pylonLine';
 import type { PylonAnchorInput } from './pylonLine';
 
-/** Base input: one anchor at the tile's bottom-left-ish corner, sf 1, no scroll, strip at 0. */
+/** Base input: one anchor at the tile's bottom-left-ish corner, square tile, sf 1, no scroll, strip at 0. */
 function input(overrides: Partial<PylonAnchorInput> = {}): PylonAnchorInput {
   return {
-    from: { x: 1030, y: 990 },
+    from: { x: 1000, y: 990 },
     anchorsArt: [{ x: 0, y: 256 }],
     tilePx: 256,
+    tileHeightPx: 256,
     scale: 2,
     scrollFactor: 1,
     stripLeftX: 0,
@@ -35,47 +36,104 @@ describe('parallaxToWorld', () => {
 
 describe('nearestPylonAnchor', () => {
   it('picks the tile k = 2 anchor for a start point in that tile', () => {
-    const p = nearestPylonAnchor(input());
-    expect(p).not.toBeNull();
-    expect(p?.x).toBeCloseTo(1024, 9);
-    expect(p?.y).toBeCloseTo(1000, 9);
+    const c = nearestPylonAnchor(input());
+    expect(c?.ref).toEqual({ tile: 2, index: 0 });
+    expect(c?.point.x).toBeCloseTo(1024, 9);
+    expect(c?.point.y).toBeCloseTo(1000, 9);
   });
 
   it('picks the nearer of two anchors', () => {
-    const p = nearestPylonAnchor(input({
-      from: { x: 1230, y: 740 },
+    const c = nearestPylonAnchor(input({
+      from: { x: 1210, y: 740 },
       anchorsArt: [{ x: 0, y: 256 }, { x: 100, y: 128 }],
     }));
-    expect(p?.x).toBeCloseTo(1224, 9);
-    expect(p?.y).toBeCloseTo(744, 9);
+    expect(c?.ref).toEqual({ tile: 2, index: 1 });
+    expect(c?.point.x).toBeCloseTo(1224, 9);
+    expect(c?.point.y).toBeCloseTo(744, 9);
+  });
+
+  it('ignores anchors left of the mast', () => {
+    // anchors sit at x = 512 k; from x 1030 the nearest anchor right of it is k = 3 (x 1536)
+    const c = nearestPylonAnchor(input({ from: { x: 1030, y: 990 } }));
+    expect(c?.ref.tile).toBe(3);
+    expect(c?.point.x).toBeCloseTo(1536, 9);
+  });
+
+  it('returns null when every anchor in the tile window is left of the mast', () => {
+    // window of the mast's own tile only: its anchor (x 512) lies left of from.x 1000
+    expect(nearestPylonAnchor(input({ from: { x: 1000, y: 990 }, tiles: 0 }))).toBeNull();
   });
 
   it('returns the world point of the chosen obj point for sf 0.5 with scroll', () => {
-    const p = nearestPylonAnchor(input({
-      from: { x: 1130, y: 990 },
+    const c = nearestPylonAnchor(input({
+      from: { x: 1100, y: 990 },
       scrollFactor: 0.5,
       scroll: { x: 200, y: 0 },
     }));
-    // obj point of tile k = 2 is (1024, 1000); world = obj + (100, 0)
-    expect(p).not.toBeNull();
-    expect(p?.x).toBeCloseTo(1124, 9);
-    expect(p?.y).toBeCloseTo(1000, 9);
+    // obj point of tile k = 2 is (1024, 1000); world = obj + (100, 0) = (1124, 1000)
+    expect(c?.ref.tile).toBe(2);
+    expect(c?.point.x).toBeCloseTo(1124, 9);
+    expect(c?.point.y).toBeCloseTo(1000, 9);
   });
 
   it('finds a tile to the far left (negative k)', () => {
-    const p = nearestPylonAnchor(input({ from: { x: -2000, y: 990 } }));
-    expect(p?.x).toBeCloseTo(-2048, 9);
-    expect(p?.y).toBeCloseTo(1000, 9);
+    const c = nearestPylonAnchor(input({ from: { x: -1990, y: 990 } }));
+    expect(c?.ref.tile).toBe(-3);
+    expect(c?.point.x).toBeCloseTo(-1536, 9);
+    expect(c?.point.y).toBeCloseTo(1000, 9);
+  });
+
+  it('uses the tile height for the anchor y on a non-square tile', () => {
+    // tile 256 wide, 128 tall: art y 59 sits 69 art px above the strip bottom
+    const c = nearestPylonAnchor(input({
+      from: { x: 1000, y: 800 },
+      tileHeightPx: 128,
+      anchorsArt: [{ x: 159.5, y: 59 }],
+      bottomObjY: 1000,
+    }));
+    expect(c?.point.y).toBeCloseTo(1000 - (128 - 59) * 2, 9);
+    expect(c?.point.x).toBeCloseTo(2 * 256 * 2 + 159.5 * 2, 9);
   });
 
   it('returns null without anchors', () => {
     expect(nearestPylonAnchor(input({ anchorsArt: [] }))).toBeNull();
   });
 
+  it('returns null for a tile of zero height', () => {
+    expect(nearestPylonAnchor(input({ tileHeightPx: 0 }))).toBeNull();
+  });
+
   it('returns null for non-finite input', () => {
     expect(nearestPylonAnchor(input({ from: { x: NaN, y: 0 } }))).toBeNull();
     expect(nearestPylonAnchor(input({ scroll: { x: 0, y: Infinity } }))).toBeNull();
     expect(nearestPylonAnchor(input({ anchorsArt: [{ x: 0, y: NaN }] }))).toBeNull();
+    expect(nearestPylonAnchor(input({ tileHeightPx: NaN }))).toBeNull();
+    expect(nearestPylonAnchor(input({ tiles: NaN }))).toBeNull();
+  });
+});
+
+describe('pylonAnchorPoint', () => {
+  it('matches the point nearestPylonAnchor chose for the same input', () => {
+    const base = input({ from: { x: 1000, y: 990 } });
+    const choice = nearestPylonAnchor(base);
+    expect(choice).not.toBeNull();
+    if (choice === null) return;
+    expect(pylonAnchorPoint(base, choice.ref)).toEqual(choice.point);
+  });
+
+  it('keeps following the same pinned anchor when the camera pans', () => {
+    const ref = { tile: 2, index: 0 };
+    const at0 = pylonAnchorPoint(input({ scrollFactor: 0.5, scroll: { x: 0, y: 0 } }), ref);
+    const at200 = pylonAnchorPoint(input({ scrollFactor: 0.5, scroll: { x: 200, y: 0 } }), ref);
+    expect(at0?.x).toBeCloseTo(1024, 9);
+    expect(at200?.x).toBeCloseTo(1124, 9);
+    expect(at200?.y).toBeCloseTo(at0?.y ?? NaN, 9);
+  });
+
+  it('returns null for an unknown anchor index or non-finite input', () => {
+    expect(pylonAnchorPoint(input(), { tile: 2, index: 1 })).toBeNull();
+    expect(pylonAnchorPoint(input({ from: { x: NaN, y: 0 } }), { tile: 2, index: 0 })).toBeNull();
+    expect(pylonAnchorPoint(input(), { tile: 0.5, index: 0 })).toBeNull();
   });
 });
 

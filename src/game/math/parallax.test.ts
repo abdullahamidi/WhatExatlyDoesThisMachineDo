@@ -1,9 +1,39 @@
 import { describe, it, expect } from 'vitest';
-import { parallaxPosition, parallaxSpan, isLayerVisible, fadeStep } from './parallax';
-import { clampCenter } from './camera';
+import { parallaxPosition, parallaxSpan, parallaxStrip, isLayerVisible, fadeStep } from './parallax';
+import { clampCenter, minZoomToFit } from './camera';
 import { VIEW, WORLD, CAMERA } from '../../data/world';
 import { TECH_IDS } from '../../data/types';
 import type { TechId } from '../../data/types';
+
+describe('parallaxStrip', () => {
+  it('matches parallaxSpan and parallaxPosition for the powerLines layer geometry', () => {
+    const minZoom = minZoomToFit(VIEW, WORLD);
+    const strip = parallaxStrip({
+      scrollFactor: 0.15, bottomY: 1320, artHeight: 256, scale: 2,
+      world: WORLD, view: VIEW, focus: { x: 1280, y: 960 }, minZoom,
+    });
+    const span = parallaxSpan(WORLD.width, VIEW.width, minZoom, 0.15);
+    const pos = parallaxPosition({ x: 0, y: 1320 }, { x: 1280, y: 960 }, VIEW, 0.15);
+    expect(strip.left).toBeCloseTo(span.min, 9);
+    expect(strip.width).toBeCloseTo(span.max - span.min, 9);
+    expect(strip.bottom).toBeCloseTo(pos.y, 9);
+  });
+
+  it('takes the height from the art height times scale, not the width', () => {
+    const base = { scrollFactor: 0.55, bottomY: 1000, world: WORLD, view: VIEW, focus: { x: 1280, y: 960 }, minZoom: 0.5 };
+    expect(parallaxStrip({ ...base, artHeight: 128, scale: 3 }).height).toBe(384);
+    expect(parallaxStrip({ ...base, artHeight: 256, scale: 2 }).height).toBe(512);
+  });
+
+  it('has a width equal to the world width when the view fits the world at minZoom', () => {
+    const strip = parallaxStrip({
+      scrollFactor: 1, bottomY: 0, artHeight: 10, scale: 1, world: WORLD, view: VIEW, focus: CAMERA.focus, minZoom: 0.5,
+    });
+    expect(strip.left).toBeCloseTo(0, 9);
+    expect(strip.width).toBeCloseTo(WORLD.width, 9);
+    expect(strip.bottom).toBeCloseTo(0, 9);
+  });
+});
 
 describe('parallaxPosition', () => {
   it('places a sf 0.15 layer at the expected position for a non-centre focus', () => {

@@ -8,11 +8,12 @@ export function parallaxToWorld(obj: Vec2, scrollFactor: number, scroll: Vec2): 
   };
 }
 
-/** Inputs of nearestPylonAnchor: the strip geometry as ParallaxBackground draws it, plus the camera scroll. */
+/** Inputs of the anchor functions: the strip geometry as ParallaxBackground draws it, plus the camera scroll. */
 export interface PylonAnchorInput {
-  from: Vec2;                  // world point the cable starts at
+  from: Vec2;                  // world point the cable starts at (the mast top)
   anchorsArt: readonly Vec2[]; // wire attachment points, art px inside one tile (origin top-left)
   tilePx: number;              // tile width in art px
+  tileHeightPx: number;        // tile height in art px
   scale: number;               // art px -> strip px
   scrollFactor: number;        // parallax factor of the layer
   stripLeftX: number;          // strip left x in parallax space
@@ -21,36 +22,71 @@ export interface PylonAnchorInput {
   tiles?: number;              // tiles to test on each side of the nearest one (default 2)
 }
 
+/** A pinnable anchor: tile index k along the strip and the index into anchorsArt. */
+export interface PylonAnchorRef {
+  tile: number;
+  index: number;
+}
+
+/** A chosen anchor with its current world point. */
+export interface PylonAnchorChoice {
+  ref: PylonAnchorRef;
+  point: Vec2;
+}
+
+function validPylonInput(input: PylonAnchorInput): boolean {
+  const { from, anchorsArt, tilePx, tileHeightPx, scale, scrollFactor: sf, stripLeftX, bottomObjY, scroll } = input;
+  if (anchorsArt.length === 0 || tilePx * scale <= 0 || tileHeightPx <= 0) return false;
+  const numbers = [from.x, from.y, tilePx, tileHeightPx, scale, sf, stripLeftX, bottomObjY, scroll.x, scroll.y];
+  if (!numbers.every((v) => Number.isFinite(v))) return false;
+  return anchorsArt.every((a) => Number.isFinite(a.x) && Number.isFinite(a.y));
+}
+
+/** World point of anchor `index` in tile `k`; the caller has validated the input. */
+function anchorWorld(input: PylonAnchorInput, k: number, a: Vec2): Vec2 {
+  const { tilePx, tileHeightPx, scale, scrollFactor: sf, stripLeftX, bottomObjY, scroll } = input;
+  const obj: Vec2 = {
+    x: stripLeftX + (k * tilePx + a.x) * scale,
+    y: bottomObjY - (tileHeightPx - a.y) * scale, // art y counts down from the tile top
+  };
+  return parallaxToWorld(obj, sf, scroll);
+}
+
 /**
- * World point of the anchor nearest to `from` over the tiles around `from`; null when there are no anchors,
- * the tile size is not positive, or any input is non-finite.
+ * Anchor nearest to `from` among the anchors lying right of `from` (world x > from.x), over the tiles around
+ * `from`. Null when there is no such anchor or the input is invalid. Ties keep the first candidate.
  */
-export function nearestPylonAnchor(input: PylonAnchorInput): Vec2 | null {
-  const { from, anchorsArt, tilePx, scale, scrollFactor: sf, stripLeftX, bottomObjY, scroll } = input;
-  const span = Math.max(0, Math.floor(input.tiles ?? 2)); // whole tiles on each side
-  const numbers = [from.x, from.y, tilePx, scale, sf, stripLeftX, bottomObjY, scroll.x, scroll.y, input.tiles ?? 2];
-  if (anchorsArt.length === 0 || tilePx * scale <= 0) return null;
-  if (!numbers.every((v) => Number.isFinite(v))) return null;
-  if (!anchorsArt.every((a) => Number.isFinite(a.x) && Number.isFinite(a.y))) return null;
+export function nearestPylonAnchor(input: PylonAnchorInput): PylonAnchorChoice | null {
+  const { from, anchorsArt, tilePx, scale, scrollFactor: sf, stripLeftX, scroll } = input;
+  const tiles = input.tiles ?? 2;
+  if (!Number.isFinite(tiles) || !validPylonInput(input)) return null;
+  const span = Math.max(0, Math.floor(tiles)); // whole tiles on each side
 
   const k0 = Math.floor((from.x - (1 - sf) * scroll.x - stripLeftX) / (tilePx * scale)); // tile under the start point
-  let best: Vec2 | null = null;
+  let best: PylonAnchorChoice | null = null;
   let bestDistance = Infinity;
   for (let k = k0 - span; k <= k0 + span; k++) {
-    for (const a of anchorsArt) {
-      const obj: Vec2 = {
-        x: stripLeftX + (k * tilePx + a.x) * scale,
-        y: bottomObjY - (tilePx - a.y) * scale,
-      };
-      const world = parallaxToWorld(obj, sf, scroll);
-      const distance = Math.hypot(world.x - from.x, world.y - from.y);
+    for (let index = 0; index < anchorsArt.length; index++) {
+      const a = anchorsArt[index];
+      if (a === undefined) continue;
+      const point = anchorWorld(input, k, a);
+      if (point.x <= from.x) continue; // only wires right of the mast
+      const distance = Math.hypot(point.x - from.x, point.y - from.y);
       if (distance < bestDistance) {
         bestDistance = distance;
-        best = world;
+        best = { ref: { tile: k, index }, point };
       }
     }
   }
   return best;
+}
+
+/** Current world point of a pinned anchor; null for an unknown index or invalid input. */
+export function pylonAnchorPoint(input: PylonAnchorInput, ref: PylonAnchorRef): Vec2 | null {
+  if (!validPylonInput(input) || !Number.isInteger(ref.tile)) return null;
+  const a = input.anchorsArt[ref.index];
+  if (a === undefined) return null;
+  return anchorWorld(input, ref.tile, a);
 }
 
 /**
