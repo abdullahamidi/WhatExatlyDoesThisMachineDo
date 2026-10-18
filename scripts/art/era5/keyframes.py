@@ -39,15 +39,16 @@ def overlay_terminal(lines, buttons=False, plate=True):
     ov = Image.new('RGBA', (1280, 720), (0, 0, 0, 0))
     if plate:
         npl = Image.open(A + 'ui/nameplate.png').convert('RGBA'); npl = npl.resize((npl.width * 3, npl.height * 3), Image.NEAREST)
-        ov.alpha_composite(npl, ((1280 - npl.width) // 2, 40))
-    pw, ph = 640, 28 + 22 * len(lines) + (70 if buttons else 0)
-    pn = nine(A + 'ui/panel.png', pw, ph); ov.alpha_composite(pn, ((1280 - pw) // 2, 470 - (60 if buttons else 0)))
-    y = 470 - (60 if buttons else 0) + 16
+        ov.alpha_composite(npl, (48, 36))
+    pw, ph = 560, 28 + 22 * len(lines) + (70 if buttons else 0)
+    px0, py0 = 48, 128
+    pn = nine(A + 'ui/panel.png', pw, ph); ov.alpha_composite(pn, (px0, py0))
+    y = py0 + 16
     for i, ln in enumerate(lines):
-        t = text_img(ln, 'a0' if i == 0 else 'a1'); ov.alpha_composite(t, ((1280 - pw) // 2 + 20, y)); y += 22
+        t = text_img(ln, 'a0' if i == 0 else 'a1'); ov.alpha_composite(t, (px0 + 20, y)); y += 22
     if buttons:
         for j, lab in enumerate(['KEEP IT RUNNING', 'BEGIN A NEW CYCLE']):
-            bw = 280; bx = (1280 - pw) // 2 + 20 + j * (bw + 40); by = y + 10
+            bw = 250; bx = px0 + 20 + j * (bw + 20); by = y + 10
             b = nine(A + 'ui/button.png', bw, 40, frame=1 if j == 0 else 0); ov.alpha_composite(b, (bx, by))
             ic = Image.open(A + 'ui/icons16.png').convert('RGBA').crop(((2 if j == 0 else 1) * 16, 0, (2 if j == 0 else 1) * 16 + 16, 16))
             ov.alpha_composite(ic, (bx + 10, by + 12))
@@ -78,6 +79,6 @@ if __name__ == '__main__':
     ov = overlay_terminal(['RESTORATION HOLDS WHILE THE MACHINE RUNS.'], buttons=True, plate=True); ov.save(K + '_ov5.png')
     k6 = run(K + 'finale_k6_choice.png', WORLD='restored', REGROW=3, BIRDS=1, SEEDS=1, U5=9, AP=5, BEAMFILE='beam-white', PLATE=5, UI=K + '_ov5.png,0,0'); shots.append(k6)
     # contact sheet (half size)
-    cs = Image.new('RGBA', (1280, 720 * 3 // 1), (0, 0, 0, 255))
+    cs = Image.new('RGBA', (1280, 1080), (0, 0, 0, 255))
     for i, s in enumerate(shots): cs.paste(s.resize((640, 360), Image.NEAREST), ((i % 2) * 640, (i // 2) * 360))
     cs.save(K + 'finale_storyboard.png'); print('ok')

@@ -166,3 +166,24 @@ Evidence (scratch `/tmp/claude-0/-home-user-WhatExatlyDoesThisMachineDo/0b9fa637
 - CR-A ACCEPTED: turbine `export` → nearest lit pylon (left) world-space cable, reuse Era II PylonLine code.
 - CR-B ACCEPTED: whistle steam burst on pressureVesselBlueprint milestone.
 - Asset rebuild tools: scripts/art/era3/ (build.py, parts2.py, mock3.py incl. pipe() reference raster).
+
+## In-game review (WP9, Art Director)
+Evidence: `.../scratchpad/ad3/` (z05.png, cap/zboiler.png, cap/zhammer.png, cap/zturbine.png, hammer_frames3x.png, after_w1_8x.png, after_chim_frames.png).
+Verified OK: P1/P2/P3 flanges + tees (header behind chimney, riser −246 into dome, drop −323 into valve chest, drop −412 into nozzle chest,
+P1 riser −98 onto girder → manifold), superheater tees into riser at (−249,−100) and stub touches dome (−257), relief puffs at valve tops, gauge on
+siphon, C1 heater → retrofit tie, hammer strike (tup on die, dust + exhaust puff, rod top hidden), turbine on condenser deck, shadows, palette.
+
+Fixed (data, done):
+- W1 started 4 px right of the condenser in mid-air (`condensate` (44,−3) lies outside the 80 px asset) and ran fully hidden behind the hammer bedplate →
+  condenser `condensate` = (40,−13) (end-cap hotwell nozzle, cols 78–79 rows −15..−12); W1 via = (−360,−13) (−360,−3) (−308,−3) (−308,−46):
+  visible elbow + drop in the 4 px gap condenser↔hammer, then behind the bedplate. Tests updated.
+- Chimney smoke too sparse/short to read: chimney rate base/min 0.4→0.8, max 2→2.5; STEAM_FX lifeMs 1200→1600, riseArtPx 12→20, scaleTo 1.5→1.75.
+
+Specs (code, for EM → worker):
+- R1 (medium) `src/game/math/camera.ts fitView` + `src/data/world.ts CAMERA`: add `hudTopInsetPx: 240` (screen px under the HUD panel). After the zoom is
+  chosen, if `(b.top − centre.y)·zoom + VIEW.height/2 < hudTopInsetPx`, shift `centre.y −= (hudTopInsetPx − that)/zoom` (then clampCenter as now).
+  Why: s10 (boiler only, zoom 0.75) puts the chimney crown at screen y 175, behind the HUD (bottom 230). Expected: crown ≈ 240, ground ≈ 600. Zoom 0.5 unchanged (clamped).
+  Unit test: fitView with the s10 bounds keeps the top ≥ inset.
+- R2 (low) `PylonLine`/`PYLON_FEEDS`: turbine export cable is at background depth and leaves the bushing (−374,−70) leftward behind the casing (top −88),
+  so at zoom ≥ 1 it reads as passing through the turbine. Add optional `PylonFeed.leadTo?: Vec2` (machine-local); turbine `leadTo: (−374,−94)`: draw a
+  1 art-px cable (MACHINE_LINK_STYLE.cable core/hi) at machine cable depth from export up to leadTo, start the catenary at leadTo.

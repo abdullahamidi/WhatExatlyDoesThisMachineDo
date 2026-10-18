@@ -108,7 +108,7 @@ def scene(out):
         sky.alpha_composite(e, (372 - 24, 290 - 24))
     cv = Image.new('RGBA', (W, H)); cv.paste(sky.crop((0, 719, 1280, 720)).resize((W, H)), (0, 0)); cv.paste(sky, (0, 0))
     d_art = 300 - 80                                  # camera centre above CAMERA.focus (art px)
-    def layer(old, new, sf, alpha, ground_row, underfill, tnt=None):
+    def layer(old, new, sf, alpha, ground_row, underfill, tnt=None, underfill_new=None):
         lift = int(round(d_art * (1 - sf)))           # parallax: layer horizon rises above the machine ground
         y_ground = gy - lift
         imgs = []
@@ -121,12 +121,13 @@ def scene(out):
             strip = tile_x(im, W, int(-gx * sf) + 300)
             top = y_ground - ground_row
             cv.alpha_composite(with_alpha(strip, alpha * a), (0, top))
-            if underfill:
-                uf = Image.new('RGBA', (W, max(0, H - (top + im.height))), underfill + (int(255 * alpha * a),))
+            uf_c = underfill_new if (path == new and underfill_new and path != old) else underfill
+            if uf_c:
+                uf = Image.new('RGBA', (W, max(0, H - (top + im.height))), uf_c + (int(255 * alpha * a),))
                 cv.alpha_composite(uf, (0, top + im.height))
     TR = os.environ.get('TRANSPARENT') == '1'
     if TR: cv = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    if not TR: layer(R5 + 'bg/mountains.png', R5 + 'finale/mountains-restored.png', .15, .45, 156, (0x5a, 0x5f, 0x63))
+    if not TR: layer(R5 + 'bg/mountains.png', R5 + 'finale/mountains-restored.png', .15, .45, 156, (0x5a, 0x5f, 0x63), underfill_new=(0x2e, 0x4a, 0x36))
     if not TR: layer(R5 + 'bg/skyline.png', R5 + 'finale/skyline-restored.png', .3, .4, 220, (0x2b, 0x2e, 0x31))
     if not TR: layer(R5 + 'bg/pylons.png', R5 + 'bg/pylons.png', .55, .45, 156, None, (0xb8, 0xa9, 0x8f))
     if not TR: layer(R5 + 'bg/pylons-lit.png', R5 + 'bg/pylons-lit.png', .55, .7, 156, None)
