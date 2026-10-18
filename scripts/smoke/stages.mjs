@@ -4,6 +4,10 @@ const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PW_PATH);
 const url = process.argv[2], out = process.argv[3], nframes = +(process.argv[4] || 0);
 const S7 = ['wornMotor', 'gearRatio','gearRatio','gearRatio','reinforcedCrank','motorTuning','motorTuning','motorTuning','motorTuning','motorTuning','flywheel','pistonArray','improvedPistons'];
+const S9 = [...S7, '@blueprint', 'generator', ...Array(5).fill('motorRetrofit'), ...Array(20).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(3).fill('transformer'), 'powerLines'];
+const S10 = [...S9, '@substationBlueprint', 'boiler'];
+// the 16 Era III machine parts (WP9 C3), reported for s10_boiler / s11_era3_full
+const PARTS = ['boiler', 'chimney', 'steamManifold', 'pressureGauge', 'gaugeNeedle', 'fireboxGlow1', 'fireboxGlow2', 'fireboxGlow3', 'inductionHeater', 'superheater', 'reliefValves', 'steamHammer', 'hammerRam', 'condenser', 'turbine', 'turbineRotor'];
 const stages = {
   s0_crank: [],
   s1_gear: ['gearRatio'],
@@ -14,7 +18,9 @@ const stages = {
   s6_pistons_nofly: ['wornMotor', 'motorTuning','motorTuning','motorTuning','motorTuning','motorTuning', 'pistonArray'],
   s7_full: S7,
   s8_generator: [...S7, '@blueprint', 'generator'],
-  s9_era2_full: [...S7, '@blueprint', 'generator', ...Array(5).fill('motorRetrofit'), ...Array(20).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(3).fill('transformer'), 'powerLines'],
+  s9_era2_full: S9,
+  s10_boiler: S10,
+  s11_era3_full: [...S10, ...Array(3).fill('inductionHeater'), ...Array(20).fill('firebox'), 'steamHammer', 'superheater', ...Array(5).fill('condenser'), 'turbine', 'reliefValves', '@pressureVesselBlueprint'],
 };
 const only = process.env.ONLY ? process.env.ONLY.split(',') : Object.keys(stages);
 const b = await chromium.launch();
@@ -33,10 +39,11 @@ for (const name of only) {
       const s = window.__wedtmd.session; const o = []; let t = Date.now();
       const jump = () => { t += 8 * 3600 * 1000; s.update(t); };
       for (const id of buys) {
-        if (id === '@blueprint') {
-          // jump forward until the generator blueprint milestone is owned (up to 5 jumps)
-          for (let k = 0; k < 5 && s.state.techLevels.generatorBlueprint !== 1; k++) jump();
-          o.push(id + ':' + (s.state.techLevels.generatorBlueprint === 1));
+        if (id.startsWith('@')) {
+          // '@<techId>' marker: jump forward until that tech is owned (up to 8 jumps); '@blueprint' = '@generatorBlueprint'
+          const tech = id === '@blueprint' ? 'generatorBlueprint' : id.slice(1);
+          for (let k = 0; k < 8 && s.state.techLevels[tech] !== 1; k++) jump();
+          o.push(id + ':' + (s.state.techLevels[tech] === 1));
           continue;
         }
         if (s.state.techLevels.wornMotor) jump();
@@ -53,6 +60,10 @@ for (const name of only) {
   await p.mouse.move(5, 5);
   await p.screenshot({ path: `${out}/${name}.png` });
   console.log(name, 'camera', JSON.stringify(await p.evaluate(() => window.__wedtmd.cameraState())));
+  console.log(name, 'plaque', JSON.stringify(await p.$eval('#hud-plaque', e => e.textContent.trim()).catch(() => null)));
+  if (name === 's10_boiler' || name === 's11_era3_full') {
+    console.log(name, 'parts', JSON.stringify(await p.evaluate((ids) => Object.fromEntries(ids.map(i => [i, window.__wedtmd.componentState(i)?.visible ?? null])), PARTS)));
+  }
   for (let f = 0; f < nframes; f++) {
     await p.screenshot({ path: `${out}/${name}-f${String(f).padStart(2,'0')}.png` });
     await p.waitForTimeout(+(process.env.FRAME_MS || 60));
