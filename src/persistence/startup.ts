@@ -28,6 +28,7 @@ export function startSession(
     settings: load.settings,
     stats: load.stats,
     achievements: load.achievements,
+    prestige: load.prestige,
     now: clock,
   });
   const offline = session.applyOffline(nowMs);
@@ -37,6 +38,7 @@ export function startSession(
   const saved = saveManager.save(session.state, session.settings, nowMs, {
     stats: session.stats,
     achievements: session.achievements,
+    prestige: session.prestige,
   });
   return { session, load, offline, saved };
 }

@@ -12,7 +12,7 @@ export interface Scheduler {
 }
 
 export interface SaveController {
-  /** Writes the current state, settings, stats and achievements. Returns the write result; never throws. */
+  /** Writes the current state, settings, stats, achievements and prestige. Returns the write result; never throws. */
   saveNow(): boolean;
   /** Erases the save, starts a fresh session (settings kept) and writes the fresh state. */
   resetProgress(): void;
@@ -38,7 +38,7 @@ const defaultScheduler: Scheduler = {
 
 /**
  * Owns all writes to the save after boot: the periodic autosave, saves on purchase, milestone,
- * achievement, ending and settings changes, the manual save, the reset and the player import.
+ * achievement, ending, cycle, perk (prestige) and settings changes, the manual save, the reset and the player import.
  * Holds no economy state of its own.
  */
 export function createSaveController(o: {
@@ -151,6 +151,7 @@ export function createSaveController(o: {
       const written = saveManager.save(envelope.state, session.settings, envelope.savedAt, {
         stats: envelope.stats,
         achievements: envelope.achievements,
+        prestige: envelope.prestige,
       });
       lastSaveOk = written;
       if (!written) return { ok: false, error: 'Could not write the imported save.' };

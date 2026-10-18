@@ -14,12 +14,13 @@ export const STATS_VIEW_LABELS = {
   clicks: 'CLICKS',
   purchases: 'PURCHASES',
   cycle: 'CYCLE',
+  bestCycle: 'BEST CYCLE',
   total: 'TOTAL',
   bestRate: 'BEST RATE',
 } as const;
 
 /**
- * Fixed rows first (playtime, away time, clicks, purchases, cycles), then for every resource with a
+ * Fixed rows first (playtime, away time, clicks, purchases, cycles, best cycle when known), then for every resource with a
  * lifetime total above zero: TOTAL and BEST RATE. Values follow the default notation.
  */
 export function statsRows(
@@ -34,6 +35,10 @@ export function statsRows(
     { label: STATS_VIEW_LABELS.purchases, value: formatNumber(stats.purchases) },
     { label: STATS_VIEW_LABELS.cycle, value: formatNumber(stats.cycles) },
   ];
+  // WP14: the fastest finished cycle (wall clock, offline time included). Hidden until a cycle has ended.
+  if (stats.bestCycleSeconds !== null) {
+    rows.push({ label: STATS_VIEW_LABELS.bestCycle, value: formatDuration(stats.bestCycleSeconds) });
+  }
   for (const id of RESOURCE_IDS) {
     if (!(stats.lifetime[id] > 0)) continue;
     const short = resources[id].short;

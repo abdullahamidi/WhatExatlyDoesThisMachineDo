@@ -75,9 +75,10 @@ describe('parseImport', () => {
   const save = serialize(createInitialState(NOW), { ...DEFAULT_SETTINGS, muted: true }, NOW, {
     stats: { ...emptyStats(NOW), clicks: 7 },
     achievements: { unlocked: { firstTurn: NOW } },
+    prestige: { cycle: 2, echoesEarned: 3, perks: ['residualCharge'] },
   });
 
-  it('accepts an encoded v2 save and returns the envelope with stats and achievements', () => {
+  it('accepts an encoded v2 save and returns the envelope with stats, achievements and prestige', () => {
     const result = parseImport(encodeSave(save), NOW + 1000);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -86,6 +87,7 @@ describe('parseImport', () => {
     expect(result.envelope.settings.muted).toBe(true);
     expect(result.envelope.stats.clicks).toBe(7);
     expect(result.envelope.achievements.unlocked.firstTurn).toBe(NOW);
+    expect(result.envelope.prestige).toEqual({ cycle: 2, echoesEarned: 3, perks: ['residualCharge'] });
   });
 
   it('accepts raw JSON and reports a migrated v1 save as migrated', () => {
@@ -96,6 +98,7 @@ describe('parseImport', () => {
     expect(v1.migrated).toBe(true);
     expect(v1.envelope.stats.clicks).toBe(321);
     expect(v1.envelope.achievements).toEqual({ unlocked: {} });
+    expect(v1.envelope.prestige).toEqual({ cycle: 1, echoesEarned: 0, perks: [] });
   });
 
   const badSaves: Array<[string, string]> = [

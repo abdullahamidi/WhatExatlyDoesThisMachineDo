@@ -38,7 +38,7 @@ function createRow(label: string, valueId: string, initial: string): { row: HTML
 }
 
 export function createHud(root: HTMLElement, commands: GameContext['commands']): Hud {
-  const initial: Readout = { me: '0', perClick: '1', perSecond: '0/s', plaque: 'PRIMARY FUNCTION: UNKNOWN' };
+  const initial: Readout = { me: '0', perClick: '1', perSecond: '0/s', plaque: 'PRIMARY FUNCTION: UNKNOWN', cycle: '' };
 
   const panel = createElement('div', { id: 'hud-panel', className: 'hud-panel' });
   panel.appendChild(createElement('div', { className: 'hud-title', text: 'MECHANICAL ENERGY' }));
@@ -67,6 +67,11 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
   // Machine plaque: the current primary function line (see plaqueText in hudView.ts).
   const plaque = createElement('div', { id: 'hud-plaque', className: 'hud-plaque', text: initial.plaque });
   panel.appendChild(plaque);
+
+  // Cycle line under the plaque (WP14): hidden in cycle 1, `CYCLE 0043` from cycle 2.
+  const cycleEl = createElement('div', { id: 'hud-cycle', className: 'hud-cycle' });
+  cycleEl.hidden = true;
+  panel.appendChild(cycleEl);
 
   const buttons = createElement('div', { id: 'hud-buttons', className: 'hud-buttons' });
   const techButton = createElement('button', { id: 'hud-tech', className: 'hud-btn', text: 'TECH INDEX' });
@@ -131,6 +136,12 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
       setText(perSecond.value, 'perSecond', view.perSecond);
       for (const rowView of view.rows) renderResourceRow(rowView);
       setText(plaque, 'plaque', view.plaque);
+      const cycleText = view.cycle ?? '';
+      if (written.cycle !== cycleText) {
+        written.cycle = cycleText;
+        cycleEl.textContent = cycleText;
+        cycleEl.hidden = cycleText === '';
+      }
     },
     destroy(): void {
       techButton.removeEventListener('click', onTech);

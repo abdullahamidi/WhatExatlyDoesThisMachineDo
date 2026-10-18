@@ -2,7 +2,7 @@ import './toasts.css';
 import { TOAST_CONFIG } from '../data/notifications';
 import type { ToastMessage, ToastTone } from '../data/notifications';
 import type { GameSession } from '../simulation';
-import { achievementMessage, messageFor, welcomeBackMessage } from './notificationRules';
+import { achievementMessage, cycleMessage, messageFor, welcomeBackMessage } from './notificationRules';
 import type { NotificationEvent } from './notificationRules';
 
 // Toast stack (WP3). DOM only: no Phaser. Text is always written with textContent.
@@ -179,5 +179,12 @@ export function connectOfflineNotices(session: GameSession, toasts: Toasts): () 
   return session.on('offline', (report) => {
     const msg = welcomeBackMessage(report);
     if (msg !== null) toasts.show(msg);
+  });
+}
+
+// Shows the new-cycle toast for every 'cycle' event (WP14 T8a). Fires after 'reset', so the reset's clear keeps it.
+export function connectCycleNotices(session: GameSession, toasts: Toasts): () => void {
+  return session.on('cycle', (event) => {
+    toasts.show(cycleMessage(event));
   });
 }

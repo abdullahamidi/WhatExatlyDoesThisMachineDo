@@ -176,7 +176,8 @@ describe('startSession', () => {
     const state = withLevels({}, { lastSimTime: t0, createdAt: t0 - HOUR_MS });
     const stats = { ...emptyStats(t0), clicks: 42, purchases: 5, activeSeconds: 120 };
     const achievements = { unlocked: { firstTurn: t0 - 1000 } };
-    storage.setItem(SAVE_KEY, serialize(state, { ...DEFAULT_SETTINGS, muted: false }, t0, { stats, achievements }));
+    const prestige = { cycle: 2, echoesEarned: 3, perks: ['residualCharge' as const] };
+    storage.setItem(SAVE_KEY, serialize(state, { ...DEFAULT_SETTINGS, muted: false }, t0, { stats, achievements, prestige }));
 
     const result = startSession(new SaveManager(storage), t0, clock);
     expect(result.saved).toBe(true);
@@ -184,10 +185,25 @@ describe('startSession', () => {
     expect(result.session.stats.purchases).toBe(5);
     expect(result.session.stats.activeSeconds).toBe(120);
     expect(result.session.achievements.unlocked.firstTurn).toBe(t0 - 1000);
+    expect(result.session.prestige).toEqual(prestige);
+    expect(result.session.stats.cycles).toBe(2);
 
     const written = deserialize(storage.getItem(SAVE_KEY), t0);
     expect(written.stats.clicks).toBe(42);
     expect(written.achievements.unlocked.firstTurn).toBe(t0 - 1000);
+    expect(written.prestige).toEqual(prestige);
+  });
+
+  it('(g) a v2 save without a prestige block boots at cycle 1 with no Echoes and writes the default back', () => {
+    const storage = new MemoryStorage();
+    const state = withLevels({}, { lastSimTime: t0, createdAt: t0 - HOUR_MS });
+    storage.setItem(SAVE_KEY, serialize(state, { ...DEFAULT_SETTINGS, muted: false }, t0));
+
+    const result = startSession(new SaveManager(storage), t0, clock);
+    expect(result.load.status).toBe('loaded');
+    expect(result.load.prestige).toEqual({ cycle: 1, echoesEarned: 0, perks: [] });
+    expect(result.session.prestige).toEqual({ cycle: 1, echoesEarned: 0, perks: [] });
+    expect(deserialize(storage.getItem(SAVE_KEY), t0).prestige).toEqual({ cycle: 1, echoesEarned: 0, perks: [] });
   });
 
   it('reports saved false when storage refuses writes, without throwing', () => {

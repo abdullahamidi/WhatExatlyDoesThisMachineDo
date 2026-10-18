@@ -30,7 +30,7 @@ function radio(s: SettingsState, id: 'notation' | 'uiScale'): RadioControl {
   return found as RadioControl;
 }
 
-function toggle(s: SettingsState, id: 'reducedMotion' | 'statusMarkers' | 'screenShake'): ToggleControl {
+function toggle(s: SettingsState, id: 'reducedMotion' | 'statusMarkers' | 'screenShake' | 'confirmNewCycle'): ToggleControl {
   const found = settingsViewModel(s).find((c) => c.id === id);
   expect(found?.kind).toBe('toggle');
   return found as ToggleControl;
@@ -41,10 +41,10 @@ describe('settingsViewModel (default settings)', () => {
 
   it('lists controls in AUDIO, DISPLAY, ACCESS order', () => {
     expect(model.map((c) => c.id)).toEqual([
-      'masterVolume', 'sfxVolume', 'ambientVolume', 'notation', 'uiScale', 'statusMarkers', 'reducedMotion', 'screenShake',
+      'masterVolume', 'sfxVolume', 'ambientVolume', 'notation', 'uiScale', 'statusMarkers', 'confirmNewCycle', 'reducedMotion', 'screenShake',
     ]);
     expect(model.map((c) => c.section)).toEqual([
-      'audio', 'audio', 'audio', 'display', 'display', 'display', 'access', 'access',
+      'audio', 'audio', 'audio', 'display', 'display', 'display', 'display', 'access', 'access',
     ]);
   });
 
@@ -74,7 +74,10 @@ describe('settingsViewModel (default settings)', () => {
     expect(row.options.map((o) => o.checked)).toEqual([true, false, false]);
   });
 
-  it('toggles: status markers off, reduced motion off, screen shake on', () => {
+  it('toggles: status markers off, confirm new cycle on, reduced motion off, screen shake on', () => {
+    const confirm = toggle(DEFAULT_SETTINGS_VALUES, 'confirmNewCycle');
+    expect(confirm).toMatchObject({ section: 'display', pressed: true, stateText: 'ON', disabled: false });
+    expect(confirm.label).toBe(SETTINGS_LABELS.confirmNewCycle);
     const markers = toggle(DEFAULT_SETTINGS_VALUES, 'statusMarkers');
     expect(markers).toMatchObject({ pressed: false, stateText: 'OFF', disabled: false });
     const reduced = toggle(DEFAULT_SETTINGS_VALUES, 'reducedMotion');
@@ -99,6 +102,10 @@ describe('settingsViewModel (changed settings)', () => {
 
   it('status markers ON when set', () => {
     expect(toggle(withSettings({ statusMarkers: true }), 'statusMarkers')).toMatchObject({ pressed: true, stateText: 'ON' });
+  });
+
+  it('confirm new cycle OFF when turned off', () => {
+    expect(toggle(withSettings({ confirmNewCycle: false }), 'confirmNewCycle')).toMatchObject({ pressed: false, stateText: 'OFF' });
   });
 
   it('reduced motion ON when set', () => {
@@ -191,5 +198,7 @@ describe('patches', () => {
     expect(toggleAction('statusMarkers', DEFAULT_SETTINGS_VALUES)).toEqual({ statusMarkers: true });
     expect(toggleAction('screenShake', DEFAULT_SETTINGS_VALUES)).toEqual({ screenShake: false });
     expect(toggleAction('screenShake', withSettings({ screenShake: false }))).toEqual({ screenShake: true });
+    expect(toggleAction('confirmNewCycle', DEFAULT_SETTINGS_VALUES)).toEqual({ confirmNewCycle: false });
+    expect(toggleAction('confirmNewCycle', withSettings({ confirmNewCycle: false }))).toEqual({ confirmNewCycle: true });
   });
 });

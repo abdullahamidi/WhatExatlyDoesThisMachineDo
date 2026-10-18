@@ -5,7 +5,7 @@ import type { NumberNotation, SettingsState, UiScale } from '../../data/types';
 export type SettingsSection = 'audio' | 'display' | 'access';
 export type VolumeId = 'masterVolume' | 'sfxVolume' | 'ambientVolume';
 export type RadioId = 'notation' | 'uiScale';
-export type ToggleId = 'reducedMotion' | 'statusMarkers' | 'screenShake';
+export type ToggleId = 'reducedMotion' | 'statusMarkers' | 'screenShake' | 'confirmNewCycle';
 
 export const VOLUME_IDS: readonly VolumeId[] = ['masterVolume', 'sfxVolume', 'ambientVolume'];
 
@@ -105,6 +105,7 @@ export function settingsViewModel(s: Readonly<SettingsState>): SettingsControl[]
     notation,
     uiScale,
     toggleControl('statusMarkers', s, 'display'),
+    toggleControl('confirmNewCycle', s, 'display'),
     toggleControl('reducedMotion', s, 'access'),
     toggleControl('screenShake', s, 'access'),
   ];
@@ -150,6 +151,8 @@ export function toggleAction(id: ToggleId, s: Readonly<SettingsState>): Partial<
       return { statusMarkers: !s.statusMarkers };
     case 'screenShake':
       return { screenShake: !s.screenShake };
+    case 'confirmNewCycle':
+      return { confirmNewCycle: !s.confirmNewCycle };
   }
 }
 

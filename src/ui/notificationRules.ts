@@ -11,8 +11,11 @@ import {
   WELCOME_TEXT,
 } from '../data/notifications';
 import type { ToastMessage } from '../data/notifications';
+import { PRESTIGE_TEXT } from '../data/prestige';
 import { RESOURCE_IDS } from '../data/types';
 import type { OfflineReport, TechId } from '../data/types';
+import { cycleLabel, echoMultiplier } from '../simulation/prestige';
+import type { SessionEvents } from '../simulation/events';
 import { formatDuration, formatNumber } from '../utils/format';
 import { resourceShort } from './revealRules';
 
@@ -129,6 +132,19 @@ export function achievementMessage(
     key: ACHIEVEMENT_TEXT.key,
     title,
     body,
+    tone: 'system',
+    durationMs: TOAST_CONFIG.durationMs,
+  };
+}
+
+// New-cycle toast (WP14 T8a): `CYCLE 0043` / `+3 ECHOES (+90% ALL/S)`. The bonus is the all-rate multiplier after the
+// gain (counts earned Echoes only, so perks do not change it). Shown after the reset, so it survives the toast clear.
+export function cycleMessage(event: SessionEvents['cycle']): ToastMessage {
+  const bonusPct = Math.round((echoMultiplier({ cycle: event.cycle, echoesEarned: event.echoesEarned, perks: [] }) - 1) * 100);
+  return {
+    key: 'cycle',
+    title: cycleLabel(event.cycle),
+    body: `+${event.echoesGained} ${PRESTIGE_TEXT.echoes} (+${bonusPct}% ${PRESTIGE_TEXT.allPerSecond})`,
     tone: 'system',
     durationMs: TOAST_CONFIG.durationMs,
   };

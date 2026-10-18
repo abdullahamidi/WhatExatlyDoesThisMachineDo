@@ -85,3 +85,24 @@ describe('statsRows', () => {
     ]);
   });
 });
+
+describe('BEST CYCLE row (WP14 T8a)', () => {
+  it('is hidden while no cycle has ended', () => {
+    expect(statsRows(stats({ bestCycleSeconds: null })).map((r) => r.label)).not.toContain(STATS_VIEW_LABELS.bestCycle);
+  });
+
+  it('shows the best cycle as a duration right after the CYCLE row', () => {
+    const rows = statsRows(stats({ cycles: 2, bestCycleSeconds: 9000 }));
+    expect(rows.slice(5, 7)).toEqual([
+      { label: 'CYCLE', value: '2' },
+      { label: STATS_VIEW_LABELS.bestCycle, value: '2h 30m' },
+    ]);
+    expect(rows).toHaveLength(7);
+  });
+
+  it('keeps the six fixed rows first when hidden', () => {
+    expect(statsRows(stats({ bestCycleSeconds: null })).slice(0, 6).map((r) => r.label)).toEqual([
+      'PLAYTIME', 'TIME AWAY', 'LONGEST ABSENCE', 'CLICKS', 'PURCHASES', 'CYCLE',
+    ]);
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { achievementMessage, messageFor, recoveredMessage, welcomeBackMessage } from './notificationRules';
+import { achievementMessage, cycleMessage, messageFor, recoveredMessage, welcomeBackMessage } from './notificationRules';
 import { setRevealed } from './revealRules';
 import type { NotificationEvent } from './notificationRules';
 import { ACHIEVEMENTS } from '../data/achievements';
@@ -276,5 +276,26 @@ describe('welcomeBackMessage with the xf reveal (WP13 D4)', () => {
     });
     expect(msg?.body).toContain('+3 RF');
     expect(msg?.body).not.toContain('???');
+  });
+});
+
+describe('cycleMessage (WP14 T8a)', () => {
+  it('cycle 2 with 3 Echoes: CYCLE 0043 and +3 ECHOES (+90% ALL/S), system tone', () => {
+    expect(cycleMessage({ cycle: 2, echoesGained: 3, echoesEarned: 3 })).toEqual({
+      key: 'cycle',
+      title: 'CYCLE 0043',
+      body: '+3 ECHOES (+90% ALL/S)',
+      tone: 'system',
+      durationMs: TOAST_CONFIG.durationMs,
+    });
+  });
+
+  it('bonus follows the earned total, capped at 30 counted Echoes', () => {
+    expect(cycleMessage({ cycle: 3, echoesGained: 3, echoesEarned: 6 }).body).toBe('+3 ECHOES (+180% ALL/S)');
+    expect(cycleMessage({ cycle: 9, echoesGained: 4, echoesEarned: 40 }).body).toBe('+4 ECHOES (+900% ALL/S)');
+  });
+
+  it('title counts the cycle with the CYCLE label', () => {
+    expect(cycleMessage({ cycle: 3, echoesGained: 3, echoesEarned: 6 }).title).toBe('CYCLE 0044');
   });
 });

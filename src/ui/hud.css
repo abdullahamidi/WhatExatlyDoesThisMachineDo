@@ -70,6 +70,15 @@
   overflow-wrap: anywhere;
 }
 
+/* WP14: cycle line under the plaque (hidden attribute in cycle 1; no display override here). */
+.hud-cycle {
+  margin-top: 4px;
+  color: var(--amber);
+  font-size: max(12px, .65em);
+  letter-spacing: .08em;
+  text-shadow: 0 0 6px rgba(217, 130, 43, .55);
+}
+
 .hud-label {
   color: var(--amber-dim);
 }

@@ -16,7 +16,12 @@ import { MemoryStorage, SaveManager, browserStorage } from './saveManager';
 import type { KeyValueStorage } from './saveManager';
 import v1Save from './fixtures/v1-save.json';
 import v2Primary from './fixtures/v2-wp11-primary.json';
+import v2Cycle2 from './fixtures/v2-cycle2.json';
 import { DEFAULT_ENDING } from '../simulation/progression/ending';
+import { DEFAULT_PRESTIGE } from '../simulation/prestige';
+
+/** A fresh, mutable copy of the default prestige (tests compare against it). */
+const DEFAULT_PRESTIGE_LITERAL = { ...DEFAULT_PRESTIGE, perks: [] };
 
 const withLevels = (levels: Partial<Record<TechId, number>>, extra: Partial<GameState> = {}): GameState => {
   const s = createInitialState(0);
@@ -66,6 +71,7 @@ describe('round trip', () => {
       settings,
       stats: deriveStats(state, 3000),
       achievements: { unlocked: {} },
+      prestige: DEFAULT_PRESTIGE_LITERAL,
       status: 'loaded',
     });
     expect(result).not.toHaveProperty('error');
@@ -79,6 +85,7 @@ describe('round trip', () => {
       settings,
       stats: deriveStats(state, 3000),
       achievements: { unlocked: {} },
+      prestige: DEFAULT_PRESTIGE_LITERAL,
       status: 'loaded',
     });
   });
@@ -197,10 +204,12 @@ describe('stats and achievements in the envelope (WP12)', () => {
   const achievements: AchievementsState = { unlocked: { firstTurn: 1234, steadyHand: 5678 } };
 
   it('serialize with meta round trips stats and achievements losslessly', () => {
-    const result = deserialize(serialize(state, DEFAULT_SETTINGS, 2000, { stats, achievements }), 3000);
+    const prestige = { cycle: 2, echoesEarned: 3, perks: ['residualCharge' as const] };
+    const result = deserialize(serialize(state, DEFAULT_SETTINGS, 2000, { stats, achievements, prestige }), 3000);
     expect(result.status).toBe('loaded');
     expect(result.stats).toEqual(stats);
     expect(result.achievements).toEqual(achievements);
+    expect(result.prestige).toEqual(prestige);
     expect(result.state).toEqual(state);
   });
 
@@ -210,8 +219,8 @@ describe('stats and achievements in the envelope (WP12)', () => {
   });
 
   it('serialize with meta appends stats and achievements after settings', () => {
-    const parsed = JSON.parse(serialize(state, DEFAULT_SETTINGS, 2000, { stats, achievements })) as Record<string, unknown>;
-    expect(Object.keys(parsed)).toEqual(['version', 'savedAt', 'state', 'settings', 'stats', 'achievements']);
+    const parsed = JSON.parse(serialize(state, DEFAULT_SETTINGS, 2000, { stats, achievements, prestige: DEFAULT_PRESTIGE_LITERAL })) as Record<string, unknown>;
+    expect(Object.keys(parsed)).toEqual(['version', 'savedAt', 'state', 'settings', 'stats', 'achievements', 'prestige']);
   });
 
   it('a v2 save without stats derives them from the state and has no achievements', () => {
@@ -706,7 +715,7 @@ describe('finale save compatibility (WP13)', () => {
   });
 
   it('stats.cycles is clamped to at least 1 (cycles 0 -> 1)', () => {
-    const meta = { stats: { ...emptyStats(2000), cycles: 0 }, achievements: { unlocked: {} } };
+    const meta = { stats: { ...emptyStats(2000), cycles: 0 }, achievements: { unlocked: {} }, prestige: DEFAULT_PRESTIGE_LITERAL };
     const result = deserialize(serialize(withLevels({ gearRatio: 2 }), settings, 2000, meta), 3000);
     expect(result.stats.cycles).toBe(1);
   });
@@ -856,6 +865,51 @@ describe('SaveManager', () => {
     new SaveManager(storage, 'other').save(createInitialState(0), { ...DEFAULT_SETTINGS, muted: false }, 10);
     expect(storage.getItem('other')).not.toBeNull();
     expect(storage.getItem(SAVE_KEY)).toBeNull();
+  });
+});
+
+describe('prestige save compatibility (WP14)', () => {
+  const settings: SettingsState = { ...DEFAULT_SETTINGS, muted: false };
+  const DEFAULT_BLOCK = { cycle: 1, echoesEarned: 0, perks: [] };
+
+  it('a v2 save without a prestige block loads as loaded with the default prestige (cycle 1)', () => {
+    const result = deserialize(raw(createInitialState(1)), 3000);
+    expect(result.status).toBe('loaded');
+    expect(result.prestige).toEqual(DEFAULT_BLOCK);
+    expect(result).not.toHaveProperty('error');
+  });
+
+  it('the v1 fixture migrates to the default prestige', () => {
+    const result = deserialize(JSON.stringify(v1Save), 5);
+    expect(result.status).toBe('migrated');
+    expect(result.prestige).toEqual(DEFAULT_BLOCK);
+  });
+
+  it('the cycle-2 fixture loads losslessly: cycle, Echoes, perks and confirmNewCycle false', () => {
+    const result = deserialize(JSON.stringify(v2Cycle2), 3000);
+    expect(result.status).toBe('loaded');
+    expect(result.prestige).toEqual({ cycle: 2, echoesEarned: 3, perks: ['residualCharge'] });
+    expect(result.settings.confirmNewCycle).toBe(false);
+    expect(result.stats.cycles).toBe(2);
+
+    const again = deserialize(serialize(result.state, result.settings, 4000, { stats: result.stats, achievements: result.achievements, prestige: result.prestige }), 5000);
+    expect(again.status).toBe('loaded');
+    expect(again.prestige).toEqual(result.prestige);
+    expect(again.settings).toEqual(result.settings);
+    expect(again.state).toEqual(result.state);
+  });
+
+  it.each<[string, unknown, { cycle: number; echoesEarned: number; perks: string[] }]>([
+    ['a string', 'cycle 2', DEFAULT_BLOCK],
+    ['an array', [2, 3], DEFAULT_BLOCK],
+    ['floats and negatives', { cycle: 2.5, echoesEarned: -4, perks: ['muscleMemory'] }, DEFAULT_BLOCK],
+    ['an unknown and a duplicate perk', { cycle: 2, echoesEarned: 5, perks: ['bogus', 'ledger', 'ledger'] }, { cycle: 2, echoesEarned: 5, perks: ['ledger'] }],
+    ['over-spend drops the last perk', { cycle: 2, echoesEarned: 3, perks: ['residualCharge', 'servoRecall'] }, { cycle: 2, echoesEarned: 3, perks: ['residualCharge'] }],
+  ])('bad prestige (%s) is normalised: status loaded, never recovered', (_name, input, expected) => {
+    const result = deserialize(raw(createInitialState(1), { prestige: input }), 3000);
+    expect(result.status).toBe('loaded');
+    expect(result).not.toHaveProperty('error');
+    expect(result.prestige).toEqual(expected);
   });
 });
 

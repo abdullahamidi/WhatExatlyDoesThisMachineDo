@@ -490,6 +490,9 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     session.on('settings', () => { dirty = true; }),
     // The xf reveal flag flips on ending / reset: labels re-render on the next update.
     session.on('ending', () => { dirty = true; }),
+    // WP14: Memory perks change tech costs and effects (Ledger, Residual Charge); a new cycle restarts the levels.
+    session.on('prestige', () => { dirty = true; }),
+    session.on('cycle', () => { dirty = true; }),
     session.on('reset', () => {
       selectedEra = 1;
       selected = isOpenFlag ? defaultSelection(viewsOfEra(1)) : null;
