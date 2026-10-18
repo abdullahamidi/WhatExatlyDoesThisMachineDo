@@ -112,3 +112,22 @@ export function busGain(volumePct: number): number {
 export function masterTarget(muted: boolean, unlocked: boolean, base: number = AUDIO.masterGain, volume01 = 1): number {
   return muted || !unlocked ? 0 : base * volume01;
 }
+
+/** Level set pushed to the synth: master target, wind on/off and the two bus gains. */
+export interface LevelSnapshot {
+  readonly master: number;
+  readonly wind: boolean;
+  readonly sfxBus: number;
+  readonly ambientBus: number;
+}
+
+/** True when `next` differs from the last applied set, or when nothing was applied yet (null). Object.is keeps NaN equal to NaN. */
+export function levelsChanged(prev: LevelSnapshot | null, next: LevelSnapshot): boolean {
+  if (prev === null) return true;
+  return (
+    !Object.is(prev.master, next.master) ||
+    prev.wind !== next.wind ||
+    !Object.is(prev.sfxBus, next.sfxBus) ||
+    !Object.is(prev.ambientBus, next.ambientBus)
+  );
+}

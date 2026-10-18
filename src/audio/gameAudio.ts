@@ -9,7 +9,8 @@ import type { SettingsState } from '../data/types';
 import { TECHNOLOGIES } from '../data/technologies';
 import type { GameFeedback } from '../game/context';
 import type { GameSession } from '../simulation';
-import { arcRate, boilerGain, busGain, droneGain, gearTickRate, humFrequency, humGain, mainsGain, masterTarget, padGain, servoGain, servoHz } from './audioMath';
+import { arcRate, boilerGain, busGain, droneGain, gearTickRate, humFrequency, humGain, levelsChanged, mainsGain, masterTarget, padGain, servoGain, servoHz } from './audioMath';
+import type { LevelSnapshot } from './audioMath';
 import { createSynth } from './synth';
 import type { Synth } from './synth';
 
@@ -55,6 +56,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
   let gesturesArmed = false;
   let timer: number | null = null;
   let unsubscribers: Array<() => void> = [];
+  let appliedLevels: LevelSnapshot | null = null; // last set pushed to the synth; the tick skips unchanged sets
   const warned = new Set<string>();
   const doc: Document | undefined = target.document;
 
@@ -82,22 +84,31 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
   }
 
   /**
-   * Master target (mute, master volume), wind bed and the sfx / ambient bus levels from the settings. Live and idempotent.
-   * Never resumes the context: callers decide that.
+   * Master target (mute, master volume), wind bed and the sfx / ambient bus levels from the settings.
+   * Pushes to the synth only when the set changed since the last push (the tick calls this every 200 ms);
+   * `force` pushes anyway (unlock, settings change, tab visible). Never resumes the context: callers decide that.
    */
-  function applyLevels(settings: Readonly<SettingsState>): void {
+  function applyLevels(settings: Readonly<SettingsState>, force = false): void {
     const s = synth;
     if (!s) return;
-    s.setMaster(masterTarget(settings.muted, true, AUDIO.masterGain, busGain(settings.masterVolume)), AUDIO.rampSeconds);
-    s.setWind(!settings.muted);
-    s.setBusGain('sfx', busGain(settings.sfxVolume), AUDIO.rampSeconds);
-    s.setBusGain('ambient', busGain(settings.ambientVolume), AUDIO.rampSeconds);
+    const next: LevelSnapshot = {
+      master: masterTarget(settings.muted, true, AUDIO.masterGain, busGain(settings.masterVolume)),
+      wind: !settings.muted,
+      sfxBus: busGain(settings.sfxVolume),
+      ambientBus: busGain(settings.ambientVolume),
+    };
+    if (!force && !levelsChanged(appliedLevels, next)) return;
+    appliedLevels = next;
+    s.setMaster(next.master, AUDIO.rampSeconds);
+    s.setWind(next.wind);
+    s.setBusGain('sfx', next.sfxBus, AUDIO.rampSeconds);
+    s.setBusGain('ambient', next.ambientBus, AUDIO.rampSeconds);
   }
 
   /**
    * Update loop: hum and gear ticks follow the current ME/s; mains and arcs follow EE/s; the boiler roar follows PR/s;
    * the resonance pad follows RS/s (owned spire only); the servo whirr follows the crank servo level;
-   * the sub-bass drone follows XF/s (owned nullChamber only). The volume levels are re-applied each tick.
+   * the sub-bass drone follows XF/s (owned nullChamber only). The volume levels are checked each tick (pushed on change only).
    * Muted keeps the hum pitch and drops only its gain.
    */
   function tick(): void {
@@ -140,7 +151,10 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
       const s = synth;
       if (!s) return;
       if (doc?.visibilityState === 'hidden') s.suspend();
-      else if (isVisible() && !session.settings.muted) s.resume();
+      else if (isVisible()) {
+        applyLevels(session.settings, true);
+        if (!session.settings.muted) s.resume();
+      }
     } catch (error) {
       warnOnce('visibility', error);
     }
@@ -227,7 +241,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
       feedback.purchaseDenied.on(oneShot('purchaseDenied', (s) => s.playDeny())),
       session.on('settings', (settings) => {
         try {
-          applyLevels(settings);
+          applyLevels(settings, true);
           if (!settings.muted && isVisible()) synth?.resume();
         } catch (error) {
           warnOnce('settings', error);
@@ -251,7 +265,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     unlocked = true;
 
     try {
-      applyLevels(session.settings);
+      applyLevels(session.settings, true);
       timer = target.setInterval(tick, AUDIO.updateIntervalMs);
       doc?.addEventListener('visibilitychange', onVisibility);
       handle.context.addEventListener('statechange', onStateChange);
@@ -286,6 +300,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     }
     const s = synth;
     synth = null;
+    appliedLevels = null;
     unlocked = false;
     if (s) {
       try {

@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import type { GameContext } from './context';
 import type { PurchaseFailure } from '../data/types';
+import type { FinaleBeat } from '../data/finale';
 import type { MachineComponentId } from '../data/machineComponents';
+import { createNewCycleStub } from './newCycle';
 import { MENU_TABS } from '../data/systemMenu';
 import { createSignal } from '../utils/signal';
 import { SaveManager, browserStorage } from '../persistence/saveManager';
@@ -52,8 +54,9 @@ export function bootstrap(): Phaser.Game {
   const ctx: GameContext = {
     session,
     commands: { refocus: createSignal(), openTechTree: createSignal(), openSystemMenu: createSignal(), crank: createSignal() },
-    feedback: { purchaseDenied: createSignal<PurchaseFailure>(), partLanded: createSignal<MachineComponentId>() },
+    feedback: { purchaseDenied: createSignal<PurchaseFailure>(), partLanded: createSignal<MachineComponentId>(), finaleBeat: createSignal<FinaleBeat>() },
     modals,
+    newCycle: createNewCycleStub(),
   };
 
   const root = document.getElementById('ui-root');

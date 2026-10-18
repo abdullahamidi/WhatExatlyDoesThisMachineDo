@@ -21,6 +21,8 @@ export interface DataPanelDeps {
 
 export interface DataPanelHandle {
   refresh(): void;
+  /** Drops an armed import (and its modal-stack entry). Called by the system menu on close and on tab change. */
+  hide(): void;
   destroy(): void;
 }
 

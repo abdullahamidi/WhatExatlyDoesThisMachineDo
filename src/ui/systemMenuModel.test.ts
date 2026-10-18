@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel, nextTab, clampTab } from './systemMenuModel';
+import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel, nextTab, clampTab, leavingTab } from './systemMenuModel';
 import type { ResetState } from './systemMenuModel';
 import { SYSTEM_MENU_CONFIG } from '../data/systemMenu';
 
@@ -149,5 +149,17 @@ describe('clampTab', () => {
   it('single tab always 0', () => {
     expect(clampTab(0, 1)).toBe(0);
     expect(clampTab(7, 1)).toBe(0);
+  });
+});
+
+describe('leavingTab', () => {
+  it('returns the tab being left when the selection moves', () => {
+    expect(leavingTab(4, 0)).toBe(4);
+    expect(leavingTab(0, 3)).toBe(0);
+  });
+
+  it('returns null when the selection stays on the same tab', () => {
+    expect(leavingTab(2, 2)).toBeNull();
+    expect(leavingTab(0, 0)).toBeNull();
   });
 });

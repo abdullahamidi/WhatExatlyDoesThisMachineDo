@@ -18,9 +18,9 @@ export const FINALE_CAMERA = [{ atS: 0, durS: 2, to: 'full' }, { atS: 10, durS: 
 export const FINALE_SHOTS = { s1: 2, s2: 10, s3: 19.3, s4: 49.3 } as const;   // S0 = 0; S5 = choiceStartS() (derived, ART_ERA5 §7)
 export const FINALE_HUD = { fadeMs: 1000 } as const;
 export const FINALE_BOOST = { startS: 2, rampS: 6, releaseS: 49.3, releaseRampS: 4,
-  holdFrames: { anchorGlow1L: 2, anchorGlow1R: 2, anchorGlow2L: 2, anchorGlow2R: 2, anchorGlow3L: 2, anchorGlow3R: 2, lensLight: 3 },
-  calliope: { atS: 4, emitter: 'calliope', count: 6 } } as const satisfies { holdFrames: Partial<Record<MachineComponentId, number>> };
-export const FINALE_BEAM = { whiteAtS: 13, headPxPerS: 900, assetId: 'fx.beamWhite', alpha: 0.85 } as const satisfies { assetId: AssetId };
+  holdFrames: { anchorGlow1L: 2, anchorGlow1R: 2, anchorGlow2L: 2, anchorGlow2R: 2, anchorGlow3L: 2, anchorGlow3R: 2, lensLight: 3 } satisfies Partial<Record<MachineComponentId, number>>,
+  calliope: { atS: 4, emitter: 'calliope', count: 6 } } as const;
+export const FINALE_BEAM = { whiteAtS: 13, headPxPerS: 900, assetId: 'fx.beamWhite' satisfies AssetId, alpha: 0.85 } as const;
 export const FINALE_ECLIPSE = { diamondAtS: 14.5, diamondFrame: 4, restoreAtS: 19.3, stepS: 1.5, steps: [4, 3, 2, 1, 0] } as const;   // after the last step: hidden
 export const FINALE_WHITE = { atS: 15, color: PALETTE.steam, peak: 0.85, inMs: 1200, holdMs: 600, outMs: 2500,
   reduced: { peak: 0.5, inMs: 500, outMs: 500 } } as const;                       // ease-out in, linear out; never > 1 fade (no strobe)
@@ -30,14 +30,14 @@ export const FINALE_TRACKS: Record<FinaleTrackId, { startS: number; durS: number
     ground: { startS: 21.3, durS: 3 } };   // ground = reduced-motion crossfade only
 export const FINALE_DUST = { reverseAtS: 19.3, reverseS: 6, speedY: [6, 18] } as const;   // then stopped
 export const FINALE_WIPE = { startS: 21.3, pxPerS: 120, bandPx: 16, maxStepPx: 16, stepPx: 2, seed: 41, regrowthLagS: [2, 5, 8] } as const;
-export const RESTORED_GROUND = { groundAssetId: 'terrain.groundGreen', groundDepth: DEPTH.ground + 0.5,
-  regrowth: [{ assetId: 'bg.regrowth1' }, { assetId: 'bg.regrowth2' }, { assetId: 'bg.regrowth3' }], regrowthDepth: DEPTH.ground + 2,
-  regrowthBottomOffsetPx: 6 } as const satisfies { groundAssetId: AssetId; regrowth: readonly { assetId: AssetId }[] };
+export const RESTORED_GROUND = { groundAssetId: 'terrain.groundGreen' satisfies AssetId, groundDepth: DEPTH.ground + 0.5,
+  regrowth: [{ assetId: 'bg.regrowth1' }, { assetId: 'bg.regrowth2' }, { assetId: 'bg.regrowth3' }] satisfies readonly { assetId: AssetId }[], regrowthDepth: DEPTH.ground + 2,
+  regrowthBottomOffsetPx: 6 } as const;
 export const FINALE_PLATE = { atS: 30, puffs: 3 } as const;
-export const FINALE_SEEDS = { startS: 25, assetId: 'fx.seed', frames: 4, frequencyMs: 120, postgameRateDiv: 3, lifespanMs: [6000, 12000],
-  speedX: [-8, 20], speedY: [-12, -4], depth: DEPTH.dust } as const satisfies { assetId: AssetId };   // x band MACHINE_ANCHOR.x ± DUST.spawnHalfWidth
-export const FINALE_BIRDS = { firstAtS: 38, assetId: 'fx.bird', size: [3, 6], everyS: [40, 70], speedPx: 70, skyY: [150, 260],
-  spacingPx: { x: 14, y: 6 }, flapHz: 3, bobPx: 2, bobHz: 0.5, seed: 43 } as const satisfies { assetId: AssetId };   // screen-fixed (sf 0), scale PIXEL_SCALE, enter right
+export const FINALE_SEEDS = { startS: 25, assetId: 'fx.seed' satisfies AssetId, frames: 4, frequencyMs: 120, postgameRateDiv: 3, lifespanMs: [6000, 12000],
+  speedX: [-8, 20], speedY: [-12, -4], depth: DEPTH.dust } as const;   // x band MACHINE_ANCHOR.x ± DUST.spawnHalfWidth
+export const FINALE_BIRDS = { firstAtS: 38, assetId: 'fx.bird' satisfies AssetId, size: [3, 6], everyS: [40, 70], speedPx: 70, skyY: [150, 260],
+  spacingPx: { x: 14, y: 6 }, flapHz: 3, bobPx: 2, bobHz: 0.5, seed: 43 } as const;   // screen-fixed (sf 0), scale PIXEL_SCALE, enter right
 export const FINALE_REVEAL = { startS: 49.3, nameplateFadeMs: 800, nameplateScale: 3, holdS: 1.0, cps: 30, linePauseS: 2.0, panelMaxWidthPx: 560,
   lines: ['PRIMARY FUNCTION: RESTORE', 'Restoration target: world state, prior.', 'Observer count: 1.', 'Operator identity: you.'],
   lastLine: 'Restoration holds while the machine runs.', buttonsDelayS: 0.5 } as const;

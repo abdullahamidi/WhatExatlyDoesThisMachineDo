@@ -3,18 +3,26 @@ import { MENU_TABS, MENU_TEXT, SYSTEM_MENU_CONFIG } from '../data/systemMenu';
 import { UI_ART } from '../data/achievements';
 import { trapFocus } from './hotkeys';
 import type { ModalStack } from './modalStack';
-import { clampTab, muteLabel, nextTab, reduceReset, resetLabel, saveFeedbackLabel } from './systemMenuModel';
+import { clampTab, leavingTab, muteLabel, nextTab, reduceReset, resetLabel, saveFeedbackLabel } from './systemMenuModel';
 import type { ResetState, TabNavKey } from './systemMenuModel';
 
 // SYSTEM menu overlay (DOM). Built once; open/close toggle the is-open class. No Phaser.
 // Esc is handled by the shared modal stack (bindEscapeToStack); this file registers no key listener.
 // Tabs: SYSTEM (always first, built here) + one tab per deps.panels entry. Panels are mounted once
 // into their tabpanel and refreshed when their tab is shown and when the menu opens.
+// Panels may drop transient state (armed confirmations, modal-stack entries) through hide(): called
+// when the menu closes and when the selection moves away from their tab.
+
+export interface SystemMenuPanelHandle {
+  refresh(): void;
+  destroy(): void;
+  hide?(): void;
+}
 
 export interface SystemMenuPanel {
   id: string;
   label: string;
-  mount(host: HTMLElement): { refresh(): void; destroy(): void };
+  mount(host: HTMLElement): SystemMenuPanelHandle;
 }
 
 export interface SystemMenuDeps {
@@ -35,13 +43,11 @@ type ResetEventType = 'press' | 'cancel' | 'tick';
 
 interface ElementOptions { id?: string; className?: string; text?: string }
 
-interface PanelHandle { refresh(): void; destroy(): void }
-
 interface TabEntry {
   id: string;
   button: HTMLButtonElement;
   pane: HTMLDivElement;
-  handle: PanelHandle | null;
+  handle: SystemMenuPanelHandle | null;
 }
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
@@ -215,7 +221,10 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
 
   // Marks one tab as selected (ARIA, roving tabindex, visibility). Does not refresh anything.
   function selectTab(index: number): void {
-    activeIndex = clampTab(index, tabs.length);
+    const next = clampTab(index, tabs.length);
+    const left = leavingTab(activeIndex, next);
+    activeIndex = next;
+    if (left !== null) tabs[left]?.handle?.hide?.();
     tabs.forEach((tab, i) => {
       const on = i === activeIndex;
       tab.button.setAttribute('aria-selected', on ? 'true' : 'false');
@@ -256,6 +265,7 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     isOpenFlag = false;
     releaseFocusTrap();
     dispatchReset('cancel');
+    for (const tab of tabs) tab.handle?.hide?.();
     clearFeedback();
     overlay.classList.remove('is-open');
     modals.remove(MENU_STACK_ID);

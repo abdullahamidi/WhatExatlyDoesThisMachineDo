@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AUDIO } from '../data/audio';
+import type { LevelSnapshot } from './audioMath';
 import {
   activityLevel,
   arcRate,
@@ -9,6 +10,7 @@ import {
   gearTickRate,
   humFrequency,
   humGain,
+  levelsChanged,
   mainsGain,
   masterTarget,
   padGain,
@@ -370,5 +372,30 @@ describe('servo maths', () => {
     for (let i = 1; i < list.length; i++) {
       expect(servoHz(list[i]!, 10)).toBeGreaterThanOrEqual(servoHz(list[i - 1]!, 10));
     }
+  });
+});
+
+describe('levelsChanged', () => {
+  const BASE: LevelSnapshot = { master: 0.5, wind: true, sfxBus: 1, ambientBus: 0.5 };
+
+  it('is true when nothing was applied yet', () => {
+    expect(levelsChanged(null, BASE)).toBe(true);
+  });
+
+  it('is false for an identical set', () => {
+    expect(levelsChanged(BASE, { ...BASE })).toBe(false);
+  });
+
+  it('is true when any one field differs', () => {
+    expect(levelsChanged(BASE, { ...BASE, master: 0.4 })).toBe(true);
+    expect(levelsChanged(BASE, { ...BASE, wind: false })).toBe(true);
+    expect(levelsChanged(BASE, { ...BASE, sfxBus: 0.5 })).toBe(true);
+    expect(levelsChanged(BASE, { ...BASE, ambientBus: 0 })).toBe(true);
+  });
+
+  it('treats NaN as equal to NaN and 0 as different from -0', () => {
+    const nan: LevelSnapshot = { ...BASE, master: Number.NaN };
+    expect(levelsChanged(nan, { ...nan })).toBe(false);
+    expect(levelsChanged({ ...BASE, master: 0 }, { ...BASE, master: -0 })).toBe(true);
   });
 });

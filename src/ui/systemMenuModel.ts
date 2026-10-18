@@ -55,6 +55,11 @@ export function clampTab(index: number, count: number): number {
   return Math.min(Math.max(Math.trunc(index), 0), count - 1);
 }
 
+/** Tab being left when the selection moves from `from` to `to`; null when the selection stays put. */
+export function leavingTab(from: number, to: number): number | null {
+  return from === to ? null : from;
+}
+
 /** Tab index after a navigation key. Arrows wrap; Home / End jump to the ends. */
 export function nextTab(index: number, count: number, key: TabNavKey): number {
   if (count <= 0) return 0;

@@ -267,7 +267,7 @@ export function readStats(input: unknown, state: GameState, nowMs: number): Stat
     purchases: readCount(input, 'purchases', derived.purchases),
     lifetime: readStatsMap(input, 'lifetime', derived.lifetime),
     maxPerSecond: readStatsMap(input, 'maxPerSecond', derived.maxPerSecond),
-    cycles: readCount(input, 'cycles', derived.cycles),
+    cycles: Math.max(1, readCount(input, 'cycles', derived.cycles)),   // at least one cycle is always running (WP12 review)
     bestCycleSeconds: readBestCycle(input, derived.bestCycleSeconds),
     startedAt: readNonNegative(input, 'startedAt', derived.startedAt),
   };

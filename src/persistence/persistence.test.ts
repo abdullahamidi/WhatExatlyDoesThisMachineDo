@@ -705,6 +705,12 @@ describe('finale save compatibility (WP13)', () => {
     expect(result.state.ending).toEqual(DEFAULT_ENDING);
   });
 
+  it('stats.cycles is clamped to at least 1 (cycles 0 -> 1)', () => {
+    const meta = { stats: { ...emptyStats(2000), cycles: 0 }, achievements: { unlocked: {} } };
+    const result = deserialize(serialize(withLevels({ gearRatio: 2 }), settings, 2000, meta), 3000);
+    expect(result.stats.cycles).toBe(1);
+  });
+
   it('a wrong-typed ending block recovers the save (fresh state, status recovered)', () => {
     const badEndings: unknown[] = [
       'sequence',

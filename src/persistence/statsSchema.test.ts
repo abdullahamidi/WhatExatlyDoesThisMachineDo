@@ -115,7 +115,7 @@ describe('readStats: per-field lenient table', () => {
     expect(out.cycles).toBe(2);
   });
 
-  it('keeps zero as a valid value for every duration and count', () => {
+  it('keeps zero as a valid value for every duration and count (cycles clamps to at least 1)', () => {
     const zeros = {
       ...validStats(),
       activeSeconds: 0,
@@ -128,7 +128,7 @@ describe('readStats: per-field lenient table', () => {
     const out = readStats(zeros, sourceState(), NOW);
     expect(out.activeSeconds).toBe(0);
     expect(out.clicks).toBe(0);
-    expect(out.cycles).toBe(0);
+    expect(out.cycles).toBe(1); // the current cycle always counts
   });
 
   it('bestCycleSeconds: null and finite >= 0 are kept; anything else is the derived null', () => {

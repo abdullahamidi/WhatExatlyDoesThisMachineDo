@@ -93,10 +93,10 @@ export function bindHotkeys(target: Window, deps: HotkeyDeps): () => void {
   };
 }
 
-/** Visible, enabled, tabbable descendants in document order. */
+/** Visible, enabled, tabbable descendants in document order (tabIndex -1 roving tabs are skipped). */
 function focusableWithin(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (el) => el.getClientRects().length > 0,
+    (el) => el.tabIndex >= 0 && el.getClientRects().length > 0,
   );
 }
 
