@@ -85,6 +85,7 @@ export class WorldScene extends Phaser.Scene {
       overlay: this.ui.finaleOverlay,
       background,
       restoredGround,
+      terrain,
       eclipse,
       beam,
       dust,

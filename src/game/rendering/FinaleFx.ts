@@ -67,13 +67,13 @@ export class FinaleFx {
     this.seeds = scene.add
       .particles(0, 0, FINALE_SEEDS.assetId, {
         x: { min: MACHINE_ANCHOR.x - DUST.spawnHalfWidth, max: MACHINE_ANCHOR.x + DUST.spawnHalfWidth },
-        y: { min: DUST.spawnTopY, max: DUST.spawnBottomY },
+        y: { min: FINALE_SEEDS.spawnY[0], max: FINALE_SEEDS.spawnY[1] },
         frame: { frames: seedFrames(), cycle: false },
         lifespan: { min: FINALE_SEEDS.lifespanMs[0], max: FINALE_SEEDS.lifespanMs[1] },
         speedX: { min: FINALE_SEEDS.speedX[0], max: FINALE_SEEDS.speedX[1] },
         speedY: { min: FINALE_SEEDS.speedY[0], max: FINALE_SEEDS.speedY[1] },
         scale: PIXEL_SCALE,
-        alpha: { start: DUST.alpha[1], end: DUST.alpha[0] },
+        alpha: { start: FINALE_SEEDS.alpha[1], end: FINALE_SEEDS.alpha[0] },
         frequency: FINALE_SEEDS.frequencyMs,
         emitting: false,
       })

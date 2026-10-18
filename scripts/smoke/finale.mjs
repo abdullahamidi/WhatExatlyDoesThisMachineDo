@@ -111,6 +111,8 @@ try {
   // RUN 1: main flow (buy, keyframes, reload to choice, KEEP, reload postgame, menu, reset)
   await open();
   ok('finale_0_fastforward_failed', failedBuys(await fastForward()));
+  // Era V sky (skyViolet) fades for ~12 s after the instant buy list: wait it out so keyframes do not start on beige sky.
+  await page.waitForTimeout(15000);
   const buy = await buyList(['primaryFunction']);
   await page.waitForTimeout(300);
   const s1 = await fin();

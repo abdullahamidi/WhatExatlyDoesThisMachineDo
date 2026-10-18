@@ -19,6 +19,7 @@ import type { SteamFx } from './SteamFx';
 import type { FinaleFx } from './FinaleFx';
 import type { CameraController } from './CameraController';
 import type { MachineView } from '../entities/MachineView';
+import type { Terrain } from './Terrain';
 
 // Finale director (WP13 T11). Owns the film clock and, each frame, pushes one FinaleFrame (math/finale.ts) to every
 // finale renderer, the camera override and the overlay. It owns no economy state: it reads the session and calls
@@ -34,6 +35,7 @@ export interface FinaleDirectorDeps {
   overlay: FinaleOverlayHandle;
   background: ParallaxBackground;
   restoredGround: RestoredGround;
+  terrain: Terrain;
   eclipse: Eclipse;
   beam: ApertureBeam;
   dust: DustField;
@@ -222,6 +224,7 @@ export class FinaleDirector {
     const d = this.deps;
     d.background.applyFinale(frame.tracks);
     d.restoredGround.applyFinale(frame);
+    d.terrain.setRestored(frame.restored);
     d.eclipse.applyFinale(frame.eclipse);
     d.beam.applyFinale(frame.beam);
     d.dust.applyFinale(frame.dust);

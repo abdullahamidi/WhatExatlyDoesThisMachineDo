@@ -55,8 +55,10 @@ function makeButton(id: string, label: string, icon: number, primary: boolean): 
   return button;
 }
 
+/** Absolute URL for a CSS url(): a relative path inside a custom property resolves against the stylesheet, not the page. */
 function artUrl(id: AssetId): string | null {
-  return resolveAssetUrl(ASSET_MANIFEST[id]);
+  const path = resolveAssetUrl(ASSET_MANIFEST[id]);
+  return path === null ? null : new URL(path, document.baseURI).href;
 }
 
 export function createFinaleOverlay(root: HTMLElement, deps: FinaleOverlayDeps): FinaleOverlayHandle {
@@ -68,13 +70,13 @@ export function createFinaleOverlay(root: HTMLElement, deps: FinaleOverlayDeps):
   overlay.setAttribute('aria-label', REVEALED.plaque);
   overlay.hidden = true;
   const plateUrl = artUrl('ui.nameplate');
-  if (plateUrl !== null) overlay.style.setProperty('--finale-plate', `url(${plateUrl})`);
+  if (plateUrl !== null) overlay.style.setProperty('--finale-plate', `url("${plateUrl}")`);
   const panelUrl = artUrl('ui.panel');
-  if (panelUrl !== null) overlay.style.setProperty('--finale-panel', `url(${panelUrl})`);
+  if (panelUrl !== null) overlay.style.setProperty('--finale-panel', `url("${panelUrl}")`);
   const buttonUrl = artUrl('ui.button');
-  if (buttonUrl !== null) overlay.style.setProperty('--finale-button', `url(${buttonUrl})`);
+  if (buttonUrl !== null) overlay.style.setProperty('--finale-button', `url("${buttonUrl}")`);
   const iconsUrl = artUrl('ui.icons16');
-  if (iconsUrl !== null) overlay.style.setProperty('--finale-icons', `url(${iconsUrl})`);
+  if (iconsUrl !== null) overlay.style.setProperty('--finale-icons', `url("${iconsUrl}")`);
 
   const column = el('div', 'finale-column');
 

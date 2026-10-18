@@ -77,9 +77,10 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-labelledby', 'sys-title');
-  // 9-slice art (CSS keeps the plain border when a var is missing).
-  overlay.style.setProperty('--ui-panel', `url(${UI_ART.panel})`);
-  overlay.style.setProperty('--ui-button', `url(${UI_ART.button})`);
+  // 9-slice art (CSS keeps the plain border when a var is missing). Absolute URLs: a relative url() in a custom
+  // property resolves against the stylesheet (the built CSS sits in assets/), not the page.
+  overlay.style.setProperty('--ui-panel', `url("${new URL(UI_ART.panel, document.baseURI).href}")`);
+  overlay.style.setProperty('--ui-button', `url("${new URL(UI_ART.button, document.baseURI).href}")`);
   overlay.style.setProperty('--ui-slice', String(UI_ART.nineSliceBorder));
 
   const panel = createElement('div', { id: 'system-panel' });

@@ -103,8 +103,8 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-labelledby', 'tech-title');
-  // Status-marker glyphs (CSS, opt-in via #ui-root[data-status-markers="on"]) read this sheet.
-  overlay.style.setProperty('--ui-icons', `url(${UI_ART.icons16})`);
+  // Status-marker glyphs (CSS, opt-in via #ui-root[data-status-markers="on"]) read this sheet. Absolute URL (see systemMenu).
+  overlay.style.setProperty('--ui-icons', `url("${new URL(UI_ART.icons16, document.baseURI).href}")`);
 
   const panel = createElement('div', { id: 'tech-panel' });
 
