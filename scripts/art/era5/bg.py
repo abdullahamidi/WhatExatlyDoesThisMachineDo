@@ -119,7 +119,15 @@ BUILDINGS = [  # x0, x1, roof top row, kind
 GROUND = 220
 def skyline_restored():
     W, H = 512, 320; a = blank(W, H); rnd = random.Random(21)
-    rect(a, 0, GROUND, W - 1, H - 1, 'i1')
+    # far ground = green fields (in-game review WP13 #2: grey i1 read as a muddy band over the restored ground);
+    # hedge line on the ground row, then dashed furrow / hedge rows spaced wider toward the viewer (aerial perspective)
+    rect(a, 0, GROUND, W - 1, H - 1, 'g1'); hline(a, 0, W - 1, GROUND, 'g0')
+    fr = random.Random(22)                                    # own RNG: building windows below stay pixel-identical
+    for (dy, k) in ((4, 'g2'), (9, 'g0'), (16, 'g2'), (26, 'g0'), (40, 'g2'), (58, 'g0'), (82, 'g2')):
+        x = fr.randint(0, 20)
+        while x < W - 8:                                      # stop short of the seam (tile x 511 -> 0)
+            w = fr.randint(14, 60)
+            hline(a, x, min(W - 9, x + w), GROUND + dy, k); x += w + fr.randint(6, 30)
     def body(x0, x1, top, lit='i3', mid='i2', dark='i1'):
         for y in range(top, GROUND):
             for x in range(x0, x1 + 1):

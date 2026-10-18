@@ -3,7 +3,7 @@
 import type { AssetId } from '../assets/assetIds';
 import type { MachineComponentId } from './machineComponents';
 import { PALETTE } from './palette';
-import { DEPTH } from './world';
+import { DEPTH, GROUND_Y } from './world';
 
 /** Restored-world track ids: the 0..1 value that multiplies a parallax layer's alpha (C3 `finale`). */
 export type FinaleTrackId = 'sky' | 'glow' | 'mountains' | 'skyline' | 'ground';
@@ -30,13 +30,14 @@ export const FINALE_TRACKS: Record<FinaleTrackId, { startS: number; durS: number
   { sky: { startS: 19.3, durS: 8 }, glow: { startS: 19.3, durS: 4 }, mountains: { startS: 27.3, durS: 6 }, skyline: { startS: 29.3, durS: 8 },
     ground: { startS: 21.3, durS: 3 } };   // ground = reduced-motion crossfade only
 export const FINALE_DUST = { reverseAtS: 19.3, reverseS: 6, speedY: [6, 18] } as const;   // then stopped
-export const FINALE_WIPE = { startS: 21.3, pxPerS: 120, bandPx: 16, maxStepPx: 16, stepPx: 2, seed: 41, regrowthLagS: [2, 5, 8] } as const;
+export const FINALE_WIPE = { startS: 21.3, pxPerS: 120, bandPx: 16, maxStepPx: 48, stepPx: 4, seed: 41, regrowthLagS: [2, 5, 8] } as const;   // world px; edge 0..24 screen px at the full view (16 read as a ruler edge, in-game review WP13 #6)
 export const RESTORED_GROUND = { groundAssetId: 'terrain.groundGreen' satisfies AssetId, groundDepth: DEPTH.ground + 0.5,
   regrowth: [{ assetId: 'bg.regrowth1' }, { assetId: 'bg.regrowth2' }, { assetId: 'bg.regrowth3' }] satisfies readonly { assetId: AssetId }[], regrowthDepth: DEPTH.ground + 2,
   regrowthBottomOffsetPx: 6 } as const;
 export const FINALE_PLATE = { atS: 30, puffs: 3 } as const;
 export const FINALE_SEEDS = { startS: 25, assetId: 'fx.seed' satisfies AssetId, frames: 4, frequencyMs: 120, postgameRateDiv: 3, lifespanMs: [6000, 12000],
-  speedX: [-8, 20], speedY: [-12, -4], depth: DEPTH.dust } as const;   // x band MACHINE_ANCHOR.x ± DUST.spawnHalfWidth
+  speedX: [-8, 20], speedY: [-12, -4], depth: DEPTH.dust,
+  spawnY: [GROUND_Y - 360, GROUND_Y - 8], alpha: [0.15, 0.9] } as const;   // x band MACHINE_ANCHOR.x ± DUST.spawnHalfWidth; spawnY world [top, bottom] = low over the far fields (pale seeds vanish on the pale lower sky); alpha [end, start] (dust is .35 -> 0: seeds unreadable)
 export const FINALE_BIRDS = { firstAtS: 38, assetId: 'fx.bird' satisfies AssetId, size: [3, 6], everyS: [40, 70], speedPx: 70, skyY: [150, 260],
   spacingPx: { x: 14, y: 6 }, flapHz: 3, bobPx: 2, bobHz: 0.5, seed: 43 } as const;   // screen-fixed (sf 0), scale PIXEL_SCALE, enter right
 export const FINALE_REVEAL = { startS: 49.3, nameplateFadeMs: 800, nameplateScale: 3, holdS: 1.0, cps: 30, linePauseS: 2.0, panelMaxWidthPx: 560,

@@ -57,6 +57,11 @@
   pointer-events: none;
 }
 
+/* No empty terminal before the reveal types its first character (in-game review WP13 #1). Layout is kept (visibility). */
+.finale-panel:not(:has(.finale-line:not(:empty))) {
+  visibility: hidden;
+}
+
 .finale-line {
   margin: 0 0 6px;
   min-height: 1.3em;
@@ -140,24 +145,39 @@
   color: var(--haze);
 }
 
+/* Disabled = dark pressed cell + dim label, fully opaque (opacity let the skyline show through, in-game review WP13 #3). */
 .finale-btn[aria-disabled="true"] {
   cursor: not-allowed;
-  opacity: .6;
 }
 
 .finale-btn[aria-disabled="true"] .finale-btn-frame {
-  --frame: 0;
+  --frame: 2;
+}
+
+.finale-btn[aria-disabled="true"] .finale-btn-icon {
+  opacity: .5;
+}
+
+.finale-btn[aria-disabled="true"] .finale-btn-label {
+  color: var(--amber-dim);
+  border-color: var(--rust-dark);
 }
 
 .finale-btn[aria-disabled="true"]:hover .finale-btn-label {
   background: var(--iron-2);
-  color: var(--amber);
+  color: var(--amber-dim);
 }
 
+/* Reason line sits on the bright restored sky: own dark plate (in-game review WP13 #3, haze on iron ~ 9:1). */
 .finale-reason {
+  box-sizing: border-box;
   max-width: 100%;
+  padding: 4px 10px;
   font-size: max(12px, .9em);
-  color: var(--amber-dim);
+  color: var(--haze);
+  background: var(--iron-2);
+  border: 2px solid var(--rust-dark);
+  box-shadow: 0 0 0 2px var(--ink);
   overflow-wrap: anywhere;
 }
 

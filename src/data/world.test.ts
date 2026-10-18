@@ -370,7 +370,7 @@ describe('WP13 finale layers (C3)', () => {
     });
     expect(layer('skylineRestored')).toEqual({
       id: 'skylineRestored', assetId: 'bg.skylineRestored', scrollFactor: 0.3, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 21,
-      alpha: 0.4, underfill: PALETTE.grayDark, finale: { track: 'skyline', dir: 'in' },
+      alpha: 0.4, underfill: PALETTE.green1, finale: { track: 'skyline', dir: 'in' },
     });
   });
 

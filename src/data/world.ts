@@ -42,7 +42,7 @@ export const PARALLAX_LAYERS: readonly ParallaxLayerDef[] = [
     finale: { track: 'sky', dir: 'in' } },
   { id: 'mountainsRestored', assetId: 'bg.mountainsRestored', scrollFactor: 0.15, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 11, alpha: 0.45, underfill: PALETTE.green0,
     finale: { track: 'mountains', dir: 'in' } },
-  { id: 'skylineRestored', assetId: 'bg.skylineRestored', scrollFactor: 0.3, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 21, alpha: 0.4, underfill: PALETTE.grayDark,
+  { id: 'skylineRestored', assetId: 'bg.skylineRestored', scrollFactor: 0.3, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 21, alpha: 0.4, underfill: PALETTE.green1 /* far fields, = ground rows of bg.skylineRestored */,
     finale: { track: 'skyline', dir: 'in' } },
 ];
 /** Era V eclipse sprite in the sky (sky px, origin centre): frame 0 = the baked sun, hidden; stages step the frame up as techs arrive; diamond = the one-off flash frame. */
