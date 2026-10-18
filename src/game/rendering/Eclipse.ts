@@ -4,6 +4,7 @@ import type { GameSession } from '../../simulation';
 import { motionPolicy } from '../../simulation/settings';
 import { effectiveMinZoom } from '../math/camera';
 import { skyPxToScrollZero, stageFrame } from '../math/parallax';
+import type { FinaleFrame } from '../math/finale';
 
 // Era V eclipse in the sky: one screen-fixed sprite whose sheet frame steps up with the null / lens / horizon /
 // aperture stages (ECLIPSE data). Frame 0 is the baked sun in bg.sky, so the sprite is hidden there. The aperture
@@ -14,6 +15,7 @@ export class Eclipse {
   private readonly unsubscribers: Array<() => void> = [];
   private diamondLeftMs: number | null = null; // ms left of the diamond flash; null when not flashing
   private shownFrame = -1;
+  private finale: FinaleFrame['eclipse'] = { kind: 'stage' }; // finale override; 'stage' = WP11 behaviour
 
   constructor(scene: Phaser.Scene, session: GameSession) {
     this.session = session;
@@ -46,6 +48,12 @@ export class Eclipse {
     this.refresh();
   }
 
+  // Finale override: 'frame' shows that sheet frame, 'hidden' hides the sprite, 'stage' returns to the WP11 stage logic.
+  applyFinale(e: FinaleFrame['eclipse']): void {
+    this.finale = e;
+    this.refresh();
+  }
+
   destroy(): void {
     for (const off of this.unsubscribers) off();
     this.unsubscribers.length = 0;
@@ -54,12 +62,18 @@ export class Eclipse {
 
   // Sets the sheet frame only when it changes; frame 0 hides the sprite. Reduced motion (flashes off) skips the diamond flash.
   private refresh(): void {
-    const flashing = this.diamondLeftMs !== null && motionPolicy(this.session.settings).flashes;
-    const frame = flashing
-      ? ECLIPSE.diamond.frame
-      : stageFrame(ECLIPSE.stages, this.session.state.techLevels);
+    const frame = this.wantedFrame();
     if (frame === this.shownFrame) return;
     this.shownFrame = frame;
     this.sprite.setFrame(frame).setVisible(frame > 0);
+  }
+
+  private wantedFrame(): number {
+    if (this.finale.kind === 'frame') return this.finale.frame;
+    if (this.finale.kind === 'hidden') return 0;
+    const flashing = this.diamondLeftMs !== null && motionPolicy(this.session.settings).flashes;
+    return flashing
+      ? ECLIPSE.diamond.frame
+      : stageFrame(ECLIPSE.stages, this.session.state.techLevels);
   }
 }
