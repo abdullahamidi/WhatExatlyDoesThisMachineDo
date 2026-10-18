@@ -75,7 +75,7 @@ function formatEngineering(a: number, mode: RoundMode): string {
 function formatThousandsAndUp(a: number, mode: RoundMode, notation: NumberNotation): string {
   if (notation === 'scientific') return formatScientific(a, mode);
   if (notation === 'engineering') return formatEngineering(a, mode);
-  if (a >= EXPONENT_FROM) return a.toExponential(2).replace('+', '');
+  if (a >= EXPONENT_FROM) return formatScientific(a, mode);
   return formatLarge(a, mode);
 }
 

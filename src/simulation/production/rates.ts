@@ -87,7 +87,7 @@ export function computeRates(
     const d = resources[r];
     let base = autoAdd[r];
     if (d.source !== null && convert[r] !== 0) {
-      base += convert[r] * Math.pow(perSecond[d.source], d.convExp);
+      base += convert[r] * Math.pow(Math.max(0, perSecond[d.source]), d.convExp);
     }
     perSecond[r] = base * (1 + autoPct[r] / 100) * resMult[r] * allMult * META_MULT;
   }

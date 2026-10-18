@@ -12,6 +12,8 @@
 | WP4 | Save/load, offline welcome-back, system menu, audio, system logs | ✅ done |
 | WP5 | Balance, ASSET_GUIDE, README, build split, §16 checklist | ✅ done |
 | WP6 | Mechanical correctness + art polish (Art Director audit → drive train, assets, RotSprite) | ✅ done |
+| WP7 | Multi-resource core (ME/EE/PR/RS/XF), save v2 migration, number suffixes to Dc, greedy sim harness | ✅ done |
+| WP8–WP17 | Full game per docs/plan/ROADMAP_FULL.md (eras II–V, finale, prestige, settings, stats) | in progress |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 

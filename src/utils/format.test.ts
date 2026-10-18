@@ -121,6 +121,11 @@ describe('formatNumber notations', () => {
     expect(formatNumber(n, 'floor', 'engineering')).toBe(expected);
   });
 
+  it('floors exponent-form suffix output at the mantissa', () => {
+    expect(formatNumber(9.996e36, 'floor')).toBe('9.99e36');
+    expect(formatNumber(1e36, 'floor')).toBe('1.00e36');
+  });
+
   it('rounds the mantissa up and bumps the exponent (carry)', () => {
     expect(formatNumber(999999, 'ceil', 'scientific')).toBe('1.00e6');
     expect(formatNumber(999999, 'round', 'scientific')).toBe('1.00e6');
@@ -152,6 +157,11 @@ describe('formatCost', () => {
   it('rounds prices up', () => {
     expect(formatCost(1015)).toBe('1.02K');
     expect(formatCost(10)).toBe('10');
+  });
+
+  it('rounds exponent-form prices up (never below the charged price)', () => {
+    expect(formatCost(1.2345e40)).toBe('1.24e40');
+    expect(formatCost(1e36)).toBe('1.00e36');
   });
 
   it('passes the notation through', () => {

@@ -185,6 +185,17 @@ describe('computeRates', () => {
     expect(r.perSecond.ee).toBe(0);
   });
 
+  it('convert with a negative source gives 0, not NaN', () => {
+    const techs = withEffects({
+      wornMotor: [{ type: 'autoAdd', amount: -4 }],
+      gearRatio: [{ type: 'convert', amount: 0.5, res: 'ee' }],
+    });
+    const r = computeRates(withLevels({ wornMotor: 1, gearRatio: 1 }), techs);
+    expect(r.perSecond.me).toBeLessThan(0);
+    expect(r.perSecond.ee).toBe(0);
+    expect(Number.isNaN(r.perSecond.ee)).toBe(false);
+  });
+
   it('clickEcho ee 2 s echoes ee per second into perClick.ee', () => {
     const techs = withEffects({
       wornMotor: [{ type: 'autoAdd', amount: 4 }],
