@@ -19,6 +19,7 @@ export class WorldScene extends Phaser.Scene {
   private readonly disposables: Array<() => void> = [];
   private lastRevision = -1;
   private machineView: MachineView | null = null;
+  private background: ParallaxBackground | null = null;
 
   constructor(ctx: GameContext, ui: { hud: Hud; techTree: TechTree; modals: ModalStack }) {
     super('World');
@@ -27,14 +28,15 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
-    const background = new ParallaxBackground(this);
+    const background = new ParallaxBackground(this, this.ctx.session.state.techLevels);
+    this.background = background;
     const terrain = new Terrain(this);
     const dust = new DustField(this);
     const machine = new MachineView(this, this.ctx);
     this.machineView = machine;
     const floatingText = new FloatingText(this);
     const crank = new HandCrank(this, this.ctx, machine, floatingText);
-    const camera = new CameraController(this);
+    const camera = new CameraController(this, this.ctx.session);
     const unsubscribeRefocus = this.ctx.commands.refocus.on(() => camera.refocus());
 
     // The crank uses the machine and the floating text, so it is disposed first.
@@ -49,7 +51,10 @@ export class WorldScene extends Phaser.Scene {
       },
       () => dust.destroy(),
       () => terrain.destroy(),
-      () => background.destroy(),
+      () => {
+        this.background = null;
+        background.destroy();
+      },
     );
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       // One failing disposable must not skip the rest (e.g. the session 'reset' unsubscribe).
@@ -74,6 +79,7 @@ export class WorldScene extends Phaser.Scene {
   // Required here: Phaser's Scene typings declare update(time, delta), unlike create/preload/init.
   override update(_time: number, delta: number): void {
     this.ctx.session.update();
+    this.background?.update(this.ctx.session.state.techLevels, delta);
     this.machineView?.update(delta);
     if (this.ctx.session.revision !== this.lastRevision) this.renderHud();
     this.ui.techTree.update();

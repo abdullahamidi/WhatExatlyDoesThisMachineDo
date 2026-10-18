@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { VIEW, WORLD, CAMERA, PIXEL_SCALE } from '../../data/world';
 import { PALETTE_CSS } from '../../data/palette';
 import type { Vec2 } from '../../data/machineComponents';
+import type { GameSession } from '../../simulation';
 import {
   minZoomToFit,
   clampZoom,
@@ -9,7 +10,11 @@ import {
   zoomAroundPoint,
   wheelToSnappedZoom,
   dragToCenter,
+  viewBounds,
+  boundsInView,
+  fitView,
 } from '../math/camera';
+import { visibleMachineBounds, boundsToWorld } from '../math/machineBounds';
 
 interface DragState {
   startCenter: Vec2;
@@ -18,10 +23,11 @@ interface DragState {
   active: boolean;
 }
 
-// Drag-pan, wheel-zoom-at-pointer and animated refocus for the main camera.
+// Drag-pan, wheel-zoom-at-pointer, animated refocus and machine auto-framing for the main camera.
 // The controller owns center/zoom and only writes them to the Phaser camera; it never reads them back.
 export class CameraController {
   private readonly scene: Phaser.Scene;
+  private readonly session: GameSession;
   private readonly camera: Phaser.Cameras.Scene2D.Camera;
   private readonly minZoom: number = minZoomToFit(VIEW, WORLD);
   private center: Vec2;
@@ -29,6 +35,7 @@ export class CameraController {
   private drag: DragState | null = null;
   private refocusTween: Phaser.Tweens.Tween | null = null;
   private lastWheelMs = Number.NEGATIVE_INFINITY; // performance.now() of the last applied wheel step
+  private readonly unsubscribes: Array<() => void> = [];
 
   // pointer handlers are arrow properties so `this` is bound and the same references can be removed in destroy()
   private readonly pointerdown = (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]): void => {
@@ -83,27 +90,81 @@ export class CameraController {
     }
   };
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, session: GameSession) {
     this.scene = scene;
+    this.session = session;
     this.camera = scene.cameras.main;
     this.camera.setBounds(0, 0, WORLD.width, WORLD.height);
     this.camera.setBackgroundColor(PALETTE_CSS.ink);
-    this.zoom = CAMERA.defaultZoom;
-    this.center = clampCenter({ x: CAMERA.focus.x, y: CAMERA.focus.y }, this.zoom, VIEW, WORLD);
+    const initial = this.target();
+    this.zoom = initial.zoom;
+    this.center = initial.center;
     this.apply();
     scene.input.on('pointerdown', this.pointerdown);
     scene.input.on('pointermove', this.pointermove);
     scene.input.on('pointerup', this.pointerup);
     scene.input.on('pointerupoutside', this.pointerupoutside);
     scene.input.on('wheel', this.wheel);
+    this.unsubscribes.push(
+      session.on('purchase', () => this.autoFrame()),
+      session.on('unlock', () => this.autoFrame()),
+      session.on('reset', () => this.refocus()),
+    );
   }
 
   refocus(): void {
     this.cancelRefocus();
     this.drag = null;
+    this.animateTo(this.target());
+  }
+
+  destroy(): void {
+    this.cancelRefocus();
+    this.scene.input.off('pointerdown', this.pointerdown);
+    this.scene.input.off('pointermove', this.pointermove);
+    this.scene.input.off('pointerup', this.pointerup);
+    this.scene.input.off('pointerupoutside', this.pointerupoutside);
+    this.scene.input.off('wheel', this.wheel);
+    for (const unsubscribe of this.unsubscribes) {
+      unsubscribe();
+    }
+    this.unsubscribes.length = 0;
+    this.drag = null;
+  }
+
+  // Camera framing for the current machine: the default view when the machine fits it, otherwise the fitted view.
+  private target(): { center: Vec2; zoom: number } {
+    if (!CAMERA.autoFrame) {
+      return {
+        center: clampCenter({ x: CAMERA.focus.x, y: CAMERA.focus.y }, CAMERA.defaultZoom, VIEW, WORLD),
+        zoom: CAMERA.defaultZoom,
+      };
+    }
+    return fitView(boundsToWorld(visibleMachineBounds(this.session.state.techLevels)), VIEW, {
+      margin: CAMERA.fitMarginPx,
+      pixelScale: PIXEL_SCALE,
+      minZoom: this.minZoom,
+      maxZoom: CAMERA.maxZoom,
+      defaultZoom: CAMERA.defaultZoom,
+      defaultCenter: { x: CAMERA.focus.x, y: CAMERA.focus.y },
+      world: WORLD,
+    });
+  }
+
+  // Purchases and unlocks grow the machine: refocus only when the machine no longer fits the current view.
+  private autoFrame(): void {
+    if (this.drag?.active === true) return;
+    const machine = boundsToWorld(visibleMachineBounds(this.session.state.techLevels));
+    if (boundsInView(machine, viewBounds(this.center, this.zoom, VIEW), CAMERA.fitMarginPx)) return;
+    this.animateTo(this.target());
+  }
+
+  // Tweens center/zoom from the current view to the given one (drag state untouched).
+  private animateTo(to: { center: Vec2; zoom: number }): void {
+    this.cancelRefocus();
     const from = { center: { ...this.center }, zoom: this.zoom };
-    const toZoom = CAMERA.defaultZoom;
-    const toCenter = clampCenter({ x: CAMERA.focus.x, y: CAMERA.focus.y }, toZoom, VIEW, WORLD);
+    const toZoom = to.zoom;
+    const toCenter = to.center;
     this.refocusTween = this.scene.tweens.addCounter({
       from: 0,
       to: 1,
@@ -127,16 +188,6 @@ export class CameraController {
         this.refocusTween = null;
       },
     });
-  }
-
-  destroy(): void {
-    this.cancelRefocus();
-    this.scene.input.off('pointerdown', this.pointerdown);
-    this.scene.input.off('pointermove', this.pointermove);
-    this.scene.input.off('pointerup', this.pointerup);
-    this.scene.input.off('pointerupoutside', this.pointerupoutside);
-    this.scene.input.off('wheel', this.wheel);
-    this.drag = null;
   }
 
   private apply(): void {
