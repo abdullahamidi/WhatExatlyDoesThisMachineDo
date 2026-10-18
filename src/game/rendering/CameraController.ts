@@ -75,6 +75,12 @@ export class CameraController {
     this.center = clampCenter(zoomAroundPoint(this.center, pointerWorld, this.zoom, newZoom), newZoom, VIEW, WORLD);
     this.zoom = newZoom;
     this.apply();
+    if (this.drag !== null) {
+      // a drag in progress continues from the new view: re-base so the next move does not jump
+      this.drag.startCenter = { ...this.center };
+      this.drag.startX = pointer.x;
+      this.drag.startY = pointer.y;
+    }
   };
 
   constructor(scene: Phaser.Scene) {

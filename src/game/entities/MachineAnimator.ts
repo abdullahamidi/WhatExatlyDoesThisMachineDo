@@ -111,14 +111,16 @@ export class MachineAnimator {
       const anim = MACHINE_COMPONENTS[id].animation;
       if (anim.kind === 'none') continue;
       const sprite = this.sprites.get(id);
-      if (sprite === undefined || !isActive(id)) continue;
+      if (sprite === undefined) continue;
+      if (!isActive(id)) {
+        // Assembling: the tween owns x/y/scale/alpha, but a visible driven part keeps turning so it does not snap on landing.
+        if (anim.kind === 'driven' && sprite.visible) sprite.setAngle(this.drivenAngle(id, anim));
+        continue;
+      }
 
       switch (anim.kind) {
         case 'driven': {
-          const angle = CRANK_PARTS.includes(id)
-            ? crankAngle(this.geared, this.crankState.deg, this.master.deg, this.crankOffsetDeg, anim.ratio, anim.phaseDeg)
-            : partAngle(this.master.deg, anim.ratio, anim.phaseDeg);
-          sprite.setAngle(angle);
+          sprite.setAngle(this.drivenAngle(id, anim));
           break;
         }
         case 'slider': {
@@ -144,6 +146,13 @@ export class MachineAnimator {
         }
       }
     }
+  }
+
+  /** Angle of a driven part: crank parts follow the crank state and gearing, the rest follow thetaM. */
+  private drivenAngle(id: MachineComponentId, anim: { ratio: number; phaseDeg: number }): number {
+    return CRANK_PARTS.includes(id)
+      ? crankAngle(this.geared, this.crankState.deg, this.master.deg, this.crankOffsetDeg, anim.ratio, anim.phaseDeg)
+      : partAngle(this.master.deg, anim.ratio, anim.phaseDeg);
   }
 
   /**

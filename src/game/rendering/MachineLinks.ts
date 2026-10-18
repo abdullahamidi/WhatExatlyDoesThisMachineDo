@@ -8,6 +8,9 @@ import { beltTravel, coalesceRuns, pointsAlongBelt, rasterBelt, rasterLine } fro
 /** Key quantisation: belt endpoints are compared at 1/KEY_SCALE art px so sub-pixel noise does not redraw. */
 const KEY_SCALE = 100;
 
+/** Horizontal run of integer pixels, as produced by coalesceRuns. */
+interface Run { x: number; y: number; w: number; h: number }
+
 /** Live view of the machine that the link renderer reads each frame. */
 export interface LinkDrawContext {
   pointOf(component: MachineComponentId, pointId: string): Vec2 | null;   // live position (sprite pos + point offset); null while hidden or assembling
@@ -15,14 +18,28 @@ export interface LinkDrawContext {
   masterDeg: number;                                                      // unwrapped thetaM
 }
 
-/** Belt ready to rasterise: endpoints quantised, dash shift in whole pixels. */
-interface BeltPlan { a: Vec2; b: Vec2; ra: number; rb: number; dashShift: number }
+/** Belt ready to rasterise: endpoints quantised, dash shift in whole pixels. key identifies the loop geometry only. */
+interface BeltPlan { key: string; a: Vec2; b: Vec2; ra: number; rb: number; dashShift: number }
 
 /** Rod ready to rasterise: pin and eye in whole pixels. */
 interface RodPlan { pin: Vec2; eye: Vec2 }
 
-/** Geometry of one draw, built from integers only; equal key means equal pixels. */
-interface LinkPlan { belts: BeltPlan[]; rods: RodPlan[]; caps: Vec2[]; key: string }
+/**
+ * Geometry of one draw, built from integers only. Each part has its own key: equal key means equal pixels for that part.
+ * The belt key excludes the dash shift, so a moving belt only re-plots its dash pass.
+ */
+interface LinkPlan {
+  belts: BeltPlan[];
+  rods: RodPlan[];
+  caps: Vec2[];
+  beltKey: string;
+  dashKey: string;
+  rodKey: string;
+  capKey: string;
+}
+
+/** Rastered belt loops with their coalesced runs; inner pixels feed the dash pass. */
+interface BeltRaster { inner: Vec2[]; innerRuns: Run[]; outerRuns: Run[] }
 
 /** Pulley radius of a connection point, 0 when the point has none. */
 function radiusOf(component: MachineComponentId, pointId: string): number {
@@ -69,11 +86,20 @@ function discPixels(c: Vec2, radius: number): Vec2[] {
   return out;
 }
 
+/** Rasters one belt's inner and outer loops; null for a degenerate belt. */
+function rasterOf(plan: BeltPlan): BeltRaster | null {
+  const r = rasterBelt(plan.a, plan.ra, plan.b, plan.rb);
+  if (r === null) return null;
+  return { inner: r.inner, innerRuns: coalesceRuns(r.inner), outerRuns: coalesceRuns(r.outer) };
+}
+
 /** Builds the belt, rod and cap geometry from live state; raster work is left to draw(). */
 function buildPlan(ctx: LinkDrawContext): LinkPlan {
   const belts: BeltPlan[] = [];
   const rods: RodPlan[] = [];
-  const keyParts: string[] = [];
+  const beltKeyParts: string[] = [];
+  const dashKeyParts: string[] = [];
+  const rodKeyParts: string[] = [];
 
   for (const link of MACHINE_LINKS) {
     const fromLive = ctx.isLive(link.from.component);
@@ -85,7 +111,7 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
       const ra = radiusOf(link.from.component, link.from.point);
       const rb = radiusOf(link.to.component, link.to.point);
       if (!fromLive || !toLive || a === null || b === null || !(ra > 0) || !(rb > 0)) {
-        keyParts.push('b-'); // hidden, assembling or pulley-less endpoint: no belt
+        beltKeyParts.push('b-'); // hidden, assembling or pulley-less endpoint: no belt
         continue;
       }
       const qa = quantisePoint(a);
@@ -93,26 +119,29 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
       const fromAnim = MACHINE_COMPONENTS[link.from.component].animation;
       const fromRatio = fromAnim.kind === 'driven' ? fromAnim.ratio : 0;
       const dashShift = Math.floor(beltTravel(ctx.masterDeg, fromRatio, ra));
-      belts.push({ a: qa, b: qb, ra, rb, dashShift });
-      keyParts.push(`b${keyOf(qa)};${keyOf(qb)};${dashShift}`);
+      const key = `${keyOf(qa)};${keyOf(qb)};${ra};${rb}`;
+      belts.push({ key, a: qa, b: qb, ra, rb, dashShift });
+      beltKeyParts.push(`b${key}`);
+      dashKeyParts.push(`${dashShift}`);
     } else {
       const crankAnim = MACHINE_COMPONENTS[link.from.component].animation;
       const hub = ctx.pointOf(link.from.component, link.from.point);
       const eye = ctx.pointOf(link.to.component, link.to.point);
       if (!fromLive || !toLive || hub === null || eye === null || crankAnim.kind !== 'driven') {
-        keyParts.push('r-'); // hidden, assembling or undriven crank: no rod
+        rodKeyParts.push('r-'); // hidden, assembling or undriven crank: no rod
         continue;
       }
       const angle = partAngle(ctx.masterDeg, crankAnim.ratio, crankAnim.phaseDeg) + DRIVE_TRAIN.rod.pinPhaseDeg;
       const pin = roundPoint(sliderCrank(hub, DRIVE_TRAIN.rod.pinRadius, DRIVE_TRAIN.rod.length, angle).pin);
       const eyeAt = roundPoint(eye);
       rods.push({ pin, eye: eyeAt });
-      keyParts.push(`r${pin.x},${pin.y};${eyeAt.x},${eyeAt.y}`);
+      rodKeyParts.push(`r${pin.x},${pin.y};${eyeAt.x},${eyeAt.y}`);
     }
   }
 
   // Axle caps: one per driven socket that is live, deduped by whole position.
   const caps: Vec2[] = [];
+  const capKeyParts: string[] = [];
   const seen = new Set<string>();
   for (const id of MACHINE_COMPONENT_IDS) {
     const def = MACHINE_COMPONENTS[id];
@@ -122,65 +151,107 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
     if (seen.has(k)) continue;
     seen.add(k);
     caps.push(at);
-    keyParts.push(`c${k}`);
+    capKeyParts.push(`c${k}`);
   }
 
-  return { belts, rods, caps, key: keyParts.join('|') };
+  return {
+    belts,
+    rods,
+    caps,
+    beltKey: beltKeyParts.join('|'),
+    dashKey: dashKeyParts.join('|'),
+    rodKey: rodKeyParts.join('|'),
+    capKey: capKeyParts.join('|'),
+  };
 }
 
 /** Draws belts, the conrod and axle caps as 1x1 pixel rectangles on integer art px. */
 export class MachineLinks {
   private readonly belts: Phaser.GameObjects.Graphics;
+  /** Dash pass on its own layer so a moving belt does not clear the belt edges. Added right after belts. */
+  private readonly dashes: Phaser.GameObjects.Graphics;
   private readonly rods: Phaser.GameObjects.Graphics;
   private readonly caps: Phaser.GameObjects.Graphics;
-  /** Key of the last drawn plan; equal key means the Graphics are already correct. */
-  private lastKey = '';
+  /** Keys of the last drawn parts; null until the first draw. Equal key means that Graphics is already correct. */
+  private beltKey: string | null = null;
+  private dashKey: string | null = null;
+  private rodKey: string | null = null;
+  private capKey: string | null = null;
+  /** Rastered belt loops by belt key; rebuilt from the current plan each draw so it never grows past the live belts. */
+  private rasterCache = new Map<string, BeltRaster>();
 
   constructor(scene: Phaser.Scene, parent: Phaser.GameObjects.Container) {
     this.belts = scene.make.graphics({}, false).setDepth(MACHINE_LINK_STYLE.beltDepth);
+    this.dashes = scene.make.graphics({}, false).setDepth(MACHINE_LINK_STYLE.beltDepth);
     this.rods = scene.make.graphics({}, false).setDepth(MACHINE_LINK_STYLE.rodDepth);
     this.caps = scene.make.graphics({}, false).setDepth(MACHINE_LINK_STYLE.capDepth);
     parent.add(this.belts);
+    parent.add(this.dashes);
     parent.add(this.rods);
     parent.add(this.caps);
   }
 
-  /** Redraws the links when the plan key changed; skips all Graphics work otherwise. */
+  /** Redraws each part only when its own key changed; skips all Graphics work otherwise. */
   draw(ctx: LinkDrawContext): void {
     const plan = buildPlan(ctx);
-    if (plan.key === this.lastKey) return;
-    this.lastKey = plan.key;
-    this.belts.clear();
-    this.rods.clear();
-    this.caps.clear();
-    this.drawBelts(plan.belts);
-    this.drawRods(plan.rods);
-    this.drawCaps(plan.caps);
+    const rastered = this.rasterBelts(plan.belts);
+    const style = MACHINE_LINK_STYLE.belt;
+
+    if (plan.beltKey !== this.beltKey) {
+      this.beltKey = plan.beltKey;
+      this.dashKey = null; // dashes sit on the inner loop, so a belt change redraws them too
+      this.belts.clear();
+      for (const { raster } of rastered) this.plotRuns(this.belts, style.outer, raster.outerRuns);
+      for (const { raster } of rastered) this.plotRuns(this.belts, style.inner, raster.innerRuns);
+    }
+    if (plan.dashKey !== this.dashKey) {
+      this.dashKey = plan.dashKey;
+      this.dashes.clear();
+      for (const { raster, dashShift } of rastered) {
+        for (let j = 0; j < style.dashLength; j++) {
+          this.plot(this.dashes, style.dash, pointsAlongBelt(raster.inner, style.dashSpacing, dashShift + j));
+        }
+      }
+    }
+    if (plan.rodKey !== this.rodKey) {
+      this.rodKey = plan.rodKey;
+      this.rods.clear();
+      this.drawRods(plan.rods);
+    }
+    if (plan.capKey !== this.capKey) {
+      this.capKey = plan.capKey;
+      this.caps.clear();
+      this.drawCaps(plan.caps);
+    }
   }
 
   /** Destroys the Graphics objects; safe to call twice. */
   destroy(): void {
-    for (const g of [this.belts, this.rods, this.caps]) {
+    for (const g of [this.belts, this.dashes, this.rods, this.caps]) {
       if (g.scene) g.destroy(); // Phaser clears scene on destroy
     }
-    this.lastKey = '';
+    this.beltKey = null;
+    this.dashKey = null;
+    this.rodKey = null;
+    this.capKey = null;
+    this.rasterCache = new Map();
   }
 
-  /** Belts: outer edge, inner edge, then moving dashes along the inner row. */
-  private drawBelts(plans: readonly BeltPlan[]): void {
-    const style = MACHINE_LINK_STYLE.belt;
-    const rastered: Array<{ inner: Vec2[]; outer: Vec2[]; dashShift: number }> = [];
+  /**
+   * Pairs each belt with its cached raster, rastering only unseen keys. The new cache holds exactly the current belts,
+   * so keys from vibrating or moved parts do not accumulate.
+   */
+  private rasterBelts(plans: readonly BeltPlan[]): Array<{ raster: BeltRaster; dashShift: number }> {
+    const next = new Map<string, BeltRaster>();
+    const out: Array<{ raster: BeltRaster; dashShift: number }> = [];
     for (const plan of plans) {
-      const r = rasterBelt(plan.a, plan.ra, plan.b, plan.rb);
-      if (r !== null) rastered.push({ inner: r.inner, outer: r.outer, dashShift: plan.dashShift });
+      const raster = next.get(plan.key) ?? this.rasterCache.get(plan.key) ?? rasterOf(plan);
+      if (raster === null) continue; // degenerate belt: nothing drawn, as before
+      next.set(plan.key, raster);
+      out.push({ raster, dashShift: plan.dashShift });
     }
-    for (const r of rastered) this.plot(this.belts, style.outer, r.outer);
-    for (const r of rastered) this.plot(this.belts, style.inner, r.inner);
-    for (const r of rastered) {
-      for (let j = 0; j < style.dashLength; j++) {
-        this.plot(this.belts, style.dash, pointsAlongBelt(r.inner, style.dashSpacing, r.dashShift + j));
-      }
-    }
+    this.rasterCache = next;
+    return out;
   }
 
   /** Conrod: edge rows, core line, then the two eyes (disc plus centre pixel). */
@@ -229,7 +300,12 @@ export class MachineLinks {
 
   /** Fills 1x1 integer pixels in one colour, merged into horizontal runs. */
   private plot(g: Phaser.GameObjects.Graphics, color: number, pixels: readonly Vec2[]): void {
+    this.plotRuns(g, color, coalesceRuns(pixels));
+  }
+
+  /** Fills precomputed horizontal runs in one colour. */
+  private plotRuns(g: Phaser.GameObjects.Graphics, color: number, runs: readonly Run[]): void {
     g.fillStyle(color, 1);
-    for (const run of coalesceRuns(pixels)) g.fillRect(run.x, run.y, run.w, run.h);
+    for (const run of runs) g.fillRect(run.x, run.y, run.w, run.h);
   }
 }
