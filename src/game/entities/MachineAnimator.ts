@@ -176,6 +176,12 @@ export class MachineAnimator {
       this.phases.clear();
       this.spinAngles.clear();
       this.gaugeValues.clear();
+      this.lastClickAt = null;
+      this.orbitAngles.clear();
+      this.exoticMilestoneAt = null;
+      this.exoticFrom.clear();
+      this.latchStart.clear();
+      this.latchFrames.clear();
       // Stale angles must not snap in later: every driven and spin part goes back to angle 0.
       for (const id of MACHINE_COMPONENT_IDS) {
         const kind = MACHINE_COMPONENTS[id].animation.kind;
@@ -183,11 +189,22 @@ export class MachineAnimator {
         const sprite = this.sprites.get(id);
         if (sprite !== undefined) applyAngle(sprite, 0);
       }
+      this.restoreBeadDepths();
     });
     this.unsubscribeMilestone = session.on('milestone', ({ id }) => {
       if (id !== RESONANCE_MILESTONE_FX.techId) return;
       this.crystalHoldUntil = this.elapsed + RESONANCE_MILESTONE_FX.holdMs / 1000; // crystal holds bright
       for (const part of RESONANCE_MILESTONE_FX.restart) this.frameOrigins.set(part, this.elapsed); // dish waves restart at 0
+    });
+    this.unsubscribeExotic = session.on('milestone', ({ id }) => {
+      if (id !== EXOTIC_MILESTONE_FX.techId) return;
+      this.exoticMilestoneAt = this.elapsed; // beads align, core spins and glows hold from here
+      this.exoticFrom.clear();
+      for (const bid of MACHINE_COMPONENT_IDS) {
+        const a = MACHINE_COMPONENTS[bid].animation;
+        if (a.kind !== 'orbit') continue;
+        this.exoticFrom.set(bid, this.orbitAngles.get(bid) ?? a.phi0Deg); // angle at the milestone
+      }
     });
   }
 
@@ -200,6 +217,10 @@ export class MachineAnimator {
     const ee = this.session.rates.perSecond.ee;
     const pr = this.session.rates.perSecond.pr;
     const rs = this.session.rates.perSecond.rs;
+    const xf = this.session.rates.perSecond.xf; // exotic driver: XF/s
+    const levels = this.session.state.techLevels;
+    const exoticSince = this.exoticMilestoneAt === null ? null : this.elapsed - this.exoticMilestoneAt;
+    const exotic = milestonePhase(exoticSince, EXOTIC_MILESTONE_FX.alignMs, EXOTIC_MILESTONE_FX.holdMs); // finalAlignment: align, hold, none
     this.manual = decayActivity(this.manual, dt, MACHINE_MOTION.manualTauSeconds); // activity fades when idle
     const dv = driverValue('combined', this.manual, me);
     const degPerSec = dv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(DRIVE_TRAIN.masterSpeed, dv); // rest below threshold
@@ -219,9 +240,14 @@ export class MachineAnimator {
         // in step with thetaM without overriding the drop. Strikes are not counted while assembling.
         if (anim.kind === 'driven' && sprite.visible) applyAngle(sprite, this.drivenAngle(id, anim));
         if (anim.kind === 'spin' && sprite.visible) {
-          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr, rs), dt);
+          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr, rs, xf), dt);
         }
         if (anim.kind === 'reciprocate' && sprite.visible) sprite.y += this.ramOffset(anim, prevMasterDeg, dt);
+        continue;
+      }
+
+      if (id === INVERSION_GHOST_FX.component) {
+        this.placeGhost(sprite);
         continue;
       }
 
@@ -238,7 +264,7 @@ export class MachineAnimator {
           break;
         }
         case 'vibrate': {
-          const vdv = driverValue(anim.driver, this.manual, me, ee, pr, rs);
+          const vdv = driverValue(anim.driver, this.manual, me, ee, pr, rs, xf);
           const speed = vdv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, vdv); // rest below threshold
           const base = resolveAttachment(MACHINE_COMPONENTS[id]);
           if (speed === 0) {
@@ -253,22 +279,28 @@ export class MachineAnimator {
         }
         case 'frames': {
           // Frame cycle: advances at up to maxHz while the driver is above rest, holds frame 0 otherwise.
-          const fdv = driverValue(anim.driver, this.manual, me, ee, pr, rs);
+          const fdv = driverValue(anim.driver, this.manual, me, ee, pr, rs, xf);
           if (id === RESONANCE_MILESTONE_FX.crystal && this.elapsed < this.crystalHoldUntil) {
             sprite.setFrame(RESONANCE_MILESTONE_FX.holdFrame); // milestone hold: bright frame, no cycle
             break;
           }
+          const glows: readonly string[] = EXOTIC_MILESTONE_FX.anchorGlows;
+          if (glows.includes(id) && this.exoticWithin(EXOTIC_MILESTONE_FX.glowHoldMs)) {
+            sprite.setFrame(EXOTIC_MILESTONE_FX.glowFrame); // finalAlignment hold: anchor glow at its hold frame
+            break;
+          }
           const origin = this.frameOrigins.get(id) ?? 0; // milestone restarts count from their origin
-          sprite.setFrame(framesIndex(this.elapsed - origin, anim.frames, anim.maxHz, fdv >= MACHINE_MOTION.restThreshold));
+          const cycle = framesIndex(this.elapsed - origin, anim.frames, anim.maxHz, fdv >= MACHINE_MOTION.restThreshold);
+          sprite.setFrame((cycle + (anim.frameOffset ?? 0)) % anim.frames); // staggered sheets offset their cycle
           break;
         }
         case 'spin': {
-          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr, rs), dt);
+          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr, rs, xf), dt);
           break;
         }
         case 'gauge': {
           // Needle: the driver is low-passed, then mapped onto the log scale of the frames sheet.
-          const target = driverValue(anim.driver, this.manual, me, ee, pr, rs);
+          const target = driverValue(anim.driver, this.manual, me, ee, pr, rs, xf);
           const value = lowPass(this.gaugeValues.get(id) ?? 0, target, dt, anim.tauSeconds);
           this.gaugeValues.set(id, value);
           sprite.setFrame(gaugeFrame(value, anim.frames, anim.minLog, anim.maxLog));
@@ -278,7 +310,108 @@ export class MachineAnimator {
           this.placeRam(id, sprite, anim, prevMasterDeg, dt);
           break;
         }
+        case 'orbit': {
+          this.placeBead(id, sprite, anim, dt, exotic, xf);
+          break;
+        }
+        case 'latch': {
+          this.placeLatch(sprite, id, anim, levels[anim.techId] >= anim.minLevel);
+          break;
+        }
+        case 'stage': {
+          const met = anim.gates.filter(([techId, level]) => levels[techId] >= level).length; // gates met
+          sprite.setFrame(stageFrameOf(met, anim.frames, false, anim.endingFrame));
+          break;
+        }
       }
+    }
+  }
+
+  /** Inversion ghost: a mirror of the hand crank, shown with hard alpha steps for echoSeconds after a click. */
+  private placeGhost(sprite: Phaser.GameObjects.Sprite): void {
+    const since = this.lastClickAt === null ? null : this.elapsed - this.lastClickAt;
+    const alpha = echoAlpha(since, INVERSION_GHOST_FX.alphaSteps);
+    sprite.setVisible(alpha > 0).setAlpha(alpha);
+    if (alpha <= 0) return;
+    const mirror = INVERSION_GHOST_FX.mirrorOf;
+    applyAngle(sprite, mirrorAngle(this.drivenAngle(mirror, drivenOf(mirror))));
+  }
+
+  /**
+   * Containment bead on its ring. phi advances with the exotic driver (XF/s); during the finalAlignment milestone it aligns
+   * to beadPhiDeg (align, then hold) and the normal orbit resumes from there. In front of the core (sin phi >= 0) the bead
+   * draws on its frontLayer; a depth change is flagged for the parts re-sort.
+   */
+  private placeBead(
+    id: MachineComponentId,
+    sprite: Phaser.GameObjects.Sprite,
+    anim: Extract<ComponentAnimation, { kind: 'orbit' }>,
+    dt: number,
+    exotic: { phase: 'none' | 'align' | 'hold'; t01: number },
+    xf: number,
+  ): void {
+    const from = this.orbitAngles.get(id) ?? anim.phi0Deg;
+    let phi: number;
+    if (exotic.phase === 'align') {
+      phi = alignStep(this.exoticFrom.get(id) ?? from, EXOTIC_MILESTONE_FX.beadPhiDeg, anim.dir, exotic.t01);
+    } else if (exotic.phase === 'hold') {
+      phi = EXOTIC_MILESTONE_FX.beadPhiDeg;
+    } else {
+      const speed = xf < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, xf) * anim.speedScale; // rest below threshold
+      phi = orbitStep(from, anim.dir, speed, dt);
+    }
+    this.orbitAngles.set(id, phi);
+    const def = MACHINE_COMPONENTS[id];
+    const base = resolveAttachment(def);
+    const p = orbitPoint(RING_GEOMETRY[anim.ring], phi);
+    sprite.setPosition(base.x + Math.floor(p.x), base.y + Math.floor(p.y));
+    const depth = orbitFront(phi) ? MACHINE_LAYER_DEPTH[anim.frontLayer] + anim.frontBias : componentDepth(def);
+    if (sprite.depth !== depth) {
+      sprite.setDepth(depth);
+      this.depthChanged = true;
+    }
+  }
+
+  /**
+   * Latch part: frame 0 until its gate holds, then 0 -> frames-1 once and held (latchFrame). A gate already met at the first
+   * active frame (a loaded save) shows the last frame without animating. Losing the gate re-arms the latch.
+   */
+  private placeLatch(sprite: Phaser.GameObjects.Sprite, id: MachineComponentId, anim: Extract<ComponentAnimation, { kind: 'latch' }>, gate: boolean): void {
+    const prior = this.latchStart.get(id);
+    let since: number | null;
+    if (!gate) {
+      this.latchStart.set(id, 'off'); // gate not met (or reset): frame 0
+      since = null;
+    } else if (prior === undefined) {
+      this.latchStart.set(id, 'done'); // met at first sight: last frame
+      since = Infinity;
+    } else if (prior === 'off') {
+      this.latchStart.set(id, this.elapsed); // the gate just opened: the sequence starts now
+      since = 0;
+    } else if (prior === 'done') {
+      since = Infinity;
+    } else {
+      since = this.elapsed - prior;
+    }
+    const frame = latchFrame(since, anim.frames, anim.fps);
+    sprite.setFrame(frame);
+    this.latchFrames.set(id, frame);
+  }
+
+  /** True for `ms` after the finalAlignment milestone (animator clock). */
+  private exoticWithin(ms: number): boolean {
+    return this.exoticMilestoneAt !== null && this.elapsed - this.exoticMilestoneAt < ms / 1000;
+  }
+
+  /** Reset: every bead goes back to its own layer depth. */
+  private restoreBeadDepths(): void {
+    for (const id of MACHINE_COMPONENT_IDS) {
+      const def = MACHINE_COMPONENTS[id];
+      if (def.animation.kind !== 'orbit') continue;
+      const sprite = this.sprites.get(id);
+      if (sprite === undefined) continue;
+      sprite.setDepth(componentDepth(def));
+      this.depthChanged = true;
     }
   }
 
