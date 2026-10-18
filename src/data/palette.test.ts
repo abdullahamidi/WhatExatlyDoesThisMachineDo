@@ -23,6 +23,15 @@ describe('PALETTE_CSS', () => {
     expect(PALETTE.cyanLight).toBe(0xbff0ec);
   });
 
+  it('has the three Era III keys for the thermal machine', () => {
+    expect(PALETTE_CSS.emberDark).toBe('#6a2418');
+    expect(PALETTE_CSS.ember).toBe('#b8402a');
+    expect(PALETTE_CSS.steam).toBe('#e8e0cc');
+    expect(PALETTE.emberDark).toBe(0x6a2418);
+    expect(PALETTE.ember).toBe(0xb8402a);
+    expect(PALETTE.steam).toBe(0xe8e0cc);
+  });
+
   it('has the same keys as PALETTE', () => {
     expect(Object.keys(PALETTE_CSS).sort()).toEqual(Object.keys(PALETTE).sort());
   });

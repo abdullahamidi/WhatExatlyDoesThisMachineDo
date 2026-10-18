@@ -4,11 +4,15 @@ import type { AssetId } from '../assets/assetIds';
 export const MACHINE_COMPONENT_IDS = ['supportFrame', 'bearingM', 'bearingP', 'gearLarge', 'mainShaft', 'gearSmall', 'crankPulley', 'handCrank', 'crankBrace',
   'flywheelPedestal', 'flywheel', 'flywheelPulley', 'motorPlinth', 'wornMotor', 'motorPulley', 'pistonYoke', 'pistonArray',
   'generatorPlinth', 'generator', 'generatorPulley', 'coilStage1', 'coilStage2', 'coilStage3', 'motorRetrofitKit', 'crankDynamo',
-  'capacitorRack', 'sparkGap', 'transformer', 'cableMast'] as const;
+  'capacitorRack', 'sparkGap', 'transformer', 'cableMast',
+  'boiler', 'chimney', 'steamManifold', 'pressureGauge', 'gaugeNeedle', 'fireboxGlow1', 'fireboxGlow2', 'fireboxGlow3',
+  'inductionHeater', 'superheater', 'reliefValves', 'steamHammer', 'hammerRam', 'condenser', 'turbine', 'turbineRotor'] as const;
 export type MachineComponentId = typeof MACHINE_COMPONENT_IDS[number];
 
 export const SOCKET_IDS = ['mainHub', 'crankHub', 'flywheelHub', 'flywheelBase', 'motorMount', 'motorBase', 'motorPulleyHub', 'pistonBed', 'yokePin',
-  'generatorBase', 'generatorMount', 'generatorHub', 'dynamoMount', 'rackBase', 'sparkMount', 'transformerBase', 'mastBase'] as const;
+  'generatorBase', 'generatorMount', 'generatorHub', 'dynamoMount', 'rackBase', 'sparkMount', 'transformerBase', 'mastBase',
+  'boilerBase', 'chimneyBase', 'superheaterSeat', 'reliefSeat', 'gaugeSeat', 'fireDoor', 'heaterSeat', 'hammerBase', 'hammerTup',
+  'condenserBase', 'turbineBase', 'turbineHub', 'manifoldSeat'] as const;
 export type SocketId = typeof SOCKET_IDS[number];
 
 export interface Vec2 { x: number; y: number }
@@ -18,8 +22,8 @@ export type MachineLayer = 'back' | 'frame' | 'mid' | 'front';
 /** Draw depth of each machine layer (relative to the machine container). */
 export const MACHINE_LAYER_DEPTH: Record<MachineLayer, number> = { back: 0, frame: 10, mid: 20, front: 30 };
 
-/** manual: click activity; automation: ME/s; combined: manual + automation; electric: EE/s (rates.perSecond.ee). */
-export type AnimationDriver = 'manual' | 'automation' | 'combined' | 'electric';
+/** manual: click activity; automation: ME/s; combined: manual + automation; electric: EE/s (rates.perSecond.ee); thermal: PR/s (rates.perSecond.pr). */
+export type AnimationDriver = 'manual' | 'automation' | 'combined' | 'electric' | 'thermal';
 
 export interface SpeedCurve { base: number; gain: number; min: number; max: number }
 
@@ -28,10 +32,13 @@ export type ComponentAnimation =
   | { kind: 'driven'; ratio: number; phaseDeg: number }          // angle = partAngle(thetaM, ratio, phaseDeg)
   | { kind: 'slider' }                                           // pistonYoke only: position from sliderCrank
   | { kind: 'vibrate'; driver: AnimationDriver; amplitude: number; speed: SpeedCurve }   // unchanged from today
-  | { kind: 'frames'; frames: number; maxHz: number; driver: AnimationDriver };         // frame cycle, advances at up to maxHz while driver > 0
+  | { kind: 'frames'; frames: number; maxHz: number; driver: AnimationDriver }         // frame cycle, advances at up to maxHz while driver > 0
+  | { kind: 'reciprocate'; ratio: number; strokeArtPx: number; phaseDeg: number }      // sprite y offset = -(stroke/2)(1 + cos(ratio * thetaM + phase)); 0 = strike
+  | { kind: 'spin'; driver: AnimationDriver; speed: SpeedCurve }                       // own angle += speed(driver)*dt, not tied to thetaM; RotSprite frames
+  | { kind: 'gauge'; driver: AnimationDriver; frames: number; minLog: number; maxLog: number; tauSeconds: number };  // frames sheet, no rotation
 
-/** radius: belt pulley radius, art px. cable: wire attachment point (no radius). */
-export interface ConnectionPoint { id: string; at: Vec2; kind: 'belt' | 'pin' | 'cable'; radius?: number }
+/** radius: belt pulley radius, art px. cable: wire attachment point (no radius). pipe: steam / water port (no radius). */
+export interface ConnectionPoint { id: string; at: Vec2; kind: 'belt' | 'pin' | 'cable' | 'pipe'; radius?: number }
 
 export interface ProductionEffect { kind: 'vibrate' | 'glow' | 'dust' | 'steam'; driver: AnimationDriver; threshold: number; intensity: number }
 
@@ -48,10 +55,15 @@ export interface MachineComponentDefinition {
 }
 
 /** belt joins two belt points; rod joins two pin points; cable joins two cable points (sag: art px, default MACHINE_LINK_STYLE.cable.sagArtPx). */
-export interface MachineLink { from: { component: MachineComponentId; point: string }; to: { component: MachineComponentId; point: string }; kind: 'belt' | 'rod' | 'cable'; sag?: number }
+export interface MachineLink {
+  from: { component: MachineComponentId; point: string }; to: { component: MachineComponentId; point: string };
+  kind: 'belt' | 'rod' | 'cable' | 'pipe'; sag?: number;
+  // pipe only: via = ABSOLUTE machine-local corners; depth defaults to MACHINE_LINK_STYLE.pipe.depth
+  via?: Vec2[]; bore?: 4 | 2; depth?: number; pipeStyle?: 'steam' | 'water';
+}
 
 /** Machine-local art px bounding box of the whole machine. */
-export const MACHINE_BOUNDS = { left: -200, right: 448, top: -200, bottom: 8 };
+export const MACHINE_BOUNDS = { left: -448, right: 448, top: -248, bottom: 8 };
 
 /** Machine-local art px positions of every socket. */
 export const MACHINE_SOCKETS: Record<SocketId, Vec2> = {
@@ -60,6 +72,11 @@ export const MACHINE_SOCKETS: Record<SocketId, Vec2> = {
   yokePin: { x: -44, y: -125 },
   generatorBase: { x: 264, y: 0 }, generatorMount: { x: 264, y: -42 }, generatorHub: { x: 268, y: -25 }, dynamoMount: { x: 70, y: -36 },
   rackBase: { x: 340, y: 0 }, sparkMount: { x: 340, y: -53 }, transformerBase: { x: 396, y: 0 }, mastBase: { x: 436, y: 0 },
+  // Era III seats: boiler and chimney, superheater, relief valves, gauge, firebox door, heater, hammer, condenser, turbine, manifold.
+  boilerBase: { x: -240, y: 0 }, chimneyBase: { x: -293, y: -78 }, superheaterSeat: { x: -268, y: -73 }, reliefSeat: { x: -214, y: -77 },
+  gaugeSeat: { x: -192, y: -77 }, fireDoor: { x: -196, y: -32 }, heaterSeat: { x: -200, y: -36 }, hammerBase: { x: -334, y: 0 },
+  hammerTup: { x: -334, y: -22 }, condenserBase: { x: -402, y: 0 }, turbineBase: { x: -402, y: -24 }, turbineHub: { x: -412, y: -54 },
+  manifoldSeat: { x: -44, y: -168 },
 };
 
 /** Motion: manual activity decay, frame clamp and rest threshold (compares the DRIVER value, not speed). */
@@ -105,6 +122,22 @@ export const MACHINE_LINK_STYLE = {
   rod: { edge: 0x3e4246, core: 0x7d8286, eye: 0x5a5f63, eyeCentre: 0xa3a6a4, eyeRadius: 2 },
   cap: { size: 4, hi: 0xa3a6a4, body: 0x7d8286, ring: 0x1f2225 },
   cable: { depth: MACHINE_LAYER_DEPTH.front + 1, core: 0x2f5a62, hi: 0x5fa8b4, sagArtPx: 10 },
+  // Era III pipes: steam (bright iron, flanged) and feed water (dark, flanged). Fitting colours are the ART_ERA3 section 4 constants.
+  pipe: {
+    depth: MACHINE_LAYER_DEPTH.frame + 5,
+    steam: {
+      prof: [0x7d8286, 0x5a5f63, 0x3e4246, 0x1f2225],
+      flange: [[0x14110f, 0xa3a6a4, 0x7d8286, 0x5a5f63, 0x3e4246, 0x14110f], [0x14110f, 0x7d8286, 0x5a5f63, 0x3e4246, 0x2b2e31, 0x14110f]],
+      flangeEvery: 24,
+      fitting: { ink: 0x14110f, hi: 0x7d8286, mid: 0x5a5f63, lo: 0x3e4246 },
+    },
+    water: {
+      prof: [0x5a5f63, 0x2b2e31],
+      flange: [[0x14110f, 0x7d8286, 0x3e4246, 0x14110f], [0x14110f, 0x5a5f63, 0x2b2e31, 0x14110f]],
+      flangeEvery: 24,
+      fitting: { ink: 0x14110f, hi: 0x7d8286, mid: 0x5a5f63, lo: 0x3e4246 },
+    },
+  },
 } as const;
 
 /** Drive-train and wiring links between components. */
@@ -116,6 +149,16 @@ export const MACHINE_LINKS: readonly MachineLink[] = [
   { from: { component: 'generator', point: 'termR' }, to: { component: 'capacitorRack', point: 'lugL' }, kind: 'cable', sag: 4 },
   { from: { component: 'capacitorRack', point: 'lugR' }, to: { component: 'transformer', point: 'primary' }, kind: 'cable', sag: 3 },
   { from: { component: 'transformer', point: 'bushing' }, to: { component: 'cableMast', point: 'top' }, kind: 'cable' },
+  // Era III: steam and feed-water pipes (P1 to P3, W1) and the tie cable on the heater (C1).
+  { from: { component: 'boiler', point: 'steam' }, to: { component: 'steamManifold', point: 'steam' }, kind: 'pipe',
+    via: [{ x: -246, y: -112 }, { x: -98, y: -112 }, { x: -98, y: -176 }], bore: 4, pipeStyle: 'steam' },
+  { from: { component: 'boiler', point: 'steam' }, to: { component: 'steamHammer', point: 'steam' }, kind: 'pipe',
+    via: [{ x: -246, y: -112 }, { x: -323, y: -112 }], bore: 4, pipeStyle: 'steam' },
+  { from: { component: 'boiler', point: 'steam' }, to: { component: 'turbine', point: 'steam' }, kind: 'pipe',
+    via: [{ x: -246, y: -112 }, { x: -412, y: -112 }], bore: 4, pipeStyle: 'steam' },
+  { from: { component: 'condenser', point: 'condensate' }, to: { component: 'boiler', point: 'feed' }, kind: 'pipe',
+    via: [{ x: -308, y: -3 }, { x: -308, y: -46 }], bore: 2, depth: MACHINE_LAYER_DEPTH.mid - 1, pipeStyle: 'water' },
+  { from: { component: 'motorRetrofitKit', point: 'tie' }, to: { component: 'inductionHeater', point: 'tie' }, kind: 'cable', sag: 3 },
 ];
 
 /** Static shadow ellipses / strips drawn under the machine. */
@@ -126,6 +169,9 @@ export const MACHINE_SHADOWS: readonly MachineShadow[] = [
   { component: 'motorPlinth', x: -164, y: 0, width: 48, height: 2 },
   { component: 'flywheelPedestal', x: 126, y: 0, width: 48, height: 2 },
   { component: 'flywheel', x: 138, y: 0, width: 24, height: 3, oval: true },
+  { component: 'boiler', x: -304, y: 0, width: 128, height: 2 },
+  { component: 'steamHammer', x: -358, y: 0, width: 48, height: 2 },
+  { component: 'condenser', x: -442, y: 0, width: 80, height: 2 },
 ];
 
 export const MACHINE_SHADOW_STYLE = { color: 0x5f5244, alpha: 0.5, depth: -1 } as const;
@@ -362,7 +408,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     size: { width: 32, height: 16 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 3,
     animation: { kind: 'vibrate', driver: 'automation', amplitude: 1, speed: { base: 8, gain: 0.3, min: 2, max: 20 } },
-    connections: [],
+    connections: [{ id: 'tie', at: { x: 0, y: -3 }, kind: 'cable' }],   // Era III: tie cable to the induction heater (C1)
     effects: [],
   },
   // Dynamo on the hand crank side: a small frame part that shakes with clicks.
@@ -419,6 +465,165 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     layer: 'back',
     animation: { kind: 'none' },
     connections: [{ id: 'top', at: { x: 0, y: -108 }, kind: 'cable' }],
+    effects: [],
+  },
+  // Era III: boiler, chimney and steam manifold stand on the boiler base; the gauge pair sits on the gauge seat.
+  boiler: {
+    id: 'boiler', techId: 'boiler', minLevel: 1,
+    assetId: 'machine.boiler', attach: { socket: 'boilerBase', offset: { x: 0, y: 0 } },
+    size: { width: 128, height: 96 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid',
+    animation: { kind: 'none' },
+    connections: [
+      { id: 'steam', at: { x: -6, y: -91 }, kind: 'pipe' },
+      { id: 'feed', at: { x: -64, y: -46 }, kind: 'pipe' },
+    ],
+    effects: [],
+  },
+  chimney: {
+    id: 'chimney', techId: 'boiler', minLevel: 1,
+    assetId: 'machine.chimney', attach: { socket: 'chimneyBase', offset: { x: 0, y: 0 } },
+    size: { width: 32, height: 160 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid', depthBias: 1,
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  steamManifold: {
+    id: 'steamManifold', techId: 'boiler', minLevel: 1,
+    assetId: 'machine.steamManifold', attach: { socket: 'manifoldSeat', offset: { x: 0, y: 0 } },
+    size: { width: 96, height: 14 }, origin: { x: 0.5, y: 1 },
+    layer: 'back', depthBias: 2,
+    animation: { kind: 'none' },
+    connections: [{ id: 'steam', at: { x: -48, y: -8 }, kind: 'pipe' }],
+    effects: [],
+  },
+  pressureGauge: {
+    id: 'pressureGauge', techId: 'boiler', minLevel: 1,
+    assetId: 'machine.gauge', attach: { socket: 'gaugeSeat', offset: { x: 0, y: 0 } },
+    size: { width: 24, height: 24 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid', depthBias: 2,
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  // Gauge needle: a frames sheet of 25 needle angles, not rotated; the low-pass reads the thermal driver (PR/s).
+  gaugeNeedle: {
+    id: 'gaugeNeedle', techId: 'boiler', minLevel: 1,
+    assetId: 'machine.gaugeNeedle', attach: { socket: 'gaugeSeat', offset: { x: 0, y: 0 } },
+    size: { width: 24, height: 24 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid', depthBias: 3,
+    animation: { kind: 'gauge', driver: 'thermal', frames: 25, minLog: 0, maxLog: 5, tauSeconds: 0.6 },
+    connections: [],
+    effects: [],
+  },
+  // Firebox glow: three frames sheets stacked by tech level (1 / 10 / 20); each later stage covers the lower one.
+  fireboxGlow1: {
+    id: 'fireboxGlow1', techId: 'firebox', minLevel: 1,
+    assetId: 'machine.fireGlow1', attach: { socket: 'fireDoor', offset: { x: 0, y: 0 } },
+    size: { width: 24, height: 24 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 2,
+    animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'thermal' },
+    connections: [],
+    effects: [],
+  },
+  fireboxGlow2: {
+    id: 'fireboxGlow2', techId: 'firebox', minLevel: 10,
+    assetId: 'machine.fireGlow2', attach: { socket: 'fireDoor', offset: { x: 0, y: 0 } },
+    size: { width: 24, height: 24 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 3,
+    animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'thermal' },
+    connections: [],
+    effects: [],
+  },
+  fireboxGlow3: {
+    id: 'fireboxGlow3', techId: 'firebox', minLevel: 20,
+    assetId: 'machine.fireGlow3', attach: { socket: 'fireDoor', offset: { x: 0, y: 0 } },
+    size: { width: 24, height: 24 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 4,
+    animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'thermal' },
+    connections: [],
+    effects: [],
+  },
+  // Induction heater: a cable tie to the motor retrofit kit (C1 link); static.
+  inductionHeater: {
+    id: 'inductionHeater', techId: 'inductionHeater', minLevel: 1,
+    assetId: 'machine.inductionHeater', attach: { socket: 'heaterSeat', offset: { x: 0, y: 0 } },
+    size: { width: 56, height: 40 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid', depthBias: 5,
+    animation: { kind: 'none' },
+    connections: [{ id: 'tie', at: { x: 25, y: -38 }, kind: 'cable' }],
+    effects: [],
+  },
+  superheater: {
+    id: 'superheater', techId: 'superheater', minLevel: 1,
+    assetId: 'machine.superheater', attach: { socket: 'superheaterSeat', offset: { x: 0, y: 0 } },
+    size: { width: 40, height: 32 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid', depthBias: 2,
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  reliefValves: {
+    id: 'reliefValves', techId: 'reliefValves', minLevel: 1,
+    assetId: 'machine.reliefValves', attach: { socket: 'reliefSeat', offset: { x: 0, y: 0 } },
+    size: { width: 16, height: 24 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid', depthBias: 2,
+    animation: { kind: 'none' },
+    connections: [],
+    effects: [],
+  },
+  // Steam hammer: the housing with a steam port; the ram below it strikes once per turn of the master angle.
+  steamHammer: {
+    id: 'steamHammer', techId: 'steamHammer', minLevel: 1,
+    assetId: 'machine.steamHammer', attach: { socket: 'hammerBase', offset: { x: 0, y: 0 } },
+    size: { width: 48, height: 96 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid', depthBias: 1,
+    animation: { kind: 'none' },
+    connections: [{ id: 'steam', at: { x: 11, y: -79 }, kind: 'pipe' }],
+    effects: [],
+  },
+  // Hammer ram: reciprocates on the master angle (ratio 1, 14 px stroke); sits below the housing (mid, no bias).
+  hammerRam: {
+    id: 'hammerRam', techId: 'steamHammer', minLevel: 1,
+    assetId: 'machine.hammerRam', attach: { socket: 'hammerTup', offset: { x: 0, y: 0 } },
+    size: { width: 12, height: 36 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid',
+    animation: { kind: 'reciprocate', ratio: 1, strokeArtPx: 14, phaseDeg: 0 },
+    connections: [],
+    effects: [],
+  },
+  // Condenser: water return; its condensate port feeds the boiler through pipe W1.
+  condenser: {
+    id: 'condenser', techId: 'condenser', minLevel: 1,
+    assetId: 'machine.condenser', attach: { socket: 'condenserBase', offset: { x: 0, y: 0 } },
+    size: { width: 80, height: 24 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid',
+    animation: { kind: 'none' },
+    connections: [{ id: 'condensate', at: { x: 44, y: -3 }, kind: 'pipe' }],
+    effects: [],
+  },
+  // Turbine: steam in from pipe P3, export cable to the pylons. turbine.export is a world-space feed (PYLON_FEEDS), not a link.
+  turbine: {
+    id: 'turbine', techId: 'turbine', minLevel: 1,
+    assetId: 'machine.turbine', attach: { socket: 'turbineBase', offset: { x: 0, y: 0 } },
+    size: { width: 80, height: 64 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid', depthBias: 1,
+    animation: { kind: 'none' },
+    connections: [
+      { id: 'steam', at: { x: -10, y: -62 }, kind: 'pipe' },
+      { id: 'export', at: { x: 28, y: -46 }, kind: 'cable' },
+    ],
+    effects: [],
+  },
+  // Turbine rotor: spins from the thermal driver; A1 speed (base 60, gain 1.5) so the rotor always turns while PR flows.
+  turbineRotor: {
+    id: 'turbineRotor', techId: 'turbine', minLevel: 1,
+    assetId: 'machine.turbineRotor', attach: { socket: 'turbineHub', offset: { x: 0, y: 0 } },
+    size: { width: 28, height: 28 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 2,
+    animation: { kind: 'spin', driver: 'thermal', speed: { base: 60, gain: 1.5, min: 0, max: 540 } },
+    connections: [],
     effects: [],
   },
 };

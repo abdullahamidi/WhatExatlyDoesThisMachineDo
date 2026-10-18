@@ -1,5 +1,6 @@
 import type { AssetId } from '../assets/assetIds';
 import type { TechId } from './types';
+import type { MachineComponentId } from './machineComponents';
 import { PALETTE } from './palette';
 export const VIEW = { width: 1280, height: 720 } as const;
 export const WORLD = { width: 2560, height: 1440 } as const;
@@ -30,6 +31,12 @@ export const PYLON_LINE = {
   anchorsArt: [{ x: 159.5, y: 59 }, { x: 223.5, y: 59 }, { x: 148.5, y: 90 }, { x: 234.5, y: 90 }],
   sagFraction: 0.06, thicknessPx: 2, depthOffset: 1,
 } as const;
+/** A world-space cable feed from a machine part to the pylon line (CR-A). side 'left' = only anchors left of the part; 'any' = right of it (the mast). */
+export interface PylonFeed { id: string; component: MachineComponentId; point: string; side: 'any' | 'left'; gate?: { techId: TechId; minLevel: number } }
+export const PYLON_FEEDS: readonly PylonFeed[] = [
+  { id: 'mast', component: 'cableMast', point: 'top', side: 'any' },
+  { id: 'turbine', component: 'turbine', point: 'export', side: 'left', gate: { techId: 'turbine', minLevel: 1 } },
+];
 export const GROUND_LAYER = { assetId: 'terrain.ground', depth: DEPTH.ground } as const;   // scrollFactor 1, spans GROUND_Y..WORLD.height
 export const GROUND_SHADE: { color: number; alpha: number; bandStarts: readonly number[];
   haze: { color: number; alpha: number; height: number } } =

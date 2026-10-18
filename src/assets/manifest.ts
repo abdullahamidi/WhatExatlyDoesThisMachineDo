@@ -170,6 +170,86 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     id: 'machine.cableMast', file: 'machine/era2/cable-mast.png', width: 16, height: 112, origin: { x: 0.5, y: 1 }, tileable: 'none',
     description: 'Tall steel mast with a cable head at the top that carries the line to the pylons.',
   },
+  // Era III: boiler, pressure and steam parts (delivered PNGs under machine/era3/).
+  'machine.boiler': {
+    id: 'machine.boiler', file: 'machine/era3/boiler.png', width: 128, height: 96, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Riveted pressure boiler drum on a cradle, with a steam outlet at the top and a feed port on the left.',
+  },
+  'machine.chimney': {
+    id: 'machine.chimney', file: 'machine/era3/chimney.png', width: 32, height: 160, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Tall riveted smokestack with a flared cap and a collar at its foot.',
+  },
+  'machine.steamManifold': {
+    id: 'machine.steamManifold', file: 'machine/era3/steam-manifold.png', width: 96, height: 14, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Flat steam manifold header with three branch stubs and a port at its left end.',
+  },
+  'machine.gauge': {
+    id: 'machine.gauge', file: 'machine/era3/gauge.png', width: 24, height: 24, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Round pressure gauge dial with a bezel and tick marks, without its needle.',
+  },
+  'machine.gaugeNeedle': {
+    id: 'machine.gaugeNeedle', file: 'machine/era3/gauge-needle.png', width: 600, height: 24, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 24, height: 24, count: 25 },
+    description: 'Twenty-five frame sheet of the gauge needle, one needle angle per frame from zero to full scale.',
+  },
+  'machine.fireGlow1': {
+    id: 'machine.fireGlow1', file: 'machine/era3/firebox-1.png', width: 96, height: 24, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 24, height: 24, count: 4 },
+    description: 'Four-frame firebox glow sheet, first stage: a dull ember behind the fire door.',
+  },
+  'machine.fireGlow2': {
+    id: 'machine.fireGlow2', file: 'machine/era3/firebox-2.png', width: 96, height: 24, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 24, height: 24, count: 4 },
+    description: 'Four-frame firebox glow sheet, second stage: a brighter fire behind the fire door.',
+  },
+  'machine.fireGlow3': {
+    id: 'machine.fireGlow3', file: 'machine/era3/firebox-3.png', width: 96, height: 24, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 24, height: 24, count: 4 },
+    description: 'Four-frame firebox glow sheet, third stage: a white-hot fire behind the fire door.',
+  },
+  'machine.inductionHeater': {
+    id: 'machine.inductionHeater', file: 'machine/era3/induction-heater.png', width: 56, height: 40, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Induction heater coil housing on a small plinth with a cable tie on its side.',
+  },
+  'machine.superheater': {
+    id: 'machine.superheater', file: 'machine/era3/superheater.png', width: 40, height: 32, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Superheater drum with a tube bundle and a glowing outlet collar.',
+  },
+  'machine.reliefValves': {
+    id: 'machine.reliefValves', file: 'machine/era3/relief-valves.png', width: 16, height: 24, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Pair of spring-loaded relief valves on a short stand, capped with vent hoods.',
+  },
+  'machine.steamHammer': {
+    id: 'machine.steamHammer', file: 'machine/era3/steam-hammer.png', width: 48, height: 96, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Steam hammer housing with a cylinder, a steam inlet on its side and a guide column below.',
+  },
+  'machine.hammerRam': {
+    id: 'machine.hammerRam', file: 'machine/era3/hammer-ram.png', width: 12, height: 36, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Hammer ram: a short iron piston with a flat striking face at its foot.',
+  },
+  'machine.condenser': {
+    id: 'machine.condenser', file: 'machine/era3/condenser.png', width: 80, height: 24, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Long condenser tank on feet with a condensate port at its right end.',
+  },
+  'machine.turbine': {
+    id: 'machine.turbine', file: 'machine/era3/turbine.png', width: 80, height: 64, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Turbine casing with a steam inlet on the left and an export cable terminal on the right.',
+  },
+  'machine.turbineRotor': {
+    id: 'machine.turbineRotor', file: 'machine/era3/turbine-rotor.png', width: 28, height: 28, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    rotation: { file: 'machine/era3/rot/turbine-rotor-rot.png', frames: 64 },
+    description: 'Turbine rotor seen face-on, a bladed wheel on a hub.',
+  },
+  'fx.steamPuff': {
+    id: 'fx.steamPuff', file: 'fx/steam-puff.png', width: 64, height: 16, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 16, height: 16, count: 4 },
+    description: 'Four-frame steam puff sheet, a pale cloud that grows and thins as it rises.',
+  },
+  'fx.smoke': {
+    id: 'fx.smoke', file: 'fx/smoke.png', width: 64, height: 16, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 16, height: 16, count: 4 },
+    description: 'Four-frame dark smoke puff sheet, used for the boiler chimney.',
+  },
 };
 
 export interface AssetLoad {

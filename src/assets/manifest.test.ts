@@ -152,6 +152,92 @@ describe('WP8 era II machine assets', () => {
   });
 });
 
+describe('WP9 era III machine and fx assets', () => {
+  const ERA3_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; height: number; origin: { x: number; y: number } }> = [
+    { id: 'machine.boiler', file: 'machine/era3/boiler.png', width: 128, height: 96, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.chimney', file: 'machine/era3/chimney.png', width: 32, height: 160, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.steamManifold', file: 'machine/era3/steam-manifold.png', width: 96, height: 14, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.gauge', file: 'machine/era3/gauge.png', width: 24, height: 24, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.gaugeNeedle', file: 'machine/era3/gauge-needle.png', width: 600, height: 24, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.fireGlow1', file: 'machine/era3/firebox-1.png', width: 96, height: 24, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.fireGlow2', file: 'machine/era3/firebox-2.png', width: 96, height: 24, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.fireGlow3', file: 'machine/era3/firebox-3.png', width: 96, height: 24, origin: { x: 0.5, y: 0.5 } },
+    { id: 'machine.inductionHeater', file: 'machine/era3/induction-heater.png', width: 56, height: 40, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.superheater', file: 'machine/era3/superheater.png', width: 40, height: 32, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.reliefValves', file: 'machine/era3/relief-valves.png', width: 16, height: 24, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.steamHammer', file: 'machine/era3/steam-hammer.png', width: 48, height: 96, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.hammerRam', file: 'machine/era3/hammer-ram.png', width: 12, height: 36, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.condenser', file: 'machine/era3/condenser.png', width: 80, height: 24, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.turbine', file: 'machine/era3/turbine.png', width: 80, height: 64, origin: { x: 0.5, y: 1 } },
+    { id: 'machine.turbineRotor', file: 'machine/era3/turbine-rotor.png', width: 28, height: 28, origin: { x: 0.5, y: 0.5 } },
+    { id: 'fx.steamPuff', file: 'fx/steam-puff.png', width: 64, height: 16, origin: { x: 0.5, y: 0.5 } },
+    { id: 'fx.smoke', file: 'fx/smoke.png', width: 64, height: 16, origin: { x: 0.5, y: 0.5 } },
+  ];
+
+  it('appends the 18 era III ids after machine.cableMast, in contract order', () => {
+    expect(ASSET_IDS.slice(ASSET_IDS.indexOf('machine.cableMast') + 1)).toEqual(ERA3_ENTRIES.map((e) => e.id));
+  });
+
+  it('has the contract file, width, height, origin and tileable none for each new id', () => {
+    for (const want of ERA3_ENTRIES) {
+      const entry = ASSET_MANIFEST[want.id];
+      expect(entry.file, want.id).toBe(want.file);
+      expect(entry.width, want.id).toBe(want.width);
+      expect(entry.height, want.id).toBe(want.height);
+      expect(entry.origin, want.id).toEqual(want.origin);
+      expect(entry.tileable, want.id).toBe('none');
+      expect(entry.description.trim().length, want.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('has a sheet frame for the gauge needle, the firebox glows and the two steam sheets, and no frame elsewhere', () => {
+    expect(ASSET_MANIFEST['machine.gaugeNeedle'].frame).toEqual({ width: 24, height: 24, count: 25 });
+    for (const id of ['machine.fireGlow1', 'machine.fireGlow2', 'machine.fireGlow3'] as const) {
+      expect(ASSET_MANIFEST[id].frame, id).toEqual({ width: 24, height: 24, count: 4 });
+    }
+    for (const id of ['fx.steamPuff', 'fx.smoke'] as const) {
+      expect(ASSET_MANIFEST[id].frame, id).toEqual({ width: 16, height: 16, count: 4 });
+    }
+    expect(ASSET_MANIFEST['machine.boiler'].frame).toBeUndefined();
+    expect(ASSET_MANIFEST['machine.turbine'].frame).toBeUndefined();
+  });
+
+  it('plans the sheet entries as spritesheets with their frame', () => {
+    const loads = planAssetLoads();
+    for (const id of ['machine.gaugeNeedle', 'machine.fireGlow1', 'machine.fireGlow2', 'machine.fireGlow3', 'fx.steamPuff', 'fx.smoke'] as const) {
+      const load = loads.find((l) => l.key === id);
+      expect(load?.kind, id).toBe('spritesheet');
+      expect(load?.frame, id).toEqual(ASSET_MANIFEST[id].frame);
+    }
+  });
+
+  it('gaugeNeedle cells run x 0..576 step 24 on row 0', () => {
+    const rects = sheetFrameRects(ASSET_MANIFEST['machine.gaugeNeedle']);
+    expect(rects.length).toBe(25);
+    rects.forEach((r, i) => {
+      expect(r).toEqual({ x: i * 24, y: 0, width: 24, height: 24 });
+    });
+    expect(rects[24]?.x).toBe(576);
+  });
+
+  it('steam puff cells are four 16x16 cells at x 0, 16, 32, 48', () => {
+    expect(sheetFrameRects(ASSET_MANIFEST['fx.steamPuff'])).toEqual([
+      { x: 0, y: 0, width: 16, height: 16 },
+      { x: 16, y: 0, width: 16, height: 16 },
+      { x: 32, y: 0, width: 16, height: 16 },
+      { x: 48, y: 0, width: 16, height: 16 },
+    ]);
+  });
+
+  it('the turbine rotor is a 224x224 rotation sheet of 64 frames of 28x28 under machine/era3/rot/', () => {
+    const entry = ASSET_MANIFEST['machine.turbineRotor'];
+    expect(entry.rotation).toEqual({ file: 'machine/era3/rot/turbine-rotor-rot.png', frames: 64 });
+    const files = Object.keys(import.meta.glob('/public/assets/**/*.png'));
+    expect(files).toContain('/public/assets/machine/era3/rot/turbine-rotor-rot.png');
+  });
+
+});
+
 describe('sheetFrameRects', () => {
   it('returns no rects for an entry without a frame', () => {
     expect(sheetFrameRects(ASSET_MANIFEST['machine.crank'])).toEqual([]);
@@ -246,13 +332,14 @@ describe('WP6c rotation sheets and sky', () => {
     'machine.pulleyFlywheel',
     'machine.pulleyMotor',
     'machine.pulleyGenerator',
+    'machine.turbineRotor',
   ];
 
   it('has a disk file for the sky entry', () => {
     expect(ASSET_MANIFEST['bg.sky'].file).not.toBeNull();
   });
 
-  it('gives exactly the ten machine ids a rotation sheet', () => {
+  it('gives exactly the eleven machine ids (ten WP6 + WP8, plus the era III turbine rotor) a rotation sheet', () => {
     const withRotation = ASSET_IDS.filter((id) => ASSET_MANIFEST[id].rotation !== undefined);
     expect(withRotation.slice().sort()).toEqual([...ROTATION_IDS].sort());
   });
@@ -282,7 +369,10 @@ describe('WP6c rotation sheets and sky', () => {
         kind: 'spritesheet',
         frame: { width: entry.width, height: entry.height, count: rotation.frames },
       });
-      expect(load?.url.startsWith('assets/machine/rot/') || load?.url.startsWith('assets/machine/era2/rot/'), id).toBe(true);
+      expect(
+        load?.url.startsWith('assets/machine/rot/') || load?.url.startsWith('assets/machine/era2/rot/') || load?.url.startsWith('assets/machine/era3/rot/'),
+        id,
+      ).toBe(true);
     }
   });
 

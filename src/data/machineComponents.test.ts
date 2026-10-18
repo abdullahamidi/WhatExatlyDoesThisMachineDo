@@ -18,7 +18,10 @@ import {
   DRIVE_TRAIN,
   SOCKET_IDS,
 } from './machineComponents';
-import type { ConnectionPoint, MachineComponentDefinition, MachineComponentId, MachineLink, Vec2 } from './machineComponents';
+import type { ConnectionPoint, MachineComponentDefinition, MachineComponentId, MachineLayer, MachineLink, SocketId, Vec2 } from './machineComponents';
+import { PYLON_FEEDS } from './world';
+import type { AssetId } from '../assets/assetIds';
+import { ASSET_MANIFEST } from '../assets/manifest';
 
 const COMPONENTS = MACHINE_COMPONENT_IDS.map((id) => MACHINE_COMPONENTS[id]);
 
@@ -31,6 +34,19 @@ function pointOf(component: MachineComponentId, pointId: string): ConnectionPoin
 function centreOf(def: MachineComponentDefinition): Vec2 {
   const base = def.attach.socket === null ? { x: 0, y: 0 } : MACHINE_SOCKETS[def.attach.socket];
   return { x: base.x + def.attach.offset.x, y: base.y + def.attach.offset.y };
+}
+
+/** Machine-local position of a connection point: the component centre plus the point offset. */
+function pointPosition(component: MachineComponentId, pointId: string): Vec2 {
+  const point = pointOf(component, pointId);
+  if (point === undefined) throw new Error(`missing point ${component}.${pointId}`);
+  const c = centreOf(MACHINE_COMPONENTS[component]);
+  return { x: c.x + point.at.x, y: c.y + point.at.y };
+}
+
+/** Draw depth of a component: its layer depth plus its depth bias. */
+function depthOf(def: MachineComponentDefinition): number {
+  return MACHINE_LAYER_DEPTH[def.layer] + (def.depthBias ?? 0);
 }
 
 /** Driven ratio of a component, or null when it is not driven by the master angle. */
@@ -113,6 +129,19 @@ const ERA_TWO_STEPS: readonly (readonly [TechId, number])[] = [
 function levelsEraTwo(n: number): Record<TechId, number> {
   const levels = levelsForPrefix(UNLOCK_ORDER.length);
   for (const [id, level] of ERA_TWO_STEPS.slice(0, n)) levels[id] = level;
+  return levels;
+}
+
+/** Era III unlock steps in order; firebox is set to each glow stage level in turn (1, 10, 20). */
+const ERA_THREE_STEPS: readonly (readonly [TechId, number])[] = [
+  ['boiler', 1], ['firebox', 1], ['firebox', 10], ['firebox', 20],
+  ['inductionHeater', 1], ['steamHammer', 1], ['superheater', 1], ['condenser', 1], ['turbine', 1], ['reliefValves', 1],
+];
+
+/** All era-I and era-II techs at their stage levels, then the first n era-III steps applied. */
+function levelsForEra3(n: number): Record<TechId, number> {
+  const levels = levelsEraTwo(ERA_TWO_STEPS.length);
+  for (const [id, level] of ERA_THREE_STEPS.slice(0, n)) levels[id] = level;
   return levels;
 }
 
@@ -300,12 +329,14 @@ describe('machine component ids', () => {
       'flywheelPedestal', 'flywheel', 'flywheelPulley', 'motorPlinth', 'wornMotor', 'motorPulley', 'pistonYoke', 'pistonArray',
       'generatorPlinth', 'generator', 'generatorPulley', 'coilStage1', 'coilStage2', 'coilStage3', 'motorRetrofitKit', 'crankDynamo',
       'capacitorRack', 'sparkGap', 'transformer', 'cableMast',
+      'boiler', 'chimney', 'steamManifold', 'pressureGauge', 'gaugeNeedle', 'fireboxGlow1', 'fireboxGlow2', 'fireboxGlow3',
+      'inductionHeater', 'superheater', 'reliefValves', 'steamHammer', 'hammerRam', 'condenser', 'turbine', 'turbineRotor',
     ]);
   });
 
-  it('has 29 components and 17 sockets', () => {
-    expect(MACHINE_COMPONENT_IDS.length).toBe(29);
-    expect(SOCKET_IDS.length).toBe(17);
+  it('has 45 components and 30 sockets', () => {
+    expect(MACHINE_COMPONENT_IDS.length).toBe(45);
+    expect(SOCKET_IDS.length).toBe(30);
   });
 });
 
@@ -374,12 +405,15 @@ describe('machine component invariants', () => {
     }
   });
 
-  it('every speed curve has min <= max and base > 0', () => {
+  it('every speed curve (vibrate and spin) has min <= max and base > 0; frames, gauge and reciprocate need none', () => {
     for (const def of COMPONENTS) {
       const anim = def.animation;
-      if ('speed' in anim) {
+      if (anim.kind === 'vibrate' || anim.kind === 'spin') {
         expect(anim.speed.min).toBeLessThanOrEqual(anim.speed.max);
         expect(anim.speed.base).toBeGreaterThan(0);
+      }
+      if (anim.kind === 'frames' || anim.kind === 'gauge' || anim.kind === 'reciprocate') {
+        expect('speed' in anim, def.id).toBe(false);
       }
     }
   });
@@ -422,9 +456,9 @@ describe('machine links and connection points', () => {
     }
   });
 
-  it('belt links connect two belt points, rod links two pin points and cable links two cable points', () => {
+  it('belt links connect two belt points, rod two pin points, cable two cable points and pipe two pipe points', () => {
     for (const link of MACHINE_LINKS) {
-      const expected = link.kind === 'belt' ? 'belt' : link.kind === 'rod' ? 'pin' : 'cable';
+      const expected = link.kind === 'belt' ? 'belt' : link.kind === 'rod' ? 'pin' : link.kind === 'pipe' ? 'pipe' : 'cable';
       expect(pointOf(link.from.component, link.from.point)?.kind).toBe(expected);
       expect(pointOf(link.to.component, link.to.point)?.kind).toBe(expected);
     }
@@ -447,7 +481,7 @@ describe('machine links and connection points', () => {
     }
   });
 
-  it('every connection point appears in at least one link', () => {
+  it('every connection point appears in at least one link except turbine.export (a world-space pylon feed)', () => {
     const linked = new Set<string>();
     for (const link of MACHINE_LINKS) {
       linked.add(`${link.from.component}.${link.from.point}`);
@@ -455,9 +489,20 @@ describe('machine links and connection points', () => {
     }
     for (const def of COMPONENTS) {
       for (const c of def.connections) {
-        expect(linked.has(`${def.id}.${c.id}`)).toBe(true);
+        if (def.id === 'turbine' && c.id === 'export') continue;
+        expect(linked.has(`${def.id}.${c.id}`), `${def.id}.${c.id}`).toBe(true);
       }
     }
+  });
+
+  it('turbine.export is a cable point that no link uses and PYLON_FEEDS references', () => {
+    expect(pointOf('turbine', 'export')?.kind).toBe('cable');
+    for (const link of MACHINE_LINKS) {
+      for (const end of [link.from, link.to]) {
+        expect(end.component === 'turbine' && end.point === 'export').toBe(false);
+      }
+    }
+    expect(PYLON_FEEDS.some((f) => f.component === 'turbine' && f.point === 'export')).toBe(true);
   });
 
   it('belt links keep |ratio| * radius equal on both pulleys', () => {
@@ -590,10 +635,18 @@ describe('machine motion, assembly and link style constants', () => {
   });
 
   it('shadows reference existing components', () => {
-    expect(MACHINE_SHADOWS.length).toBe(4);
+    expect(MACHINE_SHADOWS.length).toBe(7);
     for (const s of MACHINE_SHADOWS) {
       expect(MACHINE_COMPONENT_IDS).toContain(s.component);
     }
+  });
+
+  it('the three era III shadows are the boiler, the steam hammer and the condenser strips', () => {
+    expect(MACHINE_SHADOWS.slice(4)).toEqual([
+      { component: 'boiler', x: -304, y: 0, width: 128, height: 2 },
+      { component: 'steamHammer', x: -358, y: 0, width: 48, height: 2 },
+      { component: 'condenser', x: -442, y: 0, width: 80, height: 2 },
+    ]);
   });
 
   it('shadows sit behind the machine', () => {
@@ -700,13 +753,14 @@ describe('era II machine data', () => {
     expect(kit.right).toBeLessThanOrEqual(motor.right);
   });
 
-  it('exactly three cable links join two cable points, the CR6 ones carry sag 4 and 3', () => {
+  it('exactly four cable links join two cable points, the CR6 ones carry sag 4 and 3 (plus the era III tie)', () => {
     const cables = MACHINE_LINKS.filter((l) => l.kind === 'cable');
-    expect(cables.length).toBe(3);
+    expect(cables.length).toBe(4);
     expect(cables).toEqual([
       { from: { component: 'generator', point: 'termR' }, to: { component: 'capacitorRack', point: 'lugL' }, kind: 'cable', sag: 4 },
       { from: { component: 'capacitorRack', point: 'lugR' }, to: { component: 'transformer', point: 'primary' }, kind: 'cable', sag: 3 },
       { from: { component: 'transformer', point: 'bushing' }, to: { component: 'cableMast', point: 'top' }, kind: 'cable' },
+      { from: { component: 'motorRetrofitKit', point: 'tie' }, to: { component: 'inductionHeater', point: 'tie' }, kind: 'cable', sag: 3 },
     ]);
     for (const link of cables) {
       expect(pointOf(link.from.component, link.from.point)?.kind).toBe('cable');
@@ -720,7 +774,7 @@ describe('era II machine data', () => {
   });
 
   it('the era-II sockets are all used and every era-II component lies inside MACHINE_BOUNDS', () => {
-    const era2 = MACHINE_COMPONENT_IDS.slice(17).map((id) => MACHINE_COMPONENTS[id]);
+    const era2 = MACHINE_COMPONENT_IDS.slice(17, 29).map((id) => MACHINE_COMPONENTS[id]);
     for (const def of era2) {
       const b = boundsOf(def);
       expect(b.left).toBeGreaterThanOrEqual(MACHINE_BOUNDS.left);
@@ -729,7 +783,7 @@ describe('era II machine data', () => {
       expect(b.bottom).toBeLessThanOrEqual(MACHINE_BOUNDS.bottom);
     }
     const used = new Set(COMPONENTS.map((def) => def.attach.socket));
-    for (const id of SOCKET_IDS.slice(9)) expect(used.has(id), id).toBe(true);
+    for (const id of SOCKET_IDS.slice(9, 17)) expect(used.has(id), id).toBe(true);
   });
 });
 
@@ -738,7 +792,7 @@ describe('era II prefixes', () => {
 
   it('every era-II component is visible at the full stage', () => {
     const visible = visibleAt(levelsEraTwo(STEPS));
-    for (const id of MACHINE_COMPONENT_IDS) expect(visible.has(id), id).toBe(true);
+    for (const id of MACHINE_COMPONENT_IDS.slice(0, 29)) expect(visible.has(id), id).toBe(true);
   });
 
   it('generatorPulley visible implies flywheelPulley visible', () => {
@@ -771,6 +825,244 @@ describe('era II prefixes', () => {
     for (let n = 0; n <= STEPS; n++) {
       const visible = visibleAt(levelsEraTwo(n));
       if (visible.has('motorRetrofitKit')) expect(visible.has('wornMotor')).toBe(true);
+    }
+  });
+});
+
+/** One era-III row of the WP9 component table (contract C3). depthBias undefined = no bias. */
+interface EraThreeRow {
+  id: MachineComponentId; techId: TechId; minLevel: number; assetId: AssetId; width: number; height: number;
+  origin: Vec2; socket: SocketId; layer: MachineLayer; depthBias?: number;
+}
+
+const ERA_THREE_TABLE: readonly EraThreeRow[] = [
+  { id: 'boiler', techId: 'boiler', minLevel: 1, assetId: 'machine.boiler', width: 128, height: 96, origin: { x: 0.5, y: 1 }, socket: 'boilerBase', layer: 'mid' },
+  { id: 'chimney', techId: 'boiler', minLevel: 1, assetId: 'machine.chimney', width: 32, height: 160, origin: { x: 0.5, y: 1 }, socket: 'chimneyBase', layer: 'mid', depthBias: 1 },
+  { id: 'steamManifold', techId: 'boiler', minLevel: 1, assetId: 'machine.steamManifold', width: 96, height: 14, origin: { x: 0.5, y: 1 }, socket: 'manifoldSeat', layer: 'back', depthBias: 2 },
+  { id: 'pressureGauge', techId: 'boiler', minLevel: 1, assetId: 'machine.gauge', width: 24, height: 24, origin: { x: 0.5, y: 1 }, socket: 'gaugeSeat', layer: 'mid', depthBias: 2 },
+  { id: 'gaugeNeedle', techId: 'boiler', minLevel: 1, assetId: 'machine.gaugeNeedle', width: 24, height: 24, origin: { x: 0.5, y: 1 }, socket: 'gaugeSeat', layer: 'mid', depthBias: 3 },
+  { id: 'fireboxGlow1', techId: 'firebox', minLevel: 1, assetId: 'machine.fireGlow1', width: 24, height: 24, origin: { x: 0.5, y: 0.5 }, socket: 'fireDoor', layer: 'mid', depthBias: 2 },
+  { id: 'fireboxGlow2', techId: 'firebox', minLevel: 10, assetId: 'machine.fireGlow2', width: 24, height: 24, origin: { x: 0.5, y: 0.5 }, socket: 'fireDoor', layer: 'mid', depthBias: 3 },
+  { id: 'fireboxGlow3', techId: 'firebox', minLevel: 20, assetId: 'machine.fireGlow3', width: 24, height: 24, origin: { x: 0.5, y: 0.5 }, socket: 'fireDoor', layer: 'mid', depthBias: 4 },
+  { id: 'inductionHeater', techId: 'inductionHeater', minLevel: 1, assetId: 'machine.inductionHeater', width: 56, height: 40, origin: { x: 0.5, y: 1 }, socket: 'heaterSeat', layer: 'mid', depthBias: 5 },
+  { id: 'superheater', techId: 'superheater', minLevel: 1, assetId: 'machine.superheater', width: 40, height: 32, origin: { x: 0.5, y: 1 }, socket: 'superheaterSeat', layer: 'mid', depthBias: 2 },
+  { id: 'reliefValves', techId: 'reliefValves', minLevel: 1, assetId: 'machine.reliefValves', width: 16, height: 24, origin: { x: 0.5, y: 1 }, socket: 'reliefSeat', layer: 'mid', depthBias: 2 },
+  { id: 'steamHammer', techId: 'steamHammer', minLevel: 1, assetId: 'machine.steamHammer', width: 48, height: 96, origin: { x: 0.5, y: 1 }, socket: 'hammerBase', layer: 'mid', depthBias: 1 },
+  { id: 'hammerRam', techId: 'steamHammer', minLevel: 1, assetId: 'machine.hammerRam', width: 12, height: 36, origin: { x: 0.5, y: 1 }, socket: 'hammerTup', layer: 'mid' },
+  { id: 'condenser', techId: 'condenser', minLevel: 1, assetId: 'machine.condenser', width: 80, height: 24, origin: { x: 0.5, y: 1 }, socket: 'condenserBase', layer: 'mid' },
+  { id: 'turbine', techId: 'turbine', minLevel: 1, assetId: 'machine.turbine', width: 80, height: 64, origin: { x: 0.5, y: 1 }, socket: 'turbineBase', layer: 'mid', depthBias: 1 },
+  { id: 'turbineRotor', techId: 'turbine', minLevel: 1, assetId: 'machine.turbineRotor', width: 28, height: 28, origin: { x: 0.5, y: 0.5 }, socket: 'turbineHub', layer: 'mid', depthBias: 2 },
+];
+
+/** Era III pipe links in contract order: P1, P2, P3, W1. */
+const PIPE_LINKS_EXPECTED: readonly MachineLink[] = [
+  { from: { component: 'boiler', point: 'steam' }, to: { component: 'steamManifold', point: 'steam' }, kind: 'pipe',
+    via: [{ x: -246, y: -112 }, { x: -98, y: -112 }, { x: -98, y: -176 }], bore: 4, pipeStyle: 'steam' },
+  { from: { component: 'boiler', point: 'steam' }, to: { component: 'steamHammer', point: 'steam' }, kind: 'pipe',
+    via: [{ x: -246, y: -112 }, { x: -323, y: -112 }], bore: 4, pipeStyle: 'steam' },
+  { from: { component: 'boiler', point: 'steam' }, to: { component: 'turbine', point: 'steam' }, kind: 'pipe',
+    via: [{ x: -246, y: -112 }, { x: -412, y: -112 }], bore: 4, pipeStyle: 'steam' },
+  { from: { component: 'condenser', point: 'condensate' }, to: { component: 'boiler', point: 'feed' }, kind: 'pipe',
+    via: [{ x: -308, y: -3 }, { x: -308, y: -46 }], bore: 2, depth: MACHINE_LAYER_DEPTH.mid - 1, pipeStyle: 'water' },
+];
+
+describe('era III machine data', () => {
+  it('the 16 era-III components follow the contract table (tech, level, asset, size, origin, socket, layer, bias)', () => {
+    expect(ERA_THREE_TABLE.length).toBe(16);
+    expect(MACHINE_COMPONENT_IDS.slice(29)).toEqual(ERA_THREE_TABLE.map((r) => r.id));
+    for (const row of ERA_THREE_TABLE) {
+      const def = MACHINE_COMPONENTS[row.id];
+      expect(def.techId, row.id).toBe(row.techId);
+      expect(def.minLevel, row.id).toBe(row.minLevel);
+      expect(def.assetId, row.id).toBe(row.assetId);
+      expect(def.size, row.id).toEqual({ width: row.width, height: row.height });
+      expect(def.origin, row.id).toEqual(row.origin);
+      expect(def.attach, row.id).toEqual({ socket: row.socket, offset: { x: 0, y: 0 } });
+      expect(def.layer, row.id).toBe(row.layer);
+      expect(def.depthBias, row.id).toBe(row.depthBias);
+      expect(def.effects, row.id).toEqual([]);
+    }
+  });
+
+  it('fireboxGlow1/2/3 share size, origin, attach and frames animation at tech levels 1 / 10 / 20', () => {
+    const glows = [MACHINE_COMPONENTS.fireboxGlow1, MACHINE_COMPONENTS.fireboxGlow2, MACHINE_COMPONENTS.fireboxGlow3];
+    for (const g of glows) {
+      expect(g.size).toEqual(glows[0]?.size);
+      expect(g.origin).toEqual(glows[0]?.origin);
+      expect(g.attach).toEqual(glows[0]?.attach);
+      expect(g.animation).toEqual({ kind: 'frames', frames: 4, maxHz: 3, driver: 'thermal' });
+    }
+    expect(glows.map((g) => g.minLevel)).toEqual([1, 10, 20]);
+    expect(ASSET_MANIFEST['machine.fireGlow1'].frame?.count).toBe(4);
+    expect(ASSET_MANIFEST['machine.fireGlow2'].frame?.count).toBe(4);
+    expect(ASSET_MANIFEST['machine.fireGlow3'].frame?.count).toBe(4);
+  });
+
+  it('gaugeNeedle is a thermal gauge with 25 frames, log range 0..5 and tau 0.6 s, matching its manifest frame count', () => {
+    expect(MACHINE_COMPONENTS.gaugeNeedle.animation).toEqual({ kind: 'gauge', driver: 'thermal', frames: 25, minLog: 0, maxLog: 5, tauSeconds: 0.6 });
+    expect(ASSET_MANIFEST['machine.gaugeNeedle'].frame?.count).toBe(25);
+  });
+
+  it('hammerRam reciprocates at ratio 1, stroke 14 and phase 0, and sits below the steam hammer', () => {
+    expect(MACHINE_COMPONENTS.hammerRam.animation).toEqual({ kind: 'reciprocate', ratio: 1, strokeArtPx: 14, phaseDeg: 0 });
+    expect(depthOf(MACHINE_COMPONENTS.hammerRam)).toBeLessThan(depthOf(MACHINE_COMPONENTS.steamHammer));
+  });
+
+  it('turbineRotor spins from the thermal driver with the A1 speed curve', () => {
+    expect(MACHINE_COMPONENTS.turbineRotor.animation).toEqual({ kind: 'spin', driver: 'thermal', speed: { base: 60, gain: 1.5, min: 0, max: 540 } });
+  });
+
+  it('the era-III sockets sit at the contract coordinates', () => {
+    expect(MACHINE_SOCKETS.boilerBase).toEqual({ x: -240, y: 0 });
+    expect(MACHINE_SOCKETS.chimneyBase).toEqual({ x: -293, y: -78 });
+    expect(MACHINE_SOCKETS.superheaterSeat).toEqual({ x: -268, y: -73 });
+    expect(MACHINE_SOCKETS.reliefSeat).toEqual({ x: -214, y: -77 });
+    expect(MACHINE_SOCKETS.gaugeSeat).toEqual({ x: -192, y: -77 });
+    expect(MACHINE_SOCKETS.fireDoor).toEqual({ x: -196, y: -32 });
+    expect(MACHINE_SOCKETS.heaterSeat).toEqual({ x: -200, y: -36 });
+    expect(MACHINE_SOCKETS.hammerBase).toEqual({ x: -334, y: 0 });
+    expect(MACHINE_SOCKETS.hammerTup).toEqual({ x: -334, y: -22 });
+    expect(MACHINE_SOCKETS.condenserBase).toEqual({ x: -402, y: 0 });
+    expect(MACHINE_SOCKETS.turbineBase).toEqual({ x: -402, y: -24 });
+    expect(MACHINE_SOCKETS.turbineHub).toEqual({ x: -412, y: -54 });
+    expect(MACHINE_SOCKETS.manifoldSeat).toEqual({ x: -44, y: -168 });
+  });
+
+  it('motorRetrofitKit equals the era-II definition plus the tie connection only', () => {
+    expect(MACHINE_COMPONENTS.motorRetrofitKit).toEqual({
+      id: 'motorRetrofitKit', techId: 'motorRetrofit', minLevel: 1,
+      assetId: 'machine.motorRetrofit', attach: { socket: 'motorMount', offset: { x: 0, y: -24 } },
+      size: { width: 32, height: 16 }, origin: { x: 0.5, y: 0.5 },
+      layer: 'mid', depthBias: 3,
+      animation: { kind: 'vibrate', driver: 'automation', amplitude: 1, speed: { base: 8, gain: 0.3, min: 2, max: 20 } },
+      connections: [{ id: 'tie', at: { x: 0, y: -3 }, kind: 'cable' }],
+      effects: [],
+    });
+  });
+
+  it('era-III wiring: exactly four pipe links in contract order, each joining two pipe points', () => {
+    const pipes = MACHINE_LINKS.filter((l) => l.kind === 'pipe');
+    expect(pipes).toEqual(PIPE_LINKS_EXPECTED);
+    for (const link of pipes) {
+      expect(pointOf(link.from.component, link.from.point)?.kind).toBe('pipe');
+      expect(pointOf(link.to.component, link.to.point)?.kind).toBe('pipe');
+    }
+  });
+
+  it('every pipe bore equals the profile length of its style', () => {
+    for (const link of MACHINE_LINKS) {
+      if (link.kind !== 'pipe') continue;
+      expect(link.bore, `${link.from.component}->${link.to.component}`).toBe(MACHINE_LINK_STYLE.pipe[link.pipeStyle ?? 'steam'].prof.length);
+    }
+  });
+
+  it('every pipe polyline is axis-aligned and its ends equal the resolved connection points', () => {
+    const ENDS: Record<string, [Vec2, Vec2]> = {
+      P1: [{ x: -246, y: -91 }, { x: -92, y: -176 }],
+      P2: [{ x: -246, y: -91 }, { x: -323, y: -79 }],
+      P3: [{ x: -246, y: -91 }, { x: -412, y: -86 }],
+      W1: [{ x: -358, y: -3 }, { x: -304, y: -46 }],
+    };
+    const names = ['P1', 'P2', 'P3', 'W1'];
+    const pipes = MACHINE_LINKS.filter((l) => l.kind === 'pipe');
+    pipes.forEach((link, i) => {
+      const name = names[i] ?? '';
+      const start = pointPosition(link.from.component, link.from.point);
+      const end = pointPosition(link.to.component, link.to.point);
+      const polyline: Vec2[] = [start, ...(link.via ?? []), end];
+      for (let k = 0; k + 1 < polyline.length; k++) {
+        const a = polyline[k] as Vec2;
+        const b = polyline[k + 1] as Vec2;
+        expect(a.x === b.x || a.y === b.y, `${name} segment ${k}`).toBe(true);
+        expect(a.x === b.x && a.y === b.y, `${name} segment ${k} not zero-length`).toBe(false);
+      }
+      expect(start, name).toEqual(ENDS[name]?.[0]);
+      expect(end, name).toEqual(ENDS[name]?.[1]);
+    });
+  });
+
+  it('W1 sits one layer below mid, every other pipe uses the default pipe depth, and both pipe styles carry fitting colours', () => {
+    const pipes = MACHINE_LINKS.filter((l) => l.kind === 'pipe');
+    const w1 = pipes.find((l) => l.pipeStyle === 'water');
+    expect(w1?.depth).toBe(MACHINE_LAYER_DEPTH.mid - 1);
+    for (const link of pipes) {
+      if (link === w1) continue;
+      expect(link.depth ?? MACHINE_LINK_STYLE.pipe.depth).toBe(MACHINE_LINK_STYLE.pipe.depth);
+    }
+    expect(MACHINE_LINK_STYLE.pipe.depth).toBe(MACHINE_LAYER_DEPTH.frame + 5);
+    expect(MACHINE_LINK_STYLE.pipe.steam.fitting).toEqual({ ink: 0x14110f, hi: 0x7d8286, mid: 0x5a5f63, lo: 0x3e4246 });
+    expect(MACHINE_LINK_STYLE.pipe.water.fitting).toEqual({ ink: 0x14110f, hi: 0x7d8286, mid: 0x5a5f63, lo: 0x3e4246 });
+  });
+
+  it('the era-III machine fits the bounds and the pylon feeds sit on real parts', () => {
+    expect(MACHINE_BOUNDS).toEqual({ left: -448, right: 448, top: -248, bottom: 8 });
+    for (const row of ERA_THREE_TABLE) {
+      const b = boundsOf(MACHINE_COMPONENTS[row.id]);
+      expect(b.left, row.id).toBeGreaterThanOrEqual(MACHINE_BOUNDS.left);
+      expect(b.right, row.id).toBeLessThanOrEqual(MACHINE_BOUNDS.right);
+      expect(b.top, row.id).toBeGreaterThanOrEqual(MACHINE_BOUNDS.top);
+      expect(b.bottom, row.id).toBeLessThanOrEqual(MACHINE_BOUNDS.bottom);
+    }
+    for (const feed of PYLON_FEEDS) {
+      expect(MACHINE_COMPONENT_IDS).toContain(feed.component);
+      expect(pointOf(feed.component, feed.point)).toBeDefined();
+    }
+  });
+});
+
+describe('era III prefixes', () => {
+  const STEPS = ERA_THREE_STEPS.length;
+
+  it('every era-III component is visible at the full stage', () => {
+    const visible = visibleAt(levelsForEra3(STEPS));
+    for (const id of MACHINE_COMPONENT_IDS) expect(visible.has(id), id).toBe(true);
+  });
+
+  it('chimney, steamManifold and pressureGauge are visible exactly from boiler 1', () => {
+    for (const id of ['chimney', 'steamManifold', 'pressureGauge'] as const) {
+      expect(visibleAt(levelsForEra3(0)).has(id), id).toBe(false);
+      expect(visibleAt(levelsForEra3(1)).has(id), id).toBe(true);
+    }
+  });
+
+  it('firebox glow stages come one at a time: glow 1 at firebox 1, glow 2 at 10, glow 3 at 20', () => {
+    expect(visibleAt(levelsForEra3(2)).has('fireboxGlow1')).toBe(true);
+    expect(visibleAt(levelsForEra3(2)).has('fireboxGlow2')).toBe(false);
+    expect(visibleAt(levelsForEra3(3)).has('fireboxGlow2')).toBe(true);
+    expect(visibleAt(levelsForEra3(3)).has('fireboxGlow3')).toBe(false);
+    expect(visibleAt(levelsForEra3(4)).has('fireboxGlow3')).toBe(true);
+  });
+
+  it('fireboxGlow3 implies fireboxGlow2 implies fireboxGlow1', () => {
+    for (let n = 0; n <= STEPS; n++) {
+      const visible = visibleAt(levelsForEra3(n));
+      if (visible.has('fireboxGlow3')) expect(visible.has('fireboxGlow2')).toBe(true);
+      if (visible.has('fireboxGlow2')) expect(visible.has('fireboxGlow1')).toBe(true);
+    }
+  });
+
+  it('gaugeNeedle implies pressureGauge, hammerRam implies steamHammer, turbineRotor implies turbine', () => {
+    for (let n = 0; n <= STEPS; n++) {
+      const visible = visibleAt(levelsForEra3(n));
+      if (visible.has('gaugeNeedle')) expect(visible.has('pressureGauge')).toBe(true);
+      if (visible.has('hammerRam')) expect(visible.has('steamHammer')).toBe(true);
+      if (visible.has('turbineRotor')) expect(visible.has('turbine')).toBe(true);
+    }
+  });
+
+  it('turbine implies condenser, and inductionHeater implies motorRetrofitKit', () => {
+    for (let n = 0; n <= STEPS; n++) {
+      const visible = visibleAt(levelsForEra3(n));
+      if (visible.has('turbine')) expect(visible.has('condenser')).toBe(true);
+      if (visible.has('inductionHeater')) expect(visible.has('motorRetrofitKit')).toBe(true);
+    }
+  });
+
+  it('a frame sheet part draws exactly as many frames as its manifest entry', () => {
+    for (const id of ['gaugeNeedle', 'fireboxGlow1', 'fireboxGlow2', 'fireboxGlow3'] as const) {
+      const anim = MACHINE_COMPONENTS[id].animation;
+      const count = anim.kind === 'frames' || anim.kind === 'gauge' ? anim.frames : NaN;
+      expect(count, id).toBe(ASSET_MANIFEST[MACHINE_COMPONENTS[id].assetId].frame?.count);
     }
   });
 });

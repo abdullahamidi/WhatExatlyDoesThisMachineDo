@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_PULSE, CAMERA, DEPTH, PARALLAX_FADE_MS, PYLON_LINE } from './world';
+import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_PULSE, CAMERA, DEPTH, PARALLAX_FADE_MS, PYLON_LINE, PYLON_FEEDS, MACHINE_ANCHOR, PIXEL_SCALE } from './world';
 import type { ParallaxLayerDef } from './world';
 import { TOAST_CONFIG } from './notifications';
+import { MACHINE_BOUNDS, MACHINE_COMPONENTS } from './machineComponents';
 
 function layer(id: string): ParallaxLayerDef {
   const found = PARALLAX_LAYERS.find((l) => l.id === id);
@@ -89,6 +90,42 @@ describe('camera auto-frame and pylon line', () => {
     }
     expect(PYLON_LINE.sagFraction).toBeGreaterThan(0);
     expect(PYLON_LINE.thicknessPx).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('PYLON_FEEDS (WP9 CR-A world-space cable feeds)', () => {
+  it('has two feeds, mast and turbine, in that order', () => {
+    expect(PYLON_FEEDS.map((f) => f.id)).toEqual(['mast', 'turbine']);
+  });
+
+  it('the mast feed has no gate and takes anchors on its right side', () => {
+    const mast = PYLON_FEEDS[0];
+    expect(mast?.gate).toBeUndefined();
+    expect(mast?.side).toBe('any');
+  });
+
+  it('the turbine feed is gated on turbine level 1 and takes anchors on its left side', () => {
+    const turbine = PYLON_FEEDS[1];
+    expect(turbine?.side).toBe('left');
+    expect(turbine?.gate).toEqual({ techId: 'turbine', minLevel: 1 });
+  });
+
+  it('each feed names an existing component and one of its connection points', () => {
+    for (const feed of PYLON_FEEDS) {
+      const def = MACHINE_COMPONENTS[feed.component];
+      expect(def, feed.id).toBeDefined();
+      expect(def.connections.some((c) => c.id === feed.point), feed.id).toBe(true);
+    }
+  });
+
+  it('the machine fits the world: its left and top bounds stay on screen at the machine anchor', () => {
+    expect(MACHINE_ANCHOR.x + PIXEL_SCALE * MACHINE_BOUNDS.left).toBeGreaterThanOrEqual(0);
+    expect(MACHINE_ANCHOR.y + PIXEL_SCALE * MACHINE_BOUNDS.top).toBeGreaterThanOrEqual(0);
+    expect(MACHINE_ANCHOR.x + PIXEL_SCALE * MACHINE_BOUNDS.right).toBeLessThanOrEqual(WORLD.width);
+  });
+
+  it('MACHINE_BOUNDS is the era III box', () => {
+    expect(MACHINE_BOUNDS).toEqual({ left: -448, right: 448, top: -248, bottom: 8 });
   });
 });
 
