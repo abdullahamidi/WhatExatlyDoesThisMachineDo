@@ -66,7 +66,7 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     description: 'Piston array whose base sits at the bottom of the sprite, pumping up and down.',
   },
   'fx.steam': {
-    id: 'fx.steam', file: null, width: 16, height: 16, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    id: 'fx.steam', file: 'fx/steam.png', width: 16, height: 16, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     description: 'Steam puff particle released by working pistons.',
   },
 };
