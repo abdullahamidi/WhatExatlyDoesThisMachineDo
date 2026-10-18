@@ -242,6 +242,19 @@ describe('computeRates', () => {
     expect(r.perClick.me).toBeCloseTo(1, 9);
   });
 
+  it('offlineHours gives no rate: computeRates equals the table without the effect', () => {
+    const withBuffer = withEffects({
+      gearRatio: [...TECHNOLOGIES.gearRatio.effects, { type: 'offlineHours', hours: 4 }],
+      wornMotor: [{ type: 'autoAdd', amount: 4 }],
+    });
+    const withoutBuffer = withEffects({ wornMotor: [{ type: 'autoAdd', amount: 4 }] });
+    const levels = withLevels({ wornMotor: 1, gearRatio: 3 });
+    const a = computeRates(levels, withBuffer);
+    const b = computeRates(levels, withoutBuffer);
+    expect(a.perClick).toEqual(b.perClick);
+    expect(a.perSecond).toEqual(b.perSecond);
+  });
+
   it('none effects are ignored', () => {
     const r = computeRates(withLevels({ generatorBlueprint: 1 }));
     expect(r.perClick.me).toBeCloseTo(1, 9);

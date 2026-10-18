@@ -238,6 +238,12 @@ describe('describeEffect', () => {
     expect(describeEffect({ type: 'clickEcho', seconds: 2, res: 'ee' }, 2)).toBe('Clicks echo 4s of EE/s');
     expect(describeEffect({ type: 'none' }, 1)).toBe('Effect unknown');
   });
+
+  it('describes the offline buffer', () => {
+    expect(describeEffect({ type: 'offlineHours', hours: 4 }, 1)).toBe('+4h offline buffer');
+    expect(describeEffect({ type: 'offlineHours', hours: 4 }, 3)).toBe('+12h offline buffer');
+    expect(describeEffect({ type: 'offlineHours', hours: 0.5 }, 1)).toBe('+0.5h offline buffer');
+  });
 });
 
 describe('purchase failures', () => {

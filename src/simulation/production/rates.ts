@@ -20,6 +20,7 @@ import { emptyResourceMap } from '../resources';
 //   autoAdd   -> autoAdd[res] += amount x L         autoPct   -> autoPct[res] += percent x L
 //   rateMult  -> resMult[res] (or allMult) *= factor ^ L
 //   convert   -> convert[res] += amount x L         clickEcho -> echo[res] += seconds x L
+//   offlineHours -> offline cap only (tick.ts offlineCapSeconds); no rate effect here
 //
 // Per second, in RESOURCE_IDS order (me, ee, pr, rs, xf). A converted resource is fed by its
 // source's per-second rate:
@@ -75,6 +76,8 @@ export function computeRates(
           break;
         case 'clickEcho':
           echo[effect.res] += effect.seconds * level;
+          break;
+        case 'offlineHours':
           break;
         case 'none':
           break;

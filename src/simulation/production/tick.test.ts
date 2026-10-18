@@ -3,7 +3,7 @@ import { TECH_IDS } from '../../data/types';
 import type { Effect, GameState, TechDefinition, TechId } from '../../data/types';
 import { TECHNOLOGIES } from '../../data/technologies';
 import { createInitialState } from '../state';
-import { applyClick, advance, computeOffline, applyOffline } from './tick';
+import { applyClick, advance, computeOffline, applyOffline, offlineCapSeconds } from './tick';
 
 const withLevels = (levels: Partial<Record<TechId, number>>, extra: Partial<GameState> = {}): GameState => {
   const s = createInitialState(0);
@@ -158,7 +158,65 @@ describe('computeOffline', () => {
   });
 });
 
+describe('offlineCapSeconds', () => {
+  // Injected table: gearRatio grants a 4 h offline buffer, motorTuning a 1 h buffer per level.
+  const bufferTechs = withEffects({
+    gearRatio: [{ type: 'offlineHours', hours: 4 }],
+    motorTuning: [{ type: 'offlineHours', hours: 1 }],
+  });
+
+  it('is the base cap (28800) with no effect tech owned', () => {
+    expect(offlineCapSeconds(createInitialState(0).techLevels)).toBe(28800);
+  });
+
+  it('adds hours x level for an owned effect tech', () => {
+    expect(offlineCapSeconds(withLevels({ gearRatio: 1 }).techLevels, bufferTechs)).toBe(43200);
+  });
+
+  it('ignores effect techs at level 0', () => {
+    expect(offlineCapSeconds(withLevels({ gearRatio: 0 }).techLevels, bufferTechs)).toBe(28800);
+  });
+
+  it('scales a repeatable effect tech by its level', () => {
+    expect(offlineCapSeconds(withLevels({ motorTuning: 3 }).techLevels, bufferTechs)).toBe(28800 + 3 * 3600);
+  });
+
+  it('adds the effects of two effect techs', () => {
+    const levels = withLevels({ gearRatio: 1, motorTuning: 3 }).techLevels;
+    expect(offlineCapSeconds(levels, bufferTechs)).toBe(28800 + 4 * 3600 + 3 * 3600);
+  });
+
+  it('ignores the buffer when the injected table has no offlineHours effect', () => {
+    expect(offlineCapSeconds(withLevels({ gearRatio: 1 }).techLevels, TECHNOLOGIES)).toBe(28800);
+  });
+});
+
 describe('applyOffline', () => {
+  it('uses the offline buffer of owned techs: a 10 h gap is not capped at 8 h', () => {
+    const techs = withEffects({ gearRatio: [{ type: 'offlineHours', hours: 4 }] });
+    const s = withLevels({ wornMotor: 1, motorTuning: 5, gearRatio: 1 }, { lastSimTime: 0 });
+    const { state, report } = applyOffline(s, 36_000_000, techs);
+    expect(report.elapsedSeconds).toBe(36000);
+    expect(report.cappedSeconds).toBe(36000);
+    expect(report.gained.me).toBeCloseTo(216000, 9);
+    expect(state.res.me).toBeCloseTo(216000, 9);
+  });
+
+  it('a 14 h gap with the buffer is capped at 12 h', () => {
+    const techs = withEffects({ gearRatio: [{ type: 'offlineHours', hours: 4 }] });
+    const s = withLevels({ wornMotor: 1, motorTuning: 5, gearRatio: 1 }, { lastSimTime: 0 });
+    const { report } = applyOffline(s, 50_400_000, techs);
+    expect(report.elapsedSeconds).toBe(50400);
+    expect(report.cappedSeconds).toBe(43200);
+    expect(report.gained.me).toBeCloseTo(6 * 43200, 9);
+  });
+
+  it('without the buffer a 10 h gap is still capped at 8 h (regression)', () => {
+    const { report } = applyOffline(auto6({ lastSimTime: 0 }), 36_000_000);
+    expect(report.elapsedSeconds).toBeCloseTo(36000, 9);
+    expect(report.cappedSeconds).toBe(28800);
+  });
+
   it('credits offline gain and advances lastSimTime', () => {
     const { state, report } = applyOffline(auto6({ lastSimTime: 0 }), 3_600_000);
     expect(report.gained.me).toBeCloseTo(21600, 9);

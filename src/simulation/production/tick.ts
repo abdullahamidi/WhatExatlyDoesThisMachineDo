@@ -1,3 +1,4 @@
+import { TECH_IDS } from '../../data/types';
 import type { GameState, OfflineReport, ResourceMap, TechDefinition, TechId } from '../../data/types';
 import { TECHNOLOGIES } from '../../data/technologies';
 import { OFFLINE_CAP_SECONDS } from '../../data/balance';
@@ -42,6 +43,26 @@ export function advance(
 }
 
 /**
+ * Offline cap in seconds: the base cap plus 'offlineHours' effects of owned techs (hours x level).
+ * Techs with level <= 0 contribute nothing.
+ */
+export function offlineCapSeconds(
+  techLevels: Readonly<Record<TechId, number>>,
+  techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
+): number {
+  let hours = 0;
+  for (const id of TECH_IDS) {
+    const level = techLevels[id];
+    if (level <= 0) continue;
+    for (const effect of techs[id].effects) {
+      if (effect.type === 'offlineHours') hours += effect.hours * level;
+    }
+  }
+  // 3600 = seconds per hour (unit conversion, not a balance number).
+  return OFFLINE_CAP_SECONDS + 3600 * hours;
+}
+
+/**
  * Offline progress since state.lastSimTime, automation only (never clicks), capped at capSeconds.
  * A clock that went backwards (or a non-finite time) yields zero elapsed time.
  */
@@ -64,7 +85,7 @@ export function applyOffline(
   nowMs: number,
   techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
 ): { state: GameState; report: OfflineReport } {
-  const report = computeOffline(state, nowMs, OFFLINE_CAP_SECONDS, techs);
+  const report = computeOffline(state, nowMs, offlineCapSeconds(state.techLevels, techs), techs);
   return {
     state: {
       ...state,
