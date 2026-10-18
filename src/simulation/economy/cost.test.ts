@@ -51,16 +51,28 @@ describe('costAt', () => {
   });
 });
 
+const withRes = (res: Partial<Record<'me' | 'ee', number>>) => {
+  const s = createInitialState(0);
+  return { ...s, res: { ...s.res, ...res } };
+};
+
 describe('canAfford', () => {
   it('is true when me equals cost', () => {
-    expect(canAfford({ ...createInitialState(0), me: 10 }, 10)).toBe(true);
+    expect(canAfford(withRes({ me: 10 }), 'me', 10)).toBe(true);
   });
 
   it('is false when me is just below cost', () => {
-    expect(canAfford({ ...createInitialState(0), me: 9.999 }, 10)).toBe(false);
+    expect(canAfford(withRes({ me: 9.999 }), 'me', 10)).toBe(false);
   });
 
   it('is true for a zero cost with zero ME', () => {
-    expect(canAfford({ ...createInitialState(0), me: 0 }, 0)).toBe(true);
+    expect(canAfford(withRes({ me: 0 }), 'me', 0)).toBe(true);
+  });
+
+  it('reads only the requested resource', () => {
+    const s = withRes({ me: 1e9, ee: 0 });
+    expect(canAfford(s, 'ee', 1)).toBe(false);
+    expect(canAfford(s, 'ee', 0)).toBe(true);
+    expect(canAfford(s, 'me', 1)).toBe(true);
   });
 });

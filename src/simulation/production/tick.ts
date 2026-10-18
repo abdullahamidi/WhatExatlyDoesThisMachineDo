@@ -1,32 +1,43 @@
-import type { GameState, OfflineReport } from '../../data/types';
+import type { GameState, OfflineReport, ResourceMap, TechDefinition, TechId } from '../../data/types';
+import { TECHNOLOGIES } from '../../data/technologies';
 import { OFFLINE_CAP_SECONDS } from '../../data/balance';
 import { computeRates } from './rates';
+import { addMaps, scaleMap } from '../resources';
 
 // Pure time/click advancement. Never mutates its input; always returns new state objects
 // (except advance(), which returns the same reference for a non-positive or non-finite step).
+// Every resource in `res` and `lifetime` moves together: per-resource rate x elapsed time.
 
-/** Manual click: adds perClick ME and counts one click. */
-export function applyClick(state: GameState): { state: GameState; gained: number } {
-  const gained = computeRates(state).perClick;
+/** Manual click: adds perClick (all resources) and counts one click. `gained` is the ME part. */
+export function applyClick(
+  state: GameState,
+  techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
+): { state: GameState; gained: number; gainedAll: ResourceMap } {
+  const gainedAll = computeRates(state, techs).perClick;
   return {
     state: {
       ...state,
-      me: state.me + gained,
-      lifetimeMe: state.lifetimeMe + gained,
+      res: addMaps(state.res, gainedAll),
+      lifetime: addMaps(state.lifetime, gainedAll),
       totalClicks: state.totalClicks + 1,
     },
-    gained,
+    gained: gainedAll.me,
+    gainedAll,
   };
 }
 
 /** Automation over `seconds`. Does not touch lastSimTime. */
-export function advance(state: GameState, seconds: number): GameState {
+export function advance(
+  state: GameState,
+  seconds: number,
+  techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
+): GameState {
   if (!Number.isFinite(seconds) || seconds <= 0) return state;
-  const gained = computeRates(state).perSecond * seconds;
+  const gained = scaleMap(computeRates(state, techs).perSecond, seconds);
   return {
     ...state,
-    me: state.me + gained,
-    lifetimeMe: state.lifetimeMe + gained,
+    res: addMaps(state.res, gained),
+    lifetime: addMaps(state.lifetime, gained),
   };
 }
 
@@ -38,11 +49,12 @@ export function computeOffline(
   state: GameState,
   nowMs: number,
   capSeconds: number = OFFLINE_CAP_SECONDS,
+  techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
 ): OfflineReport {
   const raw = (nowMs - state.lastSimTime) / 1000;
   const elapsed = Number.isFinite(raw) && raw >= 0 ? raw : 0;
   const capped = Math.min(elapsed, capSeconds);
-  const gained = computeRates(state).perSecond * capped;
+  const gained = scaleMap(computeRates(state, techs).perSecond, capped);
   return { elapsedSeconds: elapsed, cappedSeconds: capped, gained };
 }
 
@@ -50,13 +62,14 @@ export function computeOffline(
 export function applyOffline(
   state: GameState,
   nowMs: number,
+  techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
 ): { state: GameState; report: OfflineReport } {
-  const report = computeOffline(state, nowMs);
+  const report = computeOffline(state, nowMs, OFFLINE_CAP_SECONDS, techs);
   return {
     state: {
       ...state,
-      me: state.me + report.gained,
-      lifetimeMe: state.lifetimeMe + report.gained,
+      res: addMaps(state.res, report.gained),
+      lifetime: addMaps(state.lifetime, report.gained),
       lastSimTime: nowMs,
     },
     report,

@@ -1,4 +1,4 @@
-import type { GameState, TechDefinition } from '../../data/types';
+import type { GameState, ResourceId, TechDefinition } from '../../data/types';
 
 // Cost formula
 // ------------
@@ -17,7 +17,7 @@ export function costAt(def: TechDefinition, level: number): number {
   return def.baseCost;
 }
 
-/** True when the player has at least `cost` ME. */
-export function canAfford(state: GameState, cost: number): boolean {
-  return state.me >= cost;
+/** True when the player holds at least `cost` of resource `res`. Only `res` is read. */
+export function canAfford(state: Pick<GameState, 'res'>, res: ResourceId, cost: number): boolean {
+  return state.res[res] >= cost;
 }
