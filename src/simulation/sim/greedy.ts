@@ -1,9 +1,10 @@
 import { TECHNOLOGIES } from '../../data/technologies';
 import { RESOURCE_IDS, TECH_IDS } from '../../data/types';
-import type { GameState, ResourceId, TechDefinition, TechId, TechView } from '../../data/types';
+import type { GameState, ResourceId, TechDefinition, TechId, TechStatus } from '../../data/types';
+import { canAfford, costAt } from '../economy/cost';
 import { applyClick, advance, applyOffline } from '../production/tick';
 import { computeRates } from '../production/rates';
-import { getAllTechViews } from '../progression/status';
+import { getTechStatus } from '../progression/status';
 import { purchase } from '../progression/purchase';
 import { evaluateMilestones } from '../progression/milestones';
 import { createInitialState } from '../state';
@@ -47,13 +48,41 @@ export interface GreedyResult {
   wallSeconds?: number;
 }
 
-/** Cheapest available, purchasable-next, non-milestone view paying in `res`; null when none. */
-function pickCheapest(views: readonly TechView[], res: ResourceId): TechView | null {
-  let pick: TechView | null = null;
-  for (const view of views) {
-    if (view.status !== 'available' || view.nextCost === null || view.def.kind === 'milestone') continue;
-    if (view.def.costRes !== res) continue;
-    if (pick === null || pick.nextCost === null || view.nextCost < pick.nextCost) pick = view;
+/** What the picker needs per tech (status, next price); the same values getTechView reports, without text. */
+interface Candidate {
+  id: TechId;
+  def: TechDefinition;
+  status: TechStatus;
+  nextCost: number | null;
+}
+
+/** Price of the next purchase, or null when there is nothing left to buy. Mirrors nextCostFor in progression/status.ts. */
+function nextCostOf(state: GameState, id: TechId, techs: Record<TechId, TechDefinition>): number | null {
+  const def = techs[id];
+  const level = state.techLevels[id];
+  if (def.kind === 'starting' || def.kind === 'milestone') return null;
+  if (def.kind === 'unlock') return level >= 1 ? null : costAt(def, level);
+  if (def.maxLevel !== null && level >= def.maxLevel) return null;
+  return costAt(def, level);
+}
+
+/** Candidates in TECH_IDS order. Built per buy tick (cheap: no effect or requirement text). */
+function candidates(state: GameState, techs: Record<TechId, TechDefinition>): Candidate[] {
+  return TECH_IDS.map((id) => ({
+    id,
+    def: techs[id],
+    status: getTechStatus(state, id, techs),
+    nextCost: nextCostOf(state, id, techs),
+  }));
+}
+
+/** Cheapest available, purchasable-next, non-milestone candidate paying in `res`; null when none. */
+function pickCheapest(list: readonly Candidate[], res: ResourceId): Candidate | null {
+  let pick: Candidate | null = null;
+  for (const c of list) {
+    if (c.status !== 'available' || c.nextCost === null || c.def.kind === 'milestone') continue;
+    if (c.def.costRes !== res) continue;
+    if (pick === null || pick.nextCost === null || c.nextCost < pick.nextCost) pick = c;
   }
   return pick;
 }
@@ -120,16 +149,16 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
 
     const ratio = t / o.buyIntervalSeconds;
     if (Math.abs(ratio - Math.round(ratio)) < 1e-9) {
-      // views are rebuilt only after a successful purchase: identical picks, far fewer rebuilds
-      let views = getAllTechViews(state, techs);
+      // candidates are rebuilt only after a successful purchase: identical picks, far fewer rebuilds
+      let list = candidates(state, techs);
       for (const res of RESOURCE_IDS) {
-        const pick = pickCheapest(views, res);
-        if (pick !== null && pick.affordable) {
+        const pick = pickCheapest(list, res);
+        if (pick !== null && pick.nextCost !== null && canAfford(state, pick.def.costRes, pick.nextCost)) {
           const result = purchase(state, pick.id, techs);
           if (result.ok) {
             state = result.state;
             purchases.push({ t, id: pick.id });
-            views = getAllTechViews(state, techs);
+            list = candidates(state, techs);
           }
         }
       }
