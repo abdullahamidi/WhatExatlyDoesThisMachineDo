@@ -151,7 +151,7 @@ try {
   const s5 = await fin();
   ok('finale_5_reload_postgame', { phase: s5?.phase ?? null, restored: s5?.frame?.restored ?? null, seeds: s5?.frame?.seeds ?? null, eclipse: s5?.frame?.eclipse?.kind ?? null, hudHidden: await hudHidden(), keepShown: await keepShown(), plate: await plateFrame(), displayObjects: await dispObjs() });
 
-  // system menu: BEGIN A NEW CYCLE row (disabled, stub reason)
+  // system menu: BEGIN A NEW CYCLE row (WP14: enabled, reason line absent; expect disabled false, reasonVisible false)
   await page.keyboard.press('Escape'); await page.waitForTimeout(250);
   await page.click('#sys-tab-system'); await page.waitForTimeout(150);
   ok('finale_6_newcycle', { menuOpen: await menuOpen(), row: await cycleRow() });

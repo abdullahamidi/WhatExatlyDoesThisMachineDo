@@ -6,6 +6,8 @@ import type { ModalStack } from '../ui/modalStack';
 import type { SystemMenu } from '../ui/systemMenu';
 import type { SaveController } from '../persistence/saveController';
 import type { GameAudio } from '../audio/gameAudio';
+import type { PrestigeState } from '../data/types';
+import type { CyclePreview } from '../simulation/prestige';
 import type { MachineComponentId } from '../data/machineComponents';
 import { MACHINE_COMPONENTS } from '../data/machineComponents';
 import { MACHINE_ANCHOR } from '../data/world';
@@ -14,6 +16,8 @@ import { worldToClient } from './math/camera';
 import type { WorldScene } from './scenes/WorldScene';
 import type { FinaleState } from './rendering/FinaleDirector';
 import type { FinaleFrame } from './math/finale';
+import type { CycleTransitionState } from './rendering/CycleTransition';
+import type { NewCycleController } from './newCycle';
 
 /** Live objects the hook reads from. Read-only views only; no mutation helpers. */
 export interface DebugExtras {
@@ -21,6 +25,14 @@ export interface DebugExtras {
   systemMenu: SystemMenu;
   saveController: SaveController;
   audio: GameAudio;
+  newCycle: NewCycleController;
+}
+
+/** Cycle state for smokes: controller busy flag + preview, and the transition clock (inactive without a scene). */
+export interface CycleDebugState {
+  busy: boolean;
+  preview: CyclePreview;
+  transition: CycleTransitionState;
 }
 
 declare global {
@@ -40,6 +52,8 @@ declare global {
       skipFinale(): void;
       finaleSeek(t: number): void;
       displayObjects(): number;
+      prestige(): PrestigeState;
+      cycleState(): CycleDebugState;
     };
   }
 }
@@ -91,6 +105,14 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
   const finaleSeek = (t: number): void => {
     game.scene.getScene<WorldScene>('World').getFinale()?.seek(t);
   };
+  /** Memory / prestige state (WP14): cycle, Echoes earned, owned perks. */
+  const prestige = (): PrestigeState => session.prestige;
+  /** New-cycle state (WP14): busy flag, what beginning now would give, and the transition clock. */
+  const cycleState = (): CycleDebugState => ({
+    busy: extras.newCycle.isBusy(),
+    preview: extras.newCycle.preview(),
+    transition: game.scene.getScene<WorldScene>('World').getCycleTransition()?.getState() ?? { active: false, tMs: 0, alpha: 0 },
+  });
   /** Display list size of the world scene (perf probe). */
   const displayObjects = (): number => game.scene.getScene('World').children.list.length;
   window.__wedtmd = {
@@ -108,5 +130,7 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     skipFinale,
     finaleSeek,
     displayObjects,
+    prestige,
+    cycleState,
   };
 }
