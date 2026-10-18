@@ -18,10 +18,10 @@
 | WP10 | Era IV Resonance (spire, coils, crystal, dishes, calliope, fork, crank servo autoClick) | ✅ done |
 | WP11 | Era V Exotic (crown, rings, siphons, lens, aperture/beam, anchors, world 3840×2160, violet sky, eclipse) | ✅ done |
 | WP12 | Settings, accessibility, stats, achievements, save export/import, reduced motion (roadmap WP10) | ✅ done |
-| WP13 | Ending sequence, reveal, postgame, restored world (roadmap WP14) | in progress |
-| WP14 | New-cycle prestige: Echoes, Memory perks (roadmap WP15) | planning |
-| WP15 | Music bed, audio mix, perf pass (roadmap WP16) | — |
-| WP16 | Release: full balance, end-to-end smoke, docs, final art audit (roadmap WP17) | — |
+| WP13 | Ending sequence, reveal, postgame, restored world (roadmap WP14) | ✅ done |
+| WP14 | New-cycle prestige: Echoes, Memory perks, MEMORY tab, cycle transition (roadmap WP15) | ✅ done |
+| WP15 | Music bed, audio mix, perf pass (roadmap WP16) | in progress |
+| WP16 | Release: full balance, end-to-end smoke, docs, final art audit (roadmap WP17) | planned (WP16.md) |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -48,7 +48,7 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 1804 pass (57 files) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 2274 pass (73 files) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
