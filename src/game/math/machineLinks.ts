@@ -238,3 +238,95 @@ export function coalesceRuns(points: readonly Vec2[]): Array<{ x: number; y: num
   }
   return runs;
 }
+
+/** Pipe look: bore profile colours (top to bottom or left to right), two flange rows, flange spacing and fitting colours. */
+export interface PipeStyleLike {
+  prof: readonly number[];
+  flange: readonly (readonly number[])[];
+  flangeEvery: number;
+  fitting: { ink: number; hi: number; mid: number; lo: number };
+}
+
+/** One solid colour rectangle of a pipe in machine-local art px; w and h >= 1. */
+export interface PipeRect {
+  color: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Flange offsets along a segment of length len: 0, len - 2, then multiples of flangeEvery below len - 4; negative marks dropped. */
+function flangeMarks(len: number, flangeEvery: number): number[] {
+  const marks = [0, len - 2]; // ends of the segment
+  if (flangeEvery >= 1) {
+    for (let m = flangeEvery; m < len - 4; m += flangeEvery) marks.push(m); // python range(flangeEvery, L - 4, flangeEvery)
+  }
+  return marks.filter((m) => m >= 0);
+}
+
+/** Colour of a pixel in the (n + 2)^2 fitting block: ink on the border, then hi / mid / lo by the i + j diagonal. */
+function fittingColor(style: PipeStyleLike, col: number, row: number, side: number): number {
+  if (col === 0 || row === 0 || col === side - 1 || row === side - 1) return style.fitting.ink; // border
+  if (col + row <= Math.floor(side / 2) + 1) return style.fitting.hi; // upper-left highlight
+  if (col + row < side) return style.fitting.mid; // body shade
+  return style.fitting.lo; // far corner
+}
+
+/**
+ * Pixel rectangles of an orthogonal pipe through machine-local corner points (port of scripts/art/era3/mock3.py pipe()).
+ * Per axis-aligned segment: a bore body of n = prof.length px centred on the line (h = floor(n / 2)), then flange pairs
+ * at the flangeMarks. After all segments: an (n + 2)^2 fitting block at every interior point.
+ * Identical neighbours are skipped; a non-axis-aligned pair throws. Output is draw order: later rects overwrite earlier ones.
+ */
+export function rasterPipe(points: readonly Vec2[], style: PipeStyleLike): PipeRect[] {
+  if (points.length < 2) return [];
+  const n = style.prof.length; // bore width in px
+  const h = Math.floor(n / 2); // half bore, centred on the corner line
+  const out: PipeRect[] = [];
+  const put = (color: number, x: number, y: number, w: number, rh: number): void => {
+    out.push({ color, x: noNegativeZero(x), y: noNegativeZero(y), w, h: rh }); // push order = draw order
+  };
+  for (let i = 1; i < points.length; i++) {
+    const p0 = points[i - 1];
+    const p1 = points[i];
+    if (p0 === undefined || p1 === undefined) continue; // index is in range
+    if (p0.x === p1.x && p0.y === p1.y) continue; // repeated corner
+    if (p0.y === p1.y) {
+      const lo = Math.min(p0.x, p1.x); // left end
+      const len = Math.abs(p1.x - p0.x); // segment length
+      style.prof.forEach((color, j) => put(color, lo, p0.y - h + j, len, 1)); // bore rows
+      for (const m of flangeMarks(len, style.flangeEvery)) {
+        for (let k = 0; k < 2; k++) {
+          const row = style.flange[k];
+          if (row === undefined) continue;
+          row.forEach((color, j) => put(color, lo + m + k, p0.y - h - 1 + j, 1, 1)); // flange pair, one column each
+        }
+      }
+    } else if (p0.x === p1.x) {
+      const lo = Math.min(p0.y, p1.y); // top end
+      const len = Math.abs(p1.y - p0.y); // segment length
+      style.prof.forEach((color, j) => put(color, p0.x - h + j, lo, 1, len)); // bore columns
+      for (const m of flangeMarks(len, style.flangeEvery)) {
+        for (let k = 0; k < 2; k++) {
+          const row = style.flange[k];
+          if (row === undefined) continue;
+          row.forEach((color, j) => put(color, p0.x - h - 1 + j, lo + m + k, 1, 1)); // flange pair, one row each
+        }
+      }
+    } else {
+      throw new Error('rasterPipe: segment must be axis-aligned');
+    }
+  }
+  const side = n + 2; // fitting block side
+  for (let i = 1; i < points.length - 1; i++) {
+    const c = points[i];
+    if (c === undefined) continue; // index is in range
+    for (let row = 0; row < side; row++) {
+      for (let col = 0; col < side; col++) {
+        put(fittingColor(style, col, row, side), c.x - h - 1 + col, c.y - h - 1 + row, 1, 1); // interior corner fitting
+      }
+    }
+  }
+  return out;
+}

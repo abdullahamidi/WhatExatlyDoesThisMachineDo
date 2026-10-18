@@ -12,8 +12,9 @@ import {
   pointsAlongBelt,
   beltTravel,
   coalesceRuns,
+  rasterPipe,
 } from './machineLinks';
-import type { Arc } from './machineLinks';
+import type { Arc, PipeRect, PipeStyleLike } from './machineLinks';
 
 const EPS = 1e-9;
 
@@ -442,5 +443,199 @@ describe('coalesceRuns', () => {
 
   it('returns nothing for empty input', () => {
     expect(coalesceRuns([])).toEqual([]);
+  });
+});
+
+/** Pipe style with plain decimal colour ids (no hex literals under src/game). Steam: 4-px bore, 6-row flanges. */
+const STEAM_LIKE: PipeStyleLike = {
+  prof: [101, 102, 103, 104],
+  flange: [
+    [110, 111, 112, 113, 114, 115],
+    [120, 121, 122, 123, 124, 125],
+  ],
+  flangeEvery: 24,
+  fitting: { ink: 900, hi: 901, mid: 902, lo: 903 },
+};
+
+/** Water style: 2-px bore, 4-row flanges. */
+const WATER_LIKE: PipeStyleLike = {
+  prof: [201, 202],
+  flange: [
+    [210, 211, 212, 213],
+    [220, 221, 222, 223],
+  ],
+  flangeEvery: 24,
+  fitting: { ink: 900, hi: 901, mid: 902, lo: 903 },
+};
+
+/** Expands rects into a pixel map in draw order; the last write wins. */
+function pixelMap(rects: readonly PipeRect[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const r of rects) {
+    for (let dy = 0; dy < r.h; dy++) {
+      for (let dx = 0; dx < r.w; dx++) map.set(`${r.x + dx},${r.y + dy}`, r.color);
+    }
+  }
+  return map;
+}
+
+/** Colour at a pixel, failing the test when the pixel is empty. */
+function colorAt(map: Map<string, number>, x: number, y: number): number {
+  const c = map.get(`${x},${y}`);
+  if (c === undefined) throw new Error(`no pixel at ${x},${y}`);
+  return c;
+}
+
+describe('rasterPipe', () => {
+  it('draws a horizontal bore of n rows centred on the line', () => {
+    const map = pixelMap(rasterPipe([{ x: 0, y: 0 }, { x: 10, y: 0 }], STEAM_LIKE));
+    for (let j = 0; j < 4; j++) expect(colorAt(map, 5, -2 + j)).toBe(STEAM_LIKE.prof[j]);
+    expect(map.has('5,-3')).toBe(false);
+    expect(map.has('5,2')).toBe(false);
+  });
+
+  it('draws the horizontal flanges at offsets 0 and L - 2 over rows -3..2', () => {
+    const map = pixelMap(rasterPipe([{ x: 0, y: 0 }, { x: 10, y: 0 }], STEAM_LIKE));
+    const fl0 = STEAM_LIKE.flange[0] ?? [];
+    const fl1 = STEAM_LIKE.flange[1] ?? [];
+    for (let j = 0; j < 6; j++) {
+      expect(colorAt(map, 0, -3 + j)).toBe(fl0[j]);
+      expect(colorAt(map, 1, -3 + j)).toBe(fl1[j]);
+      expect(colorAt(map, 8, -3 + j)).toBe(fl0[j]);
+      expect(colorAt(map, 9, -3 + j)).toBe(fl1[j]);
+    }
+  });
+
+  it('draws the vertical analog with bore cols x-2..x+1 and flange cols x-3..x+2', () => {
+    const map = pixelMap(rasterPipe([{ x: 0, y: 0 }, { x: 0, y: 10 }], STEAM_LIKE));
+    for (let j = 0; j < 4; j++) expect(colorAt(map, -2 + j, 5)).toBe(STEAM_LIKE.prof[j]);
+    const fl0 = STEAM_LIKE.flange[0] ?? [];
+    const fl1 = STEAM_LIKE.flange[1] ?? [];
+    for (let j = 0; j < 6; j++) {
+      expect(colorAt(map, -3 + j, 0)).toBe(fl0[j]);
+      expect(colorAt(map, -3 + j, 1)).toBe(fl1[j]);
+      expect(colorAt(map, -3 + j, 8)).toBe(fl0[j]);
+      expect(colorAt(map, -3 + j, 9)).toBe(fl1[j]);
+    }
+  });
+
+  it('places flanges at 0, L - 2 and the multiples of flangeEvery for a 60 px segment', () => {
+    const rects = rasterPipe([{ x: 0, y: 0 }, { x: 60, y: 0 }], STEAM_LIKE);
+    // 4 body rects + 4 marks x 2 flange rows x 6 pixels
+    expect(rects).toHaveLength(4 + 4 * 2 * 6);
+    const map = pixelMap(rects);
+    for (const m of [0, 24, 48, 58]) expect(colorAt(map, m, -3)).toBe(STEAM_LIKE.flange[0]?.[0]);
+    expect(map.has('12,-3')).toBe(false);
+  });
+
+  it('skips the multiple 48 for a 50 px segment (48 >= L - 4) and keeps the L - 2 mark', () => {
+    const rects = rasterPipe([{ x: 0, y: 0 }, { x: 50, y: 0 }], STEAM_LIKE);
+    // marks 0, 48 (= L - 2), 24: 4 body rects + 3 marks x 2 rows x 6 pixels
+    expect(rects).toHaveLength(4 + 3 * 2 * 6);
+    const map = pixelMap(rects);
+    for (const m of [0, 24, 48]) expect(colorAt(map, m, -3)).toBe(STEAM_LIKE.flange[0]?.[0]);
+    expect(colorAt(map, 49, -3)).toBe(STEAM_LIKE.flange[1]?.[0]); // second flange column of the L - 2 mark
+    expect(map.has('50,-3')).toBe(false);
+  });
+
+  it('draws an (n + 2)^2 fitting block at every interior point, last in draw order', () => {
+    const rects = rasterPipe([{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }], STEAM_LIKE);
+    const fitting = rects.slice(-36); // bore 4: (4 + 2)^2 rects
+    expect(fitting).toHaveLength(36);
+    for (const r of fitting) {
+      expect(r.w).toBe(1);
+      expect(r.h).toBe(1);
+      expect(r.x >= 17 && r.x <= 22 && r.y >= -3 && r.y <= 2).toBe(true);
+    }
+    const map = pixelMap(rects);
+    expect(colorAt(map, 17, -3)).toBe(STEAM_LIKE.fitting.ink);
+    expect(colorAt(map, 22, 2)).toBe(STEAM_LIKE.fitting.ink);
+    expect(colorAt(map, 17, 0)).toBe(STEAM_LIKE.fitting.ink);
+    expect(colorAt(map, 18, -2)).toBe(STEAM_LIKE.fitting.hi); // i + j = 2
+    expect(colorAt(map, 20, -1)).toBe(STEAM_LIKE.fitting.mid); // col 3, row 2: sum 5 < 6
+    expect(colorAt(map, 21, 1)).toBe(STEAM_LIKE.fitting.lo); // far corner, sum 8
+  });
+
+  it('draws a 4-px (bore 2) fitting block with hi and lo colours', () => {
+    const rects = rasterPipe([{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }], WATER_LIKE);
+    const fitting = rects.slice(-16); // bore 2: (2 + 2)^2 rects
+    expect(fitting).toHaveLength(16);
+    const map = pixelMap(rects);
+    // block origin (18, -2): col 1, row 1 -> (19, -1) with i + j = 2 <= 3 -> hi
+    expect(colorAt(map, 19, -1)).toBe(WATER_LIKE.fitting.hi);
+    expect(colorAt(map, 20, 0)).toBe(WATER_LIKE.fitting.lo); // col 2, row 2: sum 4 >= 4 -> far corner
+    expect(colorAt(map, 19, 1)).toBe(WATER_LIKE.fitting.ink); // bottom border row
+  });
+
+  it('draws the water style with 2 bore rows and 4 flange rows', () => {
+    const map = pixelMap(rasterPipe([{ x: 0, y: 0 }, { x: 10, y: 0 }], WATER_LIKE));
+    expect(colorAt(map, 5, -1)).toBe(201);
+    expect(colorAt(map, 5, 0)).toBe(202);
+    expect(map.has('5,-2')).toBe(false);
+    const fl0 = WATER_LIKE.flange[0] ?? [];
+    for (let j = 0; j < 4; j++) expect(colorAt(map, 0, -2 + j)).toBe(fl0[j]);
+  });
+
+  it('rasterizes the shared first segment of P1, P2 and P3 identically', () => {
+    const P1: Vec2[] = [
+      { x: -246, y: -91 },
+      { x: -246, y: -112 },
+      { x: -98, y: -112 },
+      { x: -98, y: -176 },
+      { x: -92, y: -176 },
+    ];
+    const P2: Vec2[] = [
+      { x: -246, y: -91 },
+      { x: -246, y: -112 },
+      { x: -323, y: -112 },
+      { x: -323, y: -79 },
+    ];
+    const P3: Vec2[] = [
+      { x: -246, y: -91 },
+      { x: -246, y: -112 },
+      { x: -412, y: -112 },
+      { x: -412, y: -86 },
+    ];
+    const first = rasterPipe([P1[0] as Vec2, P1[1] as Vec2], STEAM_LIKE);
+    expect(rasterPipe([P2[0] as Vec2, P2[1] as Vec2], STEAM_LIKE)).toEqual(first);
+    expect(rasterPipe([P3[0] as Vec2, P3[1] as Vec2], STEAM_LIKE)).toEqual(first);
+  });
+
+  it('keeps the full P1 polyline inside its point bounding box grown by h + 1', () => {
+    const P1: Vec2[] = [
+      { x: -246, y: -91 },
+      { x: -246, y: -112 },
+      { x: -98, y: -112 },
+      { x: -98, y: -176 },
+      { x: -92, y: -176 },
+    ];
+    const h = 2; // bore 4
+    const minX = Math.min(...P1.map((p) => p.x)) - (h + 1);
+    const maxX = Math.max(...P1.map((p) => p.x)) + (h + 1);
+    const minY = Math.min(...P1.map((p) => p.y)) - (h + 1);
+    const maxY = Math.max(...P1.map((p) => p.y)) + (h + 1);
+    for (const r of rasterPipe(P1, STEAM_LIKE)) {
+      expect(r.x).toBeGreaterThanOrEqual(minX);
+      expect(r.x + r.w - 1).toBeLessThanOrEqual(maxX);
+      expect(r.y).toBeGreaterThanOrEqual(minY);
+      expect(r.y + r.h - 1).toBeLessThanOrEqual(maxY);
+    }
+  });
+
+  it('throws for a non-axis-aligned pair', () => {
+    expect(() => rasterPipe([{ x: 0, y: 0 }, { x: 3, y: 4 }], STEAM_LIKE)).toThrow();
+  });
+
+  it('returns nothing for fewer than 2 points', () => {
+    expect(rasterPipe([], STEAM_LIKE)).toEqual([]);
+    expect(rasterPipe([{ x: 0, y: 0 }], STEAM_LIKE)).toEqual([]);
+  });
+
+  it('skips identical consecutive points without error', () => {
+    const plain = rasterPipe([{ x: 0, y: 0 }, { x: 10, y: 0 }], STEAM_LIKE);
+    const dup = rasterPipe([{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 10, y: 0 }], STEAM_LIKE);
+    // the duplicate is an interior point, so only a fitting block is added after the same segment rects
+    expect(dup.slice(0, plain.length)).toEqual(plain);
+    expect(dup).toHaveLength(plain.length + 36);
   });
 });
