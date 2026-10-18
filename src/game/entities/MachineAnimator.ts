@@ -42,6 +42,24 @@ import { addClickImpulse, partAngle, rotationFrame, sliderCrank, stepMaster } fr
 import type { MasterState } from '../math/driveTrain';
 import { crankAngle, crankOffsetOnGearUp } from '../math/crankLink';
 import { componentDepth, resolveAttachment } from '../math/machineLayout';
+import { motionPolicy } from '../../simulation/settings';
+
+/** Caps a degrees-per-second speed at maxDegPerSec (null: uncapped). Reduced motion only. */
+function capSpeed(degPerSec: number, maxDegPerSec: number | null): number {
+  return maxDegPerSec === null ? degPerSec : Math.min(degPerSec, maxDegPerSec);
+}
+
+/**
+ * Master / crank state after one frame, with the angle travelled in that frame capped at maxDegPerSec (null: uncapped).
+ * Impulse that would have been released beyond the cap is dropped; the queue (pending) is kept as stepped.
+ */
+function capTravel(prev: MasterState, next: MasterState, dt: number, maxDegPerSec: number | null): MasterState {
+  if (maxDegPerSec === null) return next;
+  const limit = maxDegPerSec * dt;
+  const travel = next.deg - prev.deg;
+  if (Math.abs(travel) <= limit) return next;
+  return { deg: prev.deg + Math.sign(travel) * limit, pending: next.pending };
+}
 
 /**
  * Shows a driven or spin part at deg. A sprite on a rotation sheet (`#rot` texture) shows the nearest pre-rendered frame with no
@@ -129,10 +147,15 @@ export class MachineAnimator {
   private exoticMilestoneAt: number | null = null;
   /** Bead angles captured when the finalAlignment milestone fired; the align step starts from them. */
   private readonly exoticFrom = new Map<MachineComponentId, number>();
-  /** Latch state: 'off' = gate not met yet (frame 0), 'done' = gate already met at first sight, number = clock when the gate opened. */
+  /**
+   * Latch state: 'off' = gate not met yet (frame 0), 'done' = gate already met at the first update after load / reset (last frame,
+   * no animation), number = clock when the gate opened (a gate met later animates, also when its part was still assembling).
+   */
   private readonly latchStart = new Map<MachineComponentId, number | 'off' | 'done'>();
   /** Last frame shown by each latch part (see latchFrame). */
   private readonly latchFrames = new Map<MachineComponentId, number>();
+  /** True until the end of the first update after construction / reset: gates met then are 'done' (see latchStart). */
+  private firstFrame = true;
   private readonly unsubscribeClick: () => void;
   private readonly unsubscribeReset: () => void;
   private readonly unsubscribeMilestone: () => void;
@@ -182,6 +205,7 @@ export class MachineAnimator {
       this.exoticFrom.clear();
       this.latchStart.clear();
       this.latchFrames.clear();
+      this.firstFrame = true;
       // Stale angles must not snap in later: every driven and spin part goes back to angle 0.
       for (const id of MACHINE_COMPONENT_IDS) {
         const kind = MACHINE_COMPONENTS[id].animation.kind;
@@ -212,6 +236,7 @@ export class MachineAnimator {
   update(deltaMs: number, isActive: (id: MachineComponentId) => boolean): void {
     const dt = clampFrameSeconds(deltaMs, MACHINE_MOTION.maxFrameSeconds);
     this.elapsed += dt; // frame-cycle clock
+    const policy = motionPolicy(this.session.settings); // read live each frame: reduced motion caps speeds and stops flicker
     const prevMasterDeg = this.master.deg; // before this frame's step: strike detection
     const me = this.session.rates.perSecond.me;
     const ee = this.session.rates.perSecond.ee;
@@ -225,9 +250,23 @@ export class MachineAnimator {
     const dv = driverValue('combined', this.manual, me);
     const degPerSec = dv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(DRIVE_TRAIN.masterSpeed, dv); // rest below threshold
     this.syncGearing(isActive('gearSmall'));
-    this.master = stepMaster(this.master, degPerSec, DRIVE_TRAIN.masterDirection, dt, DRIVE_TRAIN.clickTauSeconds);
-    this.crankState = stepMaster(this.crankState, 0, 1, dt, DRIVE_TRAIN.clickTauSeconds); // crank clicks only, no drift
+    this.master = capTravel(
+      this.master,
+      stepMaster(this.master, degPerSec, DRIVE_TRAIN.masterDirection, dt, DRIVE_TRAIN.clickTauSeconds),
+      dt,
+      policy.maxDegPerSec,
+    );
+    // crank clicks only, no drift
+    this.crankState = capTravel(this.crankState, stepMaster(this.crankState, 0, 1, dt, DRIVE_TRAIN.clickTauSeconds), dt, policy.maxDegPerSec);
     this.lastDegPerSec = degPerSec;
+    // Latches already met at the first update after load / reset show their last frame without animating (even if their part
+    // is still hidden or assembling). Later gates animate when the part is active.
+    if (this.firstFrame) {
+      for (const id of MACHINE_COMPONENT_IDS) {
+        const a = MACHINE_COMPONENTS[id].animation;
+        if (a.kind === 'latch' && levels[a.techId] >= a.minLevel) this.latchStart.set(id, 'done');
+      }
+    }
 
     for (const id of MACHINE_COMPONENT_IDS) {
       const anim = MACHINE_COMPONENTS[id].animation;
@@ -240,7 +279,7 @@ export class MachineAnimator {
         // in step with thetaM without overriding the drop. Strikes are not counted while assembling.
         if (anim.kind === 'driven' && sprite.visible) applyAngle(sprite, this.drivenAngle(id, anim));
         if (anim.kind === 'spin' && sprite.visible) {
-          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr, rs, xf), dt);
+          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr, rs, xf), dt, policy.maxDegPerSec);
         }
         if (anim.kind === 'reciprocate' && sprite.visible) sprite.y += this.ramOffset(anim, prevMasterDeg, dt);
         continue;
@@ -290,12 +329,14 @@ export class MachineAnimator {
             break;
           }
           const origin = this.frameOrigins.get(id) ?? 0; // milestone restarts count from their origin
-          const cycle = framesIndex(this.elapsed - origin, anim.frames, anim.maxHz, fdv >= MACHINE_MOTION.restThreshold);
+          // Reduced motion (no flashes): the cycle is frozen on the rest frame (spark gap flicker, siphon arcs, dish waves).
+          const cycling = policy.flashes && fdv >= MACHINE_MOTION.restThreshold;
+          const cycle = framesIndex(this.elapsed - origin, anim.frames, anim.maxHz, cycling);
           sprite.setFrame((cycle + (anim.frameOffset ?? 0)) % anim.frames); // staggered sheets offset their cycle
           break;
         }
         case 'spin': {
-          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr, rs, xf), dt);
+          this.spinPart(id, sprite, anim, driverValue(anim.driver, this.manual, me, ee, pr, rs, xf), dt, policy.maxDegPerSec);
           break;
         }
         case 'gauge': {
@@ -311,7 +352,7 @@ export class MachineAnimator {
           break;
         }
         case 'orbit': {
-          this.placeBead(id, sprite, anim, dt, exotic, xf);
+          this.placeBead(id, sprite, anim, dt, exotic, xf, policy.maxDegPerSec);
           break;
         }
         case 'latch': {
