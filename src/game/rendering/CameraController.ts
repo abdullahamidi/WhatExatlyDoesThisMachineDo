@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { VIEW, WORLD, CAMERA } from '../../data/world';
+import { VIEW, WORLD, CAMERA, PIXEL_SCALE } from '../../data/world';
 import { PALETTE_CSS } from '../../data/palette';
 import type { Vec2 } from '../../data/machineComponents';
 import {
@@ -7,7 +7,7 @@ import {
   clampZoom,
   clampCenter,
   zoomAroundPoint,
-  wheelToZoom,
+  wheelToSnappedZoom,
   dragToCenter,
 } from '../math/camera';
 
@@ -28,6 +28,7 @@ export class CameraController {
   private zoom: number;
   private drag: DragState | null = null;
   private refocusTween: Phaser.Tweens.Tween | null = null;
+  private lastWheelMs = Number.NEGATIVE_INFINITY; // performance.now() of the last applied wheel step
 
   // pointer handlers are arrow properties so `this` is bound and the same references can be removed in destroy()
   private readonly pointerdown = (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]): void => {
@@ -61,9 +62,12 @@ export class CameraController {
     _deltaX: number,
     deltaY: number,
   ): void => {
+    const now = performance.now();
+    if (now - this.lastWheelMs < CAMERA.wheelStepCooldownMs) return; // trackpads fire bursts; one grid step per window
     this.cancelRefocus();
-    const newZoom = wheelToZoom(this.zoom, deltaY, CAMERA.wheelZoomFactor, this.minZoom, CAMERA.maxZoom);
+    const newZoom = wheelToSnappedZoom(this.zoom, deltaY, PIXEL_SCALE, this.minZoom, CAMERA.maxZoom);
     if (newZoom === this.zoom) return;
+    this.lastWheelMs = now;
     const pointerWorld: Vec2 = {
       x: this.center.x + (pointer.x - VIEW.width / 2) / this.zoom,
       y: this.center.y + (pointer.y - VIEW.height / 2) / this.zoom,

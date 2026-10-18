@@ -46,6 +46,28 @@ export function wheelToZoom(zoom: number, deltaY: number, factor: number, min: n
   return clampZoom(next, min, max);
 }
 
+// zoom grid step: PIXEL_SCALE * zoom is then an integer or half-integer, so art pixels stay even on screen
+export function zoomStep(pixelScale: number): number {
+  return 0.5 / pixelScale;
+}
+
+// nearest grid zoom (k * step, k integer), clamped into [min, max]
+export function snapZoom(zoom: number, pixelScale: number, min: number, max: number): number {
+  const step = zoomStep(pixelScale);
+  return clampZoom(Math.round(zoom / step) * step, min, max);
+}
+
+// one wheel notch: deltaY < 0 -> next grid value above zoom; deltaY > 0 -> next grid value below; 0 -> snap.
+// The 1e-9 margin makes a zoom already on the grid step past itself instead of repeating.
+export function wheelToSnappedZoom(zoom: number, deltaY: number, pixelScale: number, min: number, max: number): number {
+  if (deltaY === 0) return snapZoom(zoom, pixelScale, min, max);
+  const step = zoomStep(pixelScale);
+  const next = deltaY < 0
+    ? (Math.floor((zoom + 1e-9) / step) + 1) * step
+    : (Math.ceil((zoom - 1e-9) / step) - 1) * step;
+  return clampZoom(next, min, max);
+}
+
 // dragging right (positive delta) moves the camera left: start - delta / zoom, per axis
 export function dragToCenter(startCenter: Vec2, dragScreenDelta: Vec2, zoom: number): Vec2 {
   return {

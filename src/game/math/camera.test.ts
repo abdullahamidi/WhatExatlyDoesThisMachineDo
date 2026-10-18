@@ -7,6 +7,9 @@ import {
   wheelToZoom,
   dragToCenter,
   worldToClient,
+  zoomStep,
+  snapZoom,
+  wheelToSnappedZoom,
 } from './camera';
 import type { RectLike } from './camera';
 import { VIEW, WORLD, CAMERA } from '../../data/world';
@@ -137,5 +140,95 @@ describe('worldToClient', () => {
     const p = worldToClient({ x: 1280, y: 720 }, { x: 960, y: 540 }, 2, smallRect, gameSize);
     expect(p.x).toBeCloseTo(420, 9);
     expect(p.y).toBeCloseTo(230, 9);
+  });
+});
+
+describe('zoom grid (pixel-perfect steps)', () => {
+  const PS = 2;
+  const MIN = 0.5;
+  const MAX = 2;
+
+  /** Seeded LCG (no Math.random): returns values in [0, 1). */
+  function lcg(seed: number): () => number {
+    let s = seed >>> 0;
+    return () => {
+      s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+      return s / 4294967296;
+    };
+  }
+
+  /** True when PIXEL_SCALE * zoom is an integer or half-integer, i.e. zoom is a multiple of 0.25 at scale 2. */
+  const onGrid = (z: number): boolean => Number.isInteger(z * 4);
+
+  it('step is 0.5 / pixel scale', () => {
+    expect(zoomStep(2)).toBe(0.25);
+  });
+
+  it('snaps to the nearest grid value and clamps', () => {
+    expect(snapZoom(1.1, PS, MIN, MAX)).toBe(1);
+    expect(snapZoom(1.13, PS, MIN, MAX)).toBe(1.25);
+    expect(snapZoom(2.7, PS, MIN, MAX)).toBe(2);
+    expect(snapZoom(0.1, PS, MIN, MAX)).toBe(0.5);
+  });
+
+  it('every snapped zoom from a seeded sweep lies on the grid', () => {
+    const rnd = lcg(42);
+    for (let i = 0; i < 500; i++) {
+      const z = snapZoom(0.3 + rnd() * 2.1, PS, MIN, MAX);
+      expect(onGrid(z)).toBe(true);
+      expect(z).toBeGreaterThanOrEqual(MIN);
+      expect(z).toBeLessThanOrEqual(MAX);
+    }
+  });
+
+  it('wheel steps move one grid value per notch', () => {
+    expect(wheelToSnappedZoom(1, -1, PS, MIN, MAX)).toBe(1.25);
+    expect(wheelToSnappedZoom(1, 1, PS, MIN, MAX)).toBe(0.75);
+    expect(wheelToSnappedZoom(2, -1, PS, MIN, MAX)).toBe(2);
+    expect(wheelToSnappedZoom(0.5, 1, PS, MIN, MAX)).toBe(0.5);
+  });
+
+  it('wheel steps from an off-grid zoom land on the grid', () => {
+    expect(wheelToSnappedZoom(1.1, -1, PS, MIN, MAX)).toBe(1.25);
+    expect(wheelToSnappedZoom(1.1, 1, PS, MIN, MAX)).toBe(1);
+  });
+
+  it('wheel with deltaY 0 snaps to the grid', () => {
+    expect(wheelToSnappedZoom(1.1, 0, PS, MIN, MAX)).toBe(1);
+    expect(wheelToSnappedZoom(1.13, 0, PS, MIN, MAX)).toBe(1.25);
+  });
+
+  it('wheel results never leave the grid over a seeded walk', () => {
+    const rnd = lcg(7);
+    let z = 1;
+    for (let i = 0; i < 300; i++) {
+      const dy = rnd() < 0.5 ? -1 : 1;
+      z = wheelToSnappedZoom(z, dy, PS, MIN, MAX);
+      expect(onGrid(z)).toBe(true);
+      expect(z).toBeGreaterThanOrEqual(MIN);
+      expect(z).toBeLessThanOrEqual(MAX);
+    }
+  });
+
+  it('zooming in 10 times then out 10 times visits only grid values and ends at the limits', () => {
+    let z = 1;
+    for (let i = 0; i < 10; i++) {
+      z = wheelToSnappedZoom(z, -1, PS, MIN, MAX);
+      expect(onGrid(z)).toBe(true);
+    }
+    expect(z).toBe(2);
+    for (let i = 0; i < 10; i++) {
+      z = wheelToSnappedZoom(z, 1, PS, MIN, MAX);
+      expect(onGrid(z)).toBe(true);
+    }
+    expect(z).toBe(0.5);
+  });
+
+  it('four notches in and four out return exactly to zoom 1', () => {
+    let z = 1;
+    for (let i = 0; i < 4; i++) z = wheelToSnappedZoom(z, -1, PS, MIN, MAX);
+    expect(z).toBe(2);
+    for (let i = 0; i < 4; i++) z = wheelToSnappedZoom(z, 1, PS, MIN, MAX);
+    expect(z).toBe(1);
   });
 });
