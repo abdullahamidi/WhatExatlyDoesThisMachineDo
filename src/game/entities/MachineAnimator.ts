@@ -376,7 +376,12 @@ export class MachineAnimator {
    * Latch part: frame 0 until its gate holds, then 0 -> frames-1 once and held (latchFrame). A gate already met at the first
    * active frame (a loaded save) shows the last frame without animating. Losing the gate re-arms the latch.
    */
-  private placeLatch(sprite: Phaser.GameObjects.Sprite, id: MachineComponentId, anim: Extract<ComponentAnimation, { kind: 'latch' }>, gate: boolean): void {
+  private placeLatch(
+    sprite: Phaser.GameObjects.Sprite,
+    id: MachineComponentId,
+    anim: Extract<ComponentAnimation, { kind: 'latch' }>,
+    gate: boolean,
+  ): void {
     const prior = this.latchStart.get(id);
     let since: number | null;
     if (!gate) {
@@ -439,8 +444,9 @@ export class MachineAnimator {
 
   /** Spin part: own angle += speed(driver) * dt, rest below the threshold; shown on its rotation sheet or rotated. */
   private spinPart(id: MachineComponentId, sprite: Phaser.GameObjects.Sprite, anim: { speed: SpeedCurve }, dv: number, dt: number): void {
-    const speed = dv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, dv); // rest below threshold
-    const angle = spinStep(this.spinAngles.get(id) ?? 0, speed, dt);
+    const base = dv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, dv); // rest below threshold
+    const boost = id === EXOTIC_MILESTONE_FX.core && this.exoticWithin(EXOTIC_MILESTONE_FX.coreSpinMs) ? EXOTIC_MILESTONE_FX.coreSpinMult : 1;
+    const angle = spinStep(this.spinAngles.get(id) ?? 0, base * boost, dt);
     this.spinAngles.set(id, angle);
     applyAngle(sprite, angle);
   }
@@ -482,10 +488,23 @@ export class MachineAnimator {
     return deg;
   }
 
-  /** Current driver inputs: manual activity, automation rate (ME/s), electric rate (EE/s), thermal rate (PR/s) and resonance rate (RS/s). */
-  getDriverValues(): { manual: number; automation: number; electric: number; thermal: number; resonance: number } {
+  /** Current driver inputs: manual activity, ME/s, EE/s, PR/s, RS/s and XF/s (automation, electric, thermal, resonance, exotic). */
+  getDriverValues(): { manual: number; automation: number; electric: number; thermal: number; resonance: number; exotic: number } {
     const rates = this.session.rates.perSecond;
-    return { manual: this.manual, automation: rates.me, electric: rates.ee, thermal: rates.pr, resonance: rates.rs };
+    return { manual: this.manual, automation: rates.me, electric: rates.ee, thermal: rates.pr, resonance: rates.rs, exotic: rates.xf };
+  }
+
+  /** Current frame of a latch part, or null for any other part (0 before its first active frame). */
+  latchFrame(id: MachineComponentId): number | null {
+    if (MACHINE_COMPONENTS[id].animation.kind !== 'latch') return null;
+    return this.latchFrames.get(id) ?? 0;
+  }
+
+  /** True once after any bead changed its front / back depth since the last call; then false. */
+  consumeDepthChanged(): boolean {
+    const changed = this.depthChanged;
+    this.depthChanged = false;
+    return changed;
   }
 
   /** Hammer strikes since the last call; returns the count and resets it to 0. */
@@ -500,5 +519,6 @@ export class MachineAnimator {
     this.unsubscribeClick();
     this.unsubscribeReset();
     this.unsubscribeMilestone();
+    this.unsubscribeExotic();
   }
 }
