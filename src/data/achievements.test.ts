@@ -115,9 +115,9 @@ describe('achievement table', () => {
     }
   });
 
-  it('the servo chorus tech requirement is level 10', () => {
+  it('the servo chorus tech requirement is level 9 (highest level a greedy run buys)', () => {
     const c = ACHIEVEMENTS.servoChorus.condition;
-    expect(c).toEqual({ type: 'tech', id: 'crankServo', minLevel: 10 });
+    expect(c).toEqual({ type: 'tech', id: 'crankServo', minLevel: 9 });
   });
 
   it('UI_ART frame numbers and sheet paths', () => {

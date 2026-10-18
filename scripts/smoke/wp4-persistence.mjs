@@ -40,7 +40,7 @@ ok('2_reload_again', { me: post2.me, toasts: await toasts() });
 await page.click('#hud-tech', { timeout: 4000 }); await page.keyboard.press('Escape'); ok('e1_tree_closed', await page.evaluate(() => window.__wedtmd.techTreeOpen()));
 await page.click('#hud-system', { timeout: 4000 }); await page.click('#sys-reset', { timeout: 4000 }); const armed = await page.evaluate(() => window.__wedtmd.modalCount && window.__wedtmd.modalCount());
 await page.keyboard.press('Escape'); const c1 = await page.evaluate(() => window.__wedtmd.modalCount()); const lbl = await txt('#sys-reset');
-await page.keyboard.press('Escape'); const c0 = await page.evaluate(() => window.__wedtmd.modalCount());
+if (await page.evaluate(() => window.__wedtmd.techTreeOpen() || window.__wedtmd.systemMenuOpen())) await page.keyboard.press('Escape'); const c0 = await page.evaluate(() => window.__wedtmd.modalCount());
 ok('e_stack', { armed, c1, lbl, c0 });
 // mutual exclusion + shield
 await page.click('#hud-tech', { timeout: 4000 });
@@ -56,7 +56,7 @@ await page.evaluate(() => window.__wedtmd.session.update(Date.now() + 120000)); 
 await page.click('#hud-system', { timeout: 4000 }); await page.click('#sys-reset', { timeout: 4000 }); await page.waitForTimeout(6500); ok('5_single_press', { me: (await st()).me > 0, label: await txt('#sys-reset') });
 await page.click('#sys-reset', { timeout: 4000 }); await page.click('#sys-reset', { timeout: 4000 }); await page.waitForTimeout(300);
 const r = await st(); ok('5_reset', { me: r.me, lv: r.lv, gear: await page.evaluate(() => window.__wedtmd.componentState('gearSmall')), motor: await page.evaluate(() => window.__wedtmd.componentState('wornMotor')) });
-await page.keyboard.press('Escape'); await page.reload({ waitUntil: 'networkidle' }); await ready(); ok('5_reload', (await st()).me);
+if (await page.evaluate(() => window.__wedtmd.techTreeOpen() || window.__wedtmd.systemMenuOpen())) await page.keyboard.press('Escape'); await page.reload({ waitUntil: 'networkidle' }); await ready(); ok('5_reload', (await st()).me);
 // 3 corrupt
 await page.evaluate(() => sessionStorage.setItem('corrupt', '1')); await page.reload({ waitUntil: 'networkidle' }); await ready();
 ok('3_corrupt', { me: (await st()).me, backup: await page.evaluate(() => localStorage.getItem('wedtmd.save.corrupt')), toasts: await toasts() });

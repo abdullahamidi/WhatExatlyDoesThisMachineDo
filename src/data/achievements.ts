@@ -151,20 +151,20 @@ export const ACHIEVEMENTS: Readonly<Record<AchievementId, AchievementDefinition>
     condition: { type: 'tech', id: 'crankServo', minLevel: 1 },
   },
   servoChorus: {
-    id: 'servoChorus', name: 'Servo Chorus', description: 'Bring the crank servo to level 10.', icon: 13,
-    condition: { type: 'tech', id: 'crankServo', minLevel: 10 },
+    id: 'servoChorus', name: 'Servo Chorus', description: 'Bring the crank servo to level 9.', icon: 13,
+    condition: { type: 'tech', id: 'crankServo', minLevel: 9 },
   },
   sevenDigits: {
     id: 'sevenDigits', name: 'Seven Digits', description: 'Reach 1,000,000 lifetime ME.', icon: 14,
     condition: { type: 'lifetime', res: 'me', atLeast: 1e6 },
   },
   thirteenDigits: {
-    id: 'thirteenDigits', name: 'Thirteen Digits', description: 'Reach 1,000,000,000,000 lifetime ME.', icon: 14,
-    condition: { type: 'lifetime', res: 'me', atLeast: 1e12 },
+    id: 'thirteenDigits', name: 'Ten Digits', description: 'Reach 1,000,000,000 of any resource.', icon: 14,
+    condition: { type: 'lifetime', res: 'any', atLeast: 1e9 },
   },
   bigNumber: {
-    id: 'bigNumber', name: 'Gauge In The Red', description: 'Reach 1 quadrillion of any resource.', icon: 14,
-    condition: { type: 'lifetime', res: 'any', atLeast: 1e15 },
+    id: 'bigNumber', name: 'Gauge In The Red', description: 'Reach 5 billion of any resource.', icon: 14,
+    condition: { type: 'lifetime', res: 'any', atLeast: 5e9 },
   },
 };
 
