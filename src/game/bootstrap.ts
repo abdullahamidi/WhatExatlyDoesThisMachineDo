@@ -17,6 +17,8 @@ import { recoveredMessage, welcomeBackMessage } from '../ui/notificationRules';
 import { createTechTree } from '../ui/techTree';
 import { createSystemMenu } from '../ui/systemMenu';
 import type { SystemMenuPanel } from '../ui/systemMenu';
+import { createFinaleOverlay } from '../ui/finale';
+import { setRevealed } from '../ui/revealRules';
 import { bindHotkeys } from '../ui/hotkeys';
 import { uiRootAttrs } from '../ui/menu/settingsView';
 import { createSettingsPanel } from '../ui/menu/settingsPanel';
@@ -25,6 +27,7 @@ import { createAchievementsPanel } from '../ui/menu/achievementsPanel';
 import { createDataPanel } from '../ui/menu/dataPanel';
 import { setDefaultNotation } from '../utils/format';
 import { createGameAudio } from '../audio/gameAudio';
+import { isFinaleLocked, isRevealed } from '../simulation';
 import { VIEW } from '../data/world';
 import { PALETTE_CSS } from '../data/palette';
 import { BootScene } from './scenes/BootScene';
@@ -61,6 +64,11 @@ export function bootstrap(): Phaser.Game {
 
   const root = document.getElementById('ui-root');
   if (!root) throw new Error('#ui-root missing');
+  // The xf label reads RF from the choice on (D6). Set at boot and whenever the ending changes or resets.
+  const syncReveal = (): void => setRevealed(isRevealed(session.state.ending));
+  syncReveal();
+  session.on('ending', syncReveal);
+  session.on('reset', syncReveal);
   const hud = createHud(root, ctx.commands);
   const toasts = createToasts(root);
   session.on('reset', () => toasts.clear());
@@ -151,15 +159,39 @@ export function bootstrap(): Phaser.Game {
   });
   ctx.commands.openTechTree.on(() => systemMenu.close());
 
+  // Finale overlay (WP13). Skip goes to the live director (WorldScene points finaleLink at it); KEEP writes the
+  // ending phase; the new-cycle button calls the hook only when it is not blocked.
+  const finaleLink = { skip: (): void => undefined };
+  const finaleOverlay = createFinaleOverlay(root, {
+    modals,
+    newCycle: ctx.newCycle,
+    closeDialogs: () => {
+      techTree.close();
+      systemMenu.close();
+    },
+    onSkip: () => finaleLink.skip(),
+    onKeep: () => {
+      session.keepRunning();
+    },
+    onNewCycle: () => {
+      if (ctx.newCycle.blockedReason() === null) ctx.newCycle.begin();
+    },
+  });
+
   // Global keys (T, Space / Enter crank, Escape opens the menu). Editable fields keep their keys.
+  // The tech tree and the menu stay shut while the finale runs (sequence / choice).
   bindHotkeys(window, {
     modals,
     crank: () => ctx.commands.crank.emit(),
     toggleTechTree: () => {
+      if (isFinaleLocked(session.state.ending)) return;
       if (techTree.isOpen()) techTree.close();
       else ctx.commands.openTechTree.emit();
     },
-    openMenu: () => ctx.commands.openSystemMenu.emit(),
+    openMenu: () => {
+      if (isFinaleLocked(session.state.ending)) return;
+      ctx.commands.openSystemMenu.emit();
+    },
   });
 
   // Boot-time notices. Shown once here; later offline reports (tab return) use connectOfflineNotices.
@@ -196,7 +228,7 @@ export function bootstrap(): Phaser.Game {
     input: { mouse: { preventDefaultWheel: true } },
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     audio: { noAudio: true },
-    scene: [new BootScene(), new WorldScene(ctx, { hud, techTree, modals })],
+    scene: [new BootScene(), new WorldScene(ctx, { hud, techTree, modals, finaleOverlay, finaleLink })],
   });
   installDebugHook(session, game, techTree, { modals, systemMenu, saveController, audio });
   return game;
