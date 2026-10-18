@@ -420,3 +420,96 @@ describe('finale saves (WP13)', () => {
     expect(writesOf(storage)).toBe(before);
   });
 });
+
+describe('prestige saves (WP14)', () => {
+  const DEFAULT_BLOCK = { cycle: 1, echoesEarned: 0, perks: [] };
+
+  /** A revealed run (ending 'choice') so beginNewCycle is allowed. */
+  const revealedState = (): GameState => ({
+    ...createInitialState(t0),
+    ending: { phase: 'choice', engagedAt: t0 },
+  });
+
+  it("a 'cycle' event writes the new cycle, its Echoes and the fresh run", () => {
+    const storage = new CountingStorage();
+    const session = new GameSession({ state: revealedState(), now: () => t0 });
+    const controller = createSaveController({
+      session,
+      saveManager: new SaveManager(storage),
+      now: () => t0,
+      scheduler: new FakeScheduler(),
+    });
+    controller.start();
+
+    const before = writesOf(storage);
+    expect(session.beginNewCycle(t0)).toBe(true);
+    expect(writesOf(storage)).toBeGreaterThan(before);
+
+    const saved = storedSave(storage);
+    expect(saved?.status).toBe('loaded');
+    expect(saved?.prestige).toEqual({ cycle: 2, echoesEarned: 3, perks: [] });
+    expect(saved?.state.ending.phase).toBe('none');
+    expect(saved?.stats.cycles).toBe(2);
+  });
+
+  it("a 'prestige' event writes the bought perk", () => {
+    const storage = new CountingStorage();
+    const session = new GameSession({
+      state: createInitialState(t0),
+      prestige: { cycle: 2, echoesEarned: 3, perks: [] },
+      now: () => t0,
+    });
+    const controller = createSaveController({
+      session,
+      saveManager: new SaveManager(storage),
+      now: () => t0,
+      scheduler: new FakeScheduler(),
+    });
+    controller.start();
+
+    expect(session.buyPerk('residualCharge').ok).toBe(true);
+    expect(storedSave(storage)?.prestige).toEqual({ cycle: 2, echoesEarned: 3, perks: ['residualCharge'] });
+  });
+
+  it('resetProgress() erases the prestige in storage (back to cycle 1, no Echoes)', () => {
+    const storage = new CountingStorage();
+    const session = new GameSession({
+      state: createInitialState(t0),
+      prestige: { cycle: 2, echoesEarned: 3, perks: ['residualCharge'] },
+      now: () => t0,
+    });
+    const controller = createSaveController({
+      session,
+      saveManager: new SaveManager(storage),
+      now: () => t0,
+      scheduler: new FakeScheduler(),
+    });
+
+    controller.resetProgress();
+    expect(storedSave(storage)?.prestige).toEqual(DEFAULT_BLOCK);
+    expect(session.prestige).toEqual(DEFAULT_BLOCK);
+  });
+
+  it('exportString then importString keeps the prestige; settings stay the current ones', () => {
+    const sourceSession = new GameSession({
+      state: createInitialState(t0),
+      prestige: { cycle: 2, echoesEarned: 3, perks: ['residualCharge'] },
+      now: () => t0,
+    });
+    const sourceController = createSaveController({
+      session: sourceSession,
+      saveManager: new SaveManager(new MemoryStorage()),
+      now: () => t0,
+      scheduler: new FakeScheduler(),
+    });
+    const text = sourceController.exportString();
+
+    const target = setup(new MemoryStorage(), 10);
+    target.session.setMuted(true);
+    expect(target.controller.importString(text)).toEqual({ ok: true });
+
+    const saved = storedSave(target.storage);
+    expect(saved?.prestige).toEqual({ cycle: 2, echoesEarned: 3, perks: ['residualCharge'] });
+    expect(saved?.settings.muted).toBe(true);
+  });
+});
