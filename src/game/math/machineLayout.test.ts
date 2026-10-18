@@ -17,12 +17,15 @@ describe('resolveAttachment', () => {
   });
 
   it('uses the socket position for the hand crank', () => {
-    expect(resolveAttachment(MACHINE_COMPONENTS.handCrank)).toEqual({ x: -70, y: -62 });
+    const hub = MACHINE_SOCKETS.crankHub;
+    const off = MACHINE_COMPONENTS.handCrank.attach.offset;
+    expect(resolveAttachment(MACHINE_COMPONENTS.handCrank)).toEqual({ x: hub.x + off.x, y: hub.y + off.y });
   });
 
   it('adds the attach offset to the socket position', () => {
     const def = { ...MACHINE_COMPONENTS.handCrank, attach: { socket: 'crankHub' as const, offset: { x: 3, y: -4 } } };
-    expect(resolveAttachment(def)).toEqual({ x: -67, y: -66 });
+    const hub = MACHINE_SOCKETS.crankHub;
+    expect(resolveAttachment(def)).toEqual({ x: hub.x + 3, y: hub.y - 4 });
   });
 
   it('honours a custom sockets table', () => {
