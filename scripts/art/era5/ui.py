@@ -189,7 +189,7 @@ def perks():
     for (x, y) in ((3, 16), (2, 15), (4, 15), (3, 14)): put(a, x, y, 'v2')
     fr.append(outline(a))
     # 5 Ledger: PixelLab pick (crop/pad only)
-    led = load(os.environ.get('LEDGER', SCR + 'pl/ledger/l-8.png'))
+    led = load(os.environ.get('LEDGER', os.path.dirname(os.path.abspath(__file__)) + '/src/ledger-8.png'))
     led = snap(led) if not check(led, 'ledger-src') else led
     fr.append(led)
     s = sheet(fr); check(s, 'perks'); save(s, U + 'perks.png')

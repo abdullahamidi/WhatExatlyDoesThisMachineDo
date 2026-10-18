@@ -209,7 +209,7 @@ def ground_green():
     check(o, 'groundG'); save(o, T + 'ground-green.png')
 
 # ---------------------------------------------------------------- regrowth strips (succession: pioneers -> grasses -> shrubs)
-FLORA = os.environ.get('FLORA', SCR + 'pl/flora/')
+FLORA = os.environ.get('FLORA', os.path.dirname(os.path.abspath(__file__)) + '/src/flora/')
 STAGES = {1: [13, 27, 2, 11, 28, 44], 2: [5, 15, 38, 52, 53, 59, 60, 49, 6, 43], 3: [3, 8, 16, 19, 35, 46, 48, 55, 25, 30]}
 def regrowth():
     W, H = 512, 32
