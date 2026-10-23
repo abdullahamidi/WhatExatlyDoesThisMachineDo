@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { GameState, TechId } from '../data/types';
-import { OFFLINE_CAP_SECONDS, SAVE_BACKUP_KEY, SAVE_KEY } from '../data/balance';
+import { OFFLINE_CAP_SECONDS, SAVE_BACKUP_KEY, SAVE_FULLGAME_KEY, SAVE_KEY } from '../data/balance';
 import { computeRates } from '../simulation/production/rates';
 import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
 import { emptyStats } from '../simulation/stats';
@@ -8,6 +8,8 @@ import { deserialize, serialize } from './codec';
 import { MemoryStorage, SaveManager } from './saveManager';
 import { startSession } from './startup';
 import v1Save from './fixtures/v1-save.json';
+import v2Primary from './fixtures/v2-wp11-primary.json';
+import v2Cycle2 from './fixtures/v2-cycle2.json';
 
 const HOUR_MS = 3600 * 1000;
 const t0 = 1_700_000_000_000;
@@ -248,5 +250,86 @@ describe('startSession', () => {
     const result = startSession(new SaveManager(refusing), t0, clock);
     expect(result.saved).toBe(false);
     expect(result.session.state.res.me).toBe(0);
+  });
+});
+
+describe('startSession edition era cap (WP21)', () => {
+  const NOW = 1_800_000_100_000;
+  const nowClock = (): number => NOW;
+
+  it('(a) clamps a full-game save to era 2, backs up the raw text and reports clamped', () => {
+    const storage = new MemoryStorage();
+    const raw = JSON.stringify(v2Primary);
+    storage.setItem(SAVE_KEY, raw);
+
+    const result = startSession(new SaveManager(storage), NOW, nowClock, { maxEra: 2 });
+    const { techLevels, res, lifetime, ending } = result.session.state;
+    expect(techLevels.boiler).toBe(0);
+    expect(techLevels.nullChamber).toBe(0);
+    expect(techLevels.primaryFunction).toBe(0);
+    expect(techLevels.substationBlueprint).toBe(1);
+    expect(ending.phase).toBe('none');
+    expect(res.pr).toBe(0);
+    expect(lifetime.xf).toBe(0);
+    expect(result.session.maxEra).toBe(2);
+    expect(result.clamped).toBe(true);
+    expect(storage.getItem(SAVE_FULLGAME_KEY)).toBe(raw);
+
+    const stored = deserialize(storage.getItem(SAVE_KEY), NOW);
+    expect(stored.state.techLevels.boiler).toBe(0);
+    expect(stored.state.techLevels.substationBlueprint).toBe(1);
+  });
+
+  it('(b) a second boot on the same storage has nothing to clamp and keeps the original backup', () => {
+    const storage = new MemoryStorage();
+    const raw = JSON.stringify(v2Primary);
+    storage.setItem(SAVE_KEY, raw);
+    const mgr = new SaveManager(storage);
+    startSession(mgr, NOW, nowClock, { maxEra: 2 });
+
+    const again = startSession(mgr, NOW + 1000, () => NOW + 1000, { maxEra: 2 });
+    expect(again.clamped).toBe(false);
+    expect(storage.getItem(SAVE_FULLGAME_KEY)).toBe(raw);
+  });
+
+  it('(c) without options the save loads as is: boiler stays, no backup, not clamped', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(SAVE_KEY, JSON.stringify(v2Primary));
+
+    const result = startSession(new SaveManager(storage), NOW, nowClock);
+    expect(result.session.state.techLevels.boiler).toBe(1);
+    expect(result.session.maxEra).toBeNull();
+    expect(storage.getItem(SAVE_FULLGAME_KEY)).toBeNull();
+    expect(result.clamped).toBe(false);
+  });
+
+  it('(d) empty storage with a cap starts a new game: no backup, not clamped', () => {
+    const storage = new MemoryStorage();
+
+    const result = startSession(new SaveManager(storage), NOW, nowClock, { maxEra: 2 });
+    expect(result.load.status).toBe('new');
+    expect(storage.getItem(SAVE_FULLGAME_KEY)).toBeNull();
+    expect(result.clamped).toBe(false);
+  });
+
+  it('(e) a cycle-2 save drops to cycle 1 with no Echoes under the cap, and is backed up', () => {
+    const storage = new MemoryStorage();
+    const raw = JSON.stringify(v2Cycle2);
+    storage.setItem(SAVE_KEY, raw);
+
+    const result = startSession(new SaveManager(storage), NOW, nowClock, { maxEra: 2 });
+    expect(result.session.prestige).toEqual({ cycle: 1, echoesEarned: 0, perks: [] });
+    expect(storage.getItem(SAVE_FULLGAME_KEY)).toBe(raw);
+    expect(result.clamped).toBe(true);
+  });
+
+  it('(f) a custom fullGameBackupKey receives the backup instead of the default', () => {
+    const storage = new MemoryStorage();
+    const raw = JSON.stringify(v2Primary);
+    storage.setItem(SAVE_KEY, raw);
+
+    startSession(new SaveManager(storage), NOW, nowClock, { maxEra: 2, fullGameBackupKey: 'custom.key' });
+    expect(storage.getItem('custom.key')).toBe(raw);
+    expect(storage.getItem(SAVE_FULLGAME_KEY)).toBeNull();
   });
 });

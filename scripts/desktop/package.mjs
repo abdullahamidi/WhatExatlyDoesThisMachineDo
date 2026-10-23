@@ -1,4 +1,5 @@
 // WP19 T10 desktop packaging: vite build -> stage -> @electron/packager -> SteamPipe ContentRoot -> fuses.
+// Vite writes build/vite-<edition>/ per edition; dist/ (the browser build) is never written here.
 // Usage: node scripts/desktop/package.mjs [--mode production|demo] [--no-asar-integrity]
 //   --mode production (default)  full edition -> out/steam/full/win-x64/
 //   --mode demo                  demo edition -> out/steam/demo/win-x64/
@@ -61,36 +62,41 @@ function readJson(file) {
 
 // 2. Vite build for the chosen mode (vite stdout goes to stderr; stdout stays the JSON line)
 
-function viteBuild(mode) {
+// Own output folder per edition, so a demo build never overwrites the browser dist/.
+function viteBuild(mode, edition) {
   const viteBin = path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js');
-  const result = spawnSync(process.execPath, [viteBin, 'build', '--mode', mode], {
+  const outDir = path.join(ROOT, 'build', `vite-${edition}`);
+  const args = ['build', '--mode', mode, '--outDir', outDir, '--emptyOutDir'];
+  const result = spawnSync(process.execPath, [viteBin, ...args], {
     stdio: ['inherit', 2, 'inherit'],
     cwd: ROOT,
   });
   if (result.error) fail(`vite build failed to start: ${result.error.message}`);
   if (result.status !== 0) fail(`vite build failed (status ${result.status})`);
-  if (!fs.existsSync(path.join(ROOT, 'dist', 'index.html'))) fail('vite build produced no dist/index.html');
+  if (!fs.existsSync(path.join(outDir, 'index.html'))) fail(`vite build produced no ${outDir}/index.html`);
+  return outDir;
 }
 
 // 3. Stage the app folder that packager reads
 
-function stageApp(version) {
+function stageApp(version, edition, viteOutDir) {
   fs.rmSync(STAGE_DIR, { recursive: true, force: true });
-  fs.cpSync(path.join(ROOT, 'dist'), path.join(STAGE_DIR, 'dist'), { recursive: true });
-  for (const file of ['main.cjs', 'preload.cjs', 'icon.png']) {
+  fs.cpSync(viteOutDir, path.join(STAGE_DIR, 'dist'), { recursive: true });
+  for (const file of ['main.cjs', 'preload.cjs', 'edition.cjs', 'icon.png']) {
     fs.copyFileSync(path.join(DESKTOP_DIR, file), path.join(STAGE_DIR, file));
   }
   const desktopPkg = readJson(path.join(DESKTOP_DIR, 'package.json'));
   fs.writeFileSync(
     path.join(STAGE_DIR, 'package.json'),
-    JSON.stringify({ ...desktopPkg, version }, null, 2) + '\n',
+    JSON.stringify({ ...desktopPkg, version, wedtmdEdition: edition }, null, 2) + '\n',
   );
 }
 
 // 4. Package with @electron/packager (asar on, Windows metadata, pinned Electron version)
 
-async function packageApp(version) {
+async function packageApp(version, edition) {
   const electronVersion = readJson(path.join(ROOT, 'node_modules', 'electron', 'package.json')).version;
+  const title = APP_TITLE + (edition === 'demo' ? ' Demo' : '');
   const appDirs = await packager({
     dir: STAGE_DIR,
     out: PACKAGER_OUT,
@@ -108,8 +114,8 @@ async function packageApp(version) {
     appCopyright: COPYRIGHT,
     win32metadata: {
       CompanyName: COMPANY,
-      ProductName: APP_TITLE,
-      FileDescription: APP_TITLE,
+      ProductName: title,
+      FileDescription: title,
       InternalName: EXE_NAME,
       OriginalFilename: `${EXE_NAME}.exe`,
     },
@@ -177,14 +183,14 @@ async function main() {
   const edition = opts.mode === 'demo' ? 'demo' : 'full';
   const version = readJson(path.join(ROOT, 'package.json')).version;
 
-  console.error(`package: vite build --mode ${opts.mode}`);
-  viteBuild(opts.mode);
+  console.error(`package: vite build --mode ${opts.mode} -> build/vite-${edition}`);
+  const viteOutDir = viteBuild(opts.mode, edition);
 
   console.error('package: stage build/desktop-app');
-  stageApp(version);
+  stageApp(version, edition, viteOutDir);
 
   console.error('package: @electron/packager win32-x64');
-  const appDir = await packageApp(version);
+  const appDir = await packageApp(version, edition);
 
   console.error(`package: copy to out/steam/${edition}/win-x64`);
   const dest = copyToContentRoot(appDir, edition);

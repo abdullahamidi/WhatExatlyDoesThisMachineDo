@@ -359,3 +359,63 @@ Main assertions (run order):
 
 Result keys: `showcase_A`, `showcase_B_k2_5`, `showcase_B_k3_9`, `showcase_B_k5_4`, `showcase_B_k6_9`, `showcase_B_k41_5`, `showcase_B_k45_2`, `showcase_B_k56`, `showcase_C`, `showcase_D`, `showcase_C2`, `showcase_F`, `showcase_E_era2`, `showcase_E_assembling`, `showcase_E_end`, `showcase_E_stop`.
 Note: frame max spikes come from CPU contention in the container, so the stage max gates use the median of the 3 windows; the raw max stays in the report.
+
+## WP21 Steam demo edition smokes (`demo.mjs`, `demo-cases.mjs`)
+
+Runs against the DEMO build: era cap at Substation Blueprint (era II), END OF DEMO card, final-machine teaser. Serve the
+demo build on its own port. Port 4175 keeps the production dist, so never use it here.
+
+```
+npm run build:demo
+npx vite preview --outDir dist-demo --port 4176 --strictPort    # background; stop it after the run
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/demo.mjs "http://localhost:4176/" C:/Users/<you>/AppData/Local/Temp/smoke/demo
+```
+
+- Base URL WITHOUT query. Each case adds its own (`?debug=1`; case A uses `?debug=1&title=1`).
+- Prints ONE JSON `{ results, fail, errors }`. Exit code 1 when `fail` or `errors` is non-empty; expect both `[]`.
+- Viewport 1280x720, `deviceScaleFactor` 1, fresh context per case. Wishlist popups are answered offline (route on
+  `store.steampowered.com`). Timeouts: waiting to teaser 8000 ms, teaser to card 60000 ms.
+- `demo.mjs` runs A, then B with C in the same page, then D, E, F. `demo-cases.mjs` holds C to F.
+
+| case | what |
+|---|---|
+| `A` | fresh start: title (`#title-version` = `v0.9.0 · DEMO · SAVE v2`), tech tree (5 tabs, eras III to V FULL GAME), SYSTEM menu (footer, no MEMORY tab, no DEMO ENDING row, RECORDS `/18`) |
+| `B` | reach the cap (S9 list + Substation Blueprint): waiting, teaser, card, wishlist, keep, tree after, SYSTEM row |
+| `C` | same page as B: reload with the cap owned, boot card, replay and skip |
+| `D` | reduced motion: portrait teaser and card |
+| `E` | clamp of a full-game save (era III levels, ending engaged, Echoes) that keeps an era II level (`copperWinding` 2), and its backup key |
+| `F` | boot where the offline catch-up crosses the cap: the stored save has the cap reset (`substationBlueprint` 0) and lifetime EE just under 4M, saved 1 h ago, so the boot teaser plays (`F_cap_not_yet` is read from the stored save) |
+
+Checks `A`: `A_title_demo`, `A_tabs_full_game`, `A_era3_refused` (`purchase('boiler')` reason `demo`), `A_footer_demo`,
+`A_memory_hidden`, `A_demo_row_hidden`, `A_records_18`.
+
+Checks `B`: `B_s9_buys`, `B_cap_owned`, `B_waiting`, `B_boiler_locked`, `B_teaser_started` (detail: ms since the cap, at
+least 3800), `B_caption` (`PRIMARY FUNCTION: RES?OR?`), `B_hud_hidden`, `B_no_spoiler`, `B_teaser_to_card`, `B_era3_seen`,
+`B_teaser_end`, `B_card_open`, `B_card_title`, `B_card_focus`, `B_quit_hidden`, `B_feedback_hidden`, `B_tab_trap`,
+`B_wishlist`, `B_keep`, `B_keep_crank`, `B_hud_rows` (2 rows), `B_tree_after`, `B_system_row`, `B_esc_keeps`, `B_plate_redacted`
+(the live World name plate frame is 2 and every teaser sample, card included, shows the same frame), `B_keep_focus` (case B opens the tree with the TECH INDEX button; after KEEP, focus is back on `#hud-tech`, visible and outside `#tech-overlay`). Notes, not
+failures: `B2_missed` / `B3_missed` (the era V or end teaser shot was not caught at a sample).
+Check `D_plate_redacted` (case D, card open): the teaser plate frame is 2 (RES?OR?) under reduced motion too.
+
+Screenshots in the outdir: `demo-A1-title.png`, `demo-A2-tree.png`, `demo-A3-menu.png`, `demo-B1-teaser-era3.png`,
+`demo-B2-teaser-era5.png`, `demo-B3-teaser-end.png`, `demo-B4-card.png`, `demo-B5-keep.png`, `demo-C1-boot-card.png`,
+`demo-D1-reduced.png`, `demo-F1-boot-teaser.png`.
+
+Save edits (cases E and F): `kit.editOnNextLoad(page, ops)` puts the ops in sessionStorage `wedtmd.smokeEdit`, e.g.
+`[{ path: 'state.techLevels.boiler', set: 1 }, { path: 'state.lastSimTime', add: -3600000 }]`. `set: '$lastSimTime'` means
+the save's own lastSimTime. `'$lastSimTime'` works only as the whole value of an op, so address the field itself (for example `state.ending.engagedAt`), never inside an object value. A generic init script on every context applies the ops to `localStorage['wedtmd.save']`
+before the app boots, then removes the flag, so it runs once. A direct localStorage edit would not work: the pagehide
+flush rewrites the save on reload. The edited string is kept in sessionStorage `wedtmd.smokeEditS`; `kit.editedSave(page)`
+returns it.
+
+## WP21 changes to the earlier smokes
+
+- `ux.mjs` WP21 checks: `A_toast_clear_tabs` (case A: at most one toast, none over an era tab, CLOSE or PURCHASE);
+  `D_<s>_buy_visible` (PURCHASE has a size, sits inside the tech panel, the detail pane and the viewport, and is the
+  element hit at its centre); `D_<s>_buy_visible_e2` (the same after era II and `powerLines`); `D_<s>_toast_clear_tabs`
+  (after a `copperWinding` buy). Shot `ux-D-<s>-tree-e2.png` (`<s>` = 100 and 150).
+- `desktop.mjs` with `DESKTOP_EDITION=demo`: for the demo exe (`npm run build:steam-demo`, `out/steam/demo/win-x64/`). It
+  expects the DEMO version line `v0.9.0 · DEMO · SAVE v2` and adds check `8_demo_tabs` (the era cap tabs). The default
+  `full` edition is unchanged.
+- Debug hook `window.__wedtmd.demoState()` returns `{ edition, phase, capReached, cardOpen, teaserActive, caption }`, or
+  `null` when the demo controller is absent (full game). `phase` is `idle`, `waiting`, `teaser` or `card`.

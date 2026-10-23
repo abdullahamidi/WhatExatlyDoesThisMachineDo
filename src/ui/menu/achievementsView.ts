@@ -2,7 +2,10 @@
 import { ACHIEVEMENT_IDS, ACHIEVEMENT_LIST, UI_ART } from '../../data/achievements';
 import type { AchievementDefinition, AchievementId } from '../../data/achievements';
 import { ACHIEVEMENT_TEXT, BADGE_VIEW } from '../../data/notifications';
-import type { AchievementsState } from '../../data/types';
+import { RESOURCES } from '../../data/resources';
+import { TECHNOLOGIES } from '../../data/technologies';
+import { TECH_IDS } from '../../data/types';
+import type { AchievementsState, ResourceDefinition, ResourceId, TechDefinition, TechId } from '../../data/types';
 
 // One sprite drawn from a sheet: frame at (frameIndex * box) of a row of frames, drawn at `box` px.
 export interface SpriteView {
@@ -63,11 +66,51 @@ export function achievementCards(
   });
 }
 
-// Counter line: how many known ids are unlocked, e.g. "3/31 LOGGED". Unknown ids are not counted.
+// Whether a row exists in an era-capped edition (maxEra null = full game). A row is shown only when every
+// era it depends on is inside the cap, so the demo never lists a record it cannot reach.
+export function achievementInEdition(
+  def: AchievementDefinition,
+  maxEra: number | null,
+  techs: Readonly<Record<TechId, TechDefinition>> = TECHNOLOGIES,
+  resources: Readonly<Record<ResourceId, ResourceDefinition>> = RESOURCES,
+): boolean {
+  if (maxEra === null) return true;
+  const c = def.condition;
+  switch (c.type) {
+    case 'tech':
+      return techs[c.id].era <= maxEra;
+    case 'lifetime':
+      return c.res === 'any' ? true : resources[c.res].era <= maxEra;
+    case 'maxRate':
+      return resources[c.res].era <= maxEra;
+    case 'techsOwned': {
+      // Owning N techs is only reachable in the cap if N techs exist inside it.
+      const inEra = TECH_IDS.filter((id) => techs[id].era <= maxEra).length;
+      return c.atLeast <= inEra;
+    }
+    case 'prestige':
+      // Memory perks and echoes come from the cycle reset, which the demo does not reach.
+      return false;
+    case 'stat':
+      // Cycle counts need a finished cycle, which the era-capped demo does not reach.
+      return c.key !== 'cycles';
+  }
+}
+
+// Card list for an edition: a new array in definition order, so callers may keep or mutate it.
+export function editionAchievements(
+  maxEra: number | null,
+  defs: readonly AchievementDefinition[] = ACHIEVEMENT_LIST,
+): AchievementDefinition[] {
+  return defs.filter((d) => achievementInEdition(d, maxEra));
+}
+
+// Counter line: how many of the given ids are unlocked, e.g. "3/31 LOGGED". Unknown ids are not counted.
 export function counterText(
   unlocked: AchievementsState['unlocked'],
   total: number = ACHIEVEMENT_LIST.length,
+  ids: readonly AchievementId[] = ACHIEVEMENT_IDS,
 ): string {
-  const count = ACHIEVEMENT_IDS.filter((id) => unlocked[id] !== undefined).length;
+  const count = ids.filter((id) => unlocked[id] !== undefined).length;
   return `${count}/${total} ${ACHIEVEMENT_TEXT.logged}`;
 }

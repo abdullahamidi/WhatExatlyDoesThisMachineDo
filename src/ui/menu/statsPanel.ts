@@ -1,7 +1,7 @@
 import './statsPanel.css';
 import type { StatsState } from '../../data/types';
 import { statsRows } from './statsView';
-import type { StatsRow } from './statsView';
+import type { StatsRow, StatsRowOptions } from './statsView';
 
 // STATS tab (DOM, WP12 T7). A <dl> of rows. refresh() reuses the row nodes by label and rewrites only
 // the cells whose text changed; rows are moved or added/removed only when the row list itself changes.
@@ -9,6 +9,8 @@ import type { StatsRow } from './statsView';
 export interface StatsPanelDeps {
   getStats(): Readonly<StatsState>;
   subscribe(fn: () => void): () => void;
+  // Edition filter for the rows. Default: every row.
+  rowOptions?: StatsRowOptions;
 }
 
 export interface StatsPanelHandle {
@@ -74,7 +76,7 @@ export function createStatsPanel(host: HTMLElement, deps: StatsPanelDeps): Stats
 
   function refresh(): void {
     if (destroyed) return;
-    sync(statsRows(deps.getStats()));
+    sync(statsRows(deps.getStats(), undefined, deps.rowOptions));
   }
 
   refresh();

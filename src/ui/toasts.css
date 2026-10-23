@@ -141,3 +141,9 @@ body:has(#tech-overlay.is-open) .toast {
   text-align: left;
   max-width: min(400px, calc(46vw / var(--ui-zoom, 1)));
 }
+
+/* WP21: with the tech tree open only the newest toast shows, title only and compact, so it stays clear of the era tabs. */
+body:has(#tech-overlay.is-open) #toast-stack > .toast:not(:last-child) { display: none; }
+body:has(#tech-overlay.is-open) .toast-body { display: none; }
+body:has(#tech-overlay.is-open) .toast, body:has(#tech-overlay.is-open) .toast--milestone { padding: 4px 10px; }
+body:has(#tech-overlay.is-open) .toast--milestone .toast-title { font-size: 1em; }

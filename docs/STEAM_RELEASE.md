@@ -19,13 +19,12 @@ Program decisions: `docs/plan/STEAM_DEMO_PROGRAM.md` (D4 editions, D5 shell).
 `build:steam` / `build:steam-demo` steps:
 
 1. `npm run typecheck` (`tsc --noEmit`).
-2. `vite build --mode <mode>` into `dist/`.
+2. `vite build --mode <mode>` into `build/vite-<edition>/` (`dist/` is never touched).
 3. `scripts/desktop/package.mjs` stages the app and packages Windows x64 with `@electron/packager`.
 4. Fuses flipped with `@electron/fuses` (section 3).
 5. Result folder = SteamPipe ContentRoot (section 4).
 
-- Demo edition: the folder and edition name are the only difference for now. Demo gating (era cap, end card)
-  arrives in a later package.
+- Demo edition: era cap, end card and its own save folder and Steam app. See section 14.
 - `out/`, `build/` and `dist/` are gitignored. Do not commit them.
 
 ## 2 Prerequisites
@@ -172,7 +171,7 @@ Steamworks > Application > Cloud:
   count toward the quota.
 - Native Linux build (later): root override `LinuxXdgConfigHome`, same subdirectory.
 - Proton: uses the prefix's Roaming folder (`compatdata/<appid>/pfx/drive_c/users/steamuser/AppData/Roaming/`).
-- Open decision: whether demo and full share saves (later package).
+- Demo edition has its own Auto-Cloud subdirectory and never shares saves with the full game (section 14).
 
 ## 7 Save and log locations
 
@@ -190,6 +189,8 @@ User-data folder:
 |---|---|
 | Packaged | `%APPDATA%/WhatExactlyDoesThisMachineDo/` |
 | Unpackaged (dev run) | `%APPDATA%/WhatExactlyDoesThisMachineDo-dev/` |
+| Packaged demo | `%APPDATA%/WhatExactlyDoesThisMachineDo Demo/` |
+| Unpackaged demo (dev run) | `%APPDATA%/WhatExactlyDoesThisMachineDo Demo-dev/` |
 
 Contents (under the user-data folder):
 
@@ -283,3 +284,108 @@ Before step 1: bump the version together in `package.json`, `desktop/package.jso
 - Asar-integrity fuse: only if it had to be turned off. Record the reason and fallback here.
 - A save file that exists but stays unreadable (for example an antivirus lock) is not overwritten during that session; the cause is logged in logs/main.log.
 - Window default is a 1280x720 PAGE area; on displays about 768 px high the window frame can reach below the work area.
+
+## 14 Demo edition
+
+The demo is a separate Steam app with its own depot, save folder, window title and app user model id. It never
+shares a depot or a save folder with the full game. Names live in `desktop/edition.cjs`, caps and links in
+`src/data/edition.ts`, end-flow copy and timings in `src/data/demo.ts`.
+
+| Item | Full game | Demo |
+|---|---|---|
+| Steam app | `0000000` | `0000002` (placeholder, section 4) |
+| Depot | `0000001` | `0000003` (placeholder, section 4) |
+| Vite output | `build/vite-full/` | `build/vite-demo/` |
+| SteamPipe ContentRoot | `out/steam/full/win-x64/` | `out/steam/demo/win-x64/` |
+| Window title | `What Exactly Does This Machine Do?` | `What Exactly Does This Machine Do? Demo` |
+| App user model id | `com.abdullahamidi.wedtmd` | `com.abdullahamidi.wedtmd.demo` |
+| Save folder (packaged) | `%APPDATA%/WhatExactlyDoesThisMachineDo/saves` | `%APPDATA%/WhatExactlyDoesThisMachineDo Demo/saves` |
+| Launch option | section 5 | section 5, set on the demo app |
+
+Demo VDF pair (docs only, same rules as section 4, paths relative to `steam/`):
+
+`steam/app_build_0000002.vdf`:
+
+```
+"appbuild"
+{
+  "appid" "0000002"
+  "desc" "WEDTMD demo v0.9.0"
+  "buildoutput" "..\build\steam-output\"
+  "contentroot" "..\out\steam\demo\win-x64\"
+  "setlive" ""
+  "preview" "0"
+  "depots"
+  {
+    "0000003" "depot_build_0000003.vdf"
+  }
+}
+```
+
+`steam/depot_build_0000003.vdf`:
+
+```
+"DepotBuildConfig"
+{
+  "DepotID" "0000003"
+  "FileMapping"
+  {
+    "LocalPath" "*"
+    "DepotPath" "."
+    "recursive" "1"
+  }
+  "FileExclusion" "*.pdb"
+}
+```
+
+Upload: `steamcmd +login <builder> +run_app_build "<absolute path>\app_build_0000002.vdf" +quit`.
+
+Demo Auto-Cloud (Steamworks > Application > Cloud on the demo app):
+
+| Field | Value |
+|---|---|
+| Root | `WinAppDataRoaming` |
+| Subdirectory | `WhatExactlyDoesThisMachineDo Demo/saves` |
+| Pattern | `*.json` |
+| OS | Windows |
+| Byte quota | 1 MB |
+| File count | 10 |
+
+Wishlist target:
+
+- Both shells point at the FULL game page, Steam app `0000000` (placeholder).
+- Desktop opens `steam://store/0000000` through the Steam client. Web opens `https://store.steampowered.com/app/0000000/`.
+- To change the id: edit `STEAM_STORE` in `src/data/edition.ts` (`appId`, `storeUrl`, `steamUrl`). The `EXTERNAL_ALLOW`
+  prefixes in `desktop/main.cjs` (`https://store.steampowered.com/`, `steam://`) must still cover the new URLs.
+
+Era cap:
+
+- The demo stops at era II, Substation Blueprint (`capTech` and `maxEra` in `src/data/edition.ts`).
+- Eras III to V stay locked. Their tech tree tabs read FULL GAME and are disabled.
+
+End flow:
+
+1. Substation Blueprint milestone.
+2. Wait 4 s (`DEMO_END.triggerDelayMs`).
+3. Final-machine teaser (about 9.5 s).
+4. END OF DEMO card. Buttons: WISHLIST ON STEAM, KEEP TINKERING, REPLAY TEASER, QUIT (desktop only). Esc = KEEP TINKERING.
+5. SYSTEM menu row DEMO ENDING re-opens the card.
+
+Saves:
+
+- No automatic carry-over between demo and full. To move progress, use SYSTEM > DATA: export in one build, import
+  in the other.
+- When a demo boot had to clamp a save (progress beyond the cap), the original text is kept under the storage key
+  `wedtmd.save.fullgame` (file `saves/wedtmd.save.fullgame.json`).
+
+Web demo:
+
+- `npm run build:demo` writes `dist-demo/`. Host it as a separate site or origin. Browser saves are per origin, so
+  the demo and full web builds never mix saves.
+
+Demo verification checklist:
+
+1. [ ] `npm run build:demo`, then `npx vite preview --outDir dist-demo --port 4176 --strictPort` (keep running).
+       `node scripts/smoke/demo.mjs http://localhost:4176/ <outdir>` (needs `PW_PATH`). Stop the preview afterwards.
+2. [ ] `npm run build:steam-demo`. `out/steam/demo/win-x64/` has the section 4 contents.
+3. [ ] `DESKTOP_EDITION=demo PW_PATH=<playwright dir> node scripts/smoke/desktop.mjs out/steam/demo/win-x64/WhatExactlyDoesThisMachineDo.exe <outdir>`.

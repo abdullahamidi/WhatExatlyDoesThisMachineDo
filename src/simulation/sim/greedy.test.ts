@@ -171,6 +171,30 @@ describe('runGreedy', () => {
   });
 });
 
+// WP21 demo cap: the greedy player never buys above era II, and era-II progress is unaffected.
+describe('runGreedy demo era cap (WP21)', () => {
+  let capped: GreedyResult;
+  let full: GreedyResult;
+
+  beforeAll(() => {
+    capped = runGreedy({ ...options(5400), maxEra: 2 });
+    full = runGreedy(options(5400));
+  });
+
+  it('owns and buys no tech above the era cap', () => {
+    for (const id of TECH_IDS) {
+      if (TECHNOLOGIES[id].era > 2) expect(capped.final.techLevels[id]).toBe(0);
+    }
+    for (const p of capped.purchases) expect(TECHNOLOGIES[p.id].era).toBeLessThanOrEqual(2);
+  });
+
+  it('Substation Blueprint is owned at the same time with and without the cap', () => {
+    expect(Number.isFinite(capped.firstAt.substationBlueprint)).toBe(true);
+    expect(Number.isFinite(full.firstAt.substationBlueprint)).toBe(true);
+    expect(capped.firstAt.substationBlueprint).toBe(full.firstAt.substationBlueprint);
+  });
+});
+
 describe('maxPurchaseGap', () => {
   it('no buys -> the whole window', () => {
     expect(maxPurchaseGap([], 0, 10)).toBe(10);

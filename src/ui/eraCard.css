@@ -39,15 +39,15 @@
   display: none;
 }
 
-/* Durations mirror ERA_CARD.fadeInMs (250 ms) and ERA_CARD.fadeOutMs (350 ms) in src/data/ux.ts. */
+/* Durations come from ERA_CARD in src/data/ux.ts through the --era-card-in / --era-card-out custom properties set by eraCard.ts. */
 #era-card.is-shown {
   opacity: 1;
-  animation: era-card-in 250ms ease-out;
+  animation: era-card-in var(--era-card-in) ease-out;
 }
 
 #era-card.is-fading {
   opacity: 0;
-  transition: opacity 350ms ease-in;
+  transition: opacity var(--era-card-out) ease-in;
 }
 
 .era-card-title {

@@ -37,12 +37,14 @@ import { showStorageWarning } from '../ui/storageWarning';
 import { registerCrashSaver } from '../ui/crashOverlay';
 import { createFinaleOverlay } from '../ui/finale';
 import { createCycleConfirm } from '../ui/cycleConfirm';
+import type { DemoEnd } from '../ui/demoEnd';
 import { setRevealed } from '../ui/revealRules';
 import { bindHotkeys } from '../ui/hotkeys';
 import { uiRootAttrs } from '../ui/menu/settingsView';
 import { createSettingsPanel } from '../ui/menu/settingsPanel';
 import { createStatsPanel } from '../ui/menu/statsPanel';
 import { createAchievementsPanel } from '../ui/menu/achievementsPanel';
+import { editionAchievements } from '../ui/menu/achievementsView';
 import { createMemoryPanel } from '../ui/menu/memoryPanel';
 import { createDataPanel } from '../ui/menu/dataPanel';
 import { setDefaultNotation } from '../utils/format';
@@ -50,8 +52,12 @@ import { createGameAudio } from '../audio/gameAudio';
 import { isFinaleLocked, isRevealed } from '../simulation';
 import { VIEW } from '../data/world';
 import { PALETTE_CSS } from '../data/palette';
+import { EDITIONS, capReached } from '../data/edition';
+import type { Edition } from '../data/edition';
+import { SHOWCASE_TEASER } from '../data/showcase';
 import { BootScene } from './scenes/BootScene';
 import { WorldScene } from './scenes/WorldScene';
+import { ShowcaseScene } from './scenes/ShowcaseScene';
 import { installDebugHook } from './debugHook';
 
 // Composition root. Boot: load the save (offline progress applied once, then written back), build the
@@ -60,6 +66,7 @@ import { installDebugHook } from './debugHook';
 // StartupResult, because the boot 'offline' event fires before any listener exists.
 // WP19: the desktop host (when present) supplies the save storage, the title screen holds the boot notices until
 // it closes, the crash overlay saves through the same controller, and the UI root follows the canvas viewport.
+// WP21: the edition (main.ts, from the build mode) sets the era cap, the demo-aware panels and the lazy END OF DEMO module.
 /** One disposer for several session subscriptions. */
 function joinUnsubscribes(...unsubscribes: Array<() => void>): () => void {
   return () => {
@@ -68,22 +75,31 @@ function joinUnsubscribes(...unsubscribes: Array<() => void>): () => void {
 }
 
 export interface BootOptions {
-  /** WP21 passes 'DEMO'. */
-  editionLabel?: string | null;
+  /** default EDITIONS.full; main.ts passes the build mode's edition */
+  edition?: Edition;
+  /** Demo builds only: loads the END OF DEMO module. Absent in the full build, so its code never ships there. */
+  loadDemoEnd?: () => Promise<typeof import('../ui/demoEnd')>;
   /** default window.location.search */
   search?: string;
 }
 
 export function bootstrap(opts: BootOptions = {}): Phaser.Game {
   const search = opts.search ?? window.location.search;
-  const editionLabel = opts.editionLabel ?? null;
+  const edition = opts.edition ?? EDITIONS.full;
   const host = getHost(window);
   const picked = pickStorage({ host, legacy: browserStorage });
   const saveManager = new SaveManager(picked.storage);
-  const startup = startSession(saveManager, Date.now());
+  const startup = startSession(saveManager, Date.now(), undefined, { maxEra: edition.maxEra });
   const session = startup.session;
-  const version = versionLine(APP_VERSION, SAVE_VERSION, editionLabel);
-  const versionAria = versionAriaLabel(APP_VERSION, editionLabel);
+  // WP21: the demo end module arrives late (lazy chunk); until then the boot check waits.
+  let demoEnd: DemoEnd | null = null;
+  let demoBootPending = true;
+  // The stored save did not own the cap tech, but the boot catch-up crossed it: the teaser plays, not a plain card.
+  const capJustReached = edition.capTech !== null
+    && startup.load.state.techLevels[edition.capTech] < 1
+    && session.state.techLevels[edition.capTech] >= 1;
+  const version = versionLine(APP_VERSION, SAVE_VERSION, edition.label);
+  const versionAria = versionAriaLabel(APP_VERSION, edition.label);
 
   // One Escape listener for the whole page lifetime; it closes only the top-most modal.
   const modals = createModalStack();
@@ -200,7 +216,7 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
         update: (patch) => session.updateSettings(patch),
         subscribe: (fn) => session.on('settings', () => fn()),
         fullscreen,
-        cycleRelevant: () => prestigeUiVisible(session.state.ending.phase, session.prestige.cycle),
+        cycleRelevant: () => !edition.demo && prestigeUiVisible(session.state.ending.phase, session.prestige.cycle),
       }),
     },
     {
@@ -214,6 +230,7 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
           session.on('offline', fn),
           session.on('reset', fn),
         ),
+        rowOptions: { hideCycles: edition.demo, maxEra: edition.maxEra },
       }),
     },
     {
@@ -222,12 +239,13 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
       mount: (host) => createAchievementsPanel(host, {
         getUnlocked: () => session.achievements,
         subscribe: (fn) => joinUnsubscribes(session.on('achievement', fn), session.on('reset', fn)),
+        defs: editionAchievements(edition.maxEra),
       }),
     },
     {
       id: MENU_TABS.memory.id,
       label: MENU_TABS.memory.label,
-      visible: () => prestigeUiVisible(session.state.ending.phase, session.prestige.cycle),
+      visible: () => !edition.demo && prestigeUiVisible(session.state.ending.phase, session.prestige.cycle),
       mount: (host) => createMemoryPanel(host, {
         // Thin adapter: the panel listens to three events, with no payload it needs.
         session: {
@@ -265,6 +283,9 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
     modals,
     panels,
     ending: { phase: () => session.state.ending.phase, newCycle: ctx.newCycle },
+    demoEnding: edition.demo
+      ? { reached: () => demoEnd !== null && capReached(session.state.techLevels, edition.capTech), open: () => demoEnd?.openCard() }
+      : undefined,
     quit: quitToDesktop,
     openCredits: () => credits.open(),
     footer: { text: version, ariaLabel: versionAria },
@@ -301,12 +322,12 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
     modals,
     crank: () => ctx.commands.crank.emit(),
     toggleTechTree: () => {
-      if (isFinaleLocked(session.state.ending) || newCycleHoldsKeys() || shellHoldsKeys()) return;
+      if (isFinaleLocked(session.state.ending) || newCycleHoldsKeys() || shellHoldsKeys() || demoEnd?.isBusy() === true) return;
       if (techTree.isOpen()) techTree.close();
       else ctx.commands.openTechTree.emit();
     },
     openMenu: () => {
-      if (isFinaleLocked(session.state.ending) || newCycleHoldsKeys() || shellHoldsKeys()) return;
+      if (isFinaleLocked(session.state.ending) || newCycleHoldsKeys() || shellHoldsKeys() || demoEnd?.isBusy() === true) return;
       ctx.commands.openSystemMenu.emit();
     },
   });
@@ -331,6 +352,17 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
   connectOfflineNotices(session, toasts);
   connectSystemLog(session, toasts);
 
+  // WP21: the demo end is decided once the World is up and no title blocks: cap owned -> card (or the teaser when the boot catch-up crossed the cap).
+  const runDemoBoot = (): void => {
+    if (!demoBootPending || demoEnd === null || modals.has(TITLE_STACK_ID)) return;
+    if (game === null || !game.scene.isActive('World')) {
+      window.setTimeout(runDemoBoot, 100);
+      return;
+    }
+    demoBootPending = false;
+    demoEnd.bootCheck({ teaser: capJustReached });
+  };
+
   // Title screen (WP19). Shown on a normal boot; the boot notices wait behind it. CONTINUE and Esc release them.
   // NEW GAME erases the save (when there is one) and drops the notices. Quit exists only on the desktop host.
   const hasSave = startup.load.status !== 'new';
@@ -347,13 +379,17 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
       } else {
         showBootNotices();
       }
+      runDemoBoot();
     },
     openSettings: () => systemMenu.open(MENU_TABS.settings.id),
     openCredits: () => credits.open(),
     quit: () => quitToDesktop?.(),
   });
   if (shouldShowTitle({ search, phase: session.state.ending.phase })) title.open();
-  else showBootNotices();
+  else {
+    showBootNotices();
+    runDemoBoot();
+  }
 
   // Unload saves: the tab may be closed before the next autosave tick.
   document.addEventListener('visibilitychange', () => {
@@ -388,9 +424,31 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
   game.scale.on(Phaser.Scale.Events.RESIZE, () => viewport.sync());
   game.events.once(Phaser.Core.Events.READY, () => viewport.sync());
   viewport.sync();
+  // Demo builds only: the END OF DEMO module loads after the game exists; its teaser drives the World scene.
+  if (edition.demo && opts.loadDemoEnd) {
+    opts.loadDemoEnd().then((m) => {
+      demoEnd = m.createDemoEnd(root, {
+        session, edition, modals,
+        teaser: {
+          play: (onDone) => { if (game !== null) ShowcaseScene.play(game, { settings: session.settings, plateMaxTech: edition.capTech ?? undefined, onDone }); },
+          skipToEnd: () => { if (game !== null) ShowcaseScene.ensure(game).seek(SHOWCASE_TEASER.endS); },
+          stop: () => { if (game !== null) ShowcaseScene.stop(game); },
+        },
+        closeDialogs: () => { techTree.close(); systemMenu.close(); },
+        blocked: () => shellHoldsKeys() || newCycleHoldsKeys(),
+        openUrl: (url) => { if (host !== null) host.openExternal(url); else window.open(url, '_blank', 'noopener,noreferrer'); },
+        desktop: host !== null,
+        quit: quitToDesktop,
+      });
+      runDemoBoot();
+    }, (err) => console.error('[demo] end module failed to load', err));
+  }
   // The debug hook is test-only: never with a packaged desktop host, and only with ?debug or a dev build.
   if (debugEnabled(search, import.meta.env.DEV) && host?.isPackaged !== true) {
-    installDebugHook(session, game, techTree, { modals, systemMenu, saveController, audio, newCycle });
+    installDebugHook(session, game, techTree, {
+      modals, systemMenu, saveController, audio, newCycle,
+      demo: () => demoEnd?.debugState() ?? null,
+    });
   }
   return game;
 }

@@ -1,6 +1,7 @@
 // WP20 T15 UX smoke: first-impression behaviour in a real browser (screenshots ux-*.png in the outdir).
 // Cases: A (crank prompt, hint, tree buy, fly-in), B (era cards), C (no era card in the finale),
 // D_100 / D_150 (TECH INDEX and SYSTEM menu layout at uiScale 100 / 150), perf (30 clicks, report only).
+// WP21 adds A_toast_clear_tabs and D_<s>_buy_visible / _buy_visible_e2 / _toast_clear_tabs (tree toast clear of tabs, PURCHASE in view).
 // Usage: PW_PATH=... node scripts/smoke/ux.mjs <url> <outdir>   (url like http://localhost:4175/?debug=1)
 // Prints ONE JSON object { results, fail, errors }; exit code 1 when fail or errors is non-empty.
 import { createRequire } from 'module';
@@ -85,6 +86,27 @@ const buyList = async (page, buys, clicks = 45) => {
   }, buys);
 };
 
+// WP21: no more than one visible toast, and none overlaps an era tab, CLOSE or PURCHASE.
+const toastClearTabs = () => {
+  const hits = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  const shown = [...document.querySelectorAll('.toast')].filter(t => t.getClientRects().length > 0);
+  const blockers = [...document.querySelectorAll('.tech-tab'), document.querySelector('#tech-close'), document.querySelector('#tech-buy')]
+    .filter(b => b !== null).map(b => b.getBoundingClientRect());
+  return shown.length <= 1 && shown.every(t => blockers.every(b => !hits(t.getBoundingClientRect(), b)));
+};
+// WP21: PURCHASE has a size, sits inside the tech panel and the detail pane and the viewport (1 px tolerance) and is the element hit at its centre.
+const buyVisible = () => {
+  const b = document.getElementById('tech-buy'), panel = document.getElementById('tech-panel'), detail = document.getElementById('tech-detail');
+  if (!b || !panel || !detail) return false;
+  const r = b.getBoundingClientRect(), p = panel.getBoundingClientRect(), d = detail.getBoundingClientRect();
+  const inside = (a, c) => a.left >= c.left - 1 && a.top >= c.top - 1 && a.right <= c.right + 1 && a.bottom <= c.bottom + 1;
+  if (!(r.width > 0 && r.height > 0)) return false;
+  if (!inside(r, p) || !inside(r, d)) return false;
+  if (r.left < -1 || r.top < -1 || r.right > window.innerWidth + 1 || r.bottom > window.innerHeight + 1) return false;
+  const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  return hit !== null && (hit === b || b.contains(hit));
+};
+
 // A fresh: crank prompt, hint after 15 clicks, tree focus and tab chip, buy from the tree, fly-in on close.
 const caseA = async page => {
   ok('A_prompt_visible', (await crankPrompt(page)) === true);
@@ -137,6 +159,7 @@ const caseA = async page => {
     const toasts = [...document.querySelectorAll('.toast')].map(t => t.getBoundingClientRect());
     return getComputedStyle(stack).zIndex === '200' && toasts.every(t => buttons.every(b => !hits(t, b)));
   }));
+  ok('A_toast_clear_tabs', await page.evaluate(toastClearTabs));
   await shot(page, 'ux-A3-tree-buy');
   await page.keyboard.press('Escape');
   await page.waitForTimeout(250);
@@ -218,7 +241,17 @@ const caseD = async (page, s) => {
     const a = node.getBoundingClientRect(), g = graph.getBoundingClientRect();
     return a.width > 0 && a.height > 0 && a.left >= g.left - 1 && a.top >= g.top - 1 && a.right <= g.right + 1 && a.bottom <= g.bottom + 1;
   }));
+  ok(`D_${s}_buy_visible`, await page.evaluate(buyVisible));
   await shot(page, `ux-D-${s}-tree`);
+  await page.click('#tech-tab-2');
+  await page.waitForTimeout(200);
+  await page.click('.tech-node[data-tech=powerLines]');
+  await page.waitForTimeout(200);
+  ok(`D_${s}_buy_visible_e2`, await page.evaluate(buyVisible));
+  await page.evaluate(() => window.__wedtmd.session.purchase('copperWinding'));
+  await page.waitForTimeout(300);
+  ok(`D_${s}_toast_clear_tabs`, await page.evaluate(toastClearTabs));
+  await shot(page, `ux-D-${s}-tree-e2`);
   // Esc closes the tree; when that did not open the menu, one more Esc opens it
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);

@@ -32,6 +32,7 @@ export const MENU_TEXT = {
   cancel: 'CANCEL',
   credits: 'CREDITS',
   quit: 'QUIT TO DESKTOP',
+  demoEnding: 'DEMO ENDING',
 } as const;
 
 // Tab bar entries. The SYSTEM tab is always first; deps.panels add tabs after it.

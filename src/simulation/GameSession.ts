@@ -24,6 +24,8 @@ import { evaluateAchievements } from './achievements';
 import { computeRates } from './production/rates';
 import { advance, applyClick, applyOffline as applyOfflineState } from './production/tick';
 import { evaluateMilestones } from './progression/milestones';
+import { clampStateToEra } from './progression/edition';
+import type { EraCap } from './progression/edition';
 import { advanceEnding, isRevealed, startEnding } from './progression/ending';
 import { purchase as purchaseTech } from './progression/purchase';
 import { getAllTechViews, getTechView } from './progression/status';
@@ -62,6 +64,8 @@ export interface GameSessionOptions {
   prestige?: PrestigeState;
   /** Epoch-ms clock used when a method is called without an explicit time. Defaults to Date.now. */
   now?: () => number;
+  /** WP21: era cap of the demo edition. Absent/null = full game. */
+  maxEra?: EraCap;
 }
 
 /**
@@ -89,6 +93,10 @@ export interface GameSessionOptions {
  * `state`, `rates`, `settings`, `stats` and `achievements` are immutable snapshots: never mutate
  * them. Each change replaces the object. Compare `revision` between frames to skip re-rendering
  * when nothing changed.
+ *
+ * Demo edition (WP21): with `maxEra`, the session never owns a tech of era > maxEra. The constructor
+ * clamps the given state; purchases, perks and new cycles keep the cap, and milestones above it never
+ * unlock. Save loading clamps too (persistence), so this only guards the in-memory state.
  */
 export class GameSession {
   private current: GameState;
@@ -101,17 +109,19 @@ export class GameSession {
   private currentRevision = 0;
   private offlineApplied = false;
   private readonly clock: () => number;
+  private readonly capEra: EraCap;
   private readonly emitter = new TypedEmitter();
 
   constructor(options: GameSessionOptions) {
-    this.current = options.state;
+    this.capEra = options.maxEra ?? null;
+    this.current = clampStateToEra(options.state, this.capEra).state;
     this.currentSettings = normalizeSettings(options.settings ?? {});
     this.clock = options.now ?? (() => Date.now());
     this.currentPrestige = normalizePrestige(options.prestige ?? DEFAULT_PRESTIGE);
     this.cachedTechs = cycleTechs(TECHNOLOGIES, this.currentPrestige);
-    this.cachedRates = computeRates(options.state, this.cachedTechs);
+    this.cachedRates = computeRates(this.current, this.cachedTechs);
     this.currentStats = {
-      ...bumpMaxRates(options.stats ?? deriveStats(options.state, this.clock()), this.cachedRates.perSecond),
+      ...bumpMaxRates(options.stats ?? deriveStats(this.current, this.clock()), this.cachedRates.perSecond),
       cycles: this.currentPrestige.cycle,
     };
     this.currentAchievements = options.achievements ?? { unlocked: {} };
@@ -152,6 +162,11 @@ export class GameSession {
     return this.cachedTechs;
   }
 
+  /** Era cap of the edition (WP21 demo); null = full game. Fixed at construction. */
+  get maxEra(): EraCap {
+    return this.capEra;
+  }
+
   /**
    * Counter bumped on every change to state or settings. Equal values between two reads mean
    * nothing observable changed, so a UI may skip re-rendering. Never decreases.
@@ -181,7 +196,7 @@ export class GameSession {
    * 'sequence') when an ending tech has just been bought.
    */
   purchase(id: TechId): PurchaseResult {
-    const result = purchaseTech(this.current, id, this.cachedTechs);
+    const result = purchaseTech(this.current, id, this.cachedTechs, this.capEra);
     if (!result.ok) return result;
 
     const previousLevel = this.current.techLevels[id];
@@ -256,12 +271,12 @@ export class GameSession {
 
   /** View model of one technology for the current state. */
   getTechView(id: TechId): TechView {
-    return getTechView(this.current, id, this.cachedTechs);
+    return getTechView(this.current, id, this.cachedTechs, this.capEra);
   }
 
   /** View models of every technology, in TECH_LIST order. */
   getAllTechViews(): TechView[] {
-    return getAllTechViews(this.current, this.cachedTechs);
+    return getAllTechViews(this.current, this.cachedTechs, this.capEra);
   }
 
   /**
@@ -301,7 +316,7 @@ export class GameSession {
 
     this.applyPrestige(next);
     this.offlineApplied = true; // the fresh run has no offline progress to award
-    this.setState(newCycleState(t, next), true);
+    this.setState(clampStateToEra(newCycleState(t, next), this.capEra).state, true);
     this.patchStats({ cycles: next.cycle, bestCycleSeconds });
     this.emitter.emit('reset', {});
     this.emitter.emit('cycle', { cycle: next.cycle, echoesGained: gained, echoesEarned: next.echoesEarned });
@@ -320,7 +335,7 @@ export class GameSession {
 
     const previousLevels = this.current.techLevels;
     this.applyPrestige(result.prestige);
-    const next = applyStartLevels(this.current, result.prestige);
+    const next = clampStateToEra(applyStartLevels(this.current, result.prestige), this.capEra).state;
     this.setState(next, true);
     for (const techId of TECH_IDS) {
       if (previousLevels[techId] === 0 && next.techLevels[techId] > 0) {
@@ -411,7 +426,7 @@ export class GameSession {
    * followed by 'milestone'.
    */
   private checkMilestones(): void {
-    const { state, unlocked } = evaluateMilestones(this.current, this.cachedTechs);
+    const { state, unlocked } = evaluateMilestones(this.current, this.cachedTechs, this.capEra);
     if (unlocked.length === 0) return;
     this.setState(state);
     for (const id of unlocked) {

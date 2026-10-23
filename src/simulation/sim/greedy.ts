@@ -7,6 +7,7 @@ import { computeRates } from '../production/rates';
 import { getTechStatus } from '../progression/status';
 import { purchase } from '../progression/purchase';
 import { evaluateMilestones } from '../progression/milestones';
+import type { EraCap } from '../progression/edition';
 import { createInitialState } from '../state';
 
 // Reusable deterministic greedy-player harness for balance simulations. Pure: no clock, no
@@ -37,6 +38,8 @@ export interface GreedyOptions {
   snapshotAt?: readonly TechId[];
   /** Optional active/offline block schedule. Absent = continuous active play (no offline). */
   schedule?: GreedySchedule;
+  /** Demo edition era cap: techs above it are never bought, milestones above it never unlock. Absent = full game. */
+  maxEra?: EraCap;
 }
 
 export interface GreedyResult {
@@ -81,11 +84,11 @@ function nextCostOf(state: GameState, id: TechId, techs: Record<TechId, TechDefi
 }
 
 /** Candidates in TECH_IDS order. Built per buy tick (cheap: no effect or requirement text). */
-function candidates(state: GameState, techs: Record<TechId, TechDefinition>): Candidate[] {
+function candidates(state: GameState, techs: Record<TechId, TechDefinition>, maxEra: EraCap): Candidate[] {
   return TECH_IDS.map((id) => ({
     id,
     def: techs[id],
-    status: getTechStatus(state, id, techs),
+    status: getTechStatus(state, id, techs, maxEra),
     nextCost: nextCostOf(state, id, techs),
   }));
 }
@@ -103,6 +106,7 @@ function pickCheapest(list: readonly Candidate[], res: ResourceId): Candidate | 
 
 export function runGreedy(o: GreedyOptions): GreedyResult {
   const techs = o.techs ?? TECHNOLOGIES;
+  const maxEra = o.maxEra ?? null;
   let state: GameState = o.initial ?? createInitialState(0);
   const firstAt = {} as Record<TechId, number>;
   for (const id of TECH_IDS) firstAt[id] = Infinity;
@@ -165,20 +169,20 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
     for (let i = 0; i < clicks; i++) state = applyClick(state, techs).state;
 
     state = advance(state, o.stepSeconds, techs);
-    state = evaluateMilestones(state, techs).state;
+    state = evaluateMilestones(state, techs, maxEra).state;
 
     const ratio = t / o.buyIntervalSeconds;
     if (Math.abs(ratio - Math.round(ratio)) < 1e-9) {
       // candidates are rebuilt only after a successful purchase: identical picks, far fewer rebuilds
-      let list = candidates(state, techs);
+      let list = candidates(state, techs, maxEra);
       for (const res of RESOURCE_IDS) {
         const pick = pickCheapest(list, res);
         if (pick !== null && pick.nextCost !== null && canAfford(state, pick.def.costRes, pick.nextCost)) {
-          const result = purchase(state, pick.id, techs);
+          const result = purchase(state, pick.id, techs, maxEra);
           if (result.ok) {
             state = result.state;
             purchases.push({ t, id: pick.id });
-            list = candidates(state, techs);
+            list = candidates(state, techs, maxEra);
           }
         }
       }
@@ -194,7 +198,7 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
         const offline = applyOffline({ ...state, lastSimTime: 0 }, schedule.offlineSeconds * 1000, techs);
         state = { ...offline.state, lastSimTime: state.lastSimTime };
         offlineTotal += schedule.offlineSeconds;
-        state = evaluateMilestones(state, techs).state;
+        state = evaluateMilestones(state, techs, maxEra).state;
         record(t);
         observe();
       }

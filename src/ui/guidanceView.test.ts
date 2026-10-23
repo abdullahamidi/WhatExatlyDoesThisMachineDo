@@ -130,6 +130,26 @@ describe('nextGoal', () => {
     expect(nextGoal({ ...stateOf(), ending: { phase: 'sequence', engagedAt: null } }, RATES)).toBeNull();
     expect(nextGoal(stateOf(owned(SEQUENCE)), RATES)).toBeNull();
   });
+
+  describe('demo era cap (WP21)', () => {
+    const ERA_TWO_CHAIN: TechId[] = ['generatorBlueprint', 'generator', 'substationBlueprint'];
+
+    it('ends the chain at the cap tech when the cap is era 2', () => {
+      expect(nextGoal(stateOf(owned(ERA_TWO_CHAIN)), RATES, TECHNOLOGIES, 2)).toBeNull();
+      expect(nextGoal(stateOf(owned(['generatorBlueprint'])), RATES, TECHNOLOGIES, 2)?.id).toBe('generator');
+    });
+
+    it('points at the boiler without a cap once the era II chain is owned', () => {
+      expect(nextGoal(stateOf(owned(ERA_TWO_CHAIN)), RATES)?.id).toBe('boiler');
+    });
+
+    it('never names an era above the cap for any prefix of the chain', () => {
+      for (let done = 0; done <= SEQUENCE.length; done += 1) {
+        const goal = nextGoal(stateOf(owned(SEQUENCE.slice(0, done))), RATES, TECHNOLOGIES, 2);
+        if (goal !== null) expect(TECHNOLOGIES[goal.id].era).toBeLessThanOrEqual(2);
+      }
+    });
+  });
 });
 
 describe('techHintVisible', () => {

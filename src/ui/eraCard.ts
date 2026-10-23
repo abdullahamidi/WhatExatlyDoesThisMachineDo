@@ -3,6 +3,7 @@ import { ERA_CARD } from '../data/ux';
 import type { GameSession } from '../simulation';
 import { eraCardFor } from './guidanceView';
 import type { EraCardView } from './guidanceView';
+import { eraCardTimingVars } from './eraCardTiming';
 import type { TechTree } from './techTree';
 
 // Era card (WP20 D10). DOM only: no Phaser. Purely visual, holds no game state.
@@ -18,6 +19,8 @@ export function createEraCards(root: HTMLElement, deps: EraCardDeps): EraCards {
   el.id = 'era-card';
   el.setAttribute('role', 'status');
   el.hidden = true;
+  // The CSS fades read these timings, so ERA_CARD stays the single source of the durations.
+  for (const [name, value] of Object.entries(eraCardTimingVars())) el.style.setProperty(name, value);
 
   const titleEl = document.createElement('div');
   titleEl.className = 'era-card-title';

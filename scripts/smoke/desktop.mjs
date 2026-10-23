@@ -2,6 +2,7 @@
 // Playwright's _electron.launch is not usable: the EnableNodeCliInspectArguments fuse is OFF.
 // Usage: PW_PATH=... node scripts/smoke/desktop.mjs <exePath> <outdir>
 //   env DESKTOP_CDP_PORT (default 9339). The run uses <outdir>/userdata as WEDTMD_USER_DATA (deleted first).
+//   env DESKTOP_EDITION=demo for the demo exe (out/steam/demo/win-x64): DEMO version line and the era cap tabs.
 // Prints ONE JSON object { results, fail, errors }; exit code 1 when fail is non-empty.
 // Fallback: when CDP never attaches, boot_only runs (process alive 10 s, boot save written) and cdp_attach fails.
 import { createRequire } from 'module';
@@ -14,7 +15,8 @@ const [exeArg, outArg] = process.argv.slice(2);
 
 const DEFAULT_PORT = 9339;
 const APP_PREFIX = 'app://wedtmd/';
-const VERSION_LINE = 'v0.9.0 · SAVE v2';
+const EDITION = process.env.DESKTOP_EDITION === 'demo' ? 'demo' : 'full';
+const VERSION_LINE = EDITION === 'demo' ? 'v0.9.0 · DEMO · SAVE v2' : 'v0.9.0 · SAVE v2';
 const CSP_RE = /Content Security Policy|Refused to/i;
 const CDP_WAIT_MS = 20000;
 const PAGE_WAIT_MS = 20000;
@@ -259,6 +261,23 @@ async function firstRun(s) {
   await sleep(300);
   await shot(page, 'desktop-game.png');
   check('3_crank', closed && before !== null && after !== before, { titleClosed: closed, before, after });
+
+  if (EDITION === 'demo') {
+    cur = '8_demo_tabs';
+    // The demo caps the tech tree at era II: five tabs, the last three read FULL GAME and stay disabled.
+    await page.keyboard.press('t');
+    await sleep(400);
+    const tabs = await page.$$eval('.tech-tab', (els) => els.map((el) => ({
+      text: (el.textContent || '').trim(),
+      disabled: el instanceof HTMLButtonElement && el.disabled,
+    })));
+    const ok = tabs.length === 5
+      && tabs.slice(2, 5).every((tab) => tab.text === 'FULL GAME' && tab.disabled === true)
+      && tabs[0] !== undefined && tabs[0].text.startsWith('ERA I') && tabs[0].disabled === false;
+    check('8_demo_tabs', ok, tabs);
+    await page.keyboard.press('Escape');
+    await sleep(300);
+  }
 
   cur = '4_fullscreen';
   // F11 through CDP; the main process handles it in before-input-event.

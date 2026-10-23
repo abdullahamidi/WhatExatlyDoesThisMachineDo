@@ -1,6 +1,8 @@
 import { TECHNOLOGIES } from '../../data/technologies';
 import type { GameState, PurchaseResult, TechDefinition, TechId } from '../../data/types';
 import { canAfford, costAt } from '../economy/cost';
+import { eraAllowed } from './edition';
+import type { EraCap } from './edition';
 import { requirementsMet } from './requirements';
 
 /**
@@ -12,12 +14,16 @@ export function purchase(
   state: GameState,
   id: TechId,
   techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
+  maxEra: EraCap = null,
 ): PurchaseResult {
   const def = techs[id];
   const level = state.techLevels[id];
 
   if (def.kind === 'starting' || def.kind === 'milestone') {
     return { ok: false, reason: 'notPurchasable' };
+  }
+  if (!eraAllowed(def, maxEra)) {
+    return { ok: false, reason: 'demo' };
   }
   if (def.kind === 'unlock' && level >= 1) {
     return { ok: false, reason: 'owned' };
