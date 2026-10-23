@@ -11,10 +11,27 @@ export type FinaleTrackId = 'sky' | 'glow' | 'mountains' | 'skyline' | 'ground';
 /** Timed finale beats fired to the audio / FX layers (C3 FINALE_BEATS). */
 export type FinaleBeat = 'swell' | 'calliope' | 'beamWhite' | 'white' | 'windStop' | 'plate' | 'flock' | 'chord';
 
-// World = MACHINE_ANCHOR + PIXEL_SCALE * art (art px, origin = machine base centre). full = whole machine framed, crown = top of the spire.
-export const FINALE_VIEWS = { full: { artX: 0, artY: -300, zoom: 0.5 }, crown: { artX: 64, artY: -520, zoom: 1 } } as const;
+// World = MACHINE_ANCHOR + PIXEL_SCALE * art (art px, origin = machine base centre). full = whole machine framed (also the canonical portrait pose, WP18), crown = top of the spire, baseL / baseR = zoom-1 survey views of the left / right half of the machine base (WP18).
+export const FINALE_VIEWS = {
+  full:  { artX: 0,    artY: -300, zoom: 0.5 },   // -> camera (1920, 1080, .5)
+  crown: { artX: 64,   artY: -520, zoom: 1 },     // -> (2048, 640, 1)
+  baseL: { artX: -300, artY: -150, zoom: 1 },     // -> (1320, 1380, 1): left anchor, condenser, turbine, hammer, boiler, motor
+  baseR: { artX: 300,  artY: -150, zoom: 1 },     // -> (2520, 1380, 1): crank, flywheel, generator, rack, transformer, mast, right anchor
+} as const;
+export type FinaleViewId = keyof typeof FINALE_VIEWS;
+/** One camera tween. reduced: 'cut' = a cut with a fade (WP13); 'skip' = the key does not exist under reduced motion (no pose change, no fade). */
+export interface FinaleCameraKey { atS: number; durS: number; to: FinaleViewId; reduced: 'cut' | 'skip' }
 // Cubic in-out tweens between views. Windows do not overlap.
-export const FINALE_CAMERA = [{ atS: 0, durS: 2, to: 'full' }, { atS: 10, durS: 3, to: 'crown' }, { atS: 16, durS: 3, to: 'full' }] as const;
+export const FINALE_CAMERA: readonly FinaleCameraKey[] = [
+  { atS: 0, durS: 2, to: 'full', reduced: 'cut' }, { atS: 10, durS: 3, to: 'crown', reduced: 'cut' }, { atS: 16, durS: 3, to: 'full', reduced: 'cut' },
+  // WP18 survey (S3 idle window, after the skyline track ends at 37.3): arrive baseL 41.0, hold to 42.0, arrive baseR 45.0, hold to 46.0, full at 49.3 = FINALE_SHOTS.s4
+  { atS: 38.5, durS: 2.5, to: 'baseL', reduced: 'skip' }, { atS: 42, durS: 3, to: 'baseR', reduced: 'skip' }, { atS: 46, durS: 3.3, to: 'full', reduced: 'skip' },
+];
+/** Completion beat (WP18): era whose visual-max levels the machine shows (display levels only). 0 = real levels. */
+export type CompleteEra = 0 | 3 | 4 | 5;
+/** At film time atS the machine is raised to the visual max of every tech with TECHNOLOGIES[id].era <= era (S1, one step per era). */
+export const FINALE_COMPLETE: { steps: readonly { atS: number; era: 3 | 4 | 5 }[] } =
+  { steps: [{ atS: 3, era: 3 }, { atS: 4.5, era: 4 }, { atS: 6, era: 5 }] };
 export const FINALE_SHOTS = { s1: 2, s2: 10, s3: 19.3, s4: 49.3 } as const;   // S0 = 0; S5 = choiceStartS() (derived, ART_ERA5 §7)
 export const FINALE_HUD = { fadeMs: 1000 } as const;
 export const FINALE_CLOCK = { maxFrameMs: 250 } as const;   // finale clock step clamp (tab stalls do not skip beats)

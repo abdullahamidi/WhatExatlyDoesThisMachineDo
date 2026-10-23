@@ -5,4 +5,5 @@ export const HUD_TEXT = {
   eraTitles: ['ERA I · MECHANICAL', 'ERA II · ELECTRICAL', 'ERA III · PRESSURE', 'ERA IV · RESONANCE', 'ERA V · ???'],
   eraFiveRevealed: 'ERA V · RESTORATION FLUX', restored: 'RESTORATION ENGINE',
   clickLabel: 'CLICK', autoCrank: 'AUTO-CRANK', feedsPrefix: '›',
+  viewMachine: 'VIEW MACHINE', viewMachineTitle: 'View the whole machine (photo mode)',
 } as const;

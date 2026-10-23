@@ -1,0 +1,12 @@
+/* Photo mode (WP18): hides every #ui-root child except the exit chip. Chip values copied from .hud-btn (do not import hud.css). */
+#ui-root.photo-mode > :not(.photo-chip):not(.is-open) { visibility: hidden !important; pointer-events: none !important; }
+.photo-chip { --iron-2: #1d1f21; --rust: #8c4a2a; --rust-dark: #4e2a1a; --amber: #d9822b; --haze: #d2bf9c;
+  position: fixed; right: 16px; bottom: 16px; z-index: 120; pointer-events: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: clamp(12px, 1.3vw, 15px);
+  text-transform: uppercase; letter-spacing: .08em; color: var(--amber); background: var(--iron-2); border: 2px solid var(--rust); padding: 8px 14px; cursor: pointer;
+  opacity: 0; transition: opacity 300ms linear; }
+.photo-chip[hidden] { display: none; }
+.photo-chip--hint, .photo-chip:hover { opacity: 1; }
+.photo-chip:hover { background: var(--rust-dark); color: var(--haze); }
+.photo-chip:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+#ui-root[data-reduced-motion='on'] .photo-chip { transition: none; }

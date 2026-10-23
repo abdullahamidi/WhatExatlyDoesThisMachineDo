@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   FINALE_VIEWS, FINALE_CAMERA, FINALE_SHOTS, FINALE_HUD, FINALE_BOOST, FINALE_BEAM, FINALE_ECLIPSE, FINALE_WHITE, FINALE_CUT,
   FINALE_TRACKS, FINALE_DUST, FINALE_WIPE, RESTORED_GROUND, FINALE_PLATE, FINALE_SEEDS, FINALE_BIRDS, FINALE_REVEAL, FINALE_CHOICE,
-  FINALE_BEATS, REVEALED,
+  FINALE_BEATS, FINALE_COMPLETE, REVEALED,
 } from './finale';
 import type { FinaleBeat, FinaleTrackId } from './finale';
-import { MACHINE_COMPONENTS, MACHINE_COMPONENT_IDS } from './machineComponents';
+import { MACHINE_ASSEMBLY, MACHINE_COMPONENTS, MACHINE_COMPONENT_IDS } from './machineComponents';
 import type { MachineComponentId } from './machineComponents';
 import { DEPTH } from './world';
 import { ASSET_IDS } from '../assets/assetIds';
@@ -36,6 +36,23 @@ describe('FINALE_BEATS', () => {
   });
 });
 
+describe('FINALE_COMPLETE', () => {
+  it('steps ascend by atS and raise the machine one era per step: 3, 4, 5', () => {
+    const steps = FINALE_COMPLETE.steps;
+    expect(steps.map((s) => s.era)).toEqual([3, 4, 5]);
+    for (let i = 1; i < steps.length; i++) expect(steps[i]?.atS).toBeGreaterThan(steps[i - 1]?.atS ?? Infinity);
+  });
+
+  it('every step lies inside the S1 shot, and the last step finishes its fly-in before the S2 shot', () => {
+    for (const s of FINALE_COMPLETE.steps) {
+      expect(s.atS).toBeGreaterThanOrEqual(FINALE_SHOTS.s1);
+      expect(s.atS).toBeLessThan(FINALE_SHOTS.s2);
+    }
+    const last = FINALE_COMPLETE.steps[FINALE_COMPLETE.steps.length - 1];
+    expect((last?.atS ?? 0) + MACHINE_ASSEMBLY.durationMs / 1000).toBeLessThan(FINALE_SHOTS.s2);
+  });
+});
+
 describe('finale timings', () => {
   it('shots ascend from s1 to s4 and sit inside the film', () => {
     const shots = [FINALE_SHOTS.s1, FINALE_SHOTS.s2, FINALE_SHOTS.s3, FINALE_SHOTS.s4];
@@ -44,11 +61,11 @@ describe('finale timings', () => {
     expect(FINALE_SHOTS.s4).toBeLessThanOrEqual(FINALE_REVEAL.startS);
   });
 
-  it('camera tweens are ordered and do not overlap, and target only the two views', () => {
+  it('camera tweens are ordered and do not overlap, and target only named views', () => {
     for (let i = 0; i < FINALE_CAMERA.length; i++) {
       const c = FINALE_CAMERA[i];
       expect(c?.durS).toBeGreaterThan(0);
-      expect(['full', 'crown']).toContain(c?.to);
+      expect(Object.keys(FINALE_VIEWS)).toContain(c?.to);
       if (i > 0) {
         const prev = FINALE_CAMERA[i - 1];
         expect((prev?.atS ?? 0) + (prev?.durS ?? 0)).toBeLessThanOrEqual(c?.atS ?? 0);
@@ -56,9 +73,32 @@ describe('finale timings', () => {
     }
   });
 
-  it('camera views are the full (0.5x) and crown (1x) framings in art px', () => {
+  it('camera views are the full (0.5x) and crown (1x) framings and the two zoom-1 base surveys in art px', () => {
     expect(FINALE_VIEWS.full).toEqual({ artX: 0, artY: -300, zoom: 0.5 });
     expect(FINALE_VIEWS.crown).toEqual({ artX: 64, artY: -520, zoom: 1 });
+    expect(FINALE_VIEWS.baseL).toEqual({ artX: -300, artY: -150, zoom: 1 });
+    expect(FINALE_VIEWS.baseR).toEqual({ artX: 300, artY: -150, zoom: 1 });
+  });
+
+  it('survey keys: 3 cuts (WP13), then baseL, baseR, full as skip keys in the S3 idle window ending at s4', () => {
+    expect(FINALE_CAMERA).toHaveLength(6);
+    expect(FINALE_CAMERA.slice(0, 3).every((k) => k.reduced === 'cut')).toBe(true);
+    const survey = FINALE_CAMERA.slice(-3);
+    expect(survey.every((k) => k.reduced === 'skip')).toBe(true);
+    expect(survey.map((k) => k.to)).toEqual(['baseL', 'baseR', 'full']);
+    const first = survey[0];
+    expect(first?.atS).toBeGreaterThanOrEqual(FINALE_TRACKS.skyline.startS + FINALE_TRACKS.skyline.durS);
+    const last = survey[survey.length - 1];
+    expect((last?.atS ?? 0) + (last?.durS ?? 0)).toBeCloseTo(FINALE_SHOTS.s4, 9);
+  });
+
+  it('survey holds on baseL and baseR each last at least 1 s (arrival to the next departure)', () => {
+    const survey = FINALE_CAMERA.slice(-3);
+    for (let i = 0; i < 2; i++) {
+      const arrive = (survey[i]?.atS ?? 0) + (survey[i]?.durS ?? 0);
+      const leave = survey[i + 1]?.atS ?? 0;
+      expect(leave - arrive).toBeGreaterThanOrEqual(1 - 1e-9);
+    }
   });
 
   it('every track window lies inside [s3, s4] and has a positive duration', () => {

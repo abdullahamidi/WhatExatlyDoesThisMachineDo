@@ -15,7 +15,8 @@ import { isRevealedLabel, resourceShort } from './revealRules';
 
 export interface HudResourceRow { id: ResourceId; label: string; value: string; rate: string; feeds: string | null; visible: boolean; frontier: boolean }
 export interface HudClickLine { primary: string; secondary: string | null }
-export interface HudView { title: string; rows: HudResourceRow[]; click: HudClickLine; autoCrank: string | null; plaque: string; cycle: string | null }
+/** `viewMachine` is true only in postgame (VIEW MACHINE button shown). */
+export interface HudView { title: string; rows: HudResourceRow[]; click: HudClickLine; autoCrank: string | null; plaque: string; cycle: string | null; viewMachine: boolean }
 
 /** Cycle line under the plaque: null in cycle 1 (era I start, nothing to show), `CYCLE 0043` from cycle 2. */
 export function cycleLine(cycle: number): string | null {
@@ -94,6 +95,7 @@ export function buildHudView(
     autoCrank: autoPerSecond > 0 ? `${HUD_TEXT.autoCrank} ${formatCompact(autoPerSecond)}/s` : null,
     plaque: plaqueText(state.techLevels),
     cycle: cycleLine(prestige.cycle),
+    viewMachine: state.ending.phase === 'postgame',
   };
 }
 

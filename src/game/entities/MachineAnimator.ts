@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { GameSession } from '../../simulation';
+import type { MachineSource } from './machineSource';
 import {
   DRIVE_TRAIN,
   EXOTIC_MILESTONE_FX,
@@ -14,6 +14,7 @@ import {
 import type { ComponentAnimation, MachineComponentId, SpeedCurve } from '../../data/machineComponents';
 import { HAMMER_FX } from '../../data/steamFx';
 import { FINALE_BOOST } from '../../data/finale';
+import { RESTORED_ACCENT } from '../../data/showcase';
 import { CRANK_FEEDBACK } from '../../data/world';
 import {
   addActivity,
@@ -56,6 +57,9 @@ const FRAMES_MAX_HZ = MACHINE_COMPONENT_IDS.reduce((top, id) => {
 
 /** Finale hold frames (FINALE_BOOST.holdFrames) keyed by part: shown while the finale boost is above 0. */
 const FINALE_HOLD_FRAMES: Partial<Record<MachineComponentId, number>> = FINALE_BOOST.holdFrames;
+
+/** Restored accent 'lamps lit' (RESTORED_ACCENT.holdFrames): these frame parts hold their bright frame in the restored state when the finale boost is 0. */
+const RESTORED_HOLD_FRAMES: Partial<Record<MachineComponentId, number>> = RESTORED_ACCENT.holdFrames;
 
 /** Caps a degrees-per-second speed at maxDegPerSec (null: uncapped). Reduced motion only. */
 function capSpeed(degPerSec: number, maxDegPerSec: number | null): number {
@@ -120,9 +124,10 @@ function drivenOf(id: MachineComponentId): { ratio: number; phaseDeg: number } {
  * faster for coreSpinMs and the anchor glows hold glowFrame for glowHoldMs.
  * Finale (setFinale): boost lifts every speed and frame rate towards its curve max (boostedValue) and shows the
  * FINALE_BOOST.holdFrames frames; restored moves stage parts to their endingFrame. Boost 0 and not restored = unchanged.
+ * Restored accent (RESTORED_ACCENT): restored with boost 0, the lamp frames stay lit (RESTORED_HOLD_FRAMES).
  */
 export class MachineAnimator {
-  private readonly session: GameSession;
+  private readonly session: MachineSource;
   private readonly sprites: ReadonlyMap<MachineComponentId, Phaser.GameObjects.Sprite>;
   /** Driven ratio and phase of the hand crank: converts a crank click into a thetaM impulse. */
   private readonly crankRatio: number;
@@ -183,7 +188,7 @@ export class MachineAnimator {
   private readonly unsubscribeMilestone: () => void;
   private readonly unsubscribeExotic: () => void;
 
-  constructor(session: GameSession, sprites: ReadonlyMap<MachineComponentId, Phaser.GameObjects.Sprite>) {
+  constructor(session: MachineSource, sprites: ReadonlyMap<MachineComponentId, Phaser.GameObjects.Sprite>) {
     this.session = session;
     this.sprites = sprites;
     const crank = drivenOf('handCrank');
@@ -359,6 +364,11 @@ export class MachineAnimator {
           const hold = FINALE_HOLD_FRAMES[id];
           if (hold !== undefined && boost > 0) {
             sprite.setFrame(hold); // finale boost: the part holds its finale frame
+            break;
+          }
+          const lit = RESTORED_HOLD_FRAMES[id];
+          if (lit !== undefined && this.finaleRestored && boost === 0) {
+            sprite.setFrame(lit); // restored accent: the lamp stays lit once the finale boost has released
             break;
           }
           if (anim.hz !== undefined) {

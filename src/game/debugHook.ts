@@ -12,9 +12,12 @@ import type { CyclePreview } from '../simulation/prestige';
 import type { MachineComponentId } from '../data/machineComponents';
 import { MACHINE_COMPONENTS } from '../data/machineComponents';
 import { MACHINE_ANCHOR } from '../data/world';
+import { SHOWCASE_SCENE_KEY } from '../data/showcase';
 import { machineLocalToWorld, resolveAttachment } from './math/machineLayout';
 import { worldToClient } from './math/camera';
 import type { WorldScene } from './scenes/WorldScene';
+import { ShowcaseScene } from './scenes/ShowcaseScene';
+import type { ShowcaseState } from './scenes/ShowcaseScene';
 import type { FinaleState } from './rendering/FinaleDirector';
 import type { FinaleFrame } from './math/finale';
 import type { CycleTransitionState } from './rendering/CycleTransition';
@@ -59,6 +62,14 @@ declare global {
       audioStats(): AudioStats | null;
       prestige(): PrestigeState;
       cycleState(): CycleDebugState;
+      // WP18: parts visibility probe, photo mode and the final-machine teaser (ShowcaseScene)
+      partsVisible(): { visible: number; total: number; hidden: MachineComponentId[] } | null;
+      photoMode(on: boolean, opts?: { hint?: boolean }): boolean;
+      photoState(): { active: boolean; hint: boolean } | null;
+      showcasePlay(opts?: { reduced?: boolean }): void;
+      showcaseSeek(t: number): void;
+      showcaseState(): ShowcaseState | null;
+      showcaseStop(): void;
     };
   }
 }
@@ -137,6 +148,42 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
   };
   /** Music and mix readout (WP15): theme, slot gains, duck, live and music voices, master peak. Zeros before the first gesture. */
   const audioStats = (): AudioStats | null => extras.audio.stats();
+  /** Visibility probe (WP18): hidden parts and counts, as the machine shows them now; null before the world scene exists. */
+  const partsVisible = (): { visible: number; total: number; hidden: MachineComponentId[] } | null =>
+    game.scene.getScene<WorldScene>('World')?.getMachine()?.partsVisibility() ?? null;
+  /** Photo mode (WP18): forced entry from any phase, or exit. Returns whether photo mode is active afterwards; false without a controller. */
+  const photoMode = (on: boolean, opts?: { hint?: boolean }): boolean => {
+    const photo = game.scene.getScene<WorldScene>('World')?.getPhoto() ?? null;
+    if (photo === null) return false;
+    if (on) photo.enter({ force: true, hint: opts?.hint });
+    else photo.exit();
+    return photo.isActive();
+  };
+  /** Photo mode state (WP18): active flag and hint visibility; null without a controller. */
+  const photoState = (): { active: boolean; hint: boolean } | null =>
+    game.scene.getScene<WorldScene>('World')?.getPhoto()?.state() ?? null;
+  /** The teaser scene once ShowcaseScene.ensure registered it; null before that. */
+  const showcaseScene = (): ShowcaseScene | null => {
+    const scene = game.scene.keys[SHOWCASE_SCENE_KEY];
+    return scene instanceof ShowcaseScene ? scene : null;
+  };
+  /** Starts the final-machine teaser (WP18) with the live settings; reduced: portrait from t 0, no ramps. */
+  const showcasePlay = (opts?: { reduced?: boolean }): void => {
+    ShowcaseScene.play(game, { settings: session.settings, reduced: opts?.reduced, sleepWorld: true });
+  };
+  /** Jumps the running teaser clock to t (WP18 smoke); no-op when the teaser is not running. */
+  const showcaseSeek = (t: number): void => {
+    showcaseScene()?.seek(t);
+  };
+  /** Teaser state (WP18); null when the scene is missing or not playing. */
+  const showcaseState = (): ShowcaseState | null => {
+    const state = showcaseScene()?.getState() ?? null;
+    return state?.active === true ? state : null;
+  };
+  /** Stops the teaser and wakes the World when play put it to sleep (WP18). */
+  const showcaseStop = (): void => {
+    ShowcaseScene.stop(game);
+  };
   window.__wedtmd = {
     session,
     crankClientPoint,
@@ -158,5 +205,12 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     audioStats,
     prestige,
     cycleState,
+    partsVisible,
+    photoMode,
+    photoState,
+    showcasePlay,
+    showcaseSeek,
+    showcaseState,
+    showcaseStop,
   };
 }

@@ -16,14 +16,14 @@
   "cycleDisplayPct": 10,
   "bundle": {
     "appRawKb": 400,
-    "appGzipKb": 110,
+    "appGzipKb": 130,
     "phaserKb": 1500,
     "cssKb": 40,
     "publicAssetsKb": 8000
   },
   "_notes": {
     "machineMaxMs": "window max is contention-sensitive in the shared CI container (quiet runs <=5 ms); machineMeanMs is the real gate",
-    "appGzipKb": "raised 100->110 for the WP15 music code",
+    "appGzipKb": "raised 100->110 (WP15 music), 110->130 (WP17-WP19 + A17; STEAM_DEMO_PROGRAM D7: desktop build, raw size is the binding gate)",
     "appRawKb": "raised 340->400 (STEAM_DEMO_PROGRAM D7): WP17 legacy techs/HUD + Steam demo UI",
     "cssKb": "raised 30->40 (WP19 shell css: title, credits, crash overlay, splash, storage warning)",
     "cycleDisplayPct": "vs the pre-cycle display list (parts are hidden, not destroyed)"

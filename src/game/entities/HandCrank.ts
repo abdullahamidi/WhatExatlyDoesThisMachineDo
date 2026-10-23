@@ -38,6 +38,8 @@ export class HandCrank {
   private pulseOutline: Phaser.GameObjects.Arc | null = null;
   private promptText: Phaser.GameObjects.Text | null = null;
   private promptBlink: Phaser.Time.TimerEvent | null = null;
+  /** Off in photo mode: the pointer zone and the keyboard command both stop turning the crank (WP18). */
+  private enabled = true;
 
   constructor(scene: Phaser.Scene, ctx: GameContext, machine: MachineView, floatingText: FloatingText) {
     this.scene = scene;
@@ -92,8 +94,15 @@ export class HandCrank {
     }
   }
 
+  /** Photo mode disables the crank: no pointer click (zone input off) and no keyboard crank. */
+  setEnabled(on: boolean): void {
+    this.enabled = on;
+    if (this.zone.input) this.zone.input.enabled = on;
+  }
+
   /** One crank turn: the pointer path and the keyboard command both come here. */
   private crank(): void {
+    if (!this.enabled) return;
     this.ctx.session.click(); // the only state mutation
     const { block, merged } = mergeGains(this.block, this.lastGain, this.scene.time.now, FLOATING_TEXT.coalesceMs, FLOATING_TEXT.blockMaxMs);
     this.block = block;

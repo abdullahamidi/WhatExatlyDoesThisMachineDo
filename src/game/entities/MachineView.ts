@@ -18,7 +18,7 @@ import { motionPolicy } from '../../simulation/settings';
 import { componentDepth, machineLocalToWorld, resolveAttachment } from '../math/machineLayout';
 import { connectionOffset } from '../math/machineLinks';
 import { newlyVisible, visibleComponentIds } from '../math/machineVisibility';
-import type { GameContext } from '../context';
+import type { MachineViewContext } from './machineSource';
 import { MachineAnimator } from './MachineAnimator';
 import { MachineLinks } from '../rendering/MachineLinks';
 
@@ -56,7 +56,7 @@ export class MachineView {
   private readonly rt: Phaser.GameObjects.RenderTexture | null;
   private readonly shadows: Phaser.GameObjects.Graphics;
   private lastShadowKey = '';
-  private readonly ctx: GameContext;
+  private readonly ctx: MachineViewContext;
   private readonly scene: Phaser.Scene;
   private readonly sprites = new Map<MachineComponentId, Phaser.GameObjects.Sprite>();
   private readonly assembling = new Map<MachineComponentId, Phaser.Tweens.Tween>();
@@ -87,7 +87,7 @@ export class MachineView {
     return sprite !== undefined && off !== null ? { x: sprite.x + off.x, y: sprite.y + off.y } : null;
   };
 
-  constructor(scene: Phaser.Scene, ctx: GameContext) {
+  constructor(scene: Phaser.Scene, ctx: MachineViewContext) {
     this.scene = scene;
     this.ctx = ctx;
     this.container = scene.add
@@ -374,6 +374,18 @@ export class MachineView {
 
   isAssembling(id: MachineComponentId): boolean {
     return this.assembling.has(id);
+  }
+
+  /** Re-diffs visibility against the (display) tech levels the source reports: hides lost parts, assembles (animate) or settles new ones. Used by the finale completion beat. */
+  refreshDisplay(animate: boolean): void {
+    this.refresh(animate);
+  }
+
+  /** Visibility probe (debug / smoke): sprite.visible per MACHINE_COMPONENT_IDS order. */
+  partsVisibility(): { visible: number; total: number; hidden: MachineComponentId[] } {
+    const hidden: MachineComponentId[] = [];
+    for (const id of MACHINE_COMPONENT_IDS) if (this.sprites.get(id)?.visible !== true) hidden.push(id);
+    return { visible: MACHINE_COMPONENT_IDS.length - hidden.length, total: MACHINE_COMPONENT_IDS.length, hidden };
   }
 
   /** Hammer strikes since the last session reset (monotonic between resets). */

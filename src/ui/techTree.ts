@@ -437,8 +437,30 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     setFeedback('');
     const target = returnFocus;
     returnFocus = null;
-    if (target !== null && target.isConnected) target.focus();
+    restoreFocus(target);
     emitOpen(false);
+  }
+
+  // Rendered = in the document and has a layout box (hidden / display:none elements cannot take focus).
+  function isRendered(el: HTMLElement): boolean {
+    return el.isConnected && el.getClientRects().length > 0;
+  }
+
+  // Focus goes back to the element that opened the tree. If that element is gone or no longer rendered (e.g. the
+  // photo-mode exit chip, hidden once photo mode ended while the tree was open), fall back to VIEW MACHINE
+  // (postgame) or the TECH INDEX button, so focus never drops to <body>.
+  function restoreFocus(target: HTMLElement | null): void {
+    if (target !== null && isRendered(target)) {
+      target.focus();
+      return;
+    }
+    for (const id of ['hud-view-machine', 'hud-tech']) {
+      const el = document.getElementById(id);
+      if (el !== null && isRendered(el)) {
+        el.focus();
+        return;
+      }
+    }
   }
 
   const onClose = (): void => close();

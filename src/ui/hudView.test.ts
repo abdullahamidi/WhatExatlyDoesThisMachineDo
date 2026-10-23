@@ -294,6 +294,22 @@ describe('xf label reveal (WP13 D4)', () => {
   });
 });
 
+describe('viewMachine (WP18 T3)', () => {
+  it('is false in the none, sequence and choice phases', () => {
+    for (const phase of ['none', 'sequence', 'choice'] as const) {
+      expect(buildHudView(hudState({ phase }), ratesOf({ me: 1 })).viewMachine).toBe(false);
+    }
+  });
+
+  it('is true in the postgame phase only', () => {
+    expect(buildHudView(hudState({ phase: 'postgame' }), ratesOf({ me: 1 })).viewMachine).toBe(true);
+  });
+
+  it('keeps the RESTORATION ENGINE title in postgame', () => {
+    expect(buildHudView(hudState({ phase: 'postgame' }), ratesOf({ me: 1 })).title).toBe('RESTORATION ENGINE');
+  });
+});
+
 describe('cycle line (WP14 T8a)', () => {
   it('is null in cycle 1, so the default HUD strings do not change', () => {
     expect(cycleLine(1)).toBeNull();
