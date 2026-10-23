@@ -209,3 +209,13 @@ Prioritize making the first 15–30 minutes coherent, satisfying, and visually r
 The user asked for the complete game beyond the vertical slice. `docs/plan/ROADMAP_FULL.md` is the
 authoritative extension: it supersedes §14 (out-of-scope list, which applied to the first version only)
 and §2.9 (the purpose is revealed in the finale).
+
+### 18.1 Steam demo release note (v0.9.0, 2026-10-23)
+Append-only note. Nothing above this line was changed.
+- Shipped for the Steam demo: two editions from one codebase (full; demo = Vite mode `demo`, capped at the Substation Blueprint, eras I–II,
+  final-machine teaser with the name redacted, END OF DEMO card with a wishlist link); energy continuity (every energy keeps a sink in
+  every later era through uncapped legacy feeds: Bellows Drive, Grid Exciter, Mains Backfeed, Steam Lance); final machine showcase
+  (completion beat, survey camera, postgame portrait, VIEW MACHINE photo mode); a Windows desktop build (Electron) next to the browser build.
+- Requirements beyond §1–§17 now live in `docs/plan/ROADMAP_FULL.md` (full game), `docs/plan/STEAM_DEMO_PROGRAM.md` (decisions D1–D8, they
+  win over older plans) and the work-package plans `docs/plan/WP17.md` to `docs/plan/WP21.md`, `docs/plan/WP16.md`, `docs/plan/WP16a.md`.
+- Release evidence: `docs/STEAM_RELEASE.md` §15. Changes: `CHANGELOG.md`. Balance deviations from §6: `README.md` (Balance).

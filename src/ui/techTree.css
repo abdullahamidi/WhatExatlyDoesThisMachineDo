@@ -9,6 +9,7 @@
   --rust-dark:#4e2a1a;
   --amber:#d9822b;
   --amber-dim:#a8957a;
+  --sand:#c9b28a;
   --haze:#d2bf9c;
   position: absolute;
   inset: 0;
@@ -38,6 +39,8 @@
   position: relative;
   box-sizing: border-box;
   width: min(1180px, 96%);
+  /* WP16b-2 AD r0/r1: fixed height so the panel and PURCHASE never jump when the selection or tab changes. 648 px fits the longest detail at UI 100 % (Crank Servo short of ME: 2-line NOW + 2-line NEXT + cost + NEED); the panel top stays >= 36 px at 1280x720, below the in-tree toast. */
+  height: min(94%, 648px);
   max-height: 94%;
   display: flex;
   flex-direction: column;
@@ -70,6 +73,7 @@
 
 #tech-title {
   margin: 0;
+  white-space: nowrap; /* WP16b-2 AD r1: one line beside a long readout at UI 150 % */
   font-size: 1.1em;
   color: var(--amber);
   text-shadow: 0 0 6px rgba(217, 130, 43, .55);
@@ -177,9 +181,10 @@
   scrollbar-color: var(--rust) rgba(0, 0, 0, .35);
 }
 
-/* techTree.ts sets an inline CSS zoom on this element when the graph viewport is narrower than the era canvas (WP20 fit). */
+/* techTree.ts sets an inline CSS zoom on this element when the graph viewport is narrower than the era canvas (WP20 fit). WP16b-2: centred when the era canvas is narrower than the graph; the WP20 fit zoom fills the width otherwise. */
 .tech-graph-inner {
   position: relative;
+  margin-inline: auto;
 }
 
 #tech-edges {
@@ -255,6 +260,12 @@
   color: var(--haze);
 }
 
+/* WP16b-2 a11y: level / cost on a purchased node: sand on rust-dark 6.12:1 (amber-dim was 4.34). Milestones keep ink. */
+.tech-node.is-purchased:not(.is-milestone) .tech-node-level,
+.tech-node.is-purchased:not(.is-milestone) .tech-node-cost {
+  color: var(--sand);
+}
+
 .tech-node.is-affordable {
   border-color: var(--amber);
   box-shadow: 0 0 12px rgba(217, 130, 43, .75);
@@ -266,12 +277,13 @@
 }
 
 /* Milestones: octagon, amber gradient, no border. Selection uses an inset ring because clip-path hides outlines. */
+/* WP16b-2 a11y: ink text >= 6.43:1 at both gradient stops; the rust-dark stop was 1.50:1. */
 .tech-node.is-milestone,
 .tech-node.is-milestone.is-purchased {
   border: 0;
   padding: 6px 12px;
   color: var(--ink);
-  background: linear-gradient(135deg, var(--amber), var(--rust-dark));
+  background: linear-gradient(135deg, var(--amber), var(--amber-dim));
   clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px);
 }
 
@@ -280,10 +292,10 @@
   color: var(--ink);
 }
 
-.tech-node.is-milestone.is-selected {
-  outline: none;
-  box-shadow: inset 0 0 0 2px var(--haze);
-}
+/* clip-path hides outer rings. WP16b-2 AD r0: selection = inset ink rim + haze line (ink alone merged with the dark graph and read as no ring);
+   keyboard focus adds a second ink line inside the haze line. */
+.tech-node.is-milestone.is-selected { outline: none; box-shadow: inset 0 0 0 2px var(--ink), inset 0 0 0 4px var(--haze); }
+.tech-node.is-milestone:focus-visible { box-shadow: inset 0 0 0 2px var(--ink), inset 0 0 0 4px var(--haze), inset 0 0 0 6px var(--ink); }
 
 /* ---- status markers (Settings > STATUS MARKERS, WP12 D8): only under #ui-root[data-status-markers="on"] ----
    icons16 is an 80 x 16 sheet of five 16 px frames: frame 3 = lock (-48px), frame 4 = check (-64px).
@@ -326,17 +338,18 @@
 
 /* ---- detail ---- */
 
-/* WP21: the pane takes the rest of the panel and scrolls; PURCHASE sits first in the side column (order -2) so it stays in view. */
+/* WP21: the pane takes the rest of the panel and scrolls; PURCHASE sits in the first row of the side column (grid, WP16b-2) so it stays in view. */
 #tech-detail {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
   gap: 14px;
-  flex: 1 1 auto;
-  min-height: 5.5em;
+  /* WP16b-2 AD r0: basis 0 = the detail takes only the room left under the graph, so the graph keeps one height per era at UI 125/150. */
+  flex: 1 1 0;
+  min-height: 8em;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--rust) rgba(0, 0, 0, .35);
-  padding-top: 10px;
+  padding-top: 6px;
   border-top: 1px solid var(--rust-dark);
 }
 
@@ -347,6 +360,17 @@
   gap: 4px;
   min-width: 0;
 }
+
+/* WP16b-2: PURCHASE and its feedback share the side column's first row; level, effects, cost, shortfall follow full width. */
+.tech-detail-side {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 4px;
+  align-content: start;
+}
+
+.tech-detail-side > * { grid-column: 1 / -1; }
 
 #tech-detail-name {
   margin: 0;
@@ -408,9 +432,10 @@
 }
 
 #tech-buy {
-  order: -2;
-  align-self: flex-start;
-  margin: 0 0 4px;
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+  margin: 0;
 }
 
 #tech-buy[disabled] {
@@ -418,20 +443,19 @@
   cursor: not-allowed;
 }
 
-#tech-buy[data-buy-state="insufficient"] {
-  opacity: .6;
-  border-color: var(--amber-dim);
-  cursor: pointer;
-}
+/* WP16b-2 a11y: readable while short (amber-dim on iron-2 5.70:1; opacity .6 gave 2.88:1). Still clickable: denied shake + shortfall. */
+/* AD r0: rust-dark frame (as the era tabs) so a short PURCHASE never outshines an affordable one (rust frame). */
+#tech-buy[data-buy-state="insufficient"] { color: var(--amber-dim); border-color: var(--rust-dark); cursor: pointer; }
 
 #tech-buy.is-denied {
   animation: tech-shake 400ms linear;
 }
 
-/* WP20: two lines of install text without a layout shift. */
+/* WP16b-2: install text sits beside PURCHASE in the first row; no reserved gap under PURCHASE. */
 #tech-feedback {
-  order: -1;
-  min-height: 2.8em;
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
   color: var(--haze);
 }
 

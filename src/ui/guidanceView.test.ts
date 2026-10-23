@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
+  activePrompt,
   affordableBadge,
   anyPurchased,
   crankPromptVisible,
@@ -8,7 +9,7 @@ import {
   nextGoal,
   techHintVisible,
 } from './guidanceView';
-import type { TechHintInput } from './guidanceView';
+import type { GuidancePrompt, TechHintInput } from './guidanceView';
 import { setRevealed } from './revealRules';
 import { createInitialState } from '../simulation/state';
 import { emptyResourceMap } from '../simulation/resources';
@@ -233,5 +234,59 @@ describe('eraCardFor', () => {
     for (const phase of ['sequence', 'choice', 'postgame'] as const) {
       expect(eraCardFor('generator', phase)).toBeNull();
     }
+  });
+});
+
+describe('activePrompt', () => {
+  const BASE: TechHintInput = { totalClicks: 1, anyPurchased: false, affordable: 1, phase: 'none', treeOpen: false, cycle: 1 };
+  const ROWS: [string, Partial<TechHintInput>, GuidancePrompt | null][] = [
+    ['no click yet shows the crank prompt', { totalClicks: 0 }, 'crank'],
+    ['Muscle Memory start on a new cycle shows the crank prompt', { totalClicks: 0, anyPurchased: true, cycle: 2 }, 'crank'],
+    ['the base case shows the TECH INDEX hint', {}, 'hint'],
+    ['nothing affordable shows no prompt', { affordable: 0 }, null],
+    ['a purchase shows the goal line', { anyPurchased: true }, 'goal'],
+    ['an open TECH INDEX shows no prompt', { treeOpen: true }, null],
+    ['an open TECH INDEX still shows the goal line after a purchase', { treeOpen: true, anyPurchased: true }, 'goal'],
+    ['the second cycle shows no prompt before a purchase', { cycle: 2 }, null],
+    ['the second cycle shows the goal line after a purchase', { cycle: 2, anyPurchased: true }, 'goal'],
+    ['the finale choice shows no prompt', { phase: 'choice', anyPurchased: true }, null],
+    ['the finale postgame shows no prompt', { phase: 'postgame', anyPurchased: true }, null],
+    ['the finale sequence shows no prompt, even before the first click', { phase: 'sequence', totalClicks: 0 }, null],
+  ];
+
+  it.each(ROWS)('%s', (_name, patch, expected) => {
+    expect(activePrompt({ ...BASE, ...patch })).toBe(expected);
+  });
+
+  it('never shows a prompt its own rule forbids, for every input combination', () => {
+    let combos = 0;
+    for (const totalClicks of [0, 3]) {
+      for (const anyPurchased of [false, true]) {
+        for (const affordable of [0, 2]) {
+          for (const phase of ['none', 'choice'] as const) {
+            for (const treeOpen of [false, true]) {
+              for (const cycle of [1, 2]) {
+                combos += 1;
+                const i: TechHintInput = { totalClicks, anyPurchased, affordable, phase, treeOpen, cycle };
+                const p = activePrompt(i);
+                if (p === 'crank') {
+                  expect(crankPromptVisible(i.totalClicks) && i.phase === 'none').toBe(true);
+                } else if (p === 'hint') {
+                  expect(techHintVisible(i)).toBe(true);
+                } else if (p === 'goal') {
+                  expect(goalVisible(i.anyPurchased, i.phase) && !crankPromptVisible(i.totalClicks)).toBe(true);
+                } else {
+                  expect(
+                    i.phase !== 'none'
+                      || (!crankPromptVisible(i.totalClicks) && !techHintVisible(i) && !goalVisible(i.anyPurchased, i.phase)),
+                  ).toBe(true);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(combos).toBe(64);
   });
 });

@@ -3,12 +3,13 @@ import { HUD_BUMP, NEXT_GOAL, ONBOARDING } from '../data/ux';
 import type { GameSession } from '../simulation';
 import { affordableTechIds } from '../simulation/progression/affordable';
 import { motionPolicy } from '../simulation/settings';
-import { affordableBadge, anyPurchased, goalVisible, nextGoal, techHintVisible } from './guidanceView';
+import { activePrompt, affordableBadge, anyPurchased, nextGoal } from './guidanceView';
 import type { TechTree } from './techTree';
 
 // WP20 HUD guidance (DOM only, no Phaser). Decorates the existing HUD: the next-goal line, the TECH INDEX
 // hint callout and pulse, the affordable badge, and the frontier counter bump on click. Writes text and
 // attributes only; it owns no economy state.
+// WP16b-2: one prompt at a time (crank > TECH INDEX hint > next-goal line, see activePrompt). The count chip hides under the hint.
 
 export interface GuidanceDeps { session: GameSession; techTree: Pick<TechTree, 'isOpen' | 'onOpenChange'> }
 export interface Guidance { refresh(): void; destroy(): void }
@@ -83,15 +84,16 @@ export function createGuidance(root: HTMLElement, deps: GuidanceDeps): Guidance 
     const count = affordableTechIds(s, techs, maxEra).length;
     const owned = anyPurchased(s.techLevels, techs);
     setBadge(count);
-    setHint(techHintVisible({
+    const prompt = activePrompt({
       totalClicks: s.totalClicks,
       anyPurchased: owned,
       affordable: count,
       phase: s.ending.phase,
       treeOpen: deps.techTree.isOpen(),
       cycle: deps.session.prestige.cycle,
-    }));
-    const goal = goalVisible(owned, s.ending.phase) ? nextGoal(s, deps.session.rates, techs, maxEra) : null;
+    });
+    setHint(prompt === 'hint');
+    const goal = prompt === 'goal' ? nextGoal(s, deps.session.rates, techs, maxEra) : null;
     setGoalOn(goal !== null);
     if (goal === null) return;
     setGoalTitle(goal.title);

@@ -244,10 +244,37 @@ Native gamepad support is not implemented (section 13).
 | Library capsule | 600 x 900 | |
 | Library hero | 3840 x 1240 | |
 | Library logo | 1280 x 720 | Transparent PNG |
-| Screenshots | 1920 x 1080 min, 16:9 | Plan: 1280 x 720 at device scale 3 = 3840 x 2160 via Playwright |
+| Screenshots | 1920 x 1080 min, 16:9 | scripts/smoke/store-shots.mjs: SIZE 1080 = 1920x1080, SIZE 2160 = 3840x2160 (1920x1080 viewport at device scale 2); store order in <outdir>/store-top5.json |
 | Trailer | 1080p60 | Record with OBS from the packaged build (no ffmpeg on the build machine) |
 
 - Verify sizes against the current Steamworks documentation before upload.
+
+### Screenshot set (v0.9.0)
+
+Use the 3840 x 2160 files (SIZE 2160 output). The order is written to `<outdir>/store-top5.json`.
+
+| Rank | File | Use |
+|---|---|---|
+| 1 | `07-era5-ruined-clean` | Era V, ruined plain, HUD hidden |
+| 2 | `06-era4-spire-hud` | Era IV, spire, four-resource HUD |
+| 3 | `03-era2-generator-hud` | Era II, generator, wide machine |
+| 4 | `05-tree-era3-hud` | TECH INDEX, era III |
+| 5 | `09-postgame-portrait-clean` | Restored world (mild spoiler) |
+| alt | `04-era3-boiler-hud` | No-reveal alternative to rank 5 |
+
+Never upload:
+
+- `08-finale-reveal-hud` (spoiler)
+- `09-postgame-portrait-hud` (spoiler)
+- `08b-finale-typed-hud` (spoiler: full reveal text)
+- `10-title-hud` (title screen is not gameplay; Steam wants gameplay)
+
+### Capsule art
+
+From `public/assets/ui/logo.png` (230 x 50 px). Scale by a whole number with nearest-neighbour only. Example:
+
+- x4 = 920 x 200, placed on a clean 3840 x 2160 screenshot for the 920 x 430 header capsule.
+- x5 = 1150 x 250, on a transparent canvas, for the 1280 x 720 library logo.
 
 ## 11 Deck / Proton / Linux notes
 
@@ -389,3 +416,25 @@ Demo verification checklist:
        `node scripts/smoke/demo.mjs http://localhost:4176/ <outdir>` (needs `PW_PATH`). Stop the preview afterwards.
 2. [ ] `npm run build:steam-demo`. `out/steam/demo/win-x64/` has the section 4 contents.
 3. [ ] `DESKTOP_EDITION=demo PW_PATH=<playwright dir> node scripts/smoke/desktop.mjs out/steam/demo/win-x64/WhatExactlyDoesThisMachineDo.exe <outdir>`.
+
+## 15 Release checklist (v0.9.0 demo)
+
+Evidence per program decision D8 (docs/plan/STEAM_DEMO_PROGRAM.md). Upload steps stay in section 12. Status: PASS = verified with the evidence named; PENDING = still to run in the final release pass.
+
+| # | D8 item | Evidence | Status |
+|---|---|---|---|
+| 1 | Pure full-run e2e | `src/simulation/fullRun.e2e.test.ts` (paths K and N, codec round trip, cycle 2) | PASS |
+| 2 | Save compat matrix (incl. pre-legacy save) | `src/persistence/compat.test.ts` + `src/persistence/fixtures/` (10 rows) | PASS |
+| 3 | Balance sign-off | `src/simulation/signoff.sim.test.ts` (A 22:06 / 60:23 / 110:36 / 166:30 / 249:31; B 264:00; C 428:30; D 289:30 active) | PASS |
+| 4 | Demo cap timings | `src/simulation/demoCap.sim.test.ts` (A 60:23, B 72:52, N 98:29, C 148:28) | PASS |
+| 5 | Browser e2e, full | `scripts/smoke/e2e-full.mjs` | PASS (WP16b-2 validation) |
+| 6 | Browser e2e, demo | `scripts/smoke/demo.mjs` + `demo-cases.mjs` on `dist-demo` | PASS (WP16b-2 validation) |
+| 7 | Accessibility | `scripts/smoke/a11y.mjs` (`fail []`, `deferred []`), `scripts/smoke/ux.mjs` | PASS (WP16b-2 validation) |
+| 8 | Resolutions 1280x720, 1280x800, 1920x1080, 2560x1440, 3440x1440 | `scripts/smoke/resolutions.mjs` | PASS (WP16b-2 validation) |
+| 9 | Soak 30–60 min | `scripts/smoke/soak.mjs` `SOAK_MIN=30..60` (WP16a 5 min run: PASS, heap 92.5 MB) | PENDING WP16b-3 |
+| 10 | Quiet-machine GPU perf (frame p95 ≤ 17 ms) | `PERF_GPU=1 PERF_STRICT=1 scripts/smoke/perf.mjs` | PENDING WP16b-3 |
+| 11 | Final Art Director audit (incl. 1080p, Deck 1280x800) | `docs/plan/ART_AUDIT.md` new phase | PENDING WP16b-3 |
+| 12 | ASSET_GUIDE refresh + guard | `src/assets/assetGuide.test.ts`, `docs/ASSET_GUIDE.md` | PASS |
+| 13 | Docs | `README.md`, `CHANGELOG.md`, this file section 10/15, `docs/GAME_SPEC.md` section 18.1 | PASS (WP16b-2) |
+| 14 | Store screenshots (3840x2160, HUD-free) | `scripts/smoke/store-shots.mjs` + `store-top5.json` | PASS (WP16a); recapture WP16b-1 |
+| 15 | Bundle budget, full + demo | `node scripts/perf/bundle-budget.mjs` and `… dist-demo` | PASS (WP16b-2 validation) |
