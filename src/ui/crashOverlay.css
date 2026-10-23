@@ -1,0 +1,124 @@
+/* Crash overlay (WP19 T5). Body-level, outside #ui-root, so it shows even when the HUD root is gone. */
+
+/* keep in sync with src/data/palette.ts */
+#crash-overlay {
+  --ink:#14110f;
+  --iron:#2b2e31;
+  --iron-2:#1d1f21;
+  --rust:#8c4a2a;
+  --rust-dark:#4e2a1a;
+  --amber:#d9822b;
+  --amber-dim:#a8957a;
+  --haze:#d2bf9c;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 6, 5, .92);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--amber);
+}
+
+#crash-overlay [hidden] {
+  display: none !important;
+}
+
+#crash-panel {
+  position: relative;
+  box-sizing: border-box;
+  width: min(640px, 92vw);
+  max-height: 90vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  box-shadow: 0 0 0 2px var(--ink), inset 0 0 18px rgba(0, 0, 0, .6);
+}
+
+#crash-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .22) 0 1px, transparent 1px 3px);
+}
+
+#crash-title {
+  margin: 0 0 12px;
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--haze);
+}
+
+#crash-message,
+#crash-saved {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+#crash-saved {
+  color: var(--amber-dim);
+}
+
+.crash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+#crash-overlay button {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--amber);
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+#crash-overlay button:hover {
+  background: var(--rust-dark);
+  color: var(--haze);
+}
+
+#crash-overlay button:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+#crash-report {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 160px;
+  margin: 0;
+  padding: 8px;
+  resize: vertical;
+  background: var(--ink);
+  border: 2px solid var(--rust-dark);
+  color: var(--haze);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 14px;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: pre;
+  overflow: auto;
+}
+
+#crash-version {
+  font-size: 14px;
+  color: var(--amber-dim);
+  text-align: right;
+}

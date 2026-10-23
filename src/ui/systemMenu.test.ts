@@ -4,7 +4,7 @@ import type { IntervalTimers } from './systemMenu';
 import { MENU_REFRESH_MS } from '../data/systemMenu';
 
 // Fake timers only: the refresh loop is driven through the injected timer pair (no DOM, no real waits).
-const fakeTimers: IntervalTimers<number> = {
+const fakeTimers: IntervalTimers<ReturnType<typeof setInterval>> = {
   setInterval: (fn, ms) => setInterval(fn, ms),
   clearInterval: (handle) => clearInterval(handle),
 };

@@ -30,14 +30,8 @@ export const MENU_TEXT = {
   close: 'CLOSE [ESC]',
   save: 'SAVE STATE',
   cancel: 'CANCEL',
-} as const;
-
-// Version footer (WP16 T5), SYSTEM tab: "v<app> · SAVE v<save>". Numbers come from src/data/version.ts and the save schema.
-export const VERSION_TEXT = {
-  appPrefix: 'v',
-  separator: ' · ',
-  savePrefix: 'SAVE v',
-  ariaPrefix: 'Version ',
+  credits: 'CREDITS',
+  quit: 'QUIT TO DESKTOP',
 } as const;
 
 // Tab bar entries. The SYSTEM tab is always first; deps.panels add tabs after it.

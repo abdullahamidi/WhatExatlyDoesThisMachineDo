@@ -1,0 +1,97 @@
+/* CREDITS modal (WP19 T7): shared by the title screen and the SYSTEM menu. Panel look as #tech-panel. Esc is handled by the shared modal stack. */
+
+/* keep in sync with src/data/palette.ts */
+#credits-overlay {
+  --ink:#14110f;
+  --iron:#2b2e31;
+  --iron-2:#1d1f21;
+  --rust:#8c4a2a;
+  --rust-dark:#4e2a1a;
+  --amber:#d9822b;
+  --amber-dim:#a8957a;
+  --haze:#d2bf9c;
+  position: absolute;
+  inset: 0;
+  z-index: 155;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 16px;
+  background: rgba(8, 6, 5, .78);
+  pointer-events: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(11px, 1.3vw, 15px);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--amber);
+}
+
+#credits-overlay.is-open {
+  display: flex;
+}
+
+#credits-overlay [hidden] {
+  display: none !important;
+}
+
+#credits-panel {
+  box-sizing: border-box;
+  width: min(560px, 94%);
+  max-height: 94%;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 18px;
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  box-shadow: 0 0 0 2px var(--ink), inset 0 0 18px rgba(0, 0, 0, .6);
+}
+
+#credits-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: normal;
+  letter-spacing: .12em;
+  color: var(--haze);
+}
+
+.credits-heading {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  font-weight: normal;
+  letter-spacing: .12em;
+  color: var(--amber-dim);
+}
+
+.credits-line {
+  margin: 2px 0;
+  font-size: 14px;
+  text-transform: none;
+  color: var(--haze);
+}
+
+/* CLOSE button: the HUD button look (same as .hud-btn). */
+#credits-close {
+  align-self: center;
+  margin-top: 14px;
+  font-family: inherit;
+  font-size: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: var(--amber);
+  background: var(--iron-2);
+  border: 2px solid var(--rust);
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+#credits-close:hover {
+  background: var(--rust-dark);
+  color: var(--haze);
+}
+
+#credits-close:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}

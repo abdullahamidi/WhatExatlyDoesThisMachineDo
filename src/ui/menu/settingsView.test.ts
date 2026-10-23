@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { DEFAULT_SETTINGS_VALUES, SETTINGS_LABELS, VOLUME_RANGE } from '../../data/settings';
 import type { SettingsState } from '../../data/types';
 import {
+  fullscreenRow,
   VOLUME_IDS,
   hotkeyHelpLines,
   notationOf,
@@ -172,8 +173,28 @@ describe('uiRootAttrs', () => {
 });
 
 describe('hotkeyHelpLines', () => {
-  it('lists crank, tech tree and menu keys', () => {
-    expect(hotkeyHelpLines()).toEqual(['SPACE / ENTER  CRANK', 'T  TECH TREE', 'ESC  MENU']);
+  it('lists crank, tech tree, menu and fullscreen keys', () => {
+    expect(hotkeyHelpLines()).toEqual(['SPACE / ENTER  CRANK', 'T  TECH TREE', 'ESC  MENU', 'F11 / ALT+ENTER  FULLSCREEN']);
+  });
+});
+
+describe('fullscreenRow', () => {
+  it('shows ON and pressed when fullscreen is on', () => {
+    expect(fullscreenRow(true)).toEqual({
+      label: 'FULLSCREEN',
+      stateText: 'ON',
+      pressed: true,
+      hint: 'F11 / ALT+ENTER',
+    });
+  });
+
+  it('shows OFF and not pressed when fullscreen is off', () => {
+    expect(fullscreenRow(false)).toEqual({
+      label: 'FULLSCREEN',
+      stateText: 'OFF',
+      pressed: false,
+      hint: 'F11 / ALT+ENTER',
+    });
   });
 });
 

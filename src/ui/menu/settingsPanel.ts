@@ -1,7 +1,9 @@
 import './settingsPanel.css';
 import { SETTINGS_LABELS } from '../../data/settings';
 import type { SettingsState } from '../../data/types';
+import type { FullscreenControl } from '../fullscreen';
 import {
+  fullscreenRow,
   hotkeyHelpLines,
   radioPatch,
   settingsViewModel,
@@ -18,6 +20,8 @@ export interface SettingsPanelDeps {
   get(): Readonly<SettingsState>;
   update(patch: Partial<SettingsState>): void;
   subscribe(fn: () => void): () => void;
+  /** Session-only FULLSCREEN row in DISPLAY. Shown only when supported(). */
+  fullscreen?: Pick<FullscreenControl, 'supported' | 'isOn' | 'toggle' | 'onChange'>;
 }
 
 export interface SettingsPanelHandle {
@@ -140,6 +144,33 @@ function buildToggle(c: ToggleControl, deps: SettingsPanelDeps): { el: HTMLEleme
   return { el: row, sync };
 }
 
+interface FullscreenView {
+  el: HTMLElement;
+  sync(): void;
+}
+
+/** FULLSCREEN row: a toggle button (state from the control, not optimistic) and the key hint beside it. */
+function buildFullscreen(fs: Pick<FullscreenControl, 'isOn' | 'toggle'>): FullscreenView {
+  const initial = fullscreenRow(fs.isOn());
+  const row = createElement('div', { className: 'settings-row settings-fullscreen' });
+  const button = createElement('button', { id: 'sys-set-fullscreen', className: 'settings-toggle' });
+  button.type = 'button';
+  button.setAttribute('aria-pressed', initial.pressed ? 'true' : 'false');
+  const state = createElement('span', { className: 'settings-state', text: initial.stateText });
+  button.append(createElement('span', { text: initial.label }), ' ', state);
+  button.addEventListener('click', () => fs.toggle());
+  const hint = createElement('span', { className: 'settings-hint', text: initial.hint });
+  row.append(button, hint);
+
+  const sync = (): void => {
+    const next = fullscreenRow(fs.isOn());
+    const pressed = next.pressed ? 'true' : 'false';
+    if (button.getAttribute('aria-pressed') !== pressed) button.setAttribute('aria-pressed', pressed);
+    if (state.textContent !== next.stateText) state.textContent = next.stateText;
+  };
+  return { el: row, sync };
+}
+
 function buildControl(control: SettingsControl, deps: SettingsPanelDeps): { el: HTMLElement; sync: Sync } {
   switch (control.kind) {
     case 'volume':
@@ -154,6 +185,7 @@ function buildControl(control: SettingsControl, deps: SettingsPanelDeps): { el: 
 export function createSettingsPanel(host: HTMLElement, deps: SettingsPanelDeps): SettingsPanelHandle {
   const root = createElement('div', { id: 'sys-settings', className: 'settings-panel' });
   const syncers = new Map<string, Sync>();
+  const groups = new Map<SettingsSection, HTMLElement>();
 
   let group: HTMLElement | null = null;
   let lastSection: SettingsSection | null = null;
@@ -164,11 +196,21 @@ export function createSettingsPanel(host: HTMLElement, deps: SettingsPanelDeps):
       group = createElement('section', { className: 'settings-section' });
       group.setAttribute('aria-labelledby', headingId);
       group.appendChild(createElement('h3', { id: headingId, className: 'settings-heading', text: SECTION_TITLE[control.section] }));
+      groups.set(control.section, group);
       root.appendChild(group);
     }
     const built = buildControl(control, deps);
     group?.appendChild(built.el);
     syncers.set(control.id, built.sync);
+  }
+
+  // FULLSCREEN row goes last in DISPLAY, and only when the runtime supports it (Electron host or browser API).
+  const fs = deps.fullscreen;
+  const fullscreen: FullscreenView | null = fs !== undefined && fs.supported() ? buildFullscreen(fs) : null;
+  let unsubscribeFullscreen: () => void = () => undefined;
+  if (fs !== undefined && fullscreen !== null) {
+    groups.get('display')?.appendChild(fullscreen.el);
+    unsubscribeFullscreen = fs.onChange(() => fullscreen.sync());
   }
 
   const help = createElement('section', { className: 'settings-section settings-help' });
@@ -185,6 +227,7 @@ export function createSettingsPanel(host: HTMLElement, deps: SettingsPanelDeps):
   function refresh(): void {
     if (destroyed) return;
     for (const control of settingsViewModel(deps.get())) syncers.get(control.id)?.(control);
+    fullscreen?.sync();
   }
 
   const unsubscribe = deps.subscribe(refresh);
@@ -193,6 +236,7 @@ export function createSettingsPanel(host: HTMLElement, deps: SettingsPanelDeps):
     if (destroyed) return;
     destroyed = true;
     unsubscribe();
+    unsubscribeFullscreen();
     syncers.clear();
     root.remove();
   }

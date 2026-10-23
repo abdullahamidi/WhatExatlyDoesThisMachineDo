@@ -16,7 +16,8 @@ import type { GreedyOptions, GreedyResult } from './sim/greedy';
 
 const MINUTE = 60; // unit conversion for the window table (seconds per minute)
 const HOUR = 3600; // unit conversion for the nightly schedule (seconds per hour)
-const FILE_BUDGET_MS = 10000;
+// 30 s: ~4 s alone, but 10 s failed while parallel builds/smokes loaded the CPU (Director, WP19 merge).
+const FILE_BUDGET_MS = 30000;
 const SIGNOFF_TIMEOUT_MS = 60000;
 
 // A = 4 clicks/s, buys every second. B = 4 clicks/s, buys every 30 s. C = 1 click/s, buys every 30 s, no offline.
@@ -283,7 +284,7 @@ describe('signoff: values and file budget', () => {
     }
   });
 
-  it('the signoff file runs within its 10 s budget', () => {
+  it('the signoff file runs within its 30 s budget', () => {
     expect(fileMs).toBeLessThan(FILE_BUDGET_MS);
   });
 });

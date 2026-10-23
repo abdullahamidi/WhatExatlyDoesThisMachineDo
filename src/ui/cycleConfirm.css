@@ -11,7 +11,7 @@
   --amber:#d9822b;
   --amber-dim:#a8957a;
   --haze:#d2bf9c;
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 180;
   display: flex;

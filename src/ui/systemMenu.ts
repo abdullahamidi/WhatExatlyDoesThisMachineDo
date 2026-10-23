@@ -3,7 +3,7 @@ import { MENU_REFRESH_MS, MENU_TABS, MENU_TEXT, SYSTEM_MENU_CONFIG } from '../da
 import { UI_ART } from '../data/achievements';
 import { trapFocus } from './hotkeys';
 import type { ModalStack } from './modalStack';
-import { clampTab, leavingTab, muteLabel, newCycleRow, nextTab, reduceReset, resetLabel, saveFeedbackLabel, versionAriaLabel, versionFooter } from './systemMenuModel';
+import { clampTab, leavingTab, muteLabel, newCycleRow, nextTab, reduceReset, resetLabel, saveFeedbackLabel, shellRows, tabIndexFor } from './systemMenuModel';
 import type { NewCycleRow, ResetState, TabNavKey } from './systemMenuModel';
 import type { EndingPhase } from '../data/types';
 import type { NewCycleHook } from '../game/newCycle';
@@ -36,9 +36,16 @@ export interface SystemMenuDeps {
   panels?: readonly SystemMenuPanel[];
   /** WP13: NEW CYCLE row (SYSTEM tab, postgame only). Omitted = row never shows. */
   ending?: { phase(): EndingPhase; newCycle: NewCycleHook };
+  /** WP19: CREDITS row (SYSTEM tab). Omitted = row never shows. Click calls it; the menu stays open. */
+  openCredits?: () => void;
+  /** WP19: QUIT TO DESKTOP row (SYSTEM tab). Omitted = row never shows. */
+  quit?: () => void;
+  /** WP19: version footer (SYSTEM tab, last). Omitted = no footer. */
+  footer?: { text: string; ariaLabel: string };
 }
 
-export interface SystemMenu { open(): void; close(): void; toggle(): void; isOpen(): boolean; destroy(): void }
+/** open(tabId) selects that tab when given (unknown id = SYSTEM tab); open() with no id opens on SYSTEM. */
+export interface SystemMenu { open(tabId?: string): void; close(): void; toggle(): void; isOpen(): boolean; destroy(): void }
 
 /** Timer pair the refresh loop needs; injected so tests can use fake timers. */
 export interface IntervalTimers<H> { setInterval(fn: () => void, ms: number): H; clearInterval(handle: H): void }
@@ -159,16 +166,26 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
   newCycleButton.hidden = true;
   const newCycleReason = createElement('div', { id: 'sys-new-cycle-reason' });
   newCycleReason.hidden = true;
+  // WP19 shell rows: built once, attached only when their deps are given (shellRows decides).
+  const shell = shellRows({ hasCredits: deps.openCredits !== undefined, canQuit: deps.quit !== undefined });
+  const creditsButton = createElement('button', { id: 'sys-credits', className: 'sys-btn', text: MENU_TEXT.credits });
+  creditsButton.type = 'button';
+  const quitButton = createElement('button', { id: 'sys-quit', className: 'sys-btn', text: MENU_TEXT.quit });
+  quitButton.type = 'button';
   const feedbackEl = createElement('div', { id: 'sys-feedback' });
   feedbackEl.setAttribute('aria-live', 'polite');
-  // WP16 T5 version footer (static text; read-only, not a control).
-  const versionEl = createElement('div', { id: 'sys-version', text: versionFooter() });
-  versionEl.setAttribute('role', 'note');
-  versionEl.setAttribute('aria-label', versionAriaLabel());
   const closeButton = createElement('button', { id: 'sys-close', className: 'sys-btn', text: MENU_TEXT.close });
   closeButton.type = 'button';
 
-  systemPane.append(muteButton, saveButton, resetButton, cancelButton, newCycleButton, newCycleReason, feedbackEl, versionEl);
+  systemPane.append(muteButton, saveButton, resetButton, cancelButton, newCycleButton, newCycleReason);
+  if (shell.credits) systemPane.append(creditsButton);
+  if (shell.quit) systemPane.append(quitButton);
+  systemPane.append(feedbackEl);
+  if (deps.footer !== undefined) {
+    const footerEl = createElement('div', { id: 'sys-footer', text: deps.footer.text });
+    footerEl.setAttribute('aria-label', deps.footer.ariaLabel);
+    systemPane.append(footerEl);
+  }
 
   // Extra panels: mounted once, each into its own tabpanel.
   for (const p of deps.panels ?? []) {
@@ -307,19 +324,31 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     if (dispose !== null) dispose();
   }
 
-  function open(): void {
-    if (destroyed || isOpenFlag) return;
+  // Tab index for an id; 0 (SYSTEM) when the id is undefined or unknown.
+  const indexOfTab = (tabId: string | undefined): number => tabIndexFor(tabs.map((t) => t.id), tabId);
+
+  // tabId (WP19): open or switch straight to that tab. Focus lands on its tab button; plain open focuses CLOSE.
+  function open(tabId?: string): void {
+    if (destroyed) return;
+    if (isOpenFlag) {
+      if (tabId !== undefined) activateTab(indexOfTab(tabId), true);
+      return;
+    }
     const active = document.activeElement;
     returnFocus = active instanceof HTMLElement ? active : null;
     isOpenFlag = true;
     overlay.classList.add('is-open');
-    activateTab(0, false);
+    activateTab(indexOfTab(tabId), false);
     refreshMute();
     refreshNewCycle();
     disposeFocusTrap = trapFocus(overlay);
     modals.push(MENU_STACK_ID, close);
     menuRefresh.start();
-    closeButton.focus();
+    if (tabId !== undefined) {
+      tabs[activeIndex]?.button.focus();
+    } else {
+      closeButton.focus();
+    }
   }
 
   function close(): void {
@@ -366,6 +395,15 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     close();
   };
 
+  // WP19 shell rows: CREDITS hands over to the caller and the menu stays open; QUIT only calls the hook.
+  const onCredits = (): void => {
+    deps.openCredits?.();
+  };
+
+  const onQuit = (): void => {
+    deps.quit?.();
+  };
+
   const onClose = (): void => {
     close();
   };
@@ -401,6 +439,8 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
   resetButton.addEventListener('click', onReset);
   cancelButton.addEventListener('click', onCancel);
   newCycleButton.addEventListener('click', onNewCycle);
+  creditsButton.addEventListener('click', onCredits);
+  quitButton.addEventListener('click', onQuit);
   closeButton.addEventListener('click', onClose);
   overlay.addEventListener('click', onBackdropClick);
   selectTab(0);
@@ -429,6 +469,8 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     resetButton.removeEventListener('click', onReset);
     cancelButton.removeEventListener('click', onCancel);
     newCycleButton.removeEventListener('click', onNewCycle);
+    creditsButton.removeEventListener('click', onCredits);
+    quitButton.removeEventListener('click', onQuit);
     closeButton.removeEventListener('click', onClose);
     overlay.removeEventListener('click', onBackdropClick);
     if (feedbackTimer !== null) {
