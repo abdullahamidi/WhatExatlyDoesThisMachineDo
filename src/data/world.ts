@@ -80,8 +80,9 @@ export const DUST: { maxParticles: number; frequencyMs: number; lifespanMs: [num
 export const DUST_RISING: { techId: TechId; minLevel: number; speedY: [number, number]; spawnTopY: number } =
   { techId: 'resonatorSpire', minLevel: 1, speedY: [-18, -6], spawnTopY: GROUND_Y - 900 };
 export const CRANK_FEEDBACK = { degreesPerClick: 90, tweenMs: 160, shakePx: 1 /* art px */, shakeMs: 60,
-  floatRisePx: 40, floatMs: 1100, floatPoolSize: 24, hitRadius: 36 /* art px, crank click area */ } as const;
-export const FLOATING_TEXT = { fontSizePx: 24, minScreenPx: 16, strokePx: 4, jitterX: 6, spawnOffset: { x: -80, y: -140 },
+  floatRisePx: 40, floatMs: 1100, hitRadius: 36 /* art px, crank click area */ } as const;
+export const FLOATING_TEXT = { fontSizePx: 24, minScreenPx: 16, strokePx: 4, jitterX: 6, spawnOffset: { x: 116, y: -128 },
+  spawnOffsetSpire: { x: 316, y: -138 }, spireComponent: 'spireTower', maxLines: 5,
   lineGapPx: 2, coalesceMs: 300, blockMaxMs: 900, blockPoolSize: 6, charWidthEm: 0.62, color: '#ffd27a',
   colors: { me: '#ffd27a', ee: PALETTE_CSS.cyanLight, pr: PALETTE_CSS.steam, rs: PALETTE_CSS.verdigrisLight, xf: PALETTE_CSS.violetPale } } as const;   // world px (WP17 crank gain block: minScreenPx is the font floor in screen px; spawnOffset is the block bottom-centre from the crank)
 /** Poll path of the HUD rebuild (WorldScene): at most one rebuild per HUD_REFRESH_MS. Session events rebuild at once. */

@@ -4,9 +4,6 @@ import type { Vec2 } from '../../data/machineComponents';
 import { PALETTE_CSS } from '../../data/palette';
 import type { GainLine } from '../../ui/hudView';
 
-/** Most stacked lines one gain block shows (the extra lines of a longer list are dropped). */
-const MAX_BLOCK_LINES = 5;
-
 /** One pooled gain block: a container holding its stacked line texts; it rises and fades as one. */
 interface GainBlockView {
   container: Phaser.GameObjects.Container;
@@ -29,7 +26,7 @@ export class FloatingText {
   }
 
   /**
-   * Shows the stacked gain block. `lines` are listed top-first; at most MAX_BLOCK_LINES are shown.
+   * Shows the stacked gain block. `lines` are listed top-first; at most FLOATING_TEXT.maxLines are shown.
    * merged = false: the block starts at worldPos. merged = true: the newest block is re-texted and keeps its position
    * (with no block yet it is treated as fresh). Each (re)show restarts the rise and fade from the block's current y.
    */
@@ -41,7 +38,7 @@ export class FloatingText {
     if (reused === null) container.setPosition(worldPos.x, worldPos.y);
 
     const scale = fontPx / FLOATING_TEXT.fontSizePx;
-    const shown = lines.slice(0, MAX_BLOCK_LINES);
+    const shown = lines.slice(0, FLOATING_TEXT.maxLines);
     const stepY = fontPx + FLOATING_TEXT.lineGapPx * scale;
     shown.forEach((line, i) => {
       // Line i sits above the bottom line: the last line of the stack is at local y 0.
@@ -49,6 +46,7 @@ export class FloatingText {
         .setText(line.text)
         .setFontSize(fontPx)
         .setColor(FLOATING_TEXT.colors[line.res])
+        .setStroke(PALETTE_CSS.ink, FLOATING_TEXT.strokePx * scale)
         .setPosition(0, -(shown.length - 1 - i) * stepY)
         .setVisible(true);
     });

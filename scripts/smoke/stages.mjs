@@ -92,8 +92,9 @@ for (const name of only) {
   }
   // settle wait: env WAIT_MS overrides; s16_postgame waits 2.5 s; Era IV+ stages (s14 and later, numeric compare) get 12 s
   await p.waitForTimeout(+(process.env.WAIT_MS ?? (name === 's16_postgame' ? 2500 : (+name.slice(1).split('_')[0] >= 14 ? 12000 : 2500))));
-  // era V stages: click the crank 3x so the 3 s inversion ghost shows in the shot and the frames
-  if (name === 's15_era5_full' || name === 's16_postgame') {
+  // era V stages: click the crank 3x so the 3 s inversion ghost shows in the shot and the frames;
+  // CLICK_SHOT=1 does the same on every stage (A17: the crank gain block is in the shot)
+  if (name === 's15_era5_full' || name === 's16_postgame' || process.env.CLICK_SHOT === '1') {
     const cp = await p.evaluate(() => window.__wedtmd.crankClientPoint());
     for (let i = 0; i < 3; i++) await p.mouse.click(cp.x, cp.y);
     await p.waitForTimeout(150);

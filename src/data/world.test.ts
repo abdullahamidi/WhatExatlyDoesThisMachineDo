@@ -432,8 +432,19 @@ describe('FLOATING_TEXT and CRANK_PULSE', () => {
     expect(FLOATING_TEXT.minScreenPx).toBeGreaterThanOrEqual(14);
   });
 
-  it('the gain block spawns up-left of the crank at offset (-80, -140) world px', () => {
-    expect(FLOATING_TEXT.spawnOffset).toEqual({ x: -80, y: -140 });
+  it('the gain block spawns right of the crank: (116, -128) world px over the frame, (316, -138) once the spire stands', () => {
+    expect(FLOATING_TEXT.spawnOffset).toEqual({ x: 116, y: -128 });
+    expect(FLOATING_TEXT.spawnOffsetSpire).toEqual({ x: 316, y: -138 });
+    expect(FLOATING_TEXT.spireComponent).toBe('spireTower');
+  });
+
+  it('a block shows at most maxLines (5) lines and the whole pool stays within 30 texts', () => {
+    expect(FLOATING_TEXT.maxLines).toBe(5);
+    expect(FLOATING_TEXT.blockPoolSize * FLOATING_TEXT.maxLines).toBeLessThanOrEqual(30);
+  });
+
+  it('CRANK_FEEDBACK has no dead floatPoolSize (the pool is FLOATING_TEXT.blockPoolSize)', () => {
+    expect('floatPoolSize' in CRANK_FEEDBACK).toBe(false);
   });
 
   it('the gain block pool holds six blocks', () => {

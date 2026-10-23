@@ -92,8 +92,10 @@ export class HandCrank {
     const crankPos = this.machine.getComponentWorldPosition('handCrank');
     // A fresh block gets a small random x jitter; a merged block stays on its spot.
     const jitterX = merged ? 0 : (Math.random() - 0.5) * 2 * FLOATING_TEXT.jitterX; // jitter in [-jitterX, +jitterX]
+    // A17: the block floats in clear sky right of the crank: over the frame's right half (eras I-III), right of the spire once it stands.
+    const offset = this.machine.getComponentState(FLOATING_TEXT.spireComponent).visible ? FLOATING_TEXT.spawnOffsetSpire : FLOATING_TEXT.spawnOffset;
     this.floatingText.showBlock(
-      { x: crankPos.x + FLOATING_TEXT.spawnOffset.x + jitterX, y: crankPos.y + FLOATING_TEXT.spawnOffset.y },
+      { x: crankPos.x + offset.x + jitterX, y: crankPos.y + offset.y },
       clickGainLines(block.gains),
       fontPx,
       merged,

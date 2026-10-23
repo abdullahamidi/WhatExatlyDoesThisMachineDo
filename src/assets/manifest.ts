@@ -513,28 +513,28 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     frame: { width: 16, height: 16, count: 5 },
     description: 'Five 16-px icons for the finale buttons (ART_ERA5 §8).',
   },
-  // WP17 legacy feed parts: procedural only (file null); PixelLab art pending (Art Director A17). Painters in painters/legacy.ts.
+  // WP17 legacy feed parts: A17 art under machine/legacy/ (glow sheet, bellows sheet, three single images); the procedural painters in painters/legacy.ts stay as the load-failure fallback.
   'machine.generatorGlow': {
-    id: 'machine.generatorGlow', file: null, width: 384, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    id: 'machine.generatorGlow', file: 'machine/legacy/generator-glow.png', width: 384, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     frame: { width: 96, height: 64, count: 4 },
-    description: 'Four-frame cyan winding glow laid over the generator housing, brighter frames as EE/s rises. Transparent over the belt pulley circle (r 11 at texture 52,49).',
+    description: 'Four-frame EE gauge overlay laid 1:1 on the generator (frame = EE/s level): field-coil turn gaps, armature air-gap ring, terminal caps and brush sparks light cyan; everything stays inside the generator silhouette except the level-3 brush sparks, which rise up to 2 px above the terminal caps; drawn under the belt and the generator pulley.',
   },
   'machine.bellows': {
-    id: 'machine.bellows', file: null, width: 160, height: 24, origin: { x: 0.5, y: 1 }, tileable: 'none',
-    frame: { width: 40, height: 24, count: 4 },
-    description: 'Four-frame leather bellows between two boards that open and close; the nozzle tip (texture 36,10) feeds the boiler firebox.',
+    id: 'machine.bellows', file: 'machine/legacy/bellows.png', width: 240, height: 28, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 60, height: 28, count: 4 },
+    description: 'Four-frame great forge bellows (open, half, closed, half) on two iron legs; the boards hinge at the iron snout and the nozzle (texture 59, rows 16..17) feeds the hose to the boiler tuyere.',
   },
   'machine.exciterFeed': {
-    id: 'machine.exciterFeed', file: null, width: 16, height: 24, origin: { x: 0.5, y: 1 }, tileable: 'none',
-    description: 'Short insulator post with a cyan cap; the cable lug is the cap (texture 8,2).',
+    id: 'machine.exciterFeed', file: 'machine/legacy/exciter-feed.png', width: 16, height: 28, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Cyan glass insulator on a riveted terminal box with a copper strap into the spire exciter; the cable lug is the cap (texture 10,1).',
   },
   'machine.backfeedTerminal': {
-    id: 'machine.backfeedTerminal', file: null, width: 16, height: 24, origin: { x: 0.5, y: 0 }, tileable: 'none',
-    description: 'Hanging terminal plate with insulator discs and violet accents; the cable lug is the bottom cap (texture 8,22).',
+    id: 'machine.backfeedTerminal', file: 'machine/legacy/backfeed-terminal.png', width: 16, height: 28, origin: { x: 0.5, y: 0 }, tileable: 'none',
+    description: 'Suspension string under the null gallery deck: hanger plate with a violet lead-in bushing, four cyan glass discs, conductor clamp and copper jumper; the cable lug is the bottom cap (texture 8,26).',
   },
   'machine.steamLance': {
-    id: 'machine.steamLance', file: null, width: 16, height: 24, origin: { x: 0.5, y: 0 }, tileable: 'none',
-    description: 'Steam valve block with a rust handwheel and a flanged port at the bottom (texture 8,24).',
+    id: 'machine.steamLance', file: 'machine/legacy/steam-lance.png', width: 16, height: 32, origin: { x: 0.5, y: 0 }, tileable: 'none',
+    description: 'Steam lance valve hung under the null gallery deck: mount plate, globe valve with a rust handwheel, flanged inlet at the bottom (texture 8,32).',
   },
 };
 

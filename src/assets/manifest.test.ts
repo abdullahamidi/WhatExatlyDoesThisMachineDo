@@ -709,14 +709,14 @@ describe('WP10 era IV machine and fx assets', () => {
   });
 });
 
-// WP17 legacy feed parts: procedural only (file null, no disk file yet); sheet cells per the WP17 contract.
-const WP17_ENTRIES: ReadonlyArray<{ id: AssetId; width: number; height: number; origin: { x: number; y: number };
+// WP17 legacy feed parts: A17 PixelLab-pass art under machine/legacy/ (procedural painters stay as the load-failure fallback).
+const WP17_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; height: number; origin: { x: number; y: number };
   frame?: { width: number; height: number; count: number } }> = [
-  { id: 'machine.generatorGlow', width: 384, height: 64, origin: { x: 0.5, y: 0.5 }, frame: { width: 96, height: 64, count: 4 } },
-  { id: 'machine.bellows', width: 160, height: 24, origin: { x: 0.5, y: 1 }, frame: { width: 40, height: 24, count: 4 } },
-  { id: 'machine.exciterFeed', width: 16, height: 24, origin: { x: 0.5, y: 1 } },
-  { id: 'machine.backfeedTerminal', width: 16, height: 24, origin: { x: 0.5, y: 0 } },
-  { id: 'machine.steamLance', width: 16, height: 24, origin: { x: 0.5, y: 0 } },
+  { id: 'machine.generatorGlow', file: 'machine/legacy/generator-glow.png', width: 384, height: 64, origin: { x: 0.5, y: 0.5 }, frame: { width: 96, height: 64, count: 4 } },
+  { id: 'machine.bellows', file: 'machine/legacy/bellows.png', width: 240, height: 28, origin: { x: 0.5, y: 1 }, frame: { width: 60, height: 28, count: 4 } },
+  { id: 'machine.exciterFeed', file: 'machine/legacy/exciter-feed.png', width: 16, height: 28, origin: { x: 0.5, y: 1 } },
+  { id: 'machine.backfeedTerminal', file: 'machine/legacy/backfeed-terminal.png', width: 16, height: 28, origin: { x: 0.5, y: 0 } },
+  { id: 'machine.steamLance', file: 'machine/legacy/steam-lance.png', width: 16, height: 32, origin: { x: 0.5, y: 0 } },
 ];
 
 describe('WP17 legacy feed assets', () => {
@@ -725,10 +725,12 @@ describe('WP17 legacy feed assets', () => {
     expect(ASSET_IDS.slice(112)).toEqual(WP17_ENTRIES.map((e) => e.id));
   });
 
-  it('has file null, the contract size and origin, tileable none and a description for each new id', () => {
+  it('has the A17 file, the contract size and origin, tileable none and a description for each new id', () => {
+    const files = Object.keys(import.meta.glob('/public/assets/**/*.png'));
     for (const want of WP17_ENTRIES) {
       const entry = ASSET_MANIFEST[want.id];
-      expect(entry.file, want.id).toBeNull();
+      expect(entry.file, want.id).toBe(want.file);
+      expect(files, want.id).toContain(`/public/assets/${want.file}`);
       expect(entry.width, want.id).toBe(want.width);
       expect(entry.height, want.id).toBe(want.height);
       expect(entry.origin, want.id).toEqual(want.origin);
@@ -743,7 +745,7 @@ describe('WP17 legacy feed assets', () => {
     }
   });
 
-  it('cuts the generator glow into 4 cells of 96x64 and the bellows into 4 cells of 40x24', () => {
+  it('cuts the generator glow into 4 cells of 96x64 and the bellows into 4 cells of 60x28', () => {
     expect(sheetFrameRects(ASSET_MANIFEST['machine.generatorGlow'])).toEqual([
       { x: 0, y: 0, width: 96, height: 64 },
       { x: 96, y: 0, width: 96, height: 64 },
@@ -751,17 +753,20 @@ describe('WP17 legacy feed assets', () => {
       { x: 288, y: 0, width: 96, height: 64 },
     ]);
     expect(sheetFrameRects(ASSET_MANIFEST['machine.bellows'])).toEqual([
-      { x: 0, y: 0, width: 40, height: 24 },
-      { x: 40, y: 0, width: 40, height: 24 },
-      { x: 80, y: 0, width: 40, height: 24 },
-      { x: 120, y: 0, width: 40, height: 24 },
+      { x: 0, y: 0, width: 60, height: 28 },
+      { x: 60, y: 0, width: 60, height: 28 },
+      { x: 120, y: 0, width: 60, height: 28 },
+      { x: 180, y: 0, width: 60, height: 28 },
     ]);
   });
 
-  it('plans no file load for the procedural WP17 ids', () => {
+  it('plans one load per WP17 id: spritesheets with their frame for the glow and the bellows, images for the rest', () => {
     const loads = planAssetLoads();
     for (const want of WP17_ENTRIES) {
-      expect(loads.some((l) => l.key === want.id), want.id).toBe(false);
+      const load = loads.find((l) => l.key === want.id);
+      expect(load?.url, want.id).toBe(`assets/${want.file}`);
+      expect(load?.kind, want.id).toBe(want.frame ? 'spritesheet' : 'image');
+      expect(load?.frame, want.id).toEqual(want.frame);
     }
   });
 });

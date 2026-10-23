@@ -45,8 +45,8 @@ export const paintGeneratorGlow: Painter = (g) => {
   GLOW_ALPHAS.forEach((alpha, k) => paintGlowCell(g, k * GLOW_CELL_WIDTH, alpha));
 };
 
-// Bellows sheet (160x24 = 4 cells of 40x24). Each cell has its own board gap; the boards close and open across the frames.
-const BELLOWS_CELL_WIDTH = 40;
+// Bellows sheet (240x28 = 4 cells of 60x28). Each cell has its own board gap; the boards close and open across the frames.
+const BELLOWS_CELL_WIDTH = 60;
 const BELLOWS_GAPS: readonly number[] = [18, 15, 12, 15];
 
 function paintBellowsCell(g: Gfx, ox: number, gap: number): void {
