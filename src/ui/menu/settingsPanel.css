@@ -113,6 +113,19 @@
   font-weight: bold;
 }
 
+.settings-row.settings-fullscreen {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-fullscreen .settings-toggle {
+  grid-column: auto;
+}
+
+.settings-hint {
+  font-size: 12px;
+  color: var(--amber-dim);
+}
+
 .settings-keys {
   margin: 0;
   padding: 0;

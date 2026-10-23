@@ -1,4 +1,4 @@
-// test-only hook, safe to ship
+// Test-only hook. Installed only when debugEnabled(search, DEV) and not in a packaged desktop host.
 import Phaser from 'phaser';
 import type { GameSession } from '../simulation';
 import type { TechTree } from '../ui/techTree';

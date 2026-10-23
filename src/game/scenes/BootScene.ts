@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { ASSET_IDS } from '../../assets/assetIds';
 import { ASSET_MANIFEST, planAssetLoads } from '../../assets/manifest';
 import { ensureFallbackTextures } from '../../assets/fallbackTextures';
+import { setSplashProgress, watchSplash } from '../../ui/splash';
 
 // Loads every file-backed asset, then generates procedural textures for whatever is still missing.
 export class BootScene extends Phaser.Scene {
@@ -9,12 +10,18 @@ export class BootScene extends Phaser.Scene {
     console.warn('[assets] failed to load', file.key, file.url);
   };
 
+  private readonly onProgress = (p: number): void => {
+    setSplashProgress(p);
+  };
+
   constructor() {
     super('Boot');
   }
 
   preload(): void {
+    watchSplash();
     this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, this.onFileLoadError);
+    this.load.on(Phaser.Loader.Events.PROGRESS, this.onProgress);
     for (const load of planAssetLoads()) {
       if (load.kind === 'spritesheet') {
         if (load.frame === undefined) continue;
@@ -32,6 +39,7 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     // The error listener only matters while loading; remove it so restarts do not stack listeners.
     this.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, this.onFileLoadError);
+    this.load.off(Phaser.Loader.Events.PROGRESS, this.onProgress);
     this.warnOnSizeMismatch();
     ensureFallbackTextures(this);
     this.scene.start('World');

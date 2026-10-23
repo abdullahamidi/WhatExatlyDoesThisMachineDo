@@ -4,15 +4,29 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>What Exactly Does This Machine Do?</title>
+    <link rel="icon" type="image/png" href="./assets/ui/logo-mark.png" />
+    <script src="./boot.js"></script>
     <style>
-      html,body{margin:0;height:100%;background:#0d0b09;overflow:hidden}
+      html,body{margin:0;height:100%;overflow:hidden;background:#0d0b09}
+      body{background:#0d0b09 radial-gradient(ellipse at 50% 50%,#241812 0%,#150f0c 60%,#0d0b09 100%) fixed}
       #game{position:fixed;inset:0}
-      #ui-root{position:fixed;inset:0;pointer-events:none}
+      #ui-root{position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;contain:layout}
+      #splash{position:fixed;inset:0;z-index:900;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#0d0b09;pointer-events:none;transition:opacity 300ms ease-out;font:14px ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;letter-spacing:.08em;color:#a8957a}
+      #splash.is-hiding{opacity:0}
+      #splash img{width:min(460px,80vw);height:auto;image-rendering:pixelated}
+      #splash-track{width:min(460px,80vw);height:4px;background:#1d1f21;border:1px solid #4e2a1a}
+      #splash-bar{width:0;height:100%;background:#d9822b;transition:width 120ms linear}
+      @media (prefers-reduced-motion:reduce){#splash,#splash-bar{transition:none}}
     </style>
   </head>
   <body>
     <div id="game"></div>
     <div id="ui-root"></div>
+    <div id="splash" role="status" aria-label="Loading">
+      <img src="./assets/ui/logo.png" alt="What Exactly Does This Machine Do?" width="460" height="100">
+      <div id="splash-text">WARMING UP THE MACHINE…</div>
+      <div id="splash-track"><div id="splash-bar"></div></div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

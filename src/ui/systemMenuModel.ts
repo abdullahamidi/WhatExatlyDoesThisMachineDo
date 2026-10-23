@@ -1,9 +1,7 @@
 // Pure model for the SYSTEM menu: two-step reset reducer and button labels (WP4), NEW CYCLE row (WP13).
-import { MUTE_LABELS, RESET_LABELS, SAVE_LABELS, SYSTEM_MENU_CONFIG, VERSION_TEXT } from '../data/systemMenu';
+import { MUTE_LABELS, RESET_LABELS, SAVE_LABELS, SYSTEM_MENU_CONFIG } from '../data/systemMenu';
 import { FINALE_CHOICE } from '../data/finale';
-import { APP_VERSION } from '../data/version';
 import type { EndingPhase } from '../data/types';
-import { SAVE_VERSION } from '../persistence/schema';
 
 export type ResetState = { stage: 'idle' } | { stage: 'armed'; armedAt: number };
 
@@ -68,19 +66,6 @@ export function newCycleRow(phase: EndingPhase, reason: string | null): NewCycle
   };
 }
 
-/**
- * SYSTEM tab version footer text: "v1.0.0 · SAVE v2". Lives here (not in src/data) because it reads the save schema
- * version, and src/data must not import persistence.
- */
-export function versionFooter(): string {
-  return `${VERSION_TEXT.appPrefix}${APP_VERSION}${VERSION_TEXT.separator}${VERSION_TEXT.savePrefix}${SAVE_VERSION}`;
-}
-
-/** Accessible name for the version footer: "Version 1.0.0". */
-export function versionAriaLabel(): string {
-  return `${VERSION_TEXT.ariaPrefix}${APP_VERSION}`;
-}
-
 export type TabNavKey = 'ArrowRight' | 'ArrowLeft' | 'Home' | 'End';
 
 /** Clamps a tab index into 0..count-1 (0 when there are no tabs). */
@@ -92,6 +77,18 @@ export function clampTab(index: number, count: number): number {
 /** Tab being left when the selection moves from `from` to `to`; null when the selection stays put. */
 export function leavingTab(from: number, to: number): number | null {
   return from === to ? null : from;
+}
+
+/** Index of the tab with `id`; 0 when `id` is undefined or not in the list. */
+export function tabIndexFor(tabIds: readonly string[], id: string | undefined): number {
+  if (id === undefined) return 0;
+  const index = tabIds.indexOf(id);
+  return index < 0 ? 0 : index;
+}
+
+/** WP19 shell rows in the SYSTEM tab: CREDITS and QUIT TO DESKTOP show only when their hooks are given. */
+export function shellRows(o: { hasCredits: boolean; canQuit: boolean }): { credits: boolean; quit: boolean } {
+  return { credits: o.hasCredits, quit: o.canQuit };
 }
 
 /** Tab index after a navigation key. Arrows wrap; Home / End jump to the ends. */

@@ -1,10 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel, nextTab, clampTab, leavingTab, newCycleRow, versionFooter, versionAriaLabel } from './systemMenuModel';
+import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel, nextTab, clampTab, leavingTab, newCycleRow, tabIndexFor, shellRows } from './systemMenuModel';
 import type { ResetState } from './systemMenuModel';
 import { SYSTEM_MENU_CONFIG } from '../data/systemMenu';
 import { FINALE_CHOICE } from '../data/finale';
-import { APP_VERSION } from '../data/version';
-import { SAVE_VERSION } from '../persistence/schema';
 
 const IDLE: ResetState = { stage: 'idle' };
 const ARM = SYSTEM_MENU_CONFIG.resetArmMs;
@@ -167,6 +165,32 @@ describe('leavingTab', () => {
   });
 });
 
+describe('tabIndexFor', () => {
+  const TABS = ['system', 'settings', 'stats'];
+
+  it('returns the index of a known tab id', () => {
+    expect(tabIndexFor(TABS, 'settings')).toBe(1);
+    expect(tabIndexFor(TABS, 'stats')).toBe(2);
+    expect(tabIndexFor(TABS, 'system')).toBe(0);
+  });
+
+  it('unknown id, undefined id and an empty list give 0', () => {
+    expect(tabIndexFor(TABS, 'nope')).toBe(0);
+    expect(tabIndexFor(TABS, undefined)).toBe(0);
+    expect(tabIndexFor([], 'settings')).toBe(0);
+    expect(tabIndexFor([], undefined)).toBe(0);
+  });
+});
+
+describe('shellRows', () => {
+  it('maps hasCredits to credits and canQuit to quit, all four combinations', () => {
+    expect(shellRows({ hasCredits: false, canQuit: false })).toEqual({ credits: false, quit: false });
+    expect(shellRows({ hasCredits: true, canQuit: false })).toEqual({ credits: true, quit: false });
+    expect(shellRows({ hasCredits: false, canQuit: true })).toEqual({ credits: false, quit: true });
+    expect(shellRows({ hasCredits: true, canQuit: true })).toEqual({ credits: true, quit: true });
+  });
+});
+
 describe('newCycleRow', () => {
   it('is invisible in none, sequence and choice', () => {
     for (const phase of ['none', 'sequence', 'choice'] as const) {
@@ -192,17 +216,5 @@ describe('newCycleRow', () => {
       label: FINALE_CHOICE.cycle.label,
       reason: '',
     });
-  });
-});
-
-describe('versionFooter', () => {
-  it('reads "v<app> · SAVE v<save>" with the imported save version', () => {
-    expect(versionFooter()).toBe(`v${APP_VERSION} · SAVE v${SAVE_VERSION}`);
-    expect(versionFooter()).toBe('v1.0.0 · SAVE v' + SAVE_VERSION);
-  });
-
-  it('aria label names the app version', () => {
-    expect(versionAriaLabel()).toBe(`Version ${APP_VERSION}`);
-    expect(versionAriaLabel()).toBe('Version 1.0.0');
   });
 });

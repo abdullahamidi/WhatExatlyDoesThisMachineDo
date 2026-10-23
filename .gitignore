@@ -6,3 +6,5 @@ coverage
 .vite
 .DS_Store
 __pycache__/
+out/
+build/

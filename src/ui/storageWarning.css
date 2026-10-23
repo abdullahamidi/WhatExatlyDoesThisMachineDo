@@ -1,0 +1,43 @@
+/* Persistent storage warning banner (WP19 T5). Pointer events pass through the banner. */
+
+/* keep in sync with src/data/palette.ts */
+#storage-warning {
+  --ink:#14110f;
+  --iron:#2b2e31;
+  --iron-2:#1d1f21;
+  --rust:#8c4a2a;
+  --rust-dark:#4e2a1a;
+  --amber:#d9822b;
+  --amber-dim:#a8957a;
+  --haze:#d2bf9c;
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 210;
+  box-sizing: border-box;
+  max-width: min(520px, 60%);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 14px;
+  background: var(--rust-dark);
+  border: 2px solid var(--rust);
+  box-shadow: 0 0 0 2px var(--ink);
+  color: var(--haze);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  text-align: center;
+  pointer-events: none;
+}
+
+#storage-warning .sw-title {
+  font-weight: bold;
+}
+
+#storage-warning .sw-body {
+  overflow-wrap: anywhere;
+}

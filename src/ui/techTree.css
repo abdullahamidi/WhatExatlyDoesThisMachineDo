@@ -10,7 +10,7 @@
   --amber:#d9822b;
   --amber-dim:#a8957a;
   --haze:#d2bf9c;
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 100;
   display: none;
@@ -37,8 +37,8 @@
 #tech-panel {
   position: relative;
   box-sizing: border-box;
-  width: min(1180px, 96vw);
-  max-height: 94vh;
+  width: min(1180px, 96%);
+  max-height: 94%;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -152,7 +152,7 @@
   position: relative;
   flex: 0 1 auto;
   min-height: 0;
-  max-height: 46vh;
+  max-height: calc(46vh / var(--ui-zoom, 1));
   overflow: auto;
   border: 1px solid var(--rust-dark);
   background: rgba(0, 0, 0, .25);
