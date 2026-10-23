@@ -33,10 +33,12 @@
   display: none !important;
 }
 
+/* WP20 (D12): one fixed height on every tab so the panel never jumps; the tab content scrolls inside .sys-body. */
 #system-panel {
   position: relative;
   box-sizing: border-box;
   width: min(640px, 94%);
+  height: min(86%, 620px);
   max-height: 86%;
   min-height: 0;
   display: flex;
@@ -102,7 +104,8 @@
   outline-offset: 2px;
 }
 
-/* Scroll region for the active tabpanel; title, tabs and CLOSE stay fixed. */
+/* Scroll region for the active tabpanel; title, tabs and CLOSE stay fixed. WP20: thin rust scrollbar, gutter kept
+   so the content width does not shift when the scrollbar appears. */
 .sys-body {
   display: flex;
   flex-direction: column;
@@ -110,6 +113,9 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rust) rgba(0, 0, 0, .35);
+  scrollbar-gutter: stable;
 }
 
 .sys-tabpanel {

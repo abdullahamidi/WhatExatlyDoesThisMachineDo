@@ -57,9 +57,13 @@ export function describeEffect(effect: Effect, n: number): string {
       return `×${fmt(effect.factor ** n)} ${label} production`;
     }
     case 'convert': {
-      const source = RESOURCES[effect.res].source;
-      const sourceShort = source === null ? '?' : RESOURCES[source].short;
-      return `Converts ${sourceShort}/s into ${RESOURCES[effect.res].short}/s (×${fmt(effect.amount * n)})`;
+      // WP20: show the real rate, amount * (source rate)^convExp, instead of a bare multiplier.
+      const def = RESOURCES[effect.res];
+      const src = def.source === null ? '?' : RESOURCES[def.source].short;
+      const amt = fmt(effect.amount * n);
+      const exp = def.convExp;
+      const input = exp === 0.5 ? `√(${src}/s)` : exp === 1 ? `${src}/s` : `(${src}/s)^${fmt(exp)}`;
+      return `Converts ${input} × ${amt} into ${def.short}/s`;
     }
     case 'clickEcho':
       return `Clicks echo ${fmt(effect.seconds * n)}s of ${RESOURCES[effect.res].short}/s`;

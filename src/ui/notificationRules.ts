@@ -14,6 +14,7 @@ import type { ToastMessage } from '../data/notifications';
 import { PRESTIGE_TEXT } from '../data/prestige';
 import { RESOURCE_IDS } from '../data/types';
 import type { OfflineReport, TechId } from '../data/types';
+import { TOAST_BURST } from '../data/ux';
 import { cycleLabel, echoMultiplier } from '../simulation/prestige';
 import type { SessionEvents } from '../simulation/events';
 import { formatDuration, formatNumber } from '../utils/format';
@@ -146,6 +147,45 @@ export function cycleMessage(event: SessionEvents['cycle']): ToastMessage {
     title: cycleLabel(event.cycle),
     body: `+${event.echoesGained} ${PRESTIGE_TEXT.echoes} (+${bonusPct}% ${PRESTIGE_TEXT.allPerSecond})`,
     tone: 'system',
+    durationMs: TOAST_CONFIG.durationMs,
+  };
+}
+
+// WP20 T6: consecutive purchases of one tech within windowMs join one burst, so a quick buy spree reads as one toast.
+export interface PurchaseBurst {
+  id: TechId;
+  fromLevel: number;
+  toLevel: number;
+  lastMs: number;
+}
+
+// Starts or extends the burst for one purchase. Level 1 is announced by the unlock toast, so it never starts one.
+// The window is measured from the last purchase, and a merged burst keeps the level it started from.
+export function nextPurchaseBurst(
+  prev: PurchaseBurst | null,
+  id: TechId,
+  level: number,
+  nowMs: number,
+  windowMs: number,
+): PurchaseBurst | null {
+  if (level <= 1) return null;
+  if (prev !== null && prev.id === id && nowMs - prev.lastMs <= windowMs) {
+    return { id, fromLevel: prev.fromLevel, toLevel: level, lastMs: nowMs };
+  }
+  return { id, fromLevel: level - 1, toLevel: level, lastMs: nowMs };
+}
+
+// Burst toast: `GEAR RATIO — LV 4` for one step, `GEAR RATIO — LV 1 → 4` for a merged burst.
+// One key per tech, so a growing burst refreshes the same toast in place.
+export function purchaseBurstMessage(b: PurchaseBurst): ToastMessage {
+  const span = b.toLevel - b.fromLevel <= 1
+    ? `LV ${b.toLevel}`
+    : `LV ${b.fromLevel} ${TOAST_BURST.arrow} ${b.toLevel}`;
+  return {
+    key: 'purchase:' + b.id,
+    title: `${nameOf(b.id)} — ${span}`,
+    body: null,
+    tone: 'info',
     durationMs: TOAST_CONFIG.durationMs,
   };
 }

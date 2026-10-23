@@ -1,0 +1,95 @@
+/* Era card (WP20 D10): centred NEW SIGNAL card on an era keystone unlock. Pointer events stay on (click skips). */
+
+/* keep in sync with src/data/palette.ts */
+#era-card {
+  --ink:#14110f;
+  --iron-2:#1d1f21;
+  --rust:#8c4a2a;
+  --rust-dark:#4e2a1a;
+  --amber:#d9822b;
+  --amber-dim:#a8957a;
+  --haze:#d2bf9c;
+}
+
+/* z 80: above the HUD, below the TECH INDEX overlay (z 100). */
+#era-card {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 80;
+  box-sizing: border-box;
+  /* width follows the text; the 50% left offset would otherwise cap it at half the root */
+  width: max-content;
+  max-width: min(560px, calc(92vw / var(--ui-zoom, 1)));
+  pointer-events: auto;
+  cursor: pointer;
+  text-align: center;
+  padding: 14px 28px;
+  background: var(--iron-2);
+  border: 2px solid var(--amber);
+  box-shadow: 0 0 0 2px var(--ink), 0 0 24px rgba(217, 130, 43, .45), inset 0 0 14px rgba(0, 0, 0, .6);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  opacity: 0;
+}
+
+#era-card[hidden] {
+  display: none;
+}
+
+/* Durations mirror ERA_CARD.fadeInMs (250 ms) and ERA_CARD.fadeOutMs (350 ms) in src/data/ux.ts. */
+#era-card.is-shown {
+  opacity: 1;
+  animation: era-card-in 250ms ease-out;
+}
+
+#era-card.is-fading {
+  opacity: 0;
+  transition: opacity 350ms ease-in;
+}
+
+.era-card-title {
+  font-size: clamp(16px, 2vw, 24px);
+  color: var(--haze);
+  text-shadow: 0 0 8px rgba(217, 130, 43, .6);
+}
+
+.era-card-sub {
+  margin-top: 6px;
+  font-size: max(12px, .8em);
+  color: var(--amber-dim);
+}
+
+@keyframes era-card-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Settings > REDUCED MOTION (root attribute set by bootstrap) and the OS preference: no motion, timing unchanged
+   (the JS timers still hide the card). */
+@media (prefers-reduced-motion: reduce) {
+  #era-card,
+  #era-card.is-shown {
+    animation: none;
+  }
+
+  #era-card.is-fading {
+    transition: none;
+  }
+}
+
+#ui-root[data-reduced-motion="on"] #era-card {
+  animation: none;
+}
+
+#ui-root[data-reduced-motion="on"] #era-card.is-fading {
+  transition: none;
+}

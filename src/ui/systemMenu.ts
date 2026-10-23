@@ -3,7 +3,7 @@ import { MENU_REFRESH_MS, MENU_TABS, MENU_TEXT, SYSTEM_MENU_CONFIG } from '../da
 import { UI_ART } from '../data/achievements';
 import { trapFocus } from './hotkeys';
 import type { ModalStack } from './modalStack';
-import { clampTab, leavingTab, muteLabel, newCycleRow, nextTab, reduceReset, resetLabel, saveFeedbackLabel, shellRows, tabIndexFor } from './systemMenuModel';
+import { clampTab, leavingTab, muteLabel, newCycleRow, nextVisibleTab, reduceReset, resetLabel, saveFeedbackLabel, shellRows, tabIndexFor } from './systemMenuModel';
 import type { NewCycleRow, ResetState, TabNavKey } from './systemMenuModel';
 import type { EndingPhase } from '../data/types';
 import type { NewCycleHook } from '../game/newCycle';
@@ -24,6 +24,8 @@ export interface SystemMenuPanelHandle {
 export interface SystemMenuPanel {
   id: string;
   label: string;
+  /** WP20 (D12): tab shown only while this returns true. Evaluated on open and on every tab activation; omitted = always visible. */
+  visible?: () => boolean;
   mount(host: HTMLElement): SystemMenuPanelHandle;
 }
 
@@ -44,7 +46,7 @@ export interface SystemMenuDeps {
   footer?: { text: string; ariaLabel: string };
 }
 
-/** open(tabId) selects that tab when given (unknown id = SYSTEM tab); open() with no id opens on SYSTEM. */
+/** open(tabId) selects that tab when given (unknown or hidden id = SYSTEM tab); open() with no id opens on SYSTEM. */
 export interface SystemMenu { open(tabId?: string): void; close(): void; toggle(): void; isOpen(): boolean; destroy(): void }
 
 /** Timer pair the refresh loop needs; injected so tests can use fake timers. */
@@ -84,6 +86,7 @@ interface TabEntry {
   button: HTMLButtonElement;
   pane: HTMLDivElement;
   handle: SystemMenuPanelHandle | null;
+  visible?: () => boolean;
 }
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
@@ -126,7 +129,7 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
 
   const tabs: TabEntry[] = [];
 
-  function addTab(id: string, label: string): TabEntry {
+  function addTab(id: string, label: string, visible?: () => boolean): TabEntry {
     const button = createElement('button', { id: `sys-tab-${id}`, className: 'sys-tab', text: label });
     button.type = 'button';
     button.setAttribute('role', 'tab');
@@ -137,7 +140,7 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     pane.setAttribute('role', 'tabpanel');
     pane.setAttribute('aria-labelledby', button.id);
     pane.hidden = true;
-    const entry: TabEntry = { id, button, pane, handle: null };
+    const entry: TabEntry = { id, button, pane, handle: null, visible };
     tabs.push(entry);
     tabList.appendChild(button);
     body.appendChild(pane);
@@ -189,7 +192,7 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
 
   // Extra panels: mounted once, each into its own tabpanel.
   for (const p of deps.panels ?? []) {
-    const tab = addTab(p.id, p.label);
+    const tab = addTab(p.id, p.label, p.visible);
     tab.handle = p.mount(tab.pane);
   }
 
@@ -296,18 +299,26 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     dispatchReset('cancel');
   }
 
+  // Current visibility of every tab. Evaluated per call so open, tab switches and key nav read live state.
+  const tabVisibility = (): boolean[] => tabs.map((t) => t.visible?.() ?? true);
+
   // Marks one tab as selected (ARIA, roving tabindex, visibility). Does not refresh anything.
+  // A hidden request falls back to SYSTEM (index 0, always visible), so a hidden tab is never selected.
   function selectTab(index: number): void {
-    const next = clampTab(index, tabs.length);
+    const vis = tabVisibility();
+    const requested = clampTab(index, tabs.length);
+    const next = vis[requested] === true ? requested : 0;
     const left = leavingTab(activeIndex, next);
     activeIndex = next;
     if (left !== null) tabs[left]?.handle?.hide?.();
     tabs.forEach((tab, i) => {
       const on = i === activeIndex;
+      const shown = vis[i] === true;
+      tab.button.hidden = !shown;
       tab.button.setAttribute('aria-selected', on ? 'true' : 'false');
       tab.button.tabIndex = on ? 0 : -1;
       tab.button.classList.toggle('is-active', on);
-      tab.pane.hidden = !on;
+      tab.pane.hidden = !(shown && on);
     });
   }
 
@@ -426,7 +437,7 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     const key = event.key;
     if (!isTabNavKey(key)) return;
     event.preventDefault();
-    activateTab(nextTab(index, tabs.length, key), true);
+    activateTab(nextVisibleTab(index, tabVisibility(), key), true);
   };
 
   tabs.forEach((tab, i) => {

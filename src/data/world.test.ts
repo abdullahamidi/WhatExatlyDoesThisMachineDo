@@ -460,4 +460,11 @@ describe('FLOATING_TEXT and CRANK_PULSE', () => {
     expect(CRANK_PULSE.alphaPeak).toBeLessThanOrEqual(1);
     expect(CRANK_PULSE.periodMs).toBeGreaterThan(0);
   });
+
+  it('the WP20 first-click ring: radius 24 art px, peak alpha 0.9, 1 art px ink outline', () => {
+    expect(CRANK_PULSE.radiusArtPx).toBe(24);
+    expect(CRANK_PULSE.alphaPeak).toBe(0.9);
+    expect(CRANK_PULSE.outlineArtPx).toBe(1);
+    expect(CRANK_PULSE.outlineColor).toBe(PALETTE.ink);
+  });
 });

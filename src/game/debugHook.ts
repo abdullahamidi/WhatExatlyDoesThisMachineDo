@@ -43,6 +43,7 @@ declare global {
       crankClientPoint(): { x: number; y: number };
       componentState(id: MachineComponentId): { visible: boolean; assembling: boolean; alpha: number; scale: number; frame: number } | null;
       techTreeOpen(): boolean;
+      crankPrompt(): boolean;
       saveNow(): boolean;
       systemMenuOpen(): boolean;
       modalCount(): number;
@@ -80,6 +81,11 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     return scene.getMachine()?.getComponentState(id) ?? null;
   };
   const techTreeOpen = (): boolean => techTree.isOpen();
+  /** WP20: the world-space crank prompt text exists, is visible and active. */
+  const crankPrompt = (): boolean => {
+    const obj = game.scene.getScene('World').children.getByName('crank-prompt');
+    return obj instanceof Phaser.GameObjects.Text && obj.visible && obj.active;
+  };
   const saveNow = (): boolean => extras.saveController.saveNow();
   const systemMenuOpen = (): boolean => extras.systemMenu.isOpen();
   const modalCount = (): number => extras.modals.size();
@@ -136,6 +142,7 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     crankClientPoint,
     componentState,
     techTreeOpen,
+    crankPrompt,
     saveNow,
     systemMenuOpen,
     modalCount,

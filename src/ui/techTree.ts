@@ -3,12 +3,12 @@ import type { TechId, TechView } from '../data/types';
 import { UI_ART } from '../data/achievements';
 import type { GameContext } from '../game/context';
 import type { GameSession } from '../simulation';
-import { buildEraTabs, buildTechTreeView, defaultSelection, purchaseFailureText, reachedEras } from './techTreeView';
+import { buildEraTabs, buildTechTreeView, defaultSelection, graphFitScale, priorityTech, purchaseFailureText, purchaseFeedbackText, reachedEras, revealScroll, TECH_TREE_FIT } from './techTreeView';
 import type { EraTabView, TechDetailView, TechNodeView, TechTreeView } from './techTreeView';
 
 // TECH INDEX overlay (DOM). Built once; update() patches only what changed. No Phaser.
 
-export interface TechTree { open(): void; close(): void; isOpen(): boolean; update(): void; destroy(): void }
+export interface TechTree { open(): void; close(): void; isOpen(): boolean; update(): void; destroy(): void; onOpenChange(fn: (open: boolean) => void): () => void }
 
 /** How long the buy button shows the denied shake (UI timing, not balance). */
 const DENIED_FLASH_MS = 400;
@@ -78,7 +78,7 @@ function nodeClassOf(node: TechNodeView): string {
 
 /** Cheap change key: equal strings mean nothing the overlay shows has changed. */
 function stampOf(view: TechTreeView, tabs: readonly EraTabView[]): string {
-  const eras = tabs.map((t) => `${t.era}:${t.label}:${t.reached ? 1 : 0}:${t.selected ? 1 : 0}`).join(';');
+  const eras = tabs.map((t) => `${t.era}:${t.label}:${t.reached ? 1 : 0}:${t.selected ? 1 : 0}:${t.affordable}`).join(';');
   // costText / ariaLabel carry the resource short labels (WP13 D4 reveal): they must be in the key too.
   const nodes = view.nodes
     .map((n) => `${n.id}:${n.status}:${n.levelText}:${n.affordable}:${n.selected}:${n.costText ?? ''}:${n.ariaLabel}`)
@@ -178,6 +178,11 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   // What the detail panel showed on the last render; feedback text is stale once either changes.
   let renderedSelected: TechId | null = null;
   let renderedBuyState: TechDetailView['buyState'] | null = null;
+  // WP20: onOpenChange listeners; the view the graph was last rendered from (fit + reveal); the fit zoom in use.
+  const openListeners = new Set<(open: boolean) => void>();
+  let lastView: TechTreeView | null = null;
+  let fitScale = 1;
+  const emitOpen = (open: boolean): void => { for (const fn of [...openListeners]) fn(open); };
 
   const setFeedback = (text: string): void => {
     patch.text(feedbackEl, text);
@@ -250,6 +255,9 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
       patch.attr(button, 'aria-selected', tab.selected ? 'true' : 'false');
       patch.attr(button, 'tabindex', tab.selected ? '0' : '-1');
       patch.disabled(button, !tab.reached);
+      // WP20: the affordable chip (CSS ::after) and the screen-reader name with the count.
+      patch.attr(button, 'data-affordable', String(tab.affordable));
+      patch.attr(button, 'aria-label', tab.ariaLabel);
     }
     patch.attr(graph, 'aria-labelledby', `tech-tab-${selectedEra}`);
   };
@@ -328,6 +336,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   };
 
   const render = (view: TechTreeView, tabs: readonly EraTabView[]): void => {
+    lastView = view;
     const buyState = view.detail?.buyState ?? null;
     if (selected !== renderedSelected || buyState !== renderedBuyState) setFeedback('');
     renderedSelected = selected;
@@ -372,22 +381,52 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     lastStamp = stamp;
   }
 
+  /**
+   * WP20 fit + reveal: the inline zoom shrinks an era wider than the viewport; the graph scrolls (never scrollIntoView,
+   * which would also move the overflow-hidden panel). Reads layout, so it runs on open / era / selection / resize /
+   * settings only, never per frame.
+   */
+  const layoutGraph = (): void => {
+    if (!isOpenFlag || lastView === null) return;
+    const scale = graphFitScale(graph.clientWidth, lastView.width);
+    if (scale !== fitScale) {
+      fitScale = scale;
+      if (scale === 1) inner.style.removeProperty('zoom');
+      else inner.style.setProperty('zoom', String(scale));
+    }
+    const node = selected === null ? undefined : lastView.nodes.find((n) => n.id === selected);
+    if (node === undefined) return;
+    const viewport = { width: graph.clientWidth, height: graph.clientHeight };
+    const next = revealScroll({ left: graph.scrollLeft, top: graph.scrollTop }, viewport, node, fitScale, TECH_TREE_FIT.revealPadPx);
+    if (next.left !== graph.scrollLeft) graph.scrollLeft = next.left;
+    if (next.top !== graph.scrollTop) graph.scrollTop = next.top;
+  };
+
   function open(): void {
     if (destroyed || isOpenFlag) return;
     const active = document.activeElement;
     returnFocus = active instanceof HTMLElement ? active : null;
     const all = session.getAllTechViews();
     selectedEra = Math.max(...reachedEras(all));
+    const eraViews = viewsOfEra(selectedEra);
+    // WP20: an open keystone overrides a remembered selection; otherwise keep it while it is in this era.
+    const priority = priorityTech(eraViews);
     const selectedView = selected === null ? undefined : all.find((view) => view.id === selected);
-    if (selectedView === undefined || selectedView.def.era !== selectedEra) {
-      selected = defaultSelection(viewsOfEra(selectedEra));
+    if (priority !== null) {
+      selected = priority;
+    } else if (selectedView === undefined || selectedView.def.era !== selectedEra) {
+      selected = defaultSelection(eraViews);
     }
     isOpenFlag = true;
     overlay.classList.add('is-open');
     modals.push('tech-tree', close);
     dirty = true;
     update();
-    closeButton.focus();
+    layoutGraph();
+    // WP20: focus the selected node, so Space/Enter buys it. preventScroll: layoutGraph does the reveal.
+    const node = selected === null ? undefined : nodeRefs.get(selected);
+    (node?.button ?? closeButton).focus({ preventScroll: true });
+    emitOpen(true);
   }
 
   function close(): void {
@@ -399,6 +438,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     const target = returnFocus;
     returnFocus = null;
     if (target !== null && target.isConnected) target.focus();
+    emitOpen(false);
   }
 
   const onClose = (): void => close();
@@ -415,6 +455,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     setFeedback('');
     dirty = true;
     update();
+    layoutGraph();
   };
 
   const onTabClick = (event: Event): void => {
@@ -457,18 +498,26 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     if (node === null) return;
     for (const [id, refs] of nodeRefs) {
       if (refs.button !== node) continue;
+      // WP20: Space/Enter (native click, detail 0) on the already selected node buys it; a mouse click only selects.
+      const keyboard = event instanceof MouseEvent && event.detail === 0;
+      if (keyboard && id === selected) {
+        onBuy();
+        return;
+      }
       selected = id;
       setFeedback('');
       dirty = true;
       update();
+      layoutGraph();
       return;
     }
   };
 
   const onBuy = (): void => {
     if (selected === null) return;
-    const before = session.getTechView(selected);
-    const result = session.purchase(selected);
+    const id = selected;
+    const before = session.getTechView(id);
+    const result = session.purchase(id);
     if (!result.ok) {
       const costRes = before.def.costRes;
       const shortfall = Math.max(0, (before.nextCost ?? 0) - session.state.res[costRes]);
@@ -480,7 +529,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     // Render first: the purchase changes buyState, and render clears feedback on that change.
     dirty = true;
     update();
-    setFeedback(result.newLevel > 1 ? `LEVEL ${result.newLevel}` : 'INSTALLED');
+    setFeedback(purchaseFeedbackText(id, result.newLevel));
   };
 
   const unsubscribes: Array<() => void> = [
@@ -488,6 +537,8 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     session.on('unlock', () => { dirty = true; }),
     // Notation changes re-format costs and requirement labels: rebuild on the next update.
     session.on('settings', () => { dirty = true; }),
+    // WP20: a notation / UI-zoom change moves the fit and the reveal.
+    session.on('settings', () => { if (isOpenFlag) layoutGraph(); }),
     // The xf reveal flag flips on ending / reset: labels re-render on the next update.
     session.on('ending', () => { dirty = true; }),
     // WP14: Memory perks change tech costs and effects (Ledger, Residual Charge); a new cycle restarts the levels.
@@ -508,12 +559,21 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   tabList.addEventListener('keydown', onTabKeydown);
   graph.addEventListener('click', onGraphClick);
   buyButton.addEventListener('click', onBuy);
+  // WP20: the fit zoom and the reveal depend on the viewport size.
+  const onResize = (): void => { if (isOpenFlag) layoutGraph(); };
+  window.addEventListener('resize', onResize);
+
+  function onOpenChange(fn: (open: boolean) => void): () => void {
+    openListeners.add(fn);
+    return () => { openListeners.delete(fn); };
+  }
 
   function isOpen(): boolean {
     return isOpenFlag;
   }
 
   function destroy(): void {
+    openListeners.clear(); // first: teardown must not notify listeners
     if (destroyed) return;
     close();
     destroyed = true;
@@ -524,6 +584,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     tabList.removeEventListener('keydown', onTabKeydown);
     graph.removeEventListener('click', onGraphClick);
     buyButton.removeEventListener('click', onBuy);
+    window.removeEventListener('resize', onResize);
     if (deniedTimer !== null) {
       window.clearTimeout(deniedTimer);
       deniedTimer = null;
@@ -535,5 +596,5 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     reqItems.length = 0;
   }
 
-  return { open, close, isOpen, update, destroy };
+  return { open, close, isOpen, update, destroy, onOpenChange };
 }

@@ -45,31 +45,33 @@ export const paintGeneratorGlow: Painter = (g) => {
   GLOW_ALPHAS.forEach((alpha, k) => paintGlowCell(g, k * GLOW_CELL_WIDTH, alpha));
 };
 
-// Bellows sheet (240x28 = 4 cells of 60x28). Each cell has its own board gap; the boards close and open across the frames.
+// Bellows sheet (240x28 = 4 cells of 60x28): a tilted top board hinged at the left lifts and lowers; the nozzle covers texture (59,16..17) in every cell.
 const BELLOWS_CELL_WIDTH = 60;
-const BELLOWS_GAPS: readonly number[] = [18, 15, 12, 15];
+const BELLOWS_TIPS: readonly number[] = [0, 6, 11, 6]; // row of the top board at its free left end (x = 1) per cell; it slopes down to row 15 at x = 51
 
-function paintBellowsCell(g: Gfx, ox: number, gap: number): void {
-  const top = Math.floor((24 - gap) / 2); // first row of the top board (3 rows tall)
-  const bottom = top + gap - 3; // first row of the bottom board (3 rows tall)
-  // Folded leather between the boards.
-  rect(g, PALETTE.rustDark, ox + 6, top + 3, 20, gap - 6);
-  for (let x = 7; x <= 23; x += 4) rect(g, PALETTE.rust, ox + x, top + 3, 2, gap - 6);
-  // Boards with a lit top line.
-  rect(g, PALETTE.grayDark, ox + 4, top, 24, 3);
-  rect(g, PALETTE.industrialGray, ox + 4, top, 24, 1);
-  rect(g, PALETTE.grayDark, ox + 4, bottom, 24, 3);
-  rect(g, PALETTE.industrialGray, ox + 4, bottom, 24, 1);
-  // Hinge block on the left, between the boards.
-  rect(g, PALETTE.grayDark, ox, top + 1, 4, gap - 2);
-  rect(g, PALETTE.industrialGray, ox + 1, top + 2, 2, gap - 4);
-  // Neck and nozzle tip on the right, rows 9..11 (the tip covers texture 36,10 in every cell).
-  rect(g, PALETTE.grayDark, ox + 25, 9, 8, 3);
-  rect(g, PALETTE.industrialGray, ox + 33, 9, 7, 3);
+function paintBellowsCell(g: Gfx, ox: number, t: number): void {
+  // legs and feet
+  rect(g, PALETTE.grayDark, ox + 9, 22, 5, 5);
+  rect(g, PALETTE.grayDark, ox + 33, 22, 5, 5);
+  rect(g, PALETTE.grayDark, ox + 8, 27, 7, 1);
+  rect(g, PALETTE.grayDark, ox + 32, 27, 7, 1);
+  // lower board with a lit top line
+  rect(g, PALETTE.grayDark, ox + 4, 19, 48, 3);
+  rect(g, PALETTE.industrialGray, ox + 4, 19, 48, 1);
+  // tilted top board with the folded leather under it, one column at a time
+  for (let x = 1; x <= 51; x++) {
+    const yTop = Math.round(t + (15 - t) * (x - 1) / 50);
+    rect(g, PALETTE.grayDark, ox + x, yTop, 1, 2);
+    rect(g, PALETTE.rustDark, ox + x, yTop + 2, 1, Math.max(0, 17 - yTop));
+    if (x % 6 === 0) rect(g, PALETTE.rust, ox + x, yTop + 2, 1, Math.max(0, 17 - yTop));
+  }
+  // snout cap and nozzle
+  rect(g, PALETTE.grayDark, ox + 45, 13, 8, 2);
+  rect(g, PALETTE.industrialGray, ox + 52, 15, 8, 4);
 }
 
 export const paintBellows: Painter = (g) => {
-  BELLOWS_GAPS.forEach((gap, k) => paintBellowsCell(g, k * BELLOWS_CELL_WIDTH, gap));
+  BELLOWS_TIPS.forEach((t, k) => paintBellowsCell(g, k * BELLOWS_CELL_WIDTH, t));
 };
 
 // Exciter feed post (16x24): insulator discs stacked on a post, with a cyan cap at the top (lug at 8,2).

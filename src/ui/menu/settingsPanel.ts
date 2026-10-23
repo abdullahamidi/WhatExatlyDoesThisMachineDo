@@ -22,6 +22,8 @@ export interface SettingsPanelDeps {
   subscribe(fn: () => void): () => void;
   /** Session-only FULLSCREEN row in DISPLAY. Shown only when supported(). */
   fullscreen?: Pick<FullscreenControl, 'supported' | 'isOn' | 'toggle' | 'onChange'>;
+  /** CONFIRM NEW CYCLE row visible only when prestige matters; omitted = always shown. */
+  cycleRelevant?: () => boolean;
 }
 
 export interface SettingsPanelHandle {
@@ -122,6 +124,7 @@ function buildRadio(c: RadioControl, deps: SettingsPanelDeps): { el: HTMLElement
 
 function buildToggle(c: ToggleControl, deps: SettingsPanelDeps): { el: HTMLElement; sync: Sync } {
   const row = createElement('div', { className: 'settings-row' });
+  row.hidden = c.hidden === true;
   const button = createElement('button', { id: `sys-set-${c.id}`, className: 'settings-toggle' });
   button.type = 'button';
   button.setAttribute('aria-pressed', c.pressed ? 'true' : 'false');
@@ -136,6 +139,8 @@ function buildToggle(c: ToggleControl, deps: SettingsPanelDeps): { el: HTMLEleme
 
   const sync: Sync = (next) => {
     if (next.kind !== 'toggle') return;
+    const hidden = next.hidden === true;
+    if (row.hidden !== hidden) row.hidden = hidden;
     const pressed = next.pressed ? 'true' : 'false';
     if (button.getAttribute('aria-pressed') !== pressed) button.setAttribute('aria-pressed', pressed);
     if (button.disabled !== next.disabled) button.disabled = next.disabled;
@@ -189,7 +194,7 @@ export function createSettingsPanel(host: HTMLElement, deps: SettingsPanelDeps):
 
   let group: HTMLElement | null = null;
   let lastSection: SettingsSection | null = null;
-  for (const control of settingsViewModel(deps.get())) {
+  for (const control of settingsViewModel(deps.get(), { cycleRelevant: deps.cycleRelevant?.() ?? true })) {
     if (control.section !== lastSection) {
       lastSection = control.section;
       const headingId = `sys-set-h-${control.section}`;
@@ -226,7 +231,9 @@ export function createSettingsPanel(host: HTMLElement, deps: SettingsPanelDeps):
 
   function refresh(): void {
     if (destroyed) return;
-    for (const control of settingsViewModel(deps.get())) syncers.get(control.id)?.(control);
+    for (const control of settingsViewModel(deps.get(), { cycleRelevant: deps.cycleRelevant?.() ?? true })) {
+      syncers.get(control.id)?.(control);
+    }
     fullscreen?.sync();
   }
 

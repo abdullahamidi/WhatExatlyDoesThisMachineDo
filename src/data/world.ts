@@ -87,4 +87,4 @@ export const FLOATING_TEXT = { fontSizePx: 24, minScreenPx: 16, strokePx: 4, jit
   colors: { me: '#ffd27a', ee: PALETTE_CSS.cyanLight, pr: PALETTE_CSS.steam, rs: PALETTE_CSS.verdigrisLight, xf: PALETTE_CSS.violetPale } } as const;   // world px (WP17 crank gain block: minScreenPx is the font floor in screen px; spawnOffset is the block bottom-centre from the crank)
 /** Poll path of the HUD rebuild (WorldScene): at most one rebuild per HUD_REFRESH_MS. Session events rebuild at once. */
 export const HUD_REFRESH_MS = 100;
-export const CRANK_PULSE = { color: 0xffd27a, radiusArtPx: 20, strokeArtPx: 2, alphaPeak: 0.6, periodMs: 1200 } as const;   // first-click ring on the crank (art px)
+export const CRANK_PULSE = { color: 0xffd27a, outlineColor: PALETTE.ink, radiusArtPx: 24, strokeArtPx: 2, outlineArtPx: 1, alphaPeak: 0.9, periodMs: 1200 } as const;   // first-click ring on the crank (art px): amber ring with a 1 art px ink outline (WP20 D8)

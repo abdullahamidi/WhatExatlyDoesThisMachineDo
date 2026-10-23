@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel, nextTab, clampTab, leavingTab, newCycleRow, tabIndexFor, shellRows } from './systemMenuModel';
+import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel, nextTab, clampTab, leavingTab, newCycleRow, tabIndexFor, shellRows, prestigeUiVisible, nextVisibleTab } from './systemMenuModel';
 import type { ResetState } from './systemMenuModel';
 import { SYSTEM_MENU_CONFIG } from '../data/systemMenu';
 import { FINALE_CHOICE } from '../data/finale';
@@ -216,5 +216,56 @@ describe('newCycleRow', () => {
       label: FINALE_CHOICE.cycle.label,
       reason: '',
     });
+  });
+});
+
+describe('prestigeUiVisible', () => {
+  it('shows only once prestige matters (cycle > 1, choice, postgame)', () => {
+    expect(prestigeUiVisible('none', 1)).toBe(false);
+    expect(prestigeUiVisible('sequence', 1)).toBe(false);
+    expect(prestigeUiVisible('choice', 1)).toBe(true);
+    expect(prestigeUiVisible('postgame', 1)).toBe(true);
+    expect(prestigeUiVisible('none', 2)).toBe(true);
+  });
+});
+
+describe('nextVisibleTab', () => {
+  const VIS = [true, true, true, false, true];
+
+  it('arrows step over hidden tabs and wrap', () => {
+    expect(nextVisibleTab(2, VIS, 'ArrowRight')).toBe(4);
+    expect(nextVisibleTab(4, VIS, 'ArrowRight')).toBe(0);
+    expect(nextVisibleTab(0, VIS, 'ArrowLeft')).toBe(4);
+    expect(nextVisibleTab(4, VIS, 'ArrowLeft')).toBe(2);
+  });
+
+  it('Home and End go to the first and last visible tab', () => {
+    expect(nextVisibleTab(2, VIS, 'Home')).toBe(0);
+    expect(nextVisibleTab(0, VIS, 'End')).toBe(4);
+  });
+
+  it('a hidden current index is clamped before moving', () => {
+    expect(nextVisibleTab(3, VIS, 'ArrowRight')).toBe(4);
+    expect(nextVisibleTab(9, VIS, 'ArrowRight')).toBe(0);
+  });
+
+  it('only one visible tab maps to itself for every key', () => {
+    const one = [false, true, false];
+    expect(nextVisibleTab(1, one, 'ArrowRight')).toBe(1);
+    expect(nextVisibleTab(1, one, 'ArrowLeft')).toBe(1);
+    expect(nextVisibleTab(1, one, 'Home')).toBe(1);
+    expect(nextVisibleTab(1, one, 'End')).toBe(1);
+  });
+
+  it('no visible tab (or no tabs) gives 0 for every key', () => {
+    for (const key of ['ArrowRight', 'ArrowLeft', 'Home', 'End'] as const) {
+      expect(nextVisibleTab(1, [false, false], key)).toBe(0);
+      expect(nextVisibleTab(0, [], key)).toBe(0);
+    }
+  });
+
+  it('Home skips a hidden first tab', () => {
+    expect(nextVisibleTab(2, [true, false, true], 'Home')).toBe(0);
+    expect(nextVisibleTab(0, [false, true, true], 'Home')).toBe(1);
   });
 });

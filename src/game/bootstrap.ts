@@ -23,6 +23,9 @@ import { createToasts, connectNotifications, connectAchievements, connectOffline
 import { connectSystemLog } from '../ui/systemLog';
 import { achievementMessage, recoveredMessage, welcomeBackMessage } from '../ui/notificationRules';
 import { createTechTree } from '../ui/techTree';
+import { createGuidance } from '../ui/guidance';
+import { createEraCards } from '../ui/eraCard';
+import { prestigeUiVisible } from '../ui/systemMenuModel';
 import { createSystemMenu } from '../ui/systemMenu';
 import type { SystemMenuPanel } from '../ui/systemMenu';
 import { createViewportSync } from '../ui/viewportSync';
@@ -138,6 +141,9 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
   const toasts = createToasts(root);
   session.on('reset', () => toasts.clear());
   const techTree = createTechTree(root, ctx);
+  // WP20: HUD guidance (next goal, TECH INDEX hint, affordable badge) and era cards. Page-lifetime, like the HUD and toasts.
+  createGuidance(root, { session, techTree });
+  createEraCards(root, { session, techTree });
 
   const saveController = createSaveController({ session, saveManager });
   saveController.start();
@@ -194,6 +200,7 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
         update: (patch) => session.updateSettings(patch),
         subscribe: (fn) => session.on('settings', () => fn()),
         fullscreen,
+        cycleRelevant: () => prestigeUiVisible(session.state.ending.phase, session.prestige.cycle),
       }),
     },
     {
@@ -220,6 +227,7 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
     {
       id: MENU_TABS.memory.id,
       label: MENU_TABS.memory.label,
+      visible: () => prestigeUiVisible(session.state.ending.phase, session.prestige.cycle),
       mount: (host) => createMemoryPanel(host, {
         // Thin adapter: the panel listens to three events, with no payload it needs.
         session: {

@@ -75,6 +75,30 @@ Outputs:
 - `results.rects["<w>x<h>-<scale>"]` = compact `[x, y, w, h]` per element (`canvas`, `ui`, `hud`, `buttons`, `tech`,
   `system`, `settings`); title rows hold `canvas` and `title-panel`.
 
+## UX smoke (WP20): `ux.mjs`
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/ux.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/ux
+```
+
+Fresh 1280x720 context per case (`D_100` and `D_150` each get their own). Prints ONE JSON object `{ results, fail, errors }`;
+expect `fail` and `errors` to be `[]`. Each case waits for `componentState('handCrank')` before it starts.
+
+| case | checks (names in `results` / `fail`) |
+|---|---|
+| `A` (fresh) | `A_prompt_visible` (`crankPrompt()` after load), `A_no_hint`, `A_prompt_gone` (after one real click), `A_hint_visible` (`#hud-hint` shows `TECH INDEX` after 15 clicks), `A_badge` (`#hud-tech` `data-affordable` >= 1), `A_focus_node` (after `t`, focus is the `.tech-node.is-selected`), `A_tab_chip` (first `.tech-tab` `data-affordable` >= 1), `A_space_keeps_tree`, `A_space_buys` (`gearRatio` level 1 after Space), `A_feedback_flavor` (`#tech-feedback` contains `gear mesh recalibrated`), `A_held` (`gearSmall` assembling, alpha < 0.05 while the tree is open), `A_toast_coalesced` (a `LV 1 → 4` toast, at most 2 toasts), `A_toast_above` (`#toast-stack` z-index 200, no toast over `#tech-close` / `#tech-buy`), `A_fly_in_after_close` (`gearSmall` visible, alpha >= 0.99, not assembling), `A_hint_gone`, `A_goal_line` (`#hud-goal` starts with `NEXT:`) |
+| `B` (fresh) | `B_card_shown` (`#era-card` title `ERA II · ELECTRICAL`), `B_card_skipped` (a click hides it), `B_card_held` (hidden while the tree is open), `B_card_after_close` (`ERA III · PRESSURE` after Esc), `B_reduced_no_nudge` (camera `centerX` / `centerY` / `zoom` unchanged within 0.5 across the Esc; value `{ before, after }`), `B_card_reduced` (visible with `animationName` `none` under reduced motion) |
+| `C` (fresh) | `C_no_card_in_finale` (full S15 + `primaryFunction`, `#era-card` hidden 500 ms later) |
+| `D_100`, `D_150` (fresh each) | `D_<s>_fit` (`#tech-graph` `scrollWidth <= clientWidth + 1`; value `{ scrollWidth, clientWidth }`), `D_<s>_pf_selected` (selected node is `primaryFunction`), `D_<s>_pf_in_view` (its rect lies inside `#tech-graph`, 1 px), `D_<s>_menu_fixed` (`#system-panel` height equal within 1 px on every visible `#sys-tabs` tab; value = the heights), `D_<s>_memory_hidden` (`#sys-tab-memory` hidden in phase none) |
+| `perf` | `perf_click` only (report, never in `fail`): `{ ui: uiStats(), machine: machineStats() }` after 30 clicks, 100 ms apart |
+
+Screenshots in the outdir: `ux-A1-prompt.png`, `ux-A2-hint.png`, `ux-A3-tree-buy.png`, `ux-A4-flyin.png`, `ux-A5-goal.png`,
+`ux-B1-card.png`, `ux-B2-card-after-close.png`, `ux-B3-card-reduced.png`, and per uiScale `ux-D-100-tree.png`,
+`ux-D-100-menu-system.png`, `ux-D-100-menu-settings.png` (the same set with `150`).
+
+Failed checks are listed by name in `fail`; a thrown exception becomes `FAILED:<case>:<message>`. `errors` collects console
+errors, page errors and failed requests, each prefixed with the case key.
+
 ## Desktop smoke (desktop.mjs)
 
 Runs against the PACKAGED Windows exe (Steam shell, WP19 T14). It needs a built exe first: `npm run build:steam`
@@ -132,13 +156,14 @@ In a buy list, `@<techId>` jumps 8 h at a time (up to 8 jumps) until that tech i
 `@<techId>:<n>` buys that tech until its level is `n` (a rejected buy gets an 8 h jump and a retry, up to 128 rounds), then pushes `@<techId>:<n>:true|false`; e.g. `@resonantSiphon:20`.
 `PERF=1` (stages.mjs): for s13_era4_full and s15_era5_full, waits 3 s after the screenshot and prints `machineStats` (`{ meanMs, maxMs, components }`, or `null` when the hook is missing).
 `CLICK_SHOT=1` (stages.mjs): clicks the crank 3x before every stage shot so the gain block is in the screenshot.
+An `#era-card` shown at screenshot time is clicked away first (WP20).
 WP17 (energy continuity, Legacy Feeds): S11 buys `bellowsDrive` x3, S13 `gridExciter` x5, S15 `@resonantSiphon:20`, `@graviticAnchor:10`, `mainsBackfeed` x5, `steamLance` x5 (the `finale.mjs` S lists mirror `stages.mjs`).
 `hud` (every stage, one line): `{ title, visibleRows, frontier, click, clickSub, auto, right, bottom }` = `#hud-title` text, shown `.hud-res-row` count, `data-res` of `.hud-row--frontier`, `#hud-per-click` text, `#hud-per-click-me` text (`null` when hidden), `#hud-auto` text (`null` when hidden), `#hud-panel` right / bottom edge in px (`null` when missing). Expected, in the order s0 / s9 / s11 / s13 / s15 / s16:
 title `ERA I · MECHANICAL` / `ERA II · ELECTRICAL` / `ERA III · PRESSURE` / `ERA IV · RESONANCE` / `ERA V · ???` / `RESTORATION ENGINE`; visibleRows 1 / 2 / 3 / 4 / 5 / 5; frontier `me` / `ee` / `pr` / `rs` / `xf` / `xf`; auto `null` at s11 and `AUTO-CRANK 3/s` at s13; right <= 340 on every stage.
 `parts17` (s9_era2_full, s11_era3_full, s13_era4_full, s15_era5_full, s16_postgame; visibility of the 5 legacy feed parts): all `true` at s15_era5_full and s16_postgame.
 `bellowsFrames` (s11_era3_full, s15_era5_full): `componentState('bellows').frame` sampled 4 times, 350 ms apart (span >= 1 s); the frames must not all be equal.
 wp3-techtree.mjs result keys: `11_nodes` (era III tab, expect 10), `12_tab5` (fifth tab text, expect `SIGNAL ?`), `12_nodes` (era IV tab, expect 10), `13_tabs`, `11_tabCount` / `12_tabCount` / `13_tabCount` (expect 5, tabs unchanged), `13_header` (expect ends `???`), `13_nodes` (era V tab, expect 12), `13_null` (classes of `nullChamber`, `'missing'` when absent).
-wp12-menus.mjs (WP12 menus / keyboard / settings / records / export-import): `PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/wp12-menus.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke` (screenshots `wp12-0*.png` in the outdir). Keys: `1_first_crank_toasts` (contains `RECORD LOGGED`), `2_esc_menu` (true), `2_arrow_right` (selected tab = `sys-tab-settings`), `3_tab_trapped` (true after 12 Tabs), `4_settings` / `4_root_attrs` (volume 40, reduced motion on, UI scale 125, notation scientific; `#ui-root` zoom `1.25`), `5_space` (`delta` 10, `heldDelta` 0), `6_tree_t` (`[true, false]`), `7_records_firstTurn` (1), `7_records_counter`, `8_stats_clicks_cell` = `8_stats_clicks_session`, `9_hud_me_scientific` (contains `e`), `10_settings_after_reload` (same settings), `11_restored` (all true), `12_garbage` (status text, `meSame` / `clicksSame` true), `13_typing_in_textarea` (`treeOpen` false, `clicksDelta` 0). `errors` must be empty.
+wp12-menus.mjs (WP12 menus / keyboard / settings / records / export-import): `PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/wp12-menus.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke` (screenshots `wp12-0*.png` in the outdir). Keys: `1_first_crank_toasts` (contains `RECORD LOGGED`), `2_esc_menu` (true), `2_arrow_right` (selected tab = `sys-tab-settings`), `3_tab_trapped` (true after 12 Tabs), `4_settings` / `4_root_attrs` (volume 40, reduced motion on, UI scale 125, notation scientific; `#ui-root` zoom `1.25`), `5_space` (`delta` 10, `heldDelta` 0), `6_tree_t` (`[true, false]`), `7_records_firstTurn` (1), `7_records_counter`, `8_stats_clicks_cell` = `8_stats_clicks_session`, `9_hud_me_scientific` (contains `e`), `10_settings_after_reload` (same settings), `11_restored` (all true), `12_garbage` (status text, `meSame` / `clicksSame` true), `13_typing_in_textarea` (`treeOpen` false, `clicksDelta` 0), `14_tree_space` (`{ open: true, focusNode: true }`: Space inside the tree keeps it open, WP20). `errors` must be empty.
 
 `finale.mjs` (WP13 ending sequence, PRIMARY FUNCTION reveal, postgame): `PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/finale.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke`. Runs in fresh contexts: (1) buy `primaryFunction` after the era V list, HUD hidden, crank does not change clicks, `modalCount` ≥ 1; keyframes via `finaleSeek` at 1, 6, 12, 15.6, 24, 30.5, 34, 40, 56, end (screenshots `finale-k<label>.png`); (3) 5 s playback from t 20, reload → `choice` (KEEP IT RUNNING shown, plate frame 5); (4) Esc / `t` do nothing at choice, KEEP → `postgame`, `localStorage` `state.ending.phase` postgame, crank works, reload keeps postgame, system menu BEGIN A NEW CYCLE row (WP14: enabled, reason line absent), reset from menu → plate frame 4; skip run (Esc during sequence → `choice`, t = end); reduced run (`session.updateSettings({ reducedMotion: true })` before the buy: `reduced`, overlay alpha at 15.6, wipe mode at 24, birds, beam animate).
 Result keys (all `finale_*`): `finale_0_fastforward_failed` (expect `[]`), `finale_1_buy`, `finale_1_t_sequence`, `finale_k1` … `finale_kend` (each: `t`, `shot`, `plate` = name plate texture frame, `frame` = full `FinaleFrame`), `finale_2_playback_t`, `finale_3_reload_choice`, `finale_4_esc_t_choice`, `finale_4_keep`, `finale_4_crank_postgame`, `finale_5_reload_postgame`, `finale_6_newcycle`, `finale_7_reset`, `finale_skip`, `finale_r_start`, `finale_r_15_6`, `finale_r_24`. `finale_FAILED` appears only if the run threw. `errors` must be empty (the KEEP click failure is also recorded there).

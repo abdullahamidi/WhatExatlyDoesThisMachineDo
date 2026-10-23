@@ -40,6 +40,8 @@ export interface ToggleControl {
   pressed: boolean;
   stateText: string;
   disabled: boolean;
+  /** Row is left out of the panel (not just disabled). Only confirmNewCycle sets it. */
+  hidden?: boolean;
 }
 
 export type SettingsControl = VolumeControl | RadioControl | ToggleControl;
@@ -82,8 +84,11 @@ function toggleControl(id: ToggleId, s: Readonly<SettingsState>, section: Settin
   return { kind: 'toggle', section, id, label, pressed: on, stateText: on ? SETTINGS_LABELS.on : SETTINGS_LABELS.off, disabled: false };
 }
 
-/** Control descriptors in display order: AUDIO, DISPLAY, ACCESS. */
-export function settingsViewModel(s: Readonly<SettingsState>): SettingsControl[] {
+/**
+ * Control descriptors in display order: AUDIO, DISPLAY, ACCESS.
+ * cycleRelevant: CONFIRM NEW CYCLE only matters once prestige is in play, so it is hidden until then (default: shown).
+ */
+export function settingsViewModel(s: Readonly<SettingsState>, opts?: { cycleRelevant?: boolean }): SettingsControl[] {
   const volumes: VolumeControl[] = VOLUME_IDS.map((id) => ({
     kind: 'volume',
     section: 'audio',
@@ -114,7 +119,7 @@ export function settingsViewModel(s: Readonly<SettingsState>): SettingsControl[]
     notation,
     uiScale,
     toggleControl('statusMarkers', s, 'display'),
-    toggleControl('confirmNewCycle', s, 'display'),
+    { ...toggleControl('confirmNewCycle', s, 'display'), hidden: !(opts?.cycleRelevant ?? true) },
     toggleControl('reducedMotion', s, 'access'),
     toggleControl('screenShake', s, 'access'),
   ];

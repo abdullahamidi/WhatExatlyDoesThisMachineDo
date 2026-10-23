@@ -1,13 +1,19 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
+  TECH_TREE_FIT,
   TECH_TREE_LAYOUT,
   buildEraTabs,
   buildTechTreeView,
   defaultSelection,
   edgePath,
+  eraHeaderText,
+  graphFitScale,
   nodeAriaLabel,
+  priorityTech,
   purchaseFailureText,
+  purchaseFeedbackText,
   reachedEras,
+  revealScroll,
   techNodePosition,
 } from './techTreeView';
 import { getAllTechViews, getTechView, createInitialState, emptyResourceMap } from '../simulation';
@@ -67,8 +73,8 @@ describe('techTreeView', () => {
     });
 
     it('computes the canvas size from the tree extents', () => {
-      expect(view.width).toBe(952);
-      expect(view.height).toBe(300);
+      expect(view.width).toBe(812);
+      expect(view.height).toBe(296);
       expect(view.width).toBe(
         TECH_TREE_LAYOUT.padding * 2 + 5 * TECH_TREE_LAYOUT.nodeWidth + 4 * TECH_TREE_LAYOUT.colGap,
       );
@@ -188,9 +194,9 @@ describe('techTreeView', () => {
       expect(view.detail?.buyLabel).toBe('PURCHASE — 40 EE');
     });
 
-    it('shows the era-I ME balance as headerText regardless of costRes', () => {
+    it('lists the era-I ME and EE balances in headerText when EE is a cost', () => {
       const view = buildTechTreeView(viewsFor(rich), rich.res, 'wornMotor', 1);
-      expect(view.headerText).toBe('1B ME');
+      expect(view.headerText).toBe('1B ME · 0 EE');
     });
   });
 
@@ -283,7 +289,7 @@ describe('techTreeView', () => {
     it('buildEraTabs: fresh state gives one reached, selected ERA I · ME tab', () => {
       const tabs = buildEraTabs(eraOneViewsOf(createInitialState(0)), emptyResourceMap(), 1);
       expect(tabs).toEqual([
-        { era: 1, label: 'ERA I · ME', reached: true, selected: true, resourceText: '0 ME' },
+        { era: 1, label: 'ERA I · ME', reached: true, selected: true, resourceText: '0 ME', affordable: 0, ariaLabel: 'ERA I · ME' },
       ]);
     });
 
@@ -291,17 +297,21 @@ describe('techTreeView', () => {
       const views = getAllTechViews(createInitialState(0), ERA_TWO_LOCKED);
       const tabs = buildEraTabs(views, emptyResourceMap(), 1);
       expect(tabs).toHaveLength(5);
-      expect(tabs[1]).toEqual({ era: 2, label: 'SIGNAL ?', reached: false, selected: false, resourceText: '' });
-      expect(tabs[2]).toEqual({ era: 3, label: 'SIGNAL ?', reached: false, selected: false, resourceText: '' });
-      expect(tabs[3]).toEqual({ era: 4, label: 'SIGNAL ?', reached: false, selected: false, resourceText: '' });
-      expect(tabs[4]).toEqual({ era: 5, label: 'SIGNAL ?', reached: false, selected: false, resourceText: '' });
+      const placeholder = { label: 'SIGNAL ?', reached: false, selected: false, resourceText: '', affordable: 0, ariaLabel: 'SIGNAL ?' };
+      expect(tabs[1]).toEqual({ era: 2, ...placeholder });
+      expect(tabs[2]).toEqual({ era: 3, ...placeholder });
+      expect(tabs[3]).toEqual({ era: 4, ...placeholder });
+      expect(tabs[4]).toEqual({ era: 5, ...placeholder });
     });
 
-    it('buildEraTabs: reached era II shows ERA II · EE with the EE balance', () => {
+    it('buildEraTabs: reached era II shows ERA II · EE with the EE balance and its affordable count', () => {
       const res: ResourceMap = { ...emptyResourceMap(), ee: 1200 };
       const views = getAllTechViews(stateWith({ res }), ERA_TWO_AVAILABLE);
       const tabs = buildEraTabs(views, res, 2);
-      expect(tabs[1]).toEqual({ era: 2, label: 'ERA II · EE', reached: true, selected: true, resourceText: '1.2K EE' });
+      expect(tabs[1]).toEqual({
+        era: 2, label: 'ERA II · EE', reached: true, selected: true, resourceText: '1.2K EE',
+        affordable: 1, ariaLabel: 'ERA II · EE, 1 affordable',
+      });
     });
 
     it('buildEraTabs: selected follows the argument', () => {
@@ -346,10 +356,10 @@ describe('techTreeView', () => {
       expect(view.detail?.requirements.some((r) => r.label.includes('Hand Crank'))).toBe(true);
     });
 
-    it('headerText uses the EE balance', () => {
+    it('headerText lists the ME and EE balances priced in era II', () => {
       const res: ResourceMap = { ...emptyResourceMap(), ee: 1200 };
       const view = buildTechTreeView(eraTwoViews, res, null, 2);
-      expect(view.headerText).toBe('1.2K EE');
+      expect(view.headerText).toBe('0 ME · 1.2K EE');
     });
   });
 
@@ -422,6 +432,177 @@ describe('techTreeView', () => {
         if (view === undefined) throw new Error(`missing view for ${node.id}`);
         expect(node.ariaLabel).toBe(nodeAriaLabel(view));
       }
+    });
+  });
+
+  describe('WP20 view model', () => {
+    /** All-era views with `levels` applied on top of the initial state. */
+    function viewsWith(levels: Partial<Record<TechId, number>>, res: ResourceMap = emptyResourceMap()): TechView[] {
+      const base = createInitialState(0);
+      return getAllTechViews({ ...base, res, techLevels: { ...base.techLevels, ...levels } });
+    }
+
+    /** Tech levels that satisfy the tech requirements of `id` (read from the tech table). */
+    function levelsFor(id: TechId): Partial<Record<TechId, number>> {
+      const levels: Partial<Record<TechId, number>> = {};
+      for (const req of TECHNOLOGIES[id].requires) {
+        if (req.type === 'tech') levels[req.id] = req.minLevel;
+      }
+      return levels;
+    }
+
+    describe('priority and default selection', () => {
+      it('fresh state: no priority tech, gearRatio selected', () => {
+        const views = viewsOf(createInitialState(0));
+        expect(priorityTech(views)).toBeNull();
+        expect(defaultSelection(views)).toBe('gearRatio');
+      });
+
+      it('priorityTech is null on a fresh era I list', () => {
+        expect(priorityTech(eraOneViewsOf(createInitialState(0)))).toBeNull();
+      });
+
+      it('priorityTech is null while primaryFunction and the keystones are locked', () => {
+        expect(priorityTech(viewsWith({}))).toBeNull();
+      });
+
+      it('priorityTech is null when the open keystone is already installed', () => {
+        expect(priorityTech(viewsWith({ ...levelsFor('generator'), generator: 1 }))).toBeNull();
+      });
+
+      it('priorityTech returns the open keystone when it is the only one', () => {
+        expect(priorityTech(viewsWith(levelsFor('generator')))).toBe('generator');
+      });
+
+      it('priorityTech returns primaryFunction over a simultaneously open keystone', () => {
+        const levels = { ...levelsFor('generator'), ...levelsFor('primaryFunction') };
+        expect(priorityTech(viewsWith(levels))).toBe('primaryFunction');
+      });
+
+      it('defaultSelection selects an open era keystone even when unaffordable', () => {
+        const views = viewsWith(levelsFor('generator')).filter((v) => v.def.era === 2);
+        expect(views.find((v) => v.id === 'generator')?.affordable).toBe(false);
+        expect(defaultSelection(views)).toBe('generator');
+      });
+
+      it('defaultSelection selects primaryFunction once finalAlignment is installed', () => {
+        const views = viewsWith(levelsFor('primaryFunction')).filter((v) => v.def.era === 5);
+        expect(defaultSelection(views)).toBe('primaryFunction');
+      });
+
+      it('defaultSelection prefers an affordable unlock over an affordable repeatable', () => {
+        const views = eraOneViewsOf(stateWith({ res: resWithMe(40) }));
+        expect(views.find((v) => v.id === 'gearRatio')?.affordable).toBe(true);
+        expect(views.find((v) => v.id === 'wornMotor')?.affordable).toBe(true);
+        expect(defaultSelection(views)).toBe('wornMotor');
+      });
+    });
+
+    describe('tab affordable counts', () => {
+      it('counts the affordable techs of a reached era and labels the tab', () => {
+        const res = resWithMe(15);
+        const tabs = buildEraTabs(viewsWith({}, res), res, 1);
+        expect(tabs[0]).toEqual({
+          era: 1, label: 'ERA I · ME', reached: true, selected: true, resourceText: '15 ME',
+          affordable: 1, ariaLabel: 'ERA I · ME, 1 affordable',
+        });
+        expect(tabs[1]?.affordable).toBe(0);
+        expect(tabs[1]?.ariaLabel).toBe('SIGNAL ?');
+      });
+    });
+
+    describe('era header and install feedback', () => {
+      afterEach(() => {
+        setRevealed(false);
+      });
+
+      it('shows only the era I balance when ME alone prices the era', () => {
+        const res = resWithMe(15);
+        expect(eraHeaderText(eraOneViewsOf(stateWith({ res })), res, 1)).toBe('15 ME');
+      });
+
+      it('lists every unlock and repeatable cost resource of era II', () => {
+        const views = viewsOf(createInitialState(0)).filter((v) => v.def.era === 2);
+        expect(eraHeaderText(views, { ...emptyResourceMap(), me: 15, ee: 40 }, 2)).toBe('15 ME · 40 EE');
+      });
+
+      it('ends era V with the flux label, hidden then revealed', () => {
+        const views = viewsOf(createInitialState(0)).filter((v) => v.def.era === 5);
+        expect(eraHeaderText(views, emptyResourceMap(), 5).endsWith(' ???')).toBe(true);
+        setRevealed(true);
+        expect(eraHeaderText(views, emptyResourceMap(), 5).endsWith(' RF')).toBe(true);
+      });
+
+      it('falls back to the era resource when no unlock or repeatable is priced', () => {
+        const crank = getTechView(createInitialState(0), 'handCrank');
+        expect(eraHeaderText([crank], resWithMe(42), 1)).toBe('42 ME');
+        expect(eraHeaderText([], { ...emptyResourceMap(), ee: 7 }, 2)).toBe('7 EE');
+      });
+
+      it('purchaseFeedbackText gives the install line on the first level, the level after', () => {
+        expect(purchaseFeedbackText('gearRatio', 1)).toBe('INSTALLED — Gear mesh recalibrated. Cause: unknown.');
+        expect(purchaseFeedbackText('gearRatio', 3)).toBe('LEVEL 3');
+      });
+    });
+
+    describe('fit and reveal', () => {
+      it('graphFitScale fits content, floors to 3 decimals and clamps at minScale', () => {
+        expect(graphFitScale(1142, 1128)).toBe(1);
+        expect(graphFitScale(782, 1128)).toBe(0.693);
+        expect(graphFitScale(300, 1128)).toBe(TECH_TREE_FIT.minScale);
+        expect(graphFitScale(0, 1128)).toBe(1);
+        expect(graphFitScale(1128, 1128)).toBe(1);
+      });
+
+      describe('revealScroll', () => {
+        const viewport = { width: 1000, height: 300 };
+        const box = (x: number, y: number) => ({ x, y, width: 144, height: 68 });
+
+        it('keeps the scroll when the node is already inside', () => {
+          expect(revealScroll({ left: 100, top: 50 }, viewport, box(300, 100), 1)).toEqual({ left: 100, top: 50 });
+        });
+
+        it('scrolls left to the node plus padding', () => {
+          expect(revealScroll({ left: 400, top: 0 }, viewport, box(300, 100), 1)).toEqual({ left: 288, top: 0 });
+        });
+
+        it('scrolls right so the node end sits inside the padding', () => {
+          expect(revealScroll({ left: 0, top: 0 }, viewport, box(1000, 100), 1)).toEqual({ left: 156, top: 0 });
+        });
+
+        it('scrolls up to the node plus padding', () => {
+          expect(revealScroll({ left: 0, top: 100 }, viewport, box(300, 20), 1)).toEqual({ left: 0, top: 8 });
+        });
+
+        it('scrolls down so the node bottom sits inside the padding', () => {
+          expect(revealScroll({ left: 0, top: 0 }, viewport, box(300, 280), 1)).toEqual({ left: 0, top: 60 });
+        });
+
+        it('clamps the scroll at the top-left edge', () => {
+          expect(revealScroll({ left: 50, top: 0 }, viewport, box(5, 100), 1)).toEqual({ left: 0, top: 0 });
+        });
+
+        it('works on the scaled box', () => {
+          const narrow = { width: 250, height: 300 };
+          expect(revealScroll({ left: 0, top: 0 }, narrow, box(600, 0), 0.5)).toEqual({ left: 134, top: 0 });
+        });
+      });
+    });
+
+    describe('per-era canvas with real techs', () => {
+      it.each([
+        [1, 812],
+        [2, 970],
+        [3, 1128],
+        [4, 970],
+        [5, 1128],
+      ])('era %i canvas is %i px wide, within the fit, and 296 px tall', (era, width) => {
+        const views = getAllTechViews(createInitialState(0)).filter((v) => v.def.era === era);
+        const view = buildTechTreeView(views, emptyResourceMap(), null, era);
+        expect(view.width).toBe(width);
+        expect(view.width).toBeLessThanOrEqual(TECH_TREE_FIT.maxWidthPx);
+        expect(view.height).toBe(296);
+      });
     });
   });
 });

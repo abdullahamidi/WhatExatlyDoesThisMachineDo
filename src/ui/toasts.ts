@@ -1,9 +1,18 @@
 import './toasts.css';
 import { TOAST_CONFIG } from '../data/notifications';
 import type { ToastMessage, ToastTone } from '../data/notifications';
+import type { TechId } from '../data/types';
+import { TOAST_BURST } from '../data/ux';
 import type { GameSession } from '../simulation';
-import { achievementMessage, cycleMessage, messageFor, welcomeBackMessage } from './notificationRules';
-import type { NotificationEvent } from './notificationRules';
+import {
+  achievementMessage,
+  cycleMessage,
+  messageFor,
+  nextPurchaseBurst,
+  purchaseBurstMessage,
+  welcomeBackMessage,
+} from './notificationRules';
+import type { NotificationEvent, PurchaseBurst } from './notificationRules';
 
 // Toast stack (WP3). DOM only: no Phaser. Text is always written with textContent.
 
@@ -146,12 +155,23 @@ function forward(toasts: Toasts, event: NotificationEvent): void {
 
 // Subscribes the toast stack to the session events that deserve a toast.
 export function connectNotifications(session: GameSession, toasts: Toasts): () => void {
+  // WP20 T6: the open burst per tech, so a quick buy spree shows one 'LV a → b' toast.
+  const bursts = new Map<TechId, PurchaseBurst>();
   const unsubscribers = [
     session.on('click', () => {
       forward(toasts, { type: 'click', totalClicks: session.state.totalClicks });
     }),
     session.on('purchase', ({ id, level }) => {
-      forward(toasts, { type: 'purchase', id, level });
+      const next = nextPurchaseBurst(bursts.get(id) ?? null, id, level, performance.now(), TOAST_BURST.windowMs);
+      if (next === null) {
+        bursts.delete(id);
+        return;
+      }
+      bursts.set(id, next);
+      toasts.show(purchaseBurstMessage(next));
+    }),
+    session.on('reset', () => {
+      bursts.clear();
     }),
     session.on('unlock', ({ id }) => {
       forward(toasts, { type: 'unlock', id });

@@ -44,7 +44,7 @@ export const STEAM_EMITTERS: readonly SteamEmitter[] = [
   { id: 'calliope', assetId: 'fx.steamPuff', at: [{ x: -72, y: -211 }, { x: -44, y: -216 }, { x: -16, y: -221 }], gate: { techId: 'pressureResonator', minLevel: 1 },
     driver: 'resonance', threshold: 0, mode: { kind: 'burst', count: 2, spacingMs: 150, everyMinS: 5, everyMaxS: 8, minDriver: 1, roundRobin: true } },
   // WP17 Legacy Feeds: steam lance off the manifold outlet (steamLance); thermal driver, rate follows PR/s.
-  { id: 'lance', assetId: 'fx.steamPuff', at: [{ x: 20, y: -430 }], gate: { techId: 'steamLance', minLevel: 1 },
+  { id: 'lance', assetId: 'fx.steamPuff', at: [{ x: 20, y: -422 }], gate: { techId: 'steamLance', minLevel: 1 },
     driver: 'thermal', threshold: 0, mode: { kind: 'rate', base: 0.3, perLog: 0.25, min: 0.3, max: 2 } },
 ];
 

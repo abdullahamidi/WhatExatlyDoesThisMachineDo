@@ -3,6 +3,7 @@ import { nextSystemLog, seedTracker, systemLogMessage } from './systemLogRules';
 import type { SystemLogTracker } from './systemLogRules';
 import { INSTALL_LINES, FIRST_CLICK_MESSAGE } from '../data/notifications';
 import { SYSTEM_LOGS, SYSTEM_LOG_CONFIG } from '../data/systemLogs';
+import type { SystemLogEntry } from '../data/systemLogs';
 import { TECH_IDS } from '../data/types';
 import type { ResourceMap } from '../data/types';
 
@@ -159,5 +160,28 @@ describe('systemLogMessage', () => {
     expect(msg.body).toBe(entry.text);
     expect(msg.tone).toBe('system');
     expect(msg.durationMs).toBe(SYSTEM_LOG_CONFIG.durationMs);
+  });
+
+  // Synthetic entry so the {cycle} tests do not depend on the real table text.
+  const synthetic = (text: string): SystemLogEntry => ({ id: 't', text, trigger: { kind: 'playSeconds', atLeast: 0 } });
+
+  it('replaces {cycle} with the live cycle digits', () => {
+    const entry = synthetic('Cycle {cycle} nearly complete.');
+    expect(systemLogMessage(entry, 1).body).toBe('Cycle 0042 nearly complete.');
+    expect(systemLogMessage(entry, 2).body).toBe('Cycle 0043 nearly complete.');
+  });
+
+  it('keeps text without the token unchanged', () => {
+    const entry = synthetic('Reading accepted.');
+    expect(systemLogMessage(entry, 1).body).toBe('Reading accepted.');
+    expect(systemLogMessage(entry, 5).body).toBe('Reading accepted.');
+  });
+
+  it('replaces every {cycle} token in one text', () => {
+    expect(systemLogMessage(synthetic('Cycle {cycle} of {cycle}.'), 3).body).toBe('Cycle 0044 of 0044.');
+  });
+
+  it('defaults to cycle 1 when called with one argument', () => {
+    expect(systemLogMessage(synthetic('Cycle {cycle}.')).body).toBe('Cycle 0042.');
   });
 });

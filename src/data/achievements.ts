@@ -153,7 +153,7 @@ export const ACHIEVEMENTS: Readonly<Record<AchievementId, AchievementDefinition>
     condition: { type: 'tech', id: 'crankServo', minLevel: 1 },
   },
   servoChorus: {
-    id: 'servoChorus', name: 'Servo Chorus', description: 'Bring the crank servo to level 9.', icon: 13,
+    id: 'servoChorus', name: 'Servo Chorus', description: 'Bring the crank servo to level 9 of 10.', icon: 13,
     condition: { type: 'tech', id: 'crankServo', minLevel: 9 },
   },
   sevenDigits: {

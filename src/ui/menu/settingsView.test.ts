@@ -38,6 +38,12 @@ function toggle(s: SettingsState, id: 'reducedMotion' | 'statusMarkers' | 'scree
   return found as ToggleControl;
 }
 
+/** Every leaf value of a (possibly nested) label table. */
+function flatValues(value: unknown): unknown[] {
+  if (typeof value !== 'object' || value === null) return [value];
+  return Object.values(value).flatMap(flatValues);
+}
+
 describe('settingsViewModel (default settings)', () => {
   const model = settingsViewModel(DEFAULT_SETTINGS_VALUES);
 
@@ -172,9 +178,28 @@ describe('uiRootAttrs', () => {
   });
 });
 
+describe('confirm new cycle row visibility', () => {
+  it('is shown by default and with cycleRelevant true', () => {
+    expect(toggle(DEFAULT_SETTINGS_VALUES, 'confirmNewCycle').hidden).not.toBe(true);
+    expect(settingsViewModel(DEFAULT_SETTINGS_VALUES, { cycleRelevant: true })).toEqual(settingsViewModel(DEFAULT_SETTINGS_VALUES));
+  });
+
+  it('cycleRelevant false hides only the confirm new cycle row', () => {
+    const model = settingsViewModel(DEFAULT_SETTINGS_VALUES, { cycleRelevant: false });
+    expect(model.find((c) => c.id === 'confirmNewCycle')).toMatchObject({ kind: 'toggle', hidden: true, pressed: true });
+    for (const c of model.filter((m) => m.id !== 'confirmNewCycle')) {
+      expect(c).not.toHaveProperty('hidden', true);
+    }
+  });
+});
+
 describe('hotkeyHelpLines', () => {
-  it('lists crank, tech tree, menu and fullscreen keys', () => {
-    expect(hotkeyHelpLines()).toEqual(['SPACE / ENTER  CRANK', 'T  TECH TREE', 'ESC  MENU', 'F11 / ALT+ENTER  FULLSCREEN']);
+  it('lists crank, tech index, menu and fullscreen keys', () => {
+    expect(hotkeyHelpLines()).toEqual(['SPACE / ENTER  CRANK', 'T  TECH INDEX', 'ESC  MENU', 'F11 / ALT+ENTER  FULLSCREEN']);
+  });
+
+  it('no settings label still says TECH TREE', () => {
+    expect(flatValues(SETTINGS_LABELS)).not.toContain('TECH TREE');
   });
 });
 
