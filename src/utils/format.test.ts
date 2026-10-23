@@ -1,9 +1,12 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
   NUMBER_SUFFIXES,
+  formatCompact,
   formatCost,
+  formatHudRate,
   formatNumber,
   formatRate,
+  formatStock,
   formatDuration,
   getDefaultNotation,
   setDefaultNotation,
@@ -265,5 +268,132 @@ describe('default notation (setDefaultNotation / getDefaultNotation)', () => {
     setDefaultNotation('scientific');
     expect(formatCost(1500, 'suffix')).toBe('1.5K');
     expect(formatRate(1500, 'suffix')).toBe('1.5K/s');
+  });
+});
+
+describe('formatStock', () => {
+  afterEach(() => {
+    setDefaultNotation('suffix');
+  });
+
+  it.each([
+    [0, '0'],
+    [12.79, '12'],
+    [999.99, '999'],
+    [999, '999'],
+    [1000, '1K'],
+    [1500, '1.5K'],
+    [-12.7, '-12'],
+    [-1500, '-1.5K'],
+  ])('formats %s as %s', (n, expected) => {
+    expect(formatStock(n)).toBe(expected);
+  });
+
+  it('never shows a negative zero (truncates toward zero)', () => {
+    expect(formatStock(-0.4)).toBe('0');
+    expect(formatStock(-0)).toBe('0');
+    expect(formatStock(0.5)).toBe('0');
+  });
+
+  it.each([NaN, Infinity, -Infinity])('formats %s as "0"', (n) => {
+    expect(formatStock(n)).toBe('0');
+    expect(formatStock(n, 'scientific')).toBe('0');
+  });
+
+  it('uses the floored suffix form from 1000 up, in the chosen notation', () => {
+    expect(formatStock(1500, 'scientific')).toBe('1.50e3');
+    expect(formatStock(1500, 'engineering')).toBe('1.5e3');
+    expect(formatStock(1500, 'suffix')).toBe('1.5K');
+  });
+
+  it('follows the default notation when none is passed', () => {
+    setDefaultNotation('scientific');
+    expect(formatStock(1500)).toBe('1.50e3');
+    expect(formatStock(12.7)).toBe('12');
+    setDefaultNotation('suffix');
+    expect(formatStock(1500)).toBe('1.5K');
+  });
+});
+
+describe('formatCompact', () => {
+  afterEach(() => {
+    setDefaultNotation('suffix');
+  });
+
+  it.each([
+    [0, '0'],
+    [9.76, '9.7'],
+    [0.05, '0'],
+    [1, '1'],
+    [0.3, '0.3'],
+    [9.99, '9.9'],
+    [10, '10'],
+    [12.5, '12'],
+    [999.99, '999'],
+    [1000, '1K'],
+    [1500, '1.5K'],
+    [26900, '26.9K'],
+    [-9.76, '-9.7'],
+    [-12.5, '-12'],
+    [-0.05, '0'],
+  ])('formats %s as %s', (n, expected) => {
+    expect(formatCompact(n)).toBe(expected);
+  });
+
+  it('never shows a negative zero', () => {
+    expect(formatCompact(-0)).toBe('0');
+    expect(formatCompact(-0.04)).toBe('0');
+  });
+
+  it.each([NaN, Infinity, -Infinity])('formats %s as "0"', (n) => {
+    expect(formatCompact(n)).toBe('0');
+    expect(formatCompact(n, 'engineering')).toBe('0');
+  });
+
+  it('uses the chosen notation from 1000 up', () => {
+    expect(formatCompact(1500, 'scientific')).toBe('1.50e3');
+    expect(formatCompact(1500, 'engineering')).toBe('1.5e3');
+    expect(formatCompact(12.5, 'scientific')).toBe('12');
+  });
+
+  it('follows the default notation when none is passed', () => {
+    setDefaultNotation('scientific');
+    expect(formatCompact(1500)).toBe('1.50e3');
+    expect(formatCompact(9.76)).toBe('9.7');
+    setDefaultNotation('suffix');
+    expect(formatCompact(1500)).toBe('1.5K');
+  });
+});
+
+describe('formatHudRate', () => {
+  afterEach(() => {
+    setDefaultNotation('suffix');
+  });
+
+  it.each([
+    [1500, '1.5K/s'],
+    [9.76, '9.7/s'],
+    [12.5, '12/s'],
+    [3.25, '3.2/s'],
+    [0, '0/s'],
+    [0.05, '0/s'],
+    [-9.76, '-9.7/s'],
+    [NaN, '0/s'],
+    [Infinity, '0/s'],
+  ])('formats %s as %s', (n, expected) => {
+    expect(formatHudRate(n)).toBe(expected);
+  });
+
+  it('passes the notation through', () => {
+    expect(formatHudRate(1500, 'scientific')).toBe('1.50e3/s');
+    expect(formatHudRate(1500, 'engineering')).toBe('1.5e3/s');
+    expect(formatHudRate(1500, 'suffix')).toBe('1.5K/s');
+  });
+
+  it('follows the default notation when none is passed', () => {
+    setDefaultNotation('scientific');
+    expect(formatHudRate(1500)).toBe('1.50e3/s');
+    setDefaultNotation('suffix');
+    expect(formatHudRate(1500)).toBe('1.5K/s');
   });
 });

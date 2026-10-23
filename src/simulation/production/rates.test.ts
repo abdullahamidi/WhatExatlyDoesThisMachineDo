@@ -4,7 +4,8 @@ import type { Effect, GameState, TechDefinition, TechId } from '../../data/types
 import { TECHNOLOGIES } from '../../data/technologies';
 import { RESOURCES } from '../../data/resources';
 import { createInitialState } from '../state';
-import { computeRates } from './rates';
+import { cycleTechs } from '../prestige';
+import { autoClicksPerSecond, computeRates } from './rates';
 
 const withLevels = (levels: Partial<Record<TechId, number>>, extra: Partial<GameState> = {}): GameState => {
   const s = createInitialState(0);
@@ -347,5 +348,49 @@ describe('autoClick fold', () => {
     expect(computeRates(eeAutoLevels, eeAutoTechs).perClick).toEqual(
       computeRates(eeAutoLevels, noAuto).perClick,
     );
+  });
+});
+
+describe('autoClicksPerSecond', () => {
+  // Injected table: gearRatio grants 2 automatic cranks/s per level.
+  const autoTechs = withEffects({ gearRatio: [{ type: 'autoClick', perSecond: 2 }] });
+
+  it('is 0 for the initial tech levels', () => {
+    expect(autoClicksPerSecond(createInitialState(0).techLevels)).toBe(0);
+  });
+
+  it('crankServo at level 3 gives 3 automatic cranks per second', () => {
+    expect(autoClicksPerSecond(withLevels({ crankServo: 3 }).techLevels)).toBeCloseTo(3, 9);
+  });
+
+  it('adds the Servo Recall perk on the memory-source tech (owned from the start)', () => {
+    const perkTechs = cycleTechs(TECHNOLOGIES, { cycle: 2, echoesEarned: 0, perks: ['servoRecall'] });
+    expect(autoClicksPerSecond(withLevels({ crankServo: 2 }).techLevels, perkTechs)).toBeCloseTo(3, 9);
+  });
+
+  it('multiplies the injected autoClick perSecond by the level', () => {
+    expect(autoClicksPerSecond(withLevels({ gearRatio: 5 }).techLevels, autoTechs)).toBeCloseTo(10, 9);
+  });
+
+  it('ignores techs at level 0', () => {
+    expect(autoClicksPerSecond(withLevels({ gearRatio: 0 }).techLevels, autoTechs)).toBe(0);
+  });
+
+  it('sums every autoClick effect of one tech', () => {
+    const twoEffects = withEffects({
+      gearRatio: [
+        { type: 'autoClick', perSecond: 1 },
+        { type: 'autoClick', perSecond: 2 },
+      ],
+    });
+    expect(autoClicksPerSecond(withLevels({ gearRatio: 2 }).techLevels, twoEffects)).toBeCloseTo(6, 9);
+  });
+
+  it('does not change computeRates perClick or perSecond', () => {
+    const levels = withLevels({ gearRatio: 3 });
+    const rates = computeRates(levels, autoTechs);
+    expect(rates.perClick.me).toBeCloseTo(1, 9);
+    expect(rates.perSecond.me).toBeCloseTo(6, 9);
+    expect(autoClicksPerSecond(levels.techLevels, autoTechs)).toBeCloseTo(6, 9);
   });
 });

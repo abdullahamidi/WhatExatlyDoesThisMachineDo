@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_PULSE, CAMERA, DEPTH, PARALLAX_FADE_MS, PARALLAX_BOTTOM_MARGIN, PYLON_LINE, PYLON_FEEDS, MACHINE_ANCHOR, PIXEL_SCALE, DUST, DUST_RISING, PATTERN_ORIGIN_X, VIEW, ECLIPSE, APERTURE_BEAM } from './world';
+import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_FEEDBACK, CRANK_PULSE, CAMERA, DEPTH, PARALLAX_FADE_MS, PARALLAX_BOTTOM_MARGIN, PYLON_LINE, PYLON_FEEDS, MACHINE_ANCHOR, PIXEL_SCALE, DUST, DUST_RISING, PATTERN_ORIGIN_X, VIEW, ECLIPSE, APERTURE_BEAM } from './world';
 import type { ParallaxLayerDef } from './world';
 import { PALETTE } from './palette';
 import { TOAST_CONFIG } from './notifications';
@@ -413,6 +413,33 @@ describe('WP13 finale layers (C3)', () => {
 });
 
 describe('FLOATING_TEXT and CRANK_PULSE', () => {
+  it('every floating text colour (the single colour and each block colour) is a 6-digit hex string', () => {
+    for (const c of [FLOATING_TEXT.color, ...Object.values(FLOATING_TEXT.colors)]) {
+      expect(c).toMatch(/^#[0-9a-f]{6}$/i);
+    }
+  });
+
+  it('the block colours are exactly me, ee, pr, rs and xf', () => {
+    expect(Object.keys(FLOATING_TEXT.colors).sort()).toEqual(['ee', 'me', 'pr', 'rs', 'xf']);
+  });
+
+  it('the merge window closes before the block fades: coalesceMs < blockMaxMs <= CRANK_FEEDBACK.floatMs', () => {
+    expect(FLOATING_TEXT.coalesceMs).toBeLessThan(FLOATING_TEXT.blockMaxMs);
+    expect(FLOATING_TEXT.blockMaxMs).toBeLessThanOrEqual(CRANK_FEEDBACK.floatMs);
+  });
+
+  it('the font floor keeps the gain text at least 14 screen px at any zoom', () => {
+    expect(FLOATING_TEXT.minScreenPx).toBeGreaterThanOrEqual(14);
+  });
+
+  it('the gain block spawns up-left of the crank at offset (-80, -140) world px', () => {
+    expect(FLOATING_TEXT.spawnOffset).toEqual({ x: -80, y: -140 });
+  });
+
+  it('the gain block pool holds six blocks', () => {
+    expect(FLOATING_TEXT.blockPoolSize).toBe(6);
+  });
+
   it('floating text colour is a 6-digit hex string', () => {
     expect(FLOATING_TEXT.color).toMatch(/^#[0-9a-f]{6}$/i);
   });

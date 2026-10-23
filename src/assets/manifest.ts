@@ -513,6 +513,29 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     frame: { width: 16, height: 16, count: 5 },
     description: 'Five 16-px icons for the finale buttons (ART_ERA5 §8).',
   },
+  // WP17 legacy feed parts: procedural only (file null); PixelLab art pending (Art Director A17). Painters in painters/legacy.ts.
+  'machine.generatorGlow': {
+    id: 'machine.generatorGlow', file: null, width: 384, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 96, height: 64, count: 4 },
+    description: 'Four-frame cyan winding glow laid over the generator housing, brighter frames as EE/s rises. Transparent over the belt pulley circle (r 11 at texture 52,49).',
+  },
+  'machine.bellows': {
+    id: 'machine.bellows', file: null, width: 160, height: 24, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 40, height: 24, count: 4 },
+    description: 'Four-frame leather bellows between two boards that open and close; the nozzle tip (texture 36,10) feeds the boiler firebox.',
+  },
+  'machine.exciterFeed': {
+    id: 'machine.exciterFeed', file: null, width: 16, height: 24, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Short insulator post with a cyan cap; the cable lug is the cap (texture 8,2).',
+  },
+  'machine.backfeedTerminal': {
+    id: 'machine.backfeedTerminal', file: null, width: 16, height: 24, origin: { x: 0.5, y: 0 }, tileable: 'none',
+    description: 'Hanging terminal plate with insulator discs and violet accents; the cable lug is the bottom cap (texture 8,22).',
+  },
+  'machine.steamLance': {
+    id: 'machine.steamLance', file: null, width: 16, height: 24, origin: { x: 0.5, y: 0 }, tileable: 'none',
+    description: 'Steam valve block with a rust handwheel and a flanged port at the bottom (texture 8,24).',
+  },
 };
 
 export interface AssetLoad {

@@ -9,6 +9,8 @@ import {
   advancePhase,
   vibrateOffset,
   framesIndex,
+  stepFrameCycles,
+  cycleFrame,
   reciprocateOffset,
   strikeCount,
   gaugeFrame,
@@ -154,6 +156,73 @@ describe('framesIndex', () => {
       prev = cur;
     }
     expect(changes).toBeLessThanOrEqual(Math.ceil(10 * 3));
+  });
+});
+
+describe('stepFrameCycles', () => {
+  it('stays at 0 while inactive', () => {
+    expect(stepFrameCycles(2.5, 2, 1, false, 4)).toBe(0);
+  });
+
+  it('advances hz times dt frames', () => {
+    expect(stepFrameCycles(0, 2, 0.25, true, 4)).toBeCloseTo(0.5, 9);
+    expect(stepFrameCycles(1.5, 4, 0.5, true, 4)).toBeCloseTo(3.5, 9);
+  });
+
+  it('keeps cycles for a negative or NaN hz', () => {
+    expect(stepFrameCycles(1.5, -4, 0.5, true, 4)).toBeCloseTo(1.5, 9);
+    expect(stepFrameCycles(1.5, Number.NaN, 0.5, true, 4)).toBeCloseTo(1.5, 9);
+  });
+
+  it('keeps cycles for a NaN dt and adds nothing for a negative dt', () => {
+    expect(stepFrameCycles(1.5, 4, Number.NaN, true, 4)).toBeCloseTo(1.5, 9);
+    expect(stepFrameCycles(1.5, 4, -0.5, true, 4)).toBeCloseTo(1.5, 9);
+  });
+
+  it('wraps into [0, frames * 1000)', () => {
+    const wrapped = stepFrameCycles(3999.5, 2, 1, true, 4);
+    expect(wrapped).toBeGreaterThanOrEqual(0);
+    expect(wrapped).toBeLessThan(4000);
+    expect(wrapped).toBeCloseTo(1.5, 9);
+  });
+
+  it('stays in [0, frames * 1000) over a long loop of steps', () => {
+    const frames = 6;
+    let cycles = 0;
+    for (let step = 0; step < 5000; step++) {
+      cycles = stepFrameCycles(cycles, 12, 0.37 + (step % 7) * 0.05, true, frames);
+      expect(cycles).toBeGreaterThanOrEqual(0);
+      expect(cycles).toBeLessThan(frames * 1000);
+    }
+  });
+
+  it('returns 0 for zero frames and for non-finite cycles', () => {
+    expect(stepFrameCycles(1.5, 2, 1, true, 0)).toBe(0);
+    expect(stepFrameCycles(Number.NaN, 2, 1, true, 4)).toBe(0);
+  });
+});
+
+describe('cycleFrame', () => {
+  it('floors the cycles and adds the offset', () => {
+    expect(cycleFrame(5.9, 4, 1)).toBe(2);
+    expect(cycleFrame(3.99, 4, 0)).toBe(3);
+    expect(cycleFrame(0, 4, 0)).toBe(0);
+  });
+
+  it('wraps the frame count', () => {
+    expect(cycleFrame(4, 4, 1)).toBe(1);
+  });
+
+  it('counts non-finite cycles as 0', () => {
+    expect(cycleFrame(Number.NaN, 4, 1)).toBe(1);
+  });
+
+  it('wraps negative cycles to a positive frame', () => {
+    expect(cycleFrame(-0.5, 4, 0)).toBe(3);
+  });
+
+  it('returns 0 for fewer than one frame', () => {
+    expect(cycleFrame(2, 0, 1)).toBe(0);
   });
 });
 

@@ -2,14 +2,15 @@ import { beforeAll, describe, it, expect } from 'vitest';
 import { RESOURCE_IDS, TECH_IDS } from '../../data/types';
 import type { GameState, ResourceId, TechDefinition, TechId, TechView } from '../../data/types';
 import { TECHNOLOGIES } from '../../data/technologies';
-import { runGreedy, maxPurchaseGap } from './greedy';
-import type { GreedyOptions, GreedyResult } from './greedy';
-import { applyClick, advance } from '../production/tick';
+import { runGreedy, maxPurchaseGap, purchaseLedger, deadMinutes, spendShare } from './greedy';
+import type { GreedyOptions, GreedyResult, LedgerEntry } from './greedy';
+import { applyClick, advance, offlineCapSeconds } from '../production/tick';
 import { computeRates } from '../production/rates';
 import { getAllTechViews } from '../progression/status';
 import { purchase } from '../progression/purchase';
 import { evaluateMilestones } from '../progression/milestones';
 import { createInitialState } from '../state';
+import { costAt } from '../economy/cost';
 
 const CLICKS_PER_SECOND = 4;
 
@@ -199,5 +200,218 @@ describe('maxPurchaseGap', () => {
 
   it('toT = Infinity -> Infinity', () => {
     expect(maxPurchaseGap([{ t: 4, id: 'gearRatio' }], 0, Infinity)).toBe(Infinity);
+  });
+});
+
+function buy(t: number, res: ResourceId, cost = 10): LedgerEntry {
+  return { t, id: 'gearRatio', res, level: 1, cost };
+}
+
+describe('measurement helpers (WP17)', () => {
+  it('snapshotAt leaves firstAt, purchases, maxValue and final identical to the plain run', () => {
+    const plain = runGreedy(options(1500));
+    const withSnaps = runGreedy({ ...options(1500), snapshotAt: ['gearRatio', 'wornMotor'] });
+    expect(withSnaps.firstAt).toEqual(plain.firstAt);
+    expect(withSnaps.purchases).toEqual(plain.purchases);
+    expect(withSnaps.maxValue).toEqual(plain.maxValue);
+    expect(withSnaps.final).toEqual(plain.final);
+    expect('snapshots' in plain).toBe(false);
+    expect('snapshots' in withSnaps).toBe(true);
+  });
+
+  it('snapshot is the state right after the step the tech is first owned, and is a separate object', () => {
+    const run = runGreedy({ ...options(1500), snapshotAt: ['gearRatio'] });
+    const snap = run.snapshots?.gearRatio;
+    expect(snap).toBeDefined();
+    expect(snap?.totalClicks).toBe(16);
+    expect(snap?.techLevels.gearRatio).toBe(1);
+    expect(snap).not.toBe(run.final);
+  });
+
+  it('a tech owned at t = 0 (handCrank) is snapshotted before any step', () => {
+    const run = runGreedy({ ...options(100), snapshotAt: ['handCrank'] });
+    expect(run.snapshots?.handCrank?.totalClicks).toBe(0);
+    expect(run.snapshots?.handCrank?.techLevels.handCrank).toBe(1);
+  });
+
+  it('an id never owned in the run has no snapshot key', () => {
+    const run = runGreedy({ ...options(100), snapshotAt: ['primaryFunction'] });
+    expect(run.snapshots).toBeDefined();
+    expect('primaryFunction' in (run.snapshots ?? {})).toBe(false);
+  });
+
+  it('purchaseLedger prices the 1500 s run with the era-I first buys', () => {
+    const run = runGreedy(options(1500));
+    const ledger = purchaseLedger(run.purchases);
+    expect(ledger.length).toBe(run.purchases.length);
+    expect(ledger[0]).toEqual({ t: 4, id: 'gearRatio', res: 'me', level: 1, cost: 15 });
+    expect(ledger.find((e) => e.id === 'wornMotor')).toEqual({
+      t: 13,
+      id: 'wornMotor',
+      res: TECHNOLOGIES.wornMotor.costRes,
+      level: 1,
+      cost: 40,
+    });
+  });
+
+  it('every ledger cost equals costAt(def, levelBefore) and levels step by one per buy', () => {
+    const run = runGreedy(options(1500));
+    const ledger = purchaseLedger(run.purchases);
+    const levels = { ...createInitialState(0).techLevels };
+    for (const entry of ledger) {
+      const def = TECHNOLOGIES[entry.id];
+      const levelBefore = levels[entry.id];
+      expect(entry.level).toBe(levelBefore + 1);
+      expect(entry.cost).toBe(costAt(def, levelBefore));
+      expect(entry.res).toBe(def.costRes);
+      levels[entry.id] = entry.level;
+    }
+  });
+
+  it('ledger spend in ME equals produced ME (lifetime - remaining) on the 1500 s run', () => {
+    const run = runGreedy(options(1500));
+    const ledger = purchaseLedger(run.purchases);
+    const spent = ledger.filter((e) => e.res === 'me').reduce((sum, e) => sum + e.cost, 0);
+    const produced = run.final.lifetime.me - run.final.res.me;
+    expect(produced).toBeGreaterThan(0);
+    expect(Math.abs(spent - produced) / produced).toBeLessThan(1e-9);
+  });
+
+  it('the last ledger level of every bought tech equals its final level', () => {
+    const run = runGreedy(options(1500));
+    const ledger = purchaseLedger(run.purchases);
+    for (const id of TECH_IDS) {
+      const own = ledger.filter((e) => e.id === id);
+      if (own.length === 0) continue;
+      expect(own[own.length - 1]?.level).toBe(run.final.techLevels[id]);
+    }
+  });
+
+  it('deadMinutes: last buy of the resource up to endT, in minutes', () => {
+    const ledger = [buy(100, 'ee'), buy(400, 'me')];
+    expect(deadMinutes(ledger, 'ee', 400)).toBe(5);
+  });
+
+  it('deadMinutes: no buy of the resource -> whole span endT / 60', () => {
+    const ledger = [buy(100, 'ee'), buy(400, 'me')];
+    expect(deadMinutes(ledger, 'pr', 600)).toBe(10);
+  });
+
+  it('deadMinutes: entries after endT are ignored', () => {
+    const ledger = [buy(100, 'ee'), buy(500, 'ee')];
+    expect(deadMinutes(ledger, 'ee', 400)).toBe(5);
+  });
+
+  it('deadMinutes: a buy exactly at endT gives 0', () => {
+    expect(deadMinutes([buy(400, 'me')], 'me', 400)).toBe(0);
+  });
+
+  it('spendShare: left bound exclusive, right bound inclusive, other resources ignored', () => {
+    const ledger = [buy(10, 'me', 5), buy(20, 'me', 7), buy(30, 'ee', 100), buy(40, 'me', 3)];
+    // (10, 40] for ME: t = 20 (7) and t = 40 (3); t = 10 and the EE buy are excluded.
+    expect(spendShare(ledger, 'me', 10, 40, 0, 100)).toBeCloseTo(0.1, 9);
+    expect(spendShare(ledger, 'me', 9, 10, 0, 100)).toBeCloseTo(0.05, 9);
+    expect(spendShare(ledger, 'me', 10, 10, 0, 100)).toBe(0);
+  });
+
+  it('spendShare: zero or negative produced -> 0', () => {
+    const ledger = [buy(20, 'me', 7)];
+    expect(spendShare(ledger, 'me', 0, 100, 50, 50)).toBe(0);
+    expect(spendShare(ledger, 'me', 0, 100, 50, 10)).toBe(0);
+  });
+});
+
+// Automation-only play for schedule tests: no clicks, and buyIntervalSeconds 1e6 keeps the buy tick
+// off every step of the short runs below (ratio t / 1e6 never rounds to an exact tick for t < 5e5).
+const QUIET = { clicksPerSecond: 0, stepSeconds: 1, buyIntervalSeconds: 1e6 };
+
+describe('runGreedy schedule (profile D offline blocks)', () => {
+  const base = createInitialState(0);
+  const automated = { ...base, techLevels: { ...base.techLevels, wornMotor: 1 } };
+
+  it('absent schedule: the result has no wallSeconds key', () => {
+    const run = runGreedy(options(300));
+    expect('wallSeconds' in run).toBe(false);
+  });
+
+  it('schedule with 0 offline seconds is identical to the continuous run (wallSeconds = active seconds)', () => {
+    const continuous = runGreedy(options(1500));
+    const scheduled = runGreedy({ ...options(1500), schedule: { activeSeconds: 300, offlineSeconds: 0 } });
+    expect(scheduled.firstAt).toEqual(continuous.firstAt);
+    expect(scheduled.purchases).toEqual(continuous.purchases);
+    expect(scheduled.maxValue).toEqual(continuous.maxValue);
+    expect(scheduled.final).toEqual(continuous.final);
+    expect(scheduled.wallSeconds).toBe(1500);
+  });
+
+  it('an offline block grants exactly the capped gain (8 h cap binds for 10 h away)', () => {
+    const r = computeRates(automated).perSecond.me;
+    expect(r).toBeGreaterThan(0);
+    expect(offlineCapSeconds(automated.techLevels)).toBe(28800);
+    const continuous = runGreedy({ ...QUIET, seconds: 200, initial: automated });
+    const away = runGreedy({
+      ...QUIET,
+      seconds: 200,
+      initial: automated,
+      schedule: { activeSeconds: 100, offlineSeconds: 36000 },
+    });
+    expect(away.final.res.me - continuous.final.res.me).toBeCloseTo(r * 28800, 9);
+    expect(away.wallSeconds).toBe(36200);
+  });
+
+  it('an offline block shorter than the cap grants its full elapsed gain', () => {
+    const r = computeRates(automated).perSecond.me;
+    const continuous = runGreedy({ ...QUIET, seconds: 200, initial: automated });
+    const away = runGreedy({
+      ...QUIET,
+      seconds: 200,
+      initial: automated,
+      schedule: { activeSeconds: 100, offlineSeconds: 1000 },
+    });
+    expect(away.final.res.me - continuous.final.res.me).toBeCloseTo(r * 1000, 9);
+    expect(away.wallSeconds).toBe(1200);
+  });
+
+  it('Relief Valves raise the offline cap to 12 h', () => {
+    const vented = { ...automated, techLevels: { ...automated.techLevels, reliefValves: 1 } };
+    const r = computeRates(vented).perSecond.me;
+    expect(offlineCapSeconds(vented.techLevels)).toBe(43200);
+    const continuous = runGreedy({ ...QUIET, seconds: 200, initial: vented });
+    const away = runGreedy({
+      ...QUIET,
+      seconds: 200,
+      initial: vented,
+      schedule: { activeSeconds: 100, offlineSeconds: 50000 },
+    });
+    expect(away.final.res.me - continuous.final.res.me).toBeCloseTo(r * 43200, 9);
+  });
+
+  it('no offline block after the last active block', () => {
+    const continuous = runGreedy({ ...QUIET, seconds: 100, initial: automated });
+    const away = runGreedy({
+      ...QUIET,
+      seconds: 100,
+      initial: automated,
+      schedule: { activeSeconds: 100, offlineSeconds: 36000 },
+    });
+    expect(away.final).toEqual(continuous.final);
+    expect(away.wallSeconds).toBe(100);
+  });
+
+  it('offline blocks add no clicks', () => {
+    const continuous = runGreedy({ ...options(20), buyIntervalSeconds: 1e6 });
+    const away = runGreedy({
+      ...options(20),
+      buyIntervalSeconds: 1e6,
+      schedule: { activeSeconds: 10, offlineSeconds: 1000 },
+    });
+    expect(away.final.totalClicks).toBe(continuous.final.totalClicks);
+    expect(away.final.totalClicks).toBe(80);
+  });
+
+  it('rejects an active block that is not a whole number of steps', () => {
+    expect(() =>
+      runGreedy({ ...options(20), stepSeconds: 2, schedule: { activeSeconds: 5, offlineSeconds: 10 } }),
+    ).toThrow(RangeError);
   });
 });

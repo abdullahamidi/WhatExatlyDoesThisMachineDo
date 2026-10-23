@@ -47,6 +47,7 @@ const MAX_STRIKE_PUFFS = 3;
 const RATE_EMITTER_PART: Readonly<Record<string, MachineComponentId>> = {
   chimney: 'chimney',
   manifold: 'steamManifold',
+  lance: 'steamLance',
 };
 
 function freshState(): EmitterState {

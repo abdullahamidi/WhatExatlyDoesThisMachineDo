@@ -549,9 +549,10 @@ const WP13_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; he
 ];
 
 describe('WP13 restored world, finale fx and UI assets', () => {
-  it('appends the 14 WP13 ids after the era V ids, in contract order (112 total)', () => {
-    expect(ASSET_IDS.length).toBe(112);
-    expect(ASSET_IDS.slice(98)).toEqual(WP13_ENTRIES.map((e) => e.id));
+  it('appends the 14 WP13 ids after the era V ids, in contract order (ids 98..111; WP17 ids follow)', () => {
+    expect(ASSET_IDS.length).toBe(117);
+    expect(ASSET_IDS.slice(98, 112)).toEqual(WP13_ENTRIES.map((e) => e.id));
+    expect(ASSET_IDS.slice(112)).toEqual(WP17_ENTRIES.map((e) => e.id));
   });
 
   it('has the contract file, whole-image size, origin and tiling for each new id', () => {
@@ -705,5 +706,62 @@ describe('WP10 era IV machine and fx assets', () => {
       { x: 124, y: 0, width: 62, height: 8 },
       { x: 186, y: 0, width: 62, height: 8 },
     ]);
+  });
+});
+
+// WP17 legacy feed parts: procedural only (file null, no disk file yet); sheet cells per the WP17 contract.
+const WP17_ENTRIES: ReadonlyArray<{ id: AssetId; width: number; height: number; origin: { x: number; y: number };
+  frame?: { width: number; height: number; count: number } }> = [
+  { id: 'machine.generatorGlow', width: 384, height: 64, origin: { x: 0.5, y: 0.5 }, frame: { width: 96, height: 64, count: 4 } },
+  { id: 'machine.bellows', width: 160, height: 24, origin: { x: 0.5, y: 1 }, frame: { width: 40, height: 24, count: 4 } },
+  { id: 'machine.exciterFeed', width: 16, height: 24, origin: { x: 0.5, y: 1 } },
+  { id: 'machine.backfeedTerminal', width: 16, height: 24, origin: { x: 0.5, y: 0 } },
+  { id: 'machine.steamLance', width: 16, height: 24, origin: { x: 0.5, y: 0 } },
+];
+
+describe('WP17 legacy feed assets', () => {
+  it('appends the 5 WP17 ids after the WP13 ids, in contract order (117 total)', () => {
+    expect(ASSET_IDS.length).toBe(117);
+    expect(ASSET_IDS.slice(112)).toEqual(WP17_ENTRIES.map((e) => e.id));
+  });
+
+  it('has file null, the contract size and origin, tileable none and a description for each new id', () => {
+    for (const want of WP17_ENTRIES) {
+      const entry = ASSET_MANIFEST[want.id];
+      expect(entry.file, want.id).toBeNull();
+      expect(entry.width, want.id).toBe(want.width);
+      expect(entry.height, want.id).toBe(want.height);
+      expect(entry.origin, want.id).toEqual(want.origin);
+      expect(entry.tileable, want.id).toBe('none');
+      expect(entry.description.trim().length, want.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('has exactly the contract frame (or none) for each new id', () => {
+    for (const want of WP17_ENTRIES) {
+      expect(ASSET_MANIFEST[want.id].frame, want.id).toEqual(want.frame);
+    }
+  });
+
+  it('cuts the generator glow into 4 cells of 96x64 and the bellows into 4 cells of 40x24', () => {
+    expect(sheetFrameRects(ASSET_MANIFEST['machine.generatorGlow'])).toEqual([
+      { x: 0, y: 0, width: 96, height: 64 },
+      { x: 96, y: 0, width: 96, height: 64 },
+      { x: 192, y: 0, width: 96, height: 64 },
+      { x: 288, y: 0, width: 96, height: 64 },
+    ]);
+    expect(sheetFrameRects(ASSET_MANIFEST['machine.bellows'])).toEqual([
+      { x: 0, y: 0, width: 40, height: 24 },
+      { x: 40, y: 0, width: 40, height: 24 },
+      { x: 80, y: 0, width: 40, height: 24 },
+      { x: 120, y: 0, width: 40, height: 24 },
+    ]);
+  });
+
+  it('plans no file load for the procedural WP17 ids', () => {
+    const loads = planAssetLoads();
+    for (const want of WP17_ENTRIES) {
+      expect(loads.some((l) => l.key === want.id), want.id).toBe(false);
+    }
   });
 });

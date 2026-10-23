@@ -15,11 +15,11 @@ const failedBuys = r => r.filter(x => !x.endsWith(':true'));
 const S7 = ['wornMotor', 'gearRatio','gearRatio','gearRatio','reinforcedCrank','motorTuning','motorTuning','motorTuning','motorTuning','motorTuning','flywheel','pistonArray','improvedPistons'];
 const S9 = [...S7, '@blueprint', 'generator', ...Array(5).fill('motorRetrofit'), ...Array(20).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(3).fill('transformer'), 'powerLines'];
 const S10 = [...S9, '@substationBlueprint', 'boiler'];
-const S11 = [...S10, ...Array(3).fill('inductionHeater'), ...Array(20).fill('firebox'), 'steamHammer', 'superheater', ...Array(5).fill('condenser'), 'turbine', 'reliefValves', '@pressureVesselBlueprint'];
+const S11 = [...S10, ...Array(3).fill('inductionHeater'), ...Array(20).fill('firebox'), 'steamHammer', 'superheater', ...Array(5).fill('condenser'), 'turbine', 'reliefValves', ...Array(3).fill('bellowsDrive'), '@pressureVesselBlueprint'];
 const S12 = [...S11, 'resonatorSpire'];
-const S13 = [...S12, ...Array(3).fill('crankServo'), ...Array(25).fill('harmonicCoil'), ...Array(3).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(3).fill('standingWave'), 'crystalLattice', '@harmonicConvergence'];
+const S13 = [...S12, ...Array(3).fill('crankServo'), ...Array(25).fill('harmonicCoil'), ...Array(3).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(3).fill('standingWave'), 'crystalLattice', ...Array(5).fill('gridExciter'), '@harmonicConvergence'];
 const S14 = [...S13, 'nullChamber'];
-const S15 = [...S14, ...Array(25).fill('containmentRing'), ...Array(20).fill('resonantSiphon'), ...Array(10).fill('graviticAnchor'), 'inversionCrank', 'lensArray', ...Array(20).fill('horizonField'), 'skyAperture', '@finalAlignment'];
+const S15 = [...S14, ...Array(25).fill('containmentRing'), '@resonantSiphon:20', '@graviticAnchor:10', 'inversionCrank', 'lensArray', ...Array(20).fill('horizonField'), 'skyAperture', ...Array(5).fill('mainsBackfeed'), ...Array(5).fill('steamLance'), '@finalAlignment'];
 // storyboard keyframes (WP13 Validation §Smoke (2)); 'end' = just past finaleEndS (64.47)
 const KEYS = [['1', 1], ['6', 6], ['12', 12], ['15_6', 15.6], ['24', 24], ['30_5', 30.5], ['34', 34], ['40', 40], ['56', 56], ['end', 64.5]];
 
@@ -36,11 +36,22 @@ const open = async () => {
   await page.goto(url, { waitUntil: 'networkidle' });
   await ready();
 };
-// same buy helper as stages.mjs: 8 h jumps for '@<tech>' markers and for rejected buys
+// same buy helper as stages.mjs: 8 h jumps for '@<tech>' and '@<tech>:<n>' markers and for rejected buys
 const buyList = buys => page.evaluate((buys) => {
   const s = window.__wedtmd.session; const o = []; let t = Date.now();
   const jump = () => { t += 8 * 3600 * 1000; s.update(t); };
   for (const id of buys) {
+    if (id.startsWith('@') && id.includes(':')) {
+      // '@<techId>:<n>' marker: buy that tech until its level is n (up to 128 rounds, 8 h jump after a round that ends below n)
+      const [tech, nStr] = id.slice(1).split(':'); const n = +nStr;
+      for (let k = 0; k < 128 && s.state.techLevels[tech] < n; k++) {
+        let r = s.purchase(tech);
+        while (r.ok && s.state.techLevels[tech] < n) r = s.purchase(tech);
+        if (s.state.techLevels[tech] < n) jump();
+      }
+      o.push(id + ':' + (s.state.techLevels[tech] >= n));
+      continue;
+    }
     if (id.startsWith('@')) {
       const tech = id === '@blueprint' ? 'generatorBlueprint' : id.slice(1);
       for (let k = 0; k < 8 && s.state.techLevels[tech] !== 1; k++) jump();

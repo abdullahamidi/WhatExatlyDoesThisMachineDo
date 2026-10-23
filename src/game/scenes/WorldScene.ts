@@ -300,6 +300,6 @@ export class WorldScene extends Phaser.Scene {
     const session = this.ctx.session;
     this.lastRevision = session.revision;
     this.hudRenderedAtMs = performance.now();
-    this.ui.hud.render(buildHudView(session.state, session.rates, session.prestige));
+    this.ui.hud.render(buildHudView(session.state, session.rates, session.prestige, session.techs));
   }
 }

@@ -1,9 +1,10 @@
 import { TECHNOLOGIES } from '../../data/technologies';
 import { RESOURCE_IDS, TECH_IDS } from '../../data/types';
-import type { GameState, ResourceId, TechDefinition, TechId, TechView } from '../../data/types';
-import { applyClick, advance } from '../production/tick';
+import type { GameState, ResourceId, TechDefinition, TechId, TechStatus } from '../../data/types';
+import { canAfford, costAt } from '../economy/cost';
+import { applyClick, advance, applyOffline } from '../production/tick';
 import { computeRates } from '../production/rates';
-import { getAllTechViews } from '../progression/status';
+import { getTechStatus } from '../progression/status';
 import { purchase } from '../progression/purchase';
 import { evaluateMilestones } from '../progression/milestones';
 import { createInitialState } from '../state';
@@ -12,7 +13,18 @@ import { createInitialState } from '../state';
 // randomness, no console, no timers. Policy: per resource, buy the cheapest available
 // non-milestone tech whose costRes is that resource (ties: TECH_IDS order), only if affordable.
 
+/**
+ * Repeating play blocks (profile D). Active block: clicks, buys, production. Offline block (after each
+ * full active block, never after the last one): no clicks, no buys, automation credited once through
+ * the existing applyOffline path (capped by offlineCapSeconds). offlineSeconds 0 = no offline blocks.
+ */
+export interface GreedySchedule {
+  activeSeconds: number;
+  offlineSeconds: number;
+}
+
 export interface GreedyOptions {
+  /** Active-seconds budget (with `schedule`, offline blocks do not count towards it). */
   seconds: number;
   clicksPerSecond: number;
   stepSeconds: number;
@@ -21,22 +33,70 @@ export interface GreedyOptions {
   techs?: Record<TechId, TechDefinition>;
   /** Stop after the step that first owns this tech (default: run the full `seconds`). */
   stopAt?: TechId;
+  /** Record the state right after the step each listed tech is first owned (t = 0 counts). */
+  snapshotAt?: readonly TechId[];
+  /** Optional active/offline block schedule. Absent = continuous active play (no offline). */
+  schedule?: GreedySchedule;
 }
 
 export interface GreedyResult {
+  /** Active seconds (offline time does not advance it). */
   firstAt: Record<TechId, number>;
   maxValue: number;
   final: GameState;
+  /** Purchase times in active seconds. */
   purchases: Array<{ t: number; id: TechId }>;
+  /** Present only when `snapshotAt` was given. Ids never owned have no key. */
+  snapshots?: Partial<Record<TechId, GameState>>;
+  /** Wall-clock seconds simulated (active + offline). Present only when `schedule` is set. */
+  wallSeconds?: number;
 }
 
-/** Cheapest available, purchasable-next, non-milestone view paying in `res`; null when none. */
-function pickCheapest(views: readonly TechView[], res: ResourceId): TechView | null {
-  let pick: TechView | null = null;
-  for (const view of views) {
-    if (view.status !== 'available' || view.nextCost === null || view.def.kind === 'milestone') continue;
-    if (view.def.costRes !== res) continue;
-    if (pick === null || pick.nextCost === null || view.nextCost < pick.nextCost) pick = view;
+/** One purchase with its price and the level it brought the tech to. */
+export interface LedgerEntry {
+  t: number;
+  id: TechId;
+  res: ResourceId;
+  /** Level after the buy. */
+  level: number;
+  cost: number;
+}
+
+/** What the picker needs per tech (status, next price); the same values getTechView reports, without text. */
+interface Candidate {
+  id: TechId;
+  def: TechDefinition;
+  status: TechStatus;
+  nextCost: number | null;
+}
+
+/** Price of the next purchase, or null when there is nothing left to buy. Mirrors nextCostFor in progression/status.ts. */
+function nextCostOf(state: GameState, id: TechId, techs: Record<TechId, TechDefinition>): number | null {
+  const def = techs[id];
+  const level = state.techLevels[id];
+  if (def.kind === 'starting' || def.kind === 'milestone') return null;
+  if (def.kind === 'unlock') return level >= 1 ? null : costAt(def, level);
+  if (def.maxLevel !== null && level >= def.maxLevel) return null;
+  return costAt(def, level);
+}
+
+/** Candidates in TECH_IDS order. Built per buy tick (cheap: no effect or requirement text). */
+function candidates(state: GameState, techs: Record<TechId, TechDefinition>): Candidate[] {
+  return TECH_IDS.map((id) => ({
+    id,
+    def: techs[id],
+    status: getTechStatus(state, id, techs),
+    nextCost: nextCostOf(state, id, techs),
+  }));
+}
+
+/** Cheapest available, purchasable-next, non-milestone candidate paying in `res`; null when none. */
+function pickCheapest(list: readonly Candidate[], res: ResourceId): Candidate | null {
+  let pick: Candidate | null = null;
+  for (const c of list) {
+    if (c.status !== 'available' || c.nextCost === null || c.def.kind === 'milestone') continue;
+    if (c.def.costRes !== res) continue;
+    if (pick === null || pick.nextCost === null || c.nextCost < pick.nextCost) pick = c;
   }
   return pick;
 }
@@ -47,24 +107,57 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
   const firstAt = {} as Record<TechId, number>;
   for (const id of TECH_IDS) firstAt[id] = Infinity;
   const purchases: Array<{ t: number; id: TechId }> = [];
+  const snapshotIds = o.snapshotAt;
+  const snapshots: Partial<Record<TechId, GameState>> = {};
 
   const record = (t: number): void => {
     for (const id of TECH_IDS) {
       if (firstAt[id] === Infinity && state.techLevels[id] >= 1) firstAt[id] = t;
     }
+    if (snapshotIds === undefined) return;
+    for (const id of snapshotIds) {
+      if (snapshots[id] === undefined && state.techLevels[id] >= 1) snapshots[id] = structuredClone(state);
+    }
   };
   record(0);
+
+  const schedule = o.schedule;
+  if (schedule !== undefined) {
+    const { activeSeconds, offlineSeconds } = schedule;
+    const blocks = activeSeconds / o.stepSeconds;
+    if (
+      !Number.isFinite(activeSeconds) ||
+      activeSeconds <= 0 ||
+      !Number.isFinite(offlineSeconds) ||
+      offlineSeconds < 0 ||
+      Math.abs(blocks - Math.round(blocks)) > 1e-9
+    ) {
+      throw new RangeError('runGreedy: schedule needs finite activeSeconds > 0 (multiple of stepSeconds) and offlineSeconds >= 0');
+    }
+  }
 
   const steps = Math.floor(o.seconds / o.stepSeconds);
   let clickDebt = 0;
   let maxValue = 0;
+  let activeT = 0;
+  let offlineTotal = 0;
   const track = (value: number): void => {
     if (!Number.isFinite(value)) maxValue = Infinity;
     else if (value > maxValue) maxValue = value;
   };
+  const observe = (): void => {
+    const rates = computeRates(state, techs);
+    for (const r of RESOURCE_IDS) {
+      track(state.res[r]);
+      track(state.lifetime[r]);
+      track(rates.perSecond[r]);
+      track(rates.perClick[r]);
+    }
+  };
 
   for (let k = 1; k <= steps; k++) {
     const t = k * o.stepSeconds;
+    activeT = t;
 
     clickDebt += o.clicksPerSecond * o.stepSeconds;
     const clicks = Math.floor(clickDebt + 1e-9);
@@ -76,33 +169,47 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
 
     const ratio = t / o.buyIntervalSeconds;
     if (Math.abs(ratio - Math.round(ratio)) < 1e-9) {
-      // views are rebuilt only after a successful purchase: identical picks, far fewer rebuilds
-      let views = getAllTechViews(state, techs);
+      // candidates are rebuilt only after a successful purchase: identical picks, far fewer rebuilds
+      let list = candidates(state, techs);
       for (const res of RESOURCE_IDS) {
-        const pick = pickCheapest(views, res);
-        if (pick !== null && pick.affordable) {
+        const pick = pickCheapest(list, res);
+        if (pick !== null && pick.nextCost !== null && canAfford(state, pick.def.costRes, pick.nextCost)) {
           const result = purchase(state, pick.id, techs);
           if (result.ok) {
             state = result.state;
             purchases.push({ t, id: pick.id });
-            views = getAllTechViews(state, techs);
+            list = candidates(state, techs);
           }
         }
       }
     }
     record(t);
-
-    const rates = computeRates(state, techs);
-    for (const r of RESOURCE_IDS) {
-      track(state.res[r]);
-      track(state.lifetime[r]);
-      track(rates.perSecond[r]);
-      track(rates.perClick[r]);
-    }
+    observe();
     if (o.stopAt !== undefined && state.techLevels[o.stopAt] >= 1) break;
+
+    // Offline block after a full active block (not after the last step of the budget).
+    if (schedule !== undefined && schedule.offlineSeconds > 0 && k < steps) {
+      const ratio = t / schedule.activeSeconds;
+      if (Math.abs(ratio - Math.round(ratio)) < 1e-9) {
+        const offline = applyOffline({ ...state, lastSimTime: 0 }, schedule.offlineSeconds * 1000, techs);
+        state = { ...offline.state, lastSimTime: state.lastSimTime };
+        offlineTotal += schedule.offlineSeconds;
+        state = evaluateMilestones(state, techs).state;
+        record(t);
+        observe();
+      }
+    }
   }
 
-  return { firstAt, maxValue, final: state, purchases };
+  const result: GreedyResult = {
+    firstAt,
+    maxValue,
+    final: state,
+    purchases,
+    ...(snapshotIds === undefined ? {} : { snapshots }),
+  };
+  if (schedule !== undefined) result.wallSeconds = activeT + offlineTotal;
+  return result;
 }
 
 /**
@@ -128,4 +235,59 @@ export function maxPurchaseGap(
     gap = Math.max(gap, next - prev);
   }
   return gap;
+}
+
+/**
+ * Prices each purchase in order: cost = costAt(def, levelBefore), res = def.costRes,
+ * level = levelBefore + 1. `initialLevels` is copied, never mutated.
+ */
+export function purchaseLedger(
+  purchases: GreedyResult['purchases'],
+  techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
+  initialLevels: Readonly<Record<TechId, number>> = createInitialState(0).techLevels,
+): LedgerEntry[] {
+  const levels: Record<TechId, number> = { ...initialLevels };
+  const ledger: LedgerEntry[] = [];
+  for (const p of purchases) {
+    const def = techs[p.id];
+    const levelBefore = levels[p.id];
+    const level = levelBefore + 1;
+    levels[p.id] = level;
+    ledger.push({ t: p.t, id: p.id, res: def.costRes, level, cost: costAt(def, levelBefore) });
+  }
+  return ledger;
+}
+
+/**
+ * Seconds from the last buy of `res` at or before endT up to endT, in minutes. No such buy ->
+ * the whole span [0, endT]. Buys after endT are ignored; a buy exactly at endT gives 0.
+ */
+export function deadMinutes(ledger: readonly LedgerEntry[], res: ResourceId, endT: number): number {
+  let lastT: number | null = null;
+  for (const entry of ledger) {
+    if (entry.res !== res || entry.t > endT) continue;
+    if (lastT === null || entry.t > lastT) lastT = entry.t;
+  }
+  return (endT - (lastT ?? 0)) / 60;
+}
+
+/**
+ * Share of produced `res` spent on purchases in the window (fromT, toT] (left exclusive, right
+ * inclusive). Produced = lifetimeTo - lifetimeFrom; produced <= 0 or non-finite -> 0.
+ */
+export function spendShare(
+  ledger: readonly LedgerEntry[],
+  res: ResourceId,
+  fromT: number,
+  toT: number,
+  lifetimeFrom: number,
+  lifetimeTo: number,
+): number {
+  const produced = lifetimeTo - lifetimeFrom;
+  if (!Number.isFinite(produced) || produced <= 0) return 0;
+  let spent = 0;
+  for (const entry of ledger) {
+    if (entry.res === res && entry.t > fromT && entry.t <= toT) spent += entry.cost;
+  }
+  return spent / produced;
 }

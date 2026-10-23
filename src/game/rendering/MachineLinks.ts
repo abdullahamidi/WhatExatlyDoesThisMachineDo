@@ -7,6 +7,7 @@ import {
   beltTravel,
   coalesceRuns,
   connectionOffset,
+  LruCache,
   pinEnd,
   pointsAlongBelt,
   rasterBelt,
@@ -39,8 +40,8 @@ interface RodPlan { pin: Vec2; eye: Vec2 }
 /** Pin-to-pin rod (both ends driven) ready to rasterise: draw depth plus pin and eye in whole pixels. */
 interface PinRodPlan { depth: number; pin: Vec2; eye: Vec2 }
 
-/** Cable ready to rasterise: both ends in whole pixels, sag in art px. */
-interface CablePlan { a: Vec2; b: Vec2; sag: number }
+/** Cable ready to rasterise: both ends in whole pixels, sag in art px. key is the cable key (style prefix, ends, sag). */
+interface CablePlan { key: string; a: Vec2; b: Vec2; sag: number }
 
 /**
  * Pipe ready to rasterise: corner points in whole px (both ends rounded, via points rounded), draw depth, look and cache key
@@ -229,12 +230,13 @@ function buildPlan(ctx: LinkDrawContext): LinkPlan {
       const qa = roundPoint(a);
       const qb = roundPoint(b);
       const sag = link.sag ?? MACHINE_LINK_STYLE.cable.sagArtPx;
+      const key = `${guy ? 'g' : 'c'}${qa.x},${qa.y};${qb.x},${qb.y};${sag}`;
       if (guy) {
-        guyCables.push({ a: qa, b: qb, sag });
-        guyKeyParts.push(`g${qa.x},${qa.y};${qb.x},${qb.y};${sag}`);
+        guyCables.push({ key, a: qa, b: qb, sag });
+        guyKeyParts.push(key);
       } else {
-        cables.push({ a: qa, b: qb, sag });
-        cableKeyParts.push(`c${qa.x},${qa.y};${qb.x},${qb.y};${sag}`);
+        cables.push({ key, a: qa, b: qb, sag });
+        cableKeyParts.push(key);
       }
     } else if (link.kind === 'pipe') {
       const depth = link.depth ?? MACHINE_LINK_STYLE.pipe.depth;
@@ -326,6 +328,8 @@ export class MachineLinks {
   private rasterCache = new Map<string, BeltRaster>();
   /** Rastered pipes by pipe key; rebuilt from the live pipes each time the pipe key changes. */
   private pipeRasterCache = new Map<string, PipeRect[]>();
+  /** Sagging cable cores by cable key, bounded LRU (MACHINE_LINK_STYLE.cableCacheSize) so vibrating cable ends reuse rasters. */
+  private cableRasterCache = new LruCache<Vec2[]>(MACHINE_LINK_STYLE.cableCacheSize);
 
   constructor(scene: Phaser.Scene, parent: Phaser.GameObjects.Container) {
     this.belts = scene.make.graphics({}, false).setDepth(MACHINE_LINK_STYLE.beltDepth);
@@ -414,6 +418,19 @@ export class MachineLinks {
     this.pinRodKeys = new Map();
     this.rasterCache = new Map();
     this.pipeRasterCache = new Map();
+    this.cableRasterCache = new LruCache(MACHINE_LINK_STYLE.cableCacheSize);
+  }
+
+  /**
+   * Sagging core pixels of one cable, memoised by its cable key. A hit returns the stored array (read-only to callers);
+   * a miss rasters with rasterCable on the same plan values, so pixels match the uncached path.
+   */
+  private cableCore(cable: CablePlan): Vec2[] {
+    const hit = this.cableRasterCache.get(cable.key);
+    if (hit !== undefined) return hit;
+    const core = rasterCable(cable.a, cable.b, cable.sag);
+    this.cableRasterCache.set(cable.key, core);
+    return core;
   }
 
   /**
@@ -538,8 +555,9 @@ export class MachineLinks {
    */
   private drawCables(cables: readonly CablePlan[]): void {
     const style = MACHINE_LINK_STYLE.cable;
-    for (const { a, b, sag } of cables) {
-      const core = rasterCable(a, b, sag);
+    for (const cable of cables) {
+      const { a, b } = cable;
+      const core = this.cableCore(cable);
       const coreKeys = new Set(core.map((p) => `${p.x},${p.y}`));
       const hi: Vec2[] = [];
       const hiKeys = new Set<string>();
@@ -570,8 +588,8 @@ export class MachineLinks {
    */
   private drawGuyCables(cables: readonly CablePlan[]): void {
     const style = MACHINE_LINK_STYLE.guy;
-    for (const { a, b, sag } of cables) {
-      const core = rasterCable(a, b, sag);
+    for (const cable of cables) {
+      const core = this.cableCore(cable);
       const coreKeys = new Set(core.map((p) => `${p.x},${p.y}`));
       const under: Vec2[] = [];
       const underKeys = new Set<string>();

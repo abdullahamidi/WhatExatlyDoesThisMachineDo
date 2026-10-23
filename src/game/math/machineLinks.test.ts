@@ -15,6 +15,7 @@ import {
   beltTravel,
   coalesceRuns,
   rasterPipe,
+  LruCache,
 } from './machineLinks';
 import type { Arc, PipeRect, PipeStyleLike } from './machineLinks';
 
@@ -706,5 +707,93 @@ describe('rasterPipe', () => {
     // the duplicate is an interior point, so only a fitting block is added after the same segment rects
     expect(dup.slice(0, plain.length)).toEqual(plain);
     expect(dup).toHaveLength(plain.length + 36);
+  });
+});
+
+describe('LruCache (cable raster memo)', () => {
+  it('a hit returns the same stored array', () => {
+    const cache = new LruCache<Vec2[]>(4);
+    const core: Vec2[] = [{ x: 1, y: 2 }];
+    cache.set('c1,2;3,4;10', core);
+    expect(cache.get('c1,2;3,4;10')).toBe(core);
+  });
+
+  it('a miss returns undefined and does not store anything', () => {
+    const cache = new LruCache<number>(4);
+    expect(cache.get('nope')).toBeUndefined();
+    expect(cache.size).toBe(0);
+  });
+
+  it('distinct keys hold distinct values', () => {
+    const cache = new LruCache<string>(4);
+    cache.set('c0,0;5,5;10', 'power');
+    cache.set('g0,0;5,5;10', 'guy');
+    cache.set('c0,0;5,5;4', 'other sag');
+    expect(cache.get('c0,0;5,5;10')).toBe('power');
+    expect(cache.get('g0,0;5,5;10')).toBe('guy');
+    expect(cache.get('c0,0;5,5;4')).toBe('other sag');
+    expect(cache.size).toBe(3);
+  });
+
+  it('evicts the oldest entry past capacity', () => {
+    const cache = new LruCache<number>(2);
+    cache.set('a', 1);
+    cache.set('b', 2);
+    cache.set('c', 3);
+    expect(cache.has('a')).toBe(false);
+    expect(cache.get('b')).toBe(2);
+    expect(cache.get('c')).toBe(3);
+    expect(cache.size).toBe(2);
+  });
+
+  it('a get refreshes recency so the untouched key is evicted first', () => {
+    const cache = new LruCache<number>(2);
+    cache.set('a', 1);
+    cache.set('b', 2);
+    expect(cache.get('a')).toBe(1); // a is now newest
+    cache.set('c', 3);
+    expect(cache.has('a')).toBe(true);
+    expect(cache.has('b')).toBe(false);
+    expect(cache.has('c')).toBe(true);
+  });
+
+  it('has() does not refresh recency', () => {
+    const cache = new LruCache<number>(2);
+    cache.set('a', 1);
+    cache.set('b', 2);
+    expect(cache.has('a')).toBe(true);
+    cache.set('c', 3);
+    expect(cache.has('a')).toBe(false);
+  });
+
+  it('re-setting a key replaces its value and makes it newest without growing', () => {
+    const cache = new LruCache<number>(2);
+    cache.set('a', 1);
+    cache.set('b', 2);
+    cache.set('a', 10);
+    expect(cache.size).toBe(2);
+    expect(cache.get('a')).toBe(10);
+    cache.set('c', 3);
+    expect(cache.has('b')).toBe(false);
+    expect(cache.has('a')).toBe(true);
+  });
+
+  it('stays bounded while a key set churns through many keys', () => {
+    const cache = new LruCache<number>(8);
+    for (let i = 0; i < 100; i++) cache.set(`k${i}`, i);
+    expect(cache.size).toBe(8);
+    expect(cache.get('k99')).toBe(99);
+    expect(cache.has('k91')).toBe(false);
+    expect(cache.has('k92')).toBe(true);
+  });
+
+  it('capacity 0 stores nothing; a non-finite capacity also disables storing', () => {
+    const none = new LruCache<number>(0);
+    none.set('a', 1);
+    expect(none.get('a')).toBeUndefined();
+    expect(none.size).toBe(0);
+    const nan = new LruCache<number>(Number.NaN);
+    nan.set('a', 1);
+    expect(nan.size).toBe(0);
   });
 });

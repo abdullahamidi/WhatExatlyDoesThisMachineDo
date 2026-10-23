@@ -21,6 +21,7 @@ import {
   alignStep,
   animationSpeed,
   clampFrameSeconds,
+  cycleFrame,
   decayActivity,
   driverValue,
   echoAlpha,
@@ -36,6 +37,7 @@ import {
   reciprocateOffset,
   spinStep,
   stageFrameOf,
+  stepFrameCycles,
   strikeCount,
   vibrateOffset,
 } from '../math/animation';
@@ -112,7 +114,8 @@ function drivenOf(id: MachineComponentId): { ratio: number; phaseDeg: number } {
  * mirrors the hand crank for the echo window after a click (INVERSION_GHOST_FX).
  *
  * Milestone FX (Era IV): on the RESONANCE_MILESTONE_FX milestone the crystal holds its hold frame for holdMs, and the dish
- * waves restart their frame clock at 0. Frame clocks are otherwise the animator clock (`elapsed`).
+ * waves restart their frame clock at 0. Frame clocks are otherwise the animator clock (`elapsed`). Frame parts with an hz curve
+ * run their frame rate from the driver and accumulate frames advanced (stepFrameCycles); their milestone restart clears that count.
  * Milestone FX (Era V): on the EXOTIC_MILESTONE_FX milestone the beads align to beadPhiDeg and hold, the null core spins
  * faster for coreSpinMs and the anchor glows hold glowFrame for glowHoldMs.
  * Finale (setFinale): boost lifts every speed and frame rate towards its curve max (boostedValue) and shows the
@@ -150,6 +153,8 @@ export class MachineAnimator {
   private crystalHoldUntil = -1;
   /** Frame-clock origin of parts restarted by the milestone (absent: origin 0). Cleared on reset. */
   private readonly frameOrigins = new Map<MachineComponentId, number>();
+  /** Frames advanced by each frame part with an hz curve (stepFrameCycles); absent: 0. Cleared on reset; a milestone restart deletes it. */
+  private readonly frameCycles = new Map<MachineComponentId, number>();
   /** Animator clock of the last manual click (null before the first click and after reset): drives the inversion ghost. */
   private lastClickAt: number | null = null;
   /** Current angle of each orbit bead (deg); absent means the bead's phi0Deg. Cleared on reset. */
@@ -213,6 +218,7 @@ export class MachineAnimator {
       this.strikes = 0;
       this.crystalHoldUntil = -1;
       this.frameOrigins.clear();
+      this.frameCycles.clear();
       this.phases.clear();
       this.spinAngles.clear();
       this.gaugeValues.clear();
@@ -235,7 +241,10 @@ export class MachineAnimator {
     this.unsubscribeMilestone = session.on('milestone', ({ id }) => {
       if (id !== RESONANCE_MILESTONE_FX.techId) return;
       this.crystalHoldUntil = this.elapsed + RESONANCE_MILESTONE_FX.holdMs / 1000; // crystal holds bright
-      for (const part of RESONANCE_MILESTONE_FX.restart) this.frameOrigins.set(part, this.elapsed); // dish waves restart at 0
+      for (const part of RESONANCE_MILESTONE_FX.restart) {
+        this.frameOrigins.set(part, this.elapsed); // dish waves restart at 0
+        this.frameCycles.delete(part); // hz parts restart their frame cycle at 0 too
+      }
     });
     this.unsubscribeExotic = session.on('milestone', ({ id }) => {
       if (id !== EXOTIC_MILESTONE_FX.techId) return;
@@ -350,6 +359,15 @@ export class MachineAnimator {
           const hold = FINALE_HOLD_FRAMES[id];
           if (hold !== undefined && boost > 0) {
             sprite.setFrame(hold); // finale boost: the part holds its finale frame
+            break;
+          }
+          if (anim.hz !== undefined) {
+            // Frame rate from the driver (frames per second): the frames advanced are accumulated, so a rate change is smooth.
+            const cycling = policy.flashes && (fdv >= MACHINE_MOTION.restThreshold || boost > 0); // same rule as the cycle below
+            const hzNow = Math.min(boostedValue(animationSpeed(anim.hz, fdv), FRAMES_MAX_HZ, boost), FRAMES_MAX_HZ);
+            const next = stepFrameCycles(this.frameCycles.get(id) ?? 0, hzNow, dt, cycling, anim.frames);
+            this.frameCycles.set(id, next);
+            sprite.setFrame(cycleFrame(next, anim.frames, anim.frameOffset ?? 0)); // staggered sheets offset their cycle
             break;
           }
           const origin = this.frameOrigins.get(id) ?? 0; // milestone restarts count from their origin

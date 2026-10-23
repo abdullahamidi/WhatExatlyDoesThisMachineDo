@@ -82,6 +82,10 @@ export const INSTALL_LINES: Record<TechId, string> = {
   skyAperture: 'Aperture open. The sky looked back.',
   finalAlignment: 'Alignment complete. Awaiting operator.',
   primaryFunction: 'Primary function engaged.',
+  bellowsDrive: 'Bellows coupled. The fire breathes with the crank.',
+  gridExciter: 'Exciter fed from the mains. The spire hums in phase.',
+  mainsBackfeed: 'Backfeed live. The grid answers from above.',
+  steamLance: 'Lance seated. Steam climbs where steam should not.',
 };
 
 // Achievement toast (WP12 D5) and RECORDS panel texts.

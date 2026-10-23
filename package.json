@@ -8,13 +8,14 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm test && npm run build && node scripts/perf/bundle-budget.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run typecheck && npm test && npm run build",
     "desktop:dev": "vite build && electron desktop",
     "build:steam": "npm run typecheck && node scripts/desktop/package.mjs --mode production",
     "build:steam-demo": "npm run typecheck && node scripts/desktop/package.mjs --mode demo",
-    "icon:desktop": "python -I scripts/desktop/make_icon.py"
+    "icon:desktop": "python -I scripts/desktop/make_icon.py",
+    "perf:bundle": "node scripts/perf/bundle-budget.mjs"
   },
   "dependencies": {
     "phaser": "3.90.0"

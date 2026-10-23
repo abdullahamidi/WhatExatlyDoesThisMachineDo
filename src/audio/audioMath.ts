@@ -1,8 +1,10 @@
 // Pure mapping from production rate (ME/s) to audio parameters. No DOM, no WebAudio.
 
 import { AUDIO } from '../data/audio';
+import type { BedId } from '../data/audio';
+import { MUSIC } from '../data/music';
 import { VOLUME_RANGE } from '../data/settings';
-import type { EndingPhase } from '../data/types';
+import type { EndingPhase, TechId } from '../data/types';
 
 /** Clamp x into [lo, hi]; NaN falls back to lo; -0 comes back as +0. */
 function clampRange(x: number, lo: number, hi: number): number {
@@ -189,12 +191,74 @@ export function masterTarget(muted: boolean, unlocked: boolean, base: number = A
   return muted || !unlocked ? 0 : base * volume01;
 }
 
-/** Level set pushed to the synth: master target, wind on/off and the two bus gains. */
+/** Mix era 1..5 (WP15 D8): era I before any keystone, II..V from generator, boiler, resonatorSpire, nullChamber. */
+export type Era = 1 | 2 | 3 | 4 | 5;
+
+const ERAS: readonly Era[] = [1, 2, 3, 4, 5];
+
+/** Era from any number: floored and clamped to 1..5; non-finite -> 1. */
+function eraOf(n: number): Era {
+  if (!Number.isFinite(n)) return 1;
+  return ERAS[Math.min(ERAS.length - 1, Math.max(0, Math.floor(n) - 1))] ?? 1;
+}
+
+/** Current era from the highest owned keystone (MUSIC.keystones order: generator 2 .. nullChamber 5). None owned -> 1. */
+export function currentEra(techLevels: Readonly<Record<TechId, number>>): Era {
+  let index = -1;
+  for (let i = 0; i < MUSIC.keystones.length; i++) {
+    const entry = MUSIC.keystones[i];
+    if (entry && techLevels[entry[0]] >= 1) index = i;
+  }
+  return eraOf(index + 2);
+}
+
+/** Ambient bed trim for an era (AUDIO.bedTrim row, era clamped to 1..5). Bad or missing data -> 1. */
+export function bedTrim(bed: BedId, era: number): number {
+  const trim = AUDIO.bedTrim[bed][eraOf(era) - 1];
+  return trim !== undefined && Number.isFinite(trim) ? trim : 1;
+}
+
+/** Loudest level each ambient bed reaches before its era trim (from the bed's own config). */
+const BED_PEAK_GAIN: Record<BedId, number> = {
+  hum: AUDIO.hum.maxGain,
+  gear: AUDIO.gearTick.gain,
+  mains: AUDIO.mains.maxGain,
+  boiler: AUDIO.boiler.maxGain,
+  pad: AUDIO.pad.maxGain,
+  servo: AUDIO.servo.maxGain,
+  drone: AUDIO.drone.maxGain,
+  wind: AUDIO.wind.gain,
+};
+
+/** Era in which each bed first arrives (the '-' cells of the WP15 bed table); a bed counts only from its arrival era on. */
+const BED_ARRIVAL_ERA: Record<BedId, Era> = {
+  hum: 1,
+  gear: 1,
+  mains: 2,
+  boiler: 3,
+  pad: 4,
+  servo: 4,
+  drone: 5,
+  wind: 1,
+};
+
+/** Sum of peak bed gain x era trim over the beds present in that era (WP15 C2 invariant: <= 0.45). */
+export function ambientPeakSum(era: number): number {
+  const e = eraOf(era);
+  let sum = 0;
+  for (const bed of Object.keys(BED_PEAK_GAIN) as BedId[]) {
+    if (BED_ARRIVAL_ERA[bed] <= e) sum += BED_PEAK_GAIN[bed] * bedTrim(bed, e);
+  }
+  return sum;
+}
+
+/** Level set pushed to the synth: master target, wind on/off and the three bus gains. */
 export interface LevelSnapshot {
   readonly master: number;
   readonly wind: boolean;
   readonly sfxBus: number;
   readonly ambientBus: number;
+  readonly musicBus: number;
 }
 
 /** True when `next` differs from the last applied set, or when nothing was applied yet (null). Object.is keeps NaN equal to NaN. */
@@ -204,6 +268,7 @@ export function levelsChanged(prev: LevelSnapshot | null, next: LevelSnapshot): 
     !Object.is(prev.master, next.master) ||
     prev.wind !== next.wind ||
     !Object.is(prev.sfxBus, next.sfxBus) ||
-    !Object.is(prev.ambientBus, next.ambientBus)
+    !Object.is(prev.ambientBus, next.ambientBus) ||
+    !Object.is(prev.musicBus, next.musicBus)
   );
 }

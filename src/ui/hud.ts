@@ -1,20 +1,31 @@
 import './hud.css';
+import { HUD_TEXT } from '../data/hud';
 import type { ResourceId } from '../data/types';
 import type { GameContext } from '../game/context';
 import { HUD_ROW_IDS } from './hudView';
-import type { HudView, HudResourceRow } from './hudView';
+import type { HudResourceRow, HudView } from './hudView';
 import { resourceShort } from './revealRules';
 
 export interface Hud { render(view: HudView): void; destroy(): void }
 
-interface Readout { me: string; perClick: string; perSecond: string; plaque: string; cycle: string }
+// Initial placeholder texts; the first render replaces them (WorldScene renders on create).
+const INITIAL_CLICK = '+1 ME';
+const INITIAL_PLAQUE = 'PRIMARY FUNCTION: UNKNOWN';
 
-/** DOM refs and last-written values of one non-ME resource row. */
+/** Write cache: `apply` runs only when the value differs from the last one applied. No DOM write otherwise. */
+function cachedWrite<T>(initial: T, apply: (value: T) => void): (value: T) => void {
+  let last = initial;
+  return (value: T): void => {
+    if (value === last) return;
+    last = value;
+    apply(value);
+  };
+}
+
+/** DOM row of one resource plus its view applier (write-cached). */
 interface ResourceRowRefs {
   row: HTMLElement;
-  label: HTMLElement;
-  value: HTMLElement;
-  written: { label: string; value: string; perSecond: string; visible: boolean };
+  apply(view: HudResourceRow): void;
 }
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
@@ -28,44 +39,76 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
-function createRow(label: string, valueId: string, initial: string): { row: HTMLElement; label: HTMLElement; value: HTMLElement } {
-  const row = createElement('div', { className: 'hud-row' });
+/**
+ * `div.hud-row.hud-res-row[data-res]` with label, value, rate and feeds spans.
+ * ME starts visible and as frontier (era I); the other resources start hidden.
+ */
+function createResourceRow(id: ResourceId): ResourceRowRefs {
+  const isMe = id === 'me';
+  const label = resourceShort(id);
+  const row = createElement('div', { className: isMe ? 'hud-row hud-res-row hud-row--frontier' : 'hud-row hud-res-row' });
+  row.setAttribute('data-res', id);
   const labelEl = createElement('span', { className: 'hud-label', text: label });
+  const valueEl = createElement('span', { id: isMe ? 'hud-me' : `hud-res-${id}`, className: 'hud-value', text: '0' });
+  const rateEl = createElement('span', { id: isMe ? 'hud-per-second' : `hud-rate-${id}`, className: 'hud-rate', text: '0/s' });
+  const feedsEl = createElement('span', { id: `hud-feeds-${id}`, className: 'hud-feeds' });
   row.appendChild(labelEl);
-  const value = createElement('span', { id: valueId, className: 'hud-value', text: initial });
-  row.appendChild(value);
-  return { row, label: labelEl, value };
+  row.appendChild(valueEl);
+  row.appendChild(rateEl);
+  row.appendChild(feedsEl);
+  if (!isMe) row.style.display = 'none';
+
+  const setLabel = cachedWrite<string>(label, (text) => { labelEl.textContent = text; });
+  const setValue = cachedWrite<string>('0', (text) => { valueEl.textContent = text; });
+  const setRate = cachedWrite<string>('0/s', (text) => {
+    rateEl.textContent = text;
+    row.title = text;
+  });
+  const setFeeds = cachedWrite<string>('', (text) => { feedsEl.textContent = text; });
+  const setVisible = cachedWrite<boolean>(isMe, (on) => { row.style.display = on ? '' : 'none'; });
+  const setFrontier = cachedWrite<boolean>(isMe, (on) => { row.classList.toggle('hud-row--frontier', on); });
+
+  return {
+    row,
+    apply(view: HudResourceRow): void {
+      setLabel(view.label);
+      setValue(view.value);
+      setRate(view.rate);
+      setFeeds(view.feeds ?? '');
+      setVisible(view.visible);
+      setFrontier(view.frontier);
+    },
+  };
 }
 
 export function createHud(root: HTMLElement, commands: GameContext['commands']): Hud {
-  const initial: Readout = { me: '0', perClick: '1', perSecond: '0/s', plaque: 'PRIMARY FUNCTION: UNKNOWN', cycle: '' };
-
   const panel = createElement('div', { id: 'hud-panel', className: 'hud-panel' });
-  panel.appendChild(createElement('div', { className: 'hud-title', text: 'MECHANICAL ENERGY' }));
-  const me = createRow('ME', 'hud-me', initial.me);
-  const perClick = createRow('ME/CLICK', 'hud-per-click', initial.perClick);
-  const perSecond = createRow('ME/S', 'hud-per-second', initial.perSecond);
-  panel.appendChild(me.row);
-  panel.appendChild(perClick.row);
-  panel.appendChild(perSecond.row);
+  const titleEl = createElement('div', { id: 'hud-title', className: 'hud-title', text: HUD_TEXT.eraTitles[0] });
+  panel.appendChild(titleEl);
 
-  // One row per non-ME resource, hidden until the resource is used (see HudView.rows).
+  // One row per resource in HUD_ROW_IDS order (ME first). Unused resources stay hidden (see HudView.rows).
   const resourceRows = new Map<ResourceId, ResourceRowRefs>();
   for (const id of HUD_ROW_IDS) {
-    const label = resourceShort(id);
-    const built = createRow(label, `hud-res-${id}`, '0');
-    built.row.style.display = 'none';
+    const built = createResourceRow(id);
     panel.appendChild(built.row);
-    resourceRows.set(id, {
-      row: built.row,
-      label: built.label,
-      value: built.value,
-      written: { label, value: '0', perSecond: '0/s', visible: false },
-    });
+    resourceRows.set(id, built);
   }
 
+  // Click line: crank gain, optional sub-line, optional AUTO-CRANK line (hidden until a value is given).
+  const clickRow = createElement('div', { className: 'hud-row hud-click' });
+  clickRow.appendChild(createElement('span', { className: 'hud-label', text: HUD_TEXT.clickLabel }));
+  const clickValue = createElement('span', { id: 'hud-per-click', className: 'hud-value', text: INITIAL_CLICK });
+  clickRow.appendChild(clickValue);
+  const clickSub = createElement('div', { id: 'hud-per-click-me', className: 'hud-click-sub' });
+  clickSub.style.display = 'none';
+  const autoEl = createElement('div', { id: 'hud-auto', className: 'hud-auto' });
+  autoEl.style.display = 'none';
+  panel.appendChild(clickRow);
+  panel.appendChild(clickSub);
+  panel.appendChild(autoEl);
+
   // Machine plaque: the current primary function line (see plaqueText in hudView.ts).
-  const plaque = createElement('div', { id: 'hud-plaque', className: 'hud-plaque', text: initial.plaque });
+  const plaque = createElement('div', { id: 'hud-plaque', className: 'hud-plaque', text: INITIAL_PLAQUE });
   panel.appendChild(plaque);
 
   // Cycle line under the plaque (WP14): hidden in cycle 1, `CYCLE 0043` from cycle 2.
@@ -92,8 +135,6 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
   root.appendChild(panel);
   root.appendChild(buttons);
 
-  const written: Readout = { ...initial };
-
   const onTech = (): void => commands.openTechTree.emit();
   const onRefocus = (): void => commands.refocus.emit();
   const onSystem = (): void => commands.openSystemMenu.emit();
@@ -101,47 +142,32 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
   refocusButton.addEventListener('click', onRefocus);
   systemButton.addEventListener('click', onSystem);
 
-  const setText = (el: HTMLElement, key: keyof Readout, text: string): void => {
-    if (written[key] === text) return;
-    written[key] = text;
-    el.textContent = text;
-  };
-
-  const renderResourceRow = (rowView: HudResourceRow): void => {
-    const refs = resourceRows.get(rowView.id);
-    if (refs === undefined) return;
-    const written = refs.written;
-    if (written.label !== rowView.label) {
-      written.label = rowView.label;
-      refs.label.textContent = rowView.label;
-    }
-    if (written.value !== rowView.value) {
-      written.value = rowView.value;
-      refs.value.textContent = rowView.value;
-    }
-    if (written.perSecond !== rowView.perSecond) {
-      written.perSecond = rowView.perSecond;
-      refs.row.title = rowView.perSecond;
-    }
-    if (written.visible !== rowView.visible) {
-      written.visible = rowView.visible;
-      refs.row.style.display = rowView.visible ? '' : 'none';
-    }
-  };
+  // Write caches: each field touches the DOM only when its value changes.
+  const setTitle = cachedWrite<string>(HUD_TEXT.eraTitles[0], (text) => { titleEl.textContent = text; });
+  const setPrimary = cachedWrite<string>(INITIAL_CLICK, (text) => { clickValue.textContent = text; });
+  const setSecondary = cachedWrite<string | null>(null, (text) => {
+    clickSub.textContent = text ?? '';
+    clickSub.style.display = text === null ? 'none' : '';
+  });
+  const setAuto = cachedWrite<string | null>(null, (text) => {
+    autoEl.textContent = text ?? '';
+    autoEl.style.display = text === null ? 'none' : '';
+  });
+  const setPlaque = cachedWrite<string>(INITIAL_PLAQUE, (text) => { plaque.textContent = text; });
+  const setCycle = cachedWrite<string>('', (text) => {
+    cycleEl.textContent = text;
+    cycleEl.hidden = text === '';
+  });
 
   return {
     render(view: HudView): void {
-      setText(me.value, 'me', view.me);
-      setText(perClick.value, 'perClick', view.perClick);
-      setText(perSecond.value, 'perSecond', view.perSecond);
-      for (const rowView of view.rows) renderResourceRow(rowView);
-      setText(plaque, 'plaque', view.plaque);
-      const cycleText = view.cycle ?? '';
-      if (written.cycle !== cycleText) {
-        written.cycle = cycleText;
-        cycleEl.textContent = cycleText;
-        cycleEl.hidden = cycleText === '';
-      }
+      setTitle(view.title);
+      for (const rowView of view.rows) resourceRows.get(rowView.id)?.apply(rowView);
+      setPrimary(view.click.primary);
+      setSecondary(view.click.secondary);
+      setAuto(view.autoCrank);
+      setPlaque(view.plaque);
+      setCycle(view.cycle ?? '');
     },
     destroy(): void {
       techButton.removeEventListener('click', onTech);

@@ -22,13 +22,13 @@
 | WP12 | Settings, accessibility, stats, achievements, save export/import, reduced motion (roadmap WP10) | ✅ done |
 | WP13 | Ending sequence, reveal, postgame, restored world (roadmap WP14) | ✅ done |
 | WP14 | New-cycle prestige: Echoes, Memory perks, MEMORY tab, cycle transition (roadmap WP15) | ✅ done |
-| WP15 | Music bed, audio mix, perf pass (roadmap WP16) | in progress |
-| WP17 | Energy continuity (legacy sinks, every energy used every era) + era-aware HUD + gain text | planned (STEAM_DEMO_PROGRAM D1/D2) |
+| WP15 | Music bed, audio mix, perf pass (roadmap WP16) | in progress (T1–T5, T8, T9 done on 2026-10-18 cloud session; T6/T7 + D1 audio left) |
+| WP17 | Energy continuity (legacy sinks, every energy used every era) + era-aware HUD + gain text | ✅ done |
 | WP18 | Final machine showcase (completion beat, survey camera, postgame name/portrait/photo mode, ShowcaseScene) | planned (D3) |
-| WP19 | Steam desktop shell (Electron, file saves, crash overlay, splash, title, quit/credits, fullscreen, UI anchoring) | planned (D5) |
+| WP19 | Steam desktop shell (Electron, file saves, crash overlay, splash, title, quit/credits, fullscreen, UI anchoring) | in progress (worktree, branch claude/steam-shell) |
 | WP20 | First-impression UX polish (onboarding, fly-in visible, tree fit, era cards, text sweep) | planned (D6) |
 | WP21 | Demo edition (cap at Substation Blueprint, end card + final-machine teaser, wishlist) | planned (D4) |
-| WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | planned (WP16.md, slimmed by D8) |
+| WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | started (T1 e2e, T3 sign-off sim, T5 version landed 2026-10-18; rest planned, slimmed by D8) |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -51,11 +51,19 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   crank brace); coherent at every unlock stage; art-resolution RenderTexture; RotSprite pre-rendered
   rotation frames (clean 1-px outlines, exact gear mesh per frame); banded sky with sun, ground haze,
   contact shadows, readable +ME text, first-click crank pulse, snapped zoom, toasts top-right.
+- **WP17** energy continuity: 4 uncapped legacy techs (Bellows Drive ME→PR era III, Grid Exciter EE→RS era IV,
+  Mains Backfeed EE→??? and Steam Lance PR→??? era V) + Resonant Siphon +5% ???; guard tests (cost matrix
+  lower-triangular complete; profile A era V spend share ≥75 %, dead time ≤5 min per energy). Legacy machine
+  parts + generator glow (procedural painters, src/assets/painters/legacy.ts); visual drivers saturate ≥3× PF
+  rates; dead per-component effects data removed. Era-aware HUD (pure `currentEra`, title table in
+  src/data/hud.ts, one row per energy with feeds hint, frontier row, AUTO-CRANK line); crank gain text = stacked
+  tinted lines, merged within 300 ms, zoom-compensated. Smoke `@tech:n` markers reach Resonant Siphon 20 /
+  Gravitic Anchor 10 (all 99+5 parts visible at the end).
 - **Art**: every sprite and background layer is PixelLab Pro in one locked palette from one style
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 2274 pass (73 files) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 2605 pass (84 files) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
@@ -63,7 +71,8 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   Generator Blueprint 22:06.
 
 ## Balance (greedy harness, fast profile)
-Era I: blueprint 22:06 · Era II: generator 29:18, substation 60:23 · Era III (A/B/C): boiler 67:17/80:00/164:30, vessel 112:14/126:01/260:31 · Era IV (A/B/C): convergence 174:13/189:07/351:33 · Era V (A/B/C): primaryFunction 254:37/270:00/447:30.
+Era I: blueprint 22:06 · Era II: substation 60:23/72:52/148:28 · Era III (A/B/C): vessel 110:36/124:01/255:01 · Era IV (A/B/C): convergence 166:30/181:33/339:41 · Era V (A/B/C): primaryFunction 249:31/264:00/428:30 (WP17).
+Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era V spend share 99/100/90/81 %.
 
 ## Known issues
 - Pylon cables peak slightly at tile seams (art; minor).

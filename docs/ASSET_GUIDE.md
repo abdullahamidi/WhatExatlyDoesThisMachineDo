@@ -45,6 +45,11 @@ Machine-local depths are relative to the machine container, which sits at world 
 | `machine.piston` | `machine/piston-array.png` | 96 x 64 | 0.5, 1 (bottom-centre) | none | none | machine layer `back`, depth 0 | Piston array whose base sits at the bottom of the sprite, pumping up and down. |
 | `machine.crankBrace` | `machine/crank-brace.png` | 48 x 48 | 0.5, 0.5 (centre) | none | none | machine layer `front`, depth 31 | Riveted doubler strap and bolted boss flange that overlay the hand crank. |
 | `fx.steam` | `fx/steam.png` | 16 x 16 | 0.5, 0.5 (centre) | none | none | reserved: no renderer yet (steam effect is data only) | Steam puff particle released by working pistons. |
+| `machine.generatorGlow` | none (`file: null`, procedural; PixelLab art pending, Art Director A17) | 384 x 64 | 0.5, 0.5 (centre) | none | 4 (96 x 64 cells) | machine layer `mid`, depth 26 (bias 6) | Four-frame cyan winding glow laid over the generator housing, brighter frames as EE/s rises. Transparent over the belt pulley circle (r 11 at texture 52,49). |
+| `machine.bellows` | none (`file: null`, procedural; PixelLab art pending, Art Director A17) | 160 x 24 | 0.5, 1 (bottom-centre) | none | 4 (40 x 24 cells) | machine layer `front`, depth 30 | Four-frame leather bellows between two boards that open and close; the nozzle tip (texture 36,10) feeds the boiler firebox. |
+| `machine.exciterFeed` | none (`file: null`, procedural; PixelLab art pending, Art Director A17) | 16 x 24 | 0.5, 1 (bottom-centre) | none | none | machine layer `mid`, depth 23 | Short insulator post with a cyan cap; the cable lug is the cap (texture 8,2). |
+| `machine.backfeedTerminal` | none (`file: null`, procedural; PixelLab art pending, Art Director A17) | 16 x 24 | 0.5, 0 (top-centre) | none | none | machine layer `mid`, depth 24 | Hanging terminal plate with insulator discs and violet accents; the cable lug is the bottom cap (texture 8,22). |
+| `machine.steamLance` | none (`file: null`, procedural; PixelLab art pending, Art Director A17) | 16 x 24 | 0.5, 0 (top-centre) | none | none | machine layer `mid`, depth 25 | Steam valve block with a rust handwheel and a flanged port at the bottom (texture 8,24). |
 
 Layer/depth sources: `src/data/world.ts` (`PARALLAX_LAYERS`, `GROUND_LAYER`, `DUST.depth`, `DEPTH`) and
 `src/data/machineComponents.ts` (`MACHINE_LAYER_DEPTH`, component `layer`).
@@ -90,6 +95,8 @@ Layer/depth sources: `src/data/world.ts` (`PARALLAX_LAYERS`, `GROUND_LAYER`, `DU
   `machine.frame`, `machine.crank`, `machine.gearSmall`, `machine.gearLarge`. `machine.crankBrace` uses the gear
   painter (`paintGear`). All other ids use the generic rust
   plate with an X (`paintGenericPlate`): `machine.flywheel`, `machine.motor`, `machine.piston`, `fx.steam`.
+- WP17 legacy feed parts (`machine.generatorGlow`, `machine.bellows`, `machine.exciterFeed`, `machine.backfeedTerminal`,
+  `machine.steamLance`) use `LEGACY_PAINTERS` in `src/assets/painters/legacy.ts`.
 - Generated ids are logged once: `[assets] generated fallback textures: <ids>`.
 
 ## Size mismatch warning

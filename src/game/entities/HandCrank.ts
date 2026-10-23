@@ -1,19 +1,22 @@
 import Phaser from 'phaser';
-import { CRANK_FEEDBACK, CRANK_PULSE, DEPTH, PIXEL_SCALE } from '../../data/world';
+import { CRANK_FEEDBACK, CRANK_PULSE, DEPTH, FLOATING_TEXT, PIXEL_SCALE } from '../../data/world';
 import { emptyResourceMap } from '../../simulation';
 import { motionPolicy } from '../../simulation/settings';
 import type { ResourceMap } from '../../data/types';
-import { clickGainText } from '../../ui/hudView';
+import { clickGainLines } from '../../ui/hudView';
+import { gainFontPx, mergeGains } from '../math/gainBlock';
+import type { GainBlock } from '../math/gainBlock';
 import type { GameContext } from '../context';
 import type { MachineView } from './MachineView';
 import type { FloatingText } from '../rendering/FloatingText';
 
 /**
- * Clickable hand crank: a world-space circular zone over the crank. Each click credits ME, shows "+N" and shakes the machine.
+ * Clickable hand crank: a world-space circular zone over the crank. Each click credits ME, shows the stacked gain text and shakes the machine.
  * The turn itself comes from MachineAnimator's click subscription.
  * Until the first click a pulsing ring marks the crank; it is torn down on that click and never recreated.
  */
 export class HandCrank {
+  private readonly scene: Phaser.Scene;
   private readonly zone: Phaser.GameObjects.Zone;
   private readonly ctx: GameContext;
   private readonly machine: MachineView;
@@ -23,10 +26,13 @@ export class HandCrank {
   private readonly unsubscribeCrank: () => void;
   /** Resources gained by the latest click, from the session 'click' event. */
   private lastGain: ResourceMap = emptyResourceMap();
+  /** The gain block of the latest click: rapid clicks merge into it (WP17 T8). */
+  private block: GainBlock | null = null;
   private pulseRing: Phaser.GameObjects.Arc | null = null;
   private pulseTween: Phaser.Tweens.Tween | null = null;
 
   constructor(scene: Phaser.Scene, ctx: GameContext, machine: MachineView, floatingText: FloatingText) {
+    this.scene = scene;
     this.ctx = ctx;
     this.machine = machine;
     this.floatingText = floatingText;
@@ -71,7 +77,18 @@ export class HandCrank {
   /** One crank turn: the pointer path and the keyboard command both come here. */
   private crank(): void {
     this.ctx.session.click(); // the only state mutation
-    this.floatingText.spawn(this.machine.getComponentWorldPosition('handCrank'), clickGainText(this.lastGain));
+    const { block, merged } = mergeGains(this.block, this.lastGain, this.scene.time.now, FLOATING_TEXT.coalesceMs, FLOATING_TEXT.blockMaxMs);
+    this.block = block;
+    const fontPx = gainFontPx(this.scene.cameras.main.zoom, FLOATING_TEXT.fontSizePx, FLOATING_TEXT.minScreenPx);
+    const crankPos = this.machine.getComponentWorldPosition('handCrank');
+    // A fresh block gets a small random x jitter; a merged block stays on its spot.
+    const jitterX = merged ? 0 : (Math.random() - 0.5) * 2 * FLOATING_TEXT.jitterX; // jitter in [-jitterX, +jitterX]
+    this.floatingText.showBlock(
+      { x: crankPos.x + FLOATING_TEXT.spawnOffset.x + jitterX, y: crankPos.y + FLOATING_TEXT.spawnOffset.y },
+      clickGainLines(block.gains),
+      fontPx,
+      merged,
+    );
     this.machine.shake(); // no-op under reduced motion (MachineView owns the policy check)
     this.stopPulse();
   }

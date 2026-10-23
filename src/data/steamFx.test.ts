@@ -14,8 +14,8 @@ function emitter(id: string): SteamEmitter {
 }
 
 describe('STEAM_EMITTERS', () => {
-  it('has the four Era III emitters and the Era IV calliope last, in contract order, with unique ids', () => {
-    expect(STEAM_EMITTERS.map((e) => e.id)).toEqual(['chimney', 'relief', 'hammer', 'manifold', 'calliope']);
+  it('has the four Era III emitters, the Era IV calliope and the WP17 lance last, in contract order, with unique ids', () => {
+    expect(STEAM_EMITTERS.map((e) => e.id)).toEqual(['chimney', 'relief', 'hammer', 'manifold', 'calliope', 'lance']);
     expect(new Set(STEAM_EMITTERS.map((e) => e.id)).size).toBe(STEAM_EMITTERS.length);
   });
 
@@ -47,14 +47,35 @@ describe('STEAM_EMITTERS', () => {
     }
   });
 
-  it('chimney is dark smoke on the thermal driver with a rate of 0.8 + 0.3 log10(1 + v) clamped to 0.8..2.5', () => {
+  it('chimney is dark smoke on the thermal driver with a rate of 0.8 + 0.26 log10(1 + v) clamped to 0.8..2.5', () => {
     const c = emitter('chimney');
     expect(c.assetId).toBe('fx.smoke');
     expect(c.at).toEqual([{ x: -293, y: -240 }]);
     expect(c.gate).toEqual({ techId: 'boiler', minLevel: 1 });
     expect(c.driver).toBe('thermal');
     expect(c.threshold).toBe(0);
-    expect(c.mode).toEqual({ kind: 'rate', base: 0.8, perLog: 0.3, min: 0.8, max: 2.5 });
+    expect(c.mode).toEqual({ kind: 'rate', base: 0.8, perLog: 0.26, min: 0.8, max: 2.5 });
+  });
+
+  it('lance is one steam puff on the thermal driver, gated by steamLance 1, with a rate of 0.3 + 0.25 log10(1 + v) clamped to 0.3..2', () => {
+    const l = emitter('lance');
+    expect(l.assetId).toBe('fx.steamPuff');
+    expect(l.at).toEqual([{ x: 20, y: -430 }]);
+    expect(l.gate).toEqual({ techId: 'steamLance', minLevel: 1 });
+    expect(l.until).toBeUndefined();
+    expect(l.driver).toBe('thermal');
+    expect(l.threshold).toBe(0);
+    expect(l.mode).toEqual({ kind: 'rate', base: 0.3, perLog: 0.25, min: 0.3, max: 2 });
+  });
+
+  it('the chimney and the lance keep rising to at least 3 x PF_PR (1.1e6 PR/s) before the rate cap: 10^((max - base) / perLog) - 1 >= 3.3e6', () => {
+    const PF_PR = 1.1e6;
+    for (const id of ['chimney', 'lance']) {
+      const e = emitter(id);
+      if (e.mode.kind !== 'rate') throw new Error(`${id} is not a rate emitter`);
+      const saturation = Math.pow(10, (e.mode.max - e.mode.base) / e.mode.perLog) - 1;
+      expect(saturation, id).toBeGreaterThanOrEqual(3 * PF_PR);
+    }
   });
 
   it('relief is two steam puffs, a burst of 4 spaced 120 ms, every 6..9 s while PR/s is at least 50', () => {

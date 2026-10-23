@@ -15,7 +15,9 @@ export const MACHINE_COMPONENT_IDS = ['supportFrame', 'bearingM', 'bearingP', 'g
   'siphonTube1L', 'siphonTube1R', 'siphonTube2L', 'siphonTube2R', 'siphonTube3L', 'siphonTube3R',
   'siphonArcs1', 'siphonArcs2', 'siphonArcs3', 'graviticAnchorL', 'graviticAnchorR',
   'anchorGlow1L', 'anchorGlow1R', 'anchorGlow2L', 'anchorGlow2R', 'anchorGlow3L', 'anchorGlow3R',
-  'inversionGhost', 'lensLight', 'lensColumn', 'aperture', 'namePlate'] as const;
+  'inversionGhost', 'lensLight', 'lensColumn', 'aperture', 'namePlate',
+  // WP17 Legacy Feeds: generator glow, bellows, grid exciter feed, mains backfeed terminal, steam lance.
+  'generatorGlow', 'bellows', 'exciterFeed', 'backfeedTerminal', 'steamLance'] as const;
 export type MachineComponentId = typeof MACHINE_COMPONENT_IDS[number];
 
 export const SOCKET_IDS = ['mainHub', 'crankHub', 'flywheelHub', 'flywheelBase', 'motorMount', 'motorBase', 'motorPulleyHub', 'pistonBed', 'yokePin',
@@ -26,7 +28,9 @@ export const SOCKET_IDS = ['mainHub', 'crankHub', 'flywheelHub', 'flywheelBase',
   'crystalSeat', 'calliopeSeat', 'forkBase', 'servoBase', 'servoHub',
   // Era V sockets (WP11): gallery / chamber / core hub / lens / aperture, siphon pairs, siphon arcs, anchors, name plate.
   'galleryBase', 'chamberBase', 'coreHub', 'lensBase', 'apertureBase', 'siphon1L', 'siphon1R', 'siphon2L', 'siphon2R',
-  'siphon3L', 'siphon3R', 'siphonArcs', 'anchorL', 'anchorR', 'plateSeat'] as const;
+  'siphon3L', 'siphon3R', 'siphonArcs', 'anchorL', 'anchorR', 'plateSeat',
+  // WP17 Legacy Feeds seats: bellows, grid exciter feed, mains backfeed, steam lance.
+  'bellowsSeat', 'exciterFeedSeat', 'backfeedSeat', 'lanceSeat'] as const;
 export type SocketId = typeof SOCKET_IDS[number];
 
 export interface Vec2 { x: number; y: number }
@@ -46,7 +50,7 @@ export type ComponentAnimation =
   | { kind: 'driven'; ratio: number; phaseDeg: number }          // angle = partAngle(thetaM, ratio, phaseDeg)
   | { kind: 'slider' }                                           // pistonYoke only: position from sliderCrank
   | { kind: 'vibrate'; driver: AnimationDriver; amplitude: number; speed: SpeedCurve }   // unchanged from today
-  | { kind: 'frames'; frames: number; maxHz: number; driver: AnimationDriver; frameOffset?: number }   // frame cycle, advances at up to maxHz while driver > 0; frame = (cycle + frameOffset) % frames
+  | { kind: 'frames'; frames: number; maxHz: number; driver: AnimationDriver; frameOffset?: number; hz?: SpeedCurve }   // frame cycle, advances at up to maxHz while driver > 0; frame = (cycle + frameOffset) % frames; hz = frames per second from the driver (speed formula, hz.max <= maxHz)
   | { kind: 'reciprocate'; ratio: number; strokeArtPx: number; phaseDeg: number }      // sprite y offset = -(stroke/2)(1 + cos(ratio * thetaM + phase)); 0 = strike
   | { kind: 'spin'; driver: AnimationDriver; speed: SpeedCurve }                       // own angle += speed(driver)*dt, not tied to thetaM; RotSprite frames
   | { kind: 'gauge'; driver: AnimationDriver; frames: number; minLog: number; maxLog: number; tauSeconds: number }  // frames sheet, no rotation
@@ -109,6 +113,8 @@ export const MACHINE_SOCKETS: Record<SocketId, Vec2> = {
   apertureBase: { x: 64, y: -582 }, siphon1L: { x: 30, y: -418 }, siphon1R: { x: 98, y: -418 }, siphon2L: { x: 18, y: -418 },
   siphon2R: { x: 110, y: -418 }, siphon3L: { x: 42, y: -418 }, siphon3R: { x: 86, y: -418 }, siphonArcs: { x: 64, y: -468 },
   anchorL: { x: -520, y: 0 }, anchorR: { x: 520, y: 0 }, plateSeat: { x: 64, y: -96 },
+  // WP17 Legacy Feeds seats: bellows (left of the boiler), exciter feed, mains backfeed and steam lance (top of the spire).
+  bellowsSeat: { x: -232, y: 0 }, exciterFeedSeat: { x: 88, y: -110 }, backfeedSeat: { x: 120, y: -395 }, lanceSeat: { x: 20, y: -395 },
 };
 
 /** Motion: manual activity decay, frame clamp and rest threshold (compares the DRIVER value, not speed). */
@@ -167,6 +173,7 @@ export const MACHINE_LINK_STYLE = {
   rod: { edge: 0x3e4246, core: 0x7d8286, eye: 0x5a5f63, eyeCentre: 0xa3a6a4, eyeRadius: 2 },
   cap: { size: 4, hi: 0xa3a6a4, body: 0x7d8286, ring: 0x1f2225 },
   cable: { depth: MACHINE_LAYER_DEPTH.front + 1, core: 0x2f5a62, hi: 0x5fa8b4, sagArtPx: 10 },
+  cableCacheSize: 64, // rastered cable cores kept by MachineLinks (LRU), so vibrating cable ends do not re-raster every column
   // Era V guy cables: dark wire rope under the anchor sprites (cableStyle 'guy').
   guy: { depth: MACHINE_LAYER_DEPTH.frame + 5, core: 0x3e4246, under: 0x1f2225 },
   // Era III pipes: steam (bright iron, flanged) and feed water (dark, flanged). Fitting colours are the ART_ERA3 section 4 constants.
@@ -213,6 +220,11 @@ export const MACHINE_LINKS: readonly MachineLink[] = [
   // Era V guy cables: chamber yoke eyes to the gravitic anchor eyes (wire rope, no cyan).
   { from: { component: 'nullChamber', point: 'eyeL' }, to: { component: 'graviticAnchorL', point: 'eye' }, kind: 'cable', sag: 6, cableStyle: 'guy' },
   { from: { component: 'nullChamber', point: 'eyeR' }, to: { component: 'graviticAnchorR', point: 'eye' }, kind: 'cable', sag: 6, cableStyle: 'guy' },
+  // WP17 Legacy Feeds: bellows hose into the boiler tuyere (water, depth front - 1: over mid, under the bellows); mast cables to the exciter feed and the backfeed terminal; steam lance off the manifold.
+  { from: { component: 'bellows', point: 'nozzle' }, to: { component: 'boiler', point: 'tuyere' }, kind: 'pipe', via: [{ x: -204, y: -14 }], bore: 2, depth: MACHINE_LAYER_DEPTH.front - 1, pipeStyle: 'water' },
+  { from: { component: 'cableMast', point: 'top' }, to: { component: 'exciterFeed', point: 'lug' }, kind: 'cable', sag: 8 },
+  { from: { component: 'cableMast', point: 'top' }, to: { component: 'backfeedTerminal', point: 'lug' }, kind: 'cable', sag: 12 },
+  { from: { component: 'steamManifold', point: 'outR' }, to: { component: 'steamLance', point: 'steam' }, kind: 'pipe', via: [{ x: 20, y: -176 }], bore: 4, pipeStyle: 'steam' },
 ];
 
 /** Static shadow ellipses / strips drawn under the machine. */
@@ -341,7 +353,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     layer: 'mid',
     animation: { kind: 'driven', ratio: -1.1666666667, phaseDeg: 0 },
     connections: [],
-    effects: [{ kind: 'glow', driver: 'automation', threshold: 10, intensity: 0.4 }],
+    effects: [],
   },
   flywheelPulley: {
     id: 'flywheelPulley', techId: 'flywheel', minLevel: 1,
@@ -372,7 +384,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     layer: 'mid', depthBias: 1,
     animation: { kind: 'vibrate', driver: 'automation', amplitude: 1, speed: { base: 8, gain: 0.3, min: 2, max: 20 } },
     connections: [],
-    effects: [{ kind: 'vibrate', driver: 'automation', threshold: 1, intensity: 0.5 }],
+    effects: [],
   },
   motorPulley: {
     id: 'motorPulley', techId: 'wornMotor', minLevel: 1,
@@ -400,7 +412,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     layer: 'back', depthBias: 1,
     animation: { kind: 'none' },
     connections: [],
-    effects: [{ kind: 'steam', driver: 'automation', threshold: 5, intensity: 0.6 }],
+    effects: [],
   },
   // Generator set (Era II): static plinth, coil frame and generator body; the belt pulley on the generator hub turns from the flywheel belt.
   generatorPlinth: {
@@ -478,7 +490,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     connections: [],
     effects: [],
   },
-  // Capacitor rack: static, glows with electric activity; two lugs carry the cables.
+  // Capacitor rack: static; two lugs carry the cables (its EE glow moved to generatorGlow, WP17).
   capacitorRack: {
     id: 'capacitorRack', techId: 'capacitorBank', minLevel: 1,
     assetId: 'machine.capacitorRack', attach: { socket: 'rackBase', offset: { x: 0, y: 0 } },
@@ -489,7 +501,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
       { id: 'lugL', at: { x: -17, y: -38 }, kind: 'cable' },
       { id: 'lugR', at: { x: 17, y: -38 }, kind: 'cable' },
     ],
-    effects: [{ kind: 'glow', driver: 'electric', threshold: 1, intensity: 0.5 }],
+    effects: [],
   },
   // Spark gap: four-frame discharge sheet, flickers at up to 3 Hz while EE flows.
   sparkGap: {
@@ -507,7 +519,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.transformer', attach: { socket: 'transformerBase', offset: { x: 0, y: 0 } },
     size: { width: 64, height: 64 }, origin: { x: 0.5, y: 1 },
     layer: 'mid',
-    animation: { kind: 'vibrate', driver: 'electric', amplitude: 0.5, speed: { base: 6, gain: 0.3, min: 2, max: 12 } },
+    animation: { kind: 'vibrate', driver: 'electric', amplitude: 0.5, speed: { base: 6, gain: 0.3, min: 2, max: 18 } },
     connections: [
       { id: 'primary', at: { x: -12, y: -60 }, kind: 'cable' },
       { id: 'bushing', at: { x: 16, y: -60 }, kind: 'cable' },
@@ -534,6 +546,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     connections: [
       { id: 'steam', at: { x: -6, y: -91 }, kind: 'pipe' },
       { id: 'feed', at: { x: -64, y: -46 }, kind: 'pipe' },
+      { id: 'tuyere', at: { x: 36, y: -22 }, kind: 'pipe' },   // WP17: bellows hose into the firebox
     ],
     effects: [],
   },
@@ -573,7 +586,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.gaugeNeedle', attach: { socket: 'gaugeSeat', offset: { x: 0, y: 0 } },
     size: { width: 24, height: 24 }, origin: { x: 0.5, y: 1 },
     layer: 'mid', depthBias: 3,
-    animation: { kind: 'gauge', driver: 'thermal', frames: 25, minLog: 0, maxLog: 5, tauSeconds: 0.6 },
+    animation: { kind: 'gauge', driver: 'thermal', frames: 25, minLog: 0, maxLog: 6.6, tauSeconds: 0.6 },
     connections: [],
     effects: [],
   },
@@ -682,7 +695,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.turbineRotor', attach: { socket: 'turbineHub', offset: { x: 0, y: 0 } },
     size: { width: 28, height: 28 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 2,
-    animation: { kind: 'spin', driver: 'thermal', speed: { base: 60, gain: 1.5, min: 0, max: 540 } },
+    animation: { kind: 'spin', driver: 'thermal', speed: { base: 60, gain: 1.5, min: 0, max: 660 } },
     connections: [],
     effects: [],
   },
@@ -711,7 +724,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.spireWave', attach: { socket: 'spireRod', offset: { x: 0, y: 0 } },
     size: { width: 16, height: 270 }, origin: { x: 0.5, y: 1 },
     layer: 'mid', depthBias: 1,
-    animation: { kind: 'frames', frames: 8, maxHz: 12, driver: 'resonance' },
+    animation: { kind: 'frames', frames: 8, maxHz: 12, driver: 'resonance', hz: { base: 1, gain: 1.75, min: 2, max: 12 } },
     connections: [],
     effects: [],
   },
@@ -816,7 +829,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.dishWaves', attach: { socket: 'dishWavesL', offset: { x: 0, y: 0 } },
     size: { width: 40, height: 64 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 4,
-    animation: { kind: 'frames', frames: 6, maxHz: 8, driver: 'resonance' },
+    animation: { kind: 'frames', frames: 6, maxHz: 8, driver: 'resonance', hz: { base: 1, gain: 1.12, min: 2, max: 8 } },
     connections: [],
     effects: [],
   },
@@ -825,7 +838,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.dishWaves', attach: { socket: 'dishWavesR', offset: { x: 0, y: 0 } },
     size: { width: 40, height: 64 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 4, flipX: true,
-    animation: { kind: 'frames', frames: 6, maxHz: 8, driver: 'resonance' },
+    animation: { kind: 'frames', frames: 6, maxHz: 8, driver: 'resonance', hz: { base: 1, gain: 1.12, min: 2, max: 8 } },
     connections: [],
     effects: [],
   },
@@ -867,7 +880,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.nullCore', attach: { socket: 'coreHub', offset: { x: 0, y: 0 } },
     size: { width: 64, height: 64 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 7,
-    animation: { kind: 'spin', driver: 'exotic', speed: { base: 6, gain: 30, min: 6, max: 240 } },
+    animation: { kind: 'spin', driver: 'exotic', speed: { base: 109, gain: 0.39, min: 6, max: 360 } },
     connections: [],
     effects: [],
   },
@@ -959,7 +972,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.ringBead', attach: { socket: 'coreHub', offset: { x: 0, y: 0 } },
     size: { width: 5, height: 5 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 6,
-    animation: { kind: 'orbit', ring: 1, phi0Deg: 0, dir: 1, speed: { base: 20, gain: 25, min: 20, max: 180 }, speedScale: 1, frontLayer: 'front', frontBias: 0 },
+    animation: { kind: 'orbit', ring: 1, phi0Deg: 0, dir: 1, speed: { base: 152, gain: 0.232, min: 20, max: 360 }, speedScale: 1, frontLayer: 'front', frontBias: 0 },
     connections: [],
     effects: [],
   },
@@ -968,7 +981,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.ringBead', attach: { socket: 'coreHub', offset: { x: 0, y: 0 } },
     size: { width: 5, height: 5 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 6,
-    animation: { kind: 'orbit', ring: 2, phi0Deg: 97, dir: -1, speed: { base: 20, gain: 25, min: 20, max: 180 }, speedScale: 1.25, frontLayer: 'front', frontBias: 0 },
+    animation: { kind: 'orbit', ring: 2, phi0Deg: 97, dir: -1, speed: { base: 152, gain: 0.232, min: 20, max: 360 }, speedScale: 1.25, frontLayer: 'front', frontBias: 0 },
     connections: [],
     effects: [],
   },
@@ -977,7 +990,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.ringBead', attach: { socket: 'coreHub', offset: { x: 0, y: 0 } },
     size: { width: 5, height: 5 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 6,
-    animation: { kind: 'orbit', ring: 3, phi0Deg: 194, dir: 1, speed: { base: 20, gain: 25, min: 20, max: 180 }, speedScale: 1.5, frontLayer: 'front', frontBias: 0 },
+    animation: { kind: 'orbit', ring: 3, phi0Deg: 194, dir: 1, speed: { base: 152, gain: 0.232, min: 20, max: 360 }, speedScale: 1.5, frontLayer: 'front', frontBias: 0 },
     connections: [],
     effects: [],
   },
@@ -986,7 +999,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.ringBead', attach: { socket: 'coreHub', offset: { x: 0, y: 0 } },
     size: { width: 5, height: 5 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 6,
-    animation: { kind: 'orbit', ring: 4, phi0Deg: 291, dir: -1, speed: { base: 20, gain: 25, min: 20, max: 180 }, speedScale: 1.75, frontLayer: 'front', frontBias: 0 },
+    animation: { kind: 'orbit', ring: 4, phi0Deg: 291, dir: -1, speed: { base: 152, gain: 0.232, min: 20, max: 360 }, speedScale: 1.75, frontLayer: 'front', frontBias: 0 },
     connections: [],
     effects: [],
   },
@@ -1051,7 +1064,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.siphonArcs1', attach: { socket: 'siphonArcs', offset: { x: 0, y: 0 } },
     size: { width: 128, height: 64 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 8,
-    animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 0 },
+    animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 0, hz: { base: 1, gain: 1.18, min: 2, max: 8 } },
     connections: [],
     effects: [],
   },
@@ -1060,7 +1073,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.siphonArcs2', attach: { socket: 'siphonArcs', offset: { x: 0, y: 0 } },
     size: { width: 128, height: 64 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 8,
-    animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 1 },
+    animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 1, hz: { base: 1, gain: 1.18, min: 2, max: 8 } },
     connections: [],
     effects: [],
   },
@@ -1069,7 +1082,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     assetId: 'machine.siphonArcs3', attach: { socket: 'siphonArcs', offset: { x: 0, y: 0 } },
     size: { width: 128, height: 64 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 8,
-    animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 2 },
+    animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 2, hz: { base: 1, gain: 1.18, min: 2, max: 8 } },
     connections: [],
     effects: [],
   },
@@ -1193,6 +1206,56 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     layer: 'frame', depthBias: 2,
     animation: { kind: 'stage', frames: 6, gates: [['generatorBlueprint', 1], ['substationBlueprint', 1], ['pressureVesselBlueprint', 1], ['harmonicConvergence', 1]], endingFrame: 5 },
     connections: [],
+    effects: [],
+  },
+  // WP17 Legacy Feeds: the uncapped late repeatables keep the older energies in play. Generator glow: four-frame cyan winding glow over the generator, brightness follows EE/s.
+  generatorGlow: {
+    id: 'generatorGlow', techId: 'generator', minLevel: 1,
+    assetId: 'machine.generatorGlow', attach: { socket: 'generatorMount', offset: { x: 0, y: 0 } },
+    size: { width: 96, height: 64 }, origin: { x: 0.5, y: 0.5 },
+    layer: 'mid', depthBias: 6,
+    animation: { kind: 'gauge', driver: 'electric', frames: 4, minLog: 0, maxLog: 6.5, tauSeconds: 1 },
+    connections: [],
+    effects: [],
+  },
+  // Bellows (bellowsDrive): four-frame leather bellows on the bellows seat, pumping at 1 to 4 Hz with ME/s; the nozzle hose feeds the boiler tuyere.
+  bellows: {
+    id: 'bellows', techId: 'bellowsDrive', minLevel: 1,
+    assetId: 'machine.bellows', attach: { socket: 'bellowsSeat', offset: { x: 0, y: 0 } },
+    size: { width: 40, height: 24 }, origin: { x: 0.5, y: 1 },
+    layer: 'front',
+    animation: { kind: 'frames', frames: 4, maxHz: 4, driver: 'automation', hz: { base: 1, gain: 0.6, min: 1, max: 4 } },
+    connections: [{ id: 'nozzle', at: { x: 16, y: -14 }, kind: 'pipe' }],
+    effects: [],
+  },
+  // Grid exciter feed (gridExciter): static insulator post; its cable lug is the cap.
+  exciterFeed: {
+    id: 'exciterFeed', techId: 'gridExciter', minLevel: 1,
+    assetId: 'machine.exciterFeed', attach: { socket: 'exciterFeedSeat', offset: { x: 0, y: 0 } },
+    size: { width: 16, height: 24 }, origin: { x: 0.5, y: 1 },
+    layer: 'mid', depthBias: 3,
+    animation: { kind: 'none' },
+    connections: [{ id: 'lug', at: { x: 0, y: -22 }, kind: 'cable' }],
+    effects: [],
+  },
+  // Mains backfeed terminal (mainsBackfeed): hanging terminal plate; its cable lug is the bottom cap.
+  backfeedTerminal: {
+    id: 'backfeedTerminal', techId: 'mainsBackfeed', minLevel: 1,
+    assetId: 'machine.backfeedTerminal', attach: { socket: 'backfeedSeat', offset: { x: 0, y: 0 } },
+    size: { width: 16, height: 24 }, origin: { x: 0.5, y: 0 },
+    layer: 'mid', depthBias: 4,
+    animation: { kind: 'none' },
+    connections: [{ id: 'lug', at: { x: 0, y: 22 }, kind: 'cable' }],
+    effects: [],
+  },
+  // Steam lance (steamLance): valve block with a flanged steam port at the bottom, fed from the manifold outlet.
+  steamLance: {
+    id: 'steamLance', techId: 'steamLance', minLevel: 1,
+    assetId: 'machine.steamLance', attach: { socket: 'lanceSeat', offset: { x: 0, y: 0 } },
+    size: { width: 16, height: 24 }, origin: { x: 0.5, y: 0 },
+    layer: 'mid', depthBias: 5,
+    animation: { kind: 'none' },
+    connections: [{ id: 'steam', at: { x: 0, y: 24 }, kind: 'pipe' }],
     effects: [],
   },
 };
