@@ -1,4 +1,6 @@
 import { formatCost, formatNumber } from '../utils/format';
+import { ERA_KEYSTONES } from '../data/eras';
+import { INSTALL_LINES } from '../data/notifications';
 import { RESOURCES } from '../data/resources';
 import { RESOURCE_IDS } from '../data/types';
 import type { PurchaseFailure, ResourceId, ResourceMap, TechId, TechStatus, TechView } from '../data/types';
@@ -6,7 +8,9 @@ import { resourceShort } from './revealRules';
 
 // Pure view model for the TECH INDEX overlay. No DOM, no Phaser.
 
-export const TECH_TREE_LAYOUT = { nodeWidth: 160, nodeHeight: 68, colGap: 28, rowGap: 28, padding: 20 } as const;
+export const TECH_TREE_LAYOUT = { nodeWidth: 144, nodeHeight: 68, colGap: 14, rowGap: 28, padding: 18 } as const;
+// WP20 fit: the widest era (1128 px) scales down to minScale to fit maxWidthPx; reveal keeps a node revealPadPx inside the window.
+export const TECH_TREE_FIT = { maxWidthPx: 1140, minScale: 0.6, revealPadPx: 12 } as const;
 
 export type TechKindLabel = 'ORIGIN' | 'UNLOCK' | 'REPEATABLE' | 'MILESTONE';
 export type BuyState = 'buy' | 'insufficient' | 'locked' | 'maxed' | 'owned' | 'automatic';
@@ -24,7 +28,8 @@ export interface TechDetailView {
   buyState: BuyState; buyLabel: string; buyEnabled: boolean; shortfallText: string | null;
 }
 export interface TechTreeView { width: number; height: number; headerText: string; nodes: TechNodeView[]; edges: TechEdgeView[]; detail: TechDetailView | null }
-export interface EraTabView { era: number; label: string; reached: boolean; selected: boolean; resourceText: string }
+// affordable: buyable techs in the era (0 when unreached). ariaLabel appends the count when > 0.
+export interface EraTabView { era: number; label: string; reached: boolean; selected: boolean; resourceText: string; affordable: number; ariaLabel: string }
 
 const ROMAN_ERAS = ['I', 'II', 'III', 'IV', 'V'] as const;
 
@@ -54,14 +59,40 @@ export function edgePath(from: TechNodeView, to: TechNodeView): string {
   return `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
 }
 
-/** Affordable node first; else first available non-starting node; else the crank (or the first view). */
+/** WP20: primaryFunction when open, else the first open era keystone (table order). Open = available and not installed. Null when none. */
+export function priorityTech(views: readonly TechView[]): TechId | null {
+  const open = (id: TechId): boolean =>
+    views.some((view) => view.id === id && view.status === 'available' && view.level === 0);
+  if (open('primaryFunction')) return 'primaryFunction';
+  return ERA_KEYSTONES.find((keystone) => open(keystone.techId))?.techId ?? null;
+}
+
+/**
+ * Default selection (WP20): open keystone; else first affordable unlock; else first affordable tech;
+ * else first available non-starting tech; else the crank (or the first view).
+ */
 export function defaultSelection(views: readonly TechView[]): TechId {
+  const priority = priorityTech(views);
+  if (priority) return priority;
+  const affordableUnlock = views.find((view) => view.affordable && view.def.kind === 'unlock');
+  if (affordableUnlock) return affordableUnlock.id;
   const affordable = views.find((view) => view.affordable);
   if (affordable) return affordable.id;
   const available = views.find((view) => view.status === 'available' && view.def.kind !== 'starting');
   if (available) return available.id;
   if (views.some((view) => view.id === 'handCrank')) return 'handCrank';
   return views[0]?.id ?? 'handCrank';
+}
+
+/**
+ * Era header (WP20): `N RES · M RES` over the distinct costRes of the era's unlocks and repeatables,
+ * in RESOURCE_IDS order. No such view: the era's own resource alone.
+ */
+export function eraHeaderText(views: readonly TechView[], res: Readonly<ResourceMap>, era: number): string {
+  const priced = new Set(views.filter((view) => view.def.kind === 'unlock' || view.def.kind === 'repeatable').map((view) => view.def.costRes));
+  const shown = RESOURCE_IDS.filter((id) => priced.has(id));
+  const ids = shown.length > 0 ? shown : [eraResourceOf(era)];
+  return ids.map((id) => `${formatNumber(res[id])} ${resourceShort(id)}`).join(' · ');
 }
 
 /** Eras whose tab is open: era 1 always; era n > 1 once any of its techs is not locked. Ascending. */
@@ -84,17 +115,21 @@ export function buildEraTabs(
   return eras.map((era): EraTabView => {
     const isReached = reached.has(era);
     if (!isReached) {
-      return { era, label: 'SIGNAL ?', reached: false, selected: era === selectedEra, resourceText: '' };
+      return { era, label: 'SIGNAL ?', reached: false, selected: era === selectedEra, resourceText: '', affordable: 0, ariaLabel: 'SIGNAL ?' };
     }
     const eraRes = eraResourceOf(era);
     const short = resourceShort(eraRes);
     const roman = ROMAN_ERAS[era - 1] ?? String(era);
+    const label = `ERA ${roman} · ${short}`;
+    const affordable = views.filter((view) => view.def.era === era && view.affordable).length;
     return {
       era,
-      label: `ERA ${roman} · ${short}`,
+      label,
       reached: true,
       selected: era === selectedEra,
       resourceText: `${formatNumber(res[eraRes])} ${short}`,
+      affordable,
+      ariaLabel: affordable > 0 ? `${label}, ${affordable} affordable` : label,
     };
   });
 }
@@ -113,6 +148,11 @@ export function purchaseFailureText(reason: PurchaseFailure, shortfall: number, 
     case 'owned': return 'ALREADY INSTALLED';
     case 'notPurchasable': return 'CANNOT BE PURCHASED';
   }
+}
+
+/** WP20 feedback line after a purchase: the install line on the first level, else the new level. */
+export function purchaseFeedbackText(id: TechId, newLevel: number): string {
+  return newLevel > 1 ? `LEVEL ${newLevel}` : `INSTALLED — ${INSTALL_LINES[id]}`;
 }
 
 /** Kind label: starting/unlock/repeatable/milestone mapped to display words. */
@@ -301,13 +341,40 @@ export function buildTechTreeView(
   }
 
   const selectedView = selected === null ? undefined : views.find((view) => view.id === selected);
-  const eraRes = eraResourceOf(era);
   return {
     width,
     height,
-    headerText: `${formatNumber(res[eraRes])} ${resourceShort(eraRes)}`,
+    headerText: eraHeaderText(views, res, era),
     nodes,
     edges,
     detail: selectedView ? detailOf(selectedView, res) : null,
+  };
+}
+
+/** WP20 fit: 1 when the content already fits, else the fit ratio floored to 3 decimals and clamped at minScale. */
+export function graphFitScale(viewportPx: number, contentPx: number, minScale: number = TECH_TREE_FIT.minScale): number {
+  if (contentPx <= viewportPx || viewportPx <= 0) return 1;
+  return Math.max(minScale, Math.floor(viewportPx / contentPx * 1000) / 1000);
+}
+
+/** One axis of revealScroll: scroll the least that keeps [start - pad, end + pad] inside [s, s + v]. */
+function revealAxis(s: number, v: number, start: number, size: number, pad: number): number {
+  const end = start + size;
+  if (start - pad < s) return Math.max(0, start - pad);
+  if (end + pad > s + v) return end + pad - v;
+  return s;
+}
+
+/** WP20 reveal: scroll that brings `box` (graph units, drawn at `scale`) into the viewport with `padPx` margin. */
+export function revealScroll(
+  scroll: { left: number; top: number },
+  viewport: { width: number; height: number },
+  box: { x: number; y: number; width: number; height: number },
+  scale: number,
+  padPx: number = TECH_TREE_FIT.revealPadPx,
+): { left: number; top: number } {
+  return {
+    left: revealAxis(scroll.left, viewport.width, box.x * scale, box.width * scale, padPx),
+    top: revealAxis(scroll.top, viewport.height, box.y * scale, box.height * scale, padPx),
   };
 }

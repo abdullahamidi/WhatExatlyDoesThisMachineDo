@@ -53,7 +53,7 @@ export const INSTALL_LINES: Record<TechId, string> = {
   sparkGap: 'Discharge observed. Observers: none.',
   transformer: 'Voltage changed. Ratio chosen by something.',
   powerLines: 'Conductors raised toward a grid. Grid: not found.',
-  substationBlueprint: 'Grid handshake... no response from grid.',
+  substationBlueprint: 'Grid handshake… no response from grid.',
   boiler: 'Pressure detected. Vessel rating: unlisted.',
   firebox: 'Fuel source not on the manifest. Burning anyway.',
   inductionHeater: 'Current turned to heat. Heat did not object.',

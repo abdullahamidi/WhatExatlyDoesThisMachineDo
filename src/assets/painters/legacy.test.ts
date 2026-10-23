@@ -176,26 +176,34 @@ describe('machine.bellows sheet', () => {
   const painter = LEGACY_PAINTERS['machine.bellows'];
   const rects = painter === undefined ? [] : record(painter, entry);
   const cells = sheetFrameRects(entry);
+  // Topmost painted row in column x = cell.x + 1 (the free left end of the tilted top board), per cell.
+  const tipRows = cells.map((cell) => Math.min(...rects.filter((r) => r.x <= cell.x + 1 && cell.x + 1 < r.x + r.w).map((r) => r.y)));
 
   it('has four 60x28 cells at x 0, 60, 120, 180', () => {
     expect(cells.map((c) => c.x)).toEqual([0, 60, 120, 180]);
     expect(cells.every((c) => c.width === 60 && c.height === 28 && c.y === 0)).toBe(true);
   });
 
-  it('covers the nozzle tip pixel (36,10) in every cell', () => {
+  it('covers the nozzle texture (59,16) and (59,17) in every cell', () => {
     for (const cell of cells) {
-      expect(rects.some((r) => covers(r, cell.x + 36, 10)), `cell x${cell.x}`).toBe(true);
+      expect(rects.some((r) => covers(r, cell.x + 59, 16)), `cell x${cell.x} row 16`).toBe(true);
+      expect(rects.some((r) => covers(r, cell.x + 59, 17)), `cell x${cell.x} row 17`).toBe(true);
     }
   });
 
-  it('has a different board gap per cell (gaps 18, 15, 12, 15)', () => {
-    const boardRows = cells.map((cell) => {
-      const boards = rects.filter((r) => inCell(r, cell) && r.color === PALETTE.grayDark && r.x === cell.x + 4 && r.w === 24 && r.h === 3);
-      return { top: Math.min(...boards.map((r) => r.y)), bottom: Math.max(...boards.map((r) => r.y)) };
-    });
-    expect(boardRows.map((b) => b.bottom)).toEqual([18, 16, 15, 16]);
-    expect(boardRows.map((b) => b.bottom - b.top)).toEqual([15, 12, 9, 12]);
-    expect(new Set(boardRows.map((b) => b.bottom)).size).toBeGreaterThanOrEqual(3);
+  it('starts the tilted top board at the per-cell tip row at its free left end (x = 1): 0, 6, 11, 6', () => {
+    expect(tipRows).toEqual([0, 6, 11, 6]);
+  });
+
+  it('draws the legs over (11,25) and (35,25) in every cell', () => {
+    for (const cell of cells) {
+      expect(rects.some((r) => covers(r, cell.x + 11, 25)), `cell x${cell.x} left leg`).toBe(true);
+      expect(rects.some((r) => covers(r, cell.x + 35, 25)), `cell x${cell.x} right leg`).toBe(true);
+    }
+  });
+
+  it('gives the four cells different tilts (three distinct tip rows)', () => {
+    expect(new Set(tipRows).size).toBe(3);
   });
 });
 

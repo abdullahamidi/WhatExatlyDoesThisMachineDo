@@ -33,8 +33,8 @@ export const SYSTEM_LOGS: readonly SystemLogEntry[] = [
   { id: 'sync-success', text: 'Synchronization successful.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 1000 } },
   { id: 'signal-below', text: 'Frequency matches a signal from below the ground.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 1000000 } },
   { id: 'observer-one', text: 'Observer count: 1.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 20000000 } },
-  { id: 'units-unknown', text: 'Units not recognised. Continuing.', trigger: { kind: 'lifetime', res: 'xf', atLeast: 1000 } },
-  { id: 'cycle-0041', text: 'Cycle 0041 nearly complete.', trigger: { kind: 'lifetime', res: 'xf', atLeast: 1000000 } },
+  { id: 'units-unknown', text: 'Units not recognized. Continuing.', trigger: { kind: 'lifetime', res: 'xf', atLeast: 1000 } },
+  { id: 'cycle-0041', text: 'Cycle {cycle} nearly complete.', trigger: { kind: 'lifetime', res: 'xf', atLeast: 1000000 } },
   { id: 'operator-located', text: 'Operator identity: located.', trigger: { kind: 'lifetime', res: 'xf', atLeast: 100000000 } },
 ];
 

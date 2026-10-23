@@ -1,0 +1,104 @@
+/* WP20 HUD guidance (guidance.ts): next-goal line in the panel, TECH INDEX hint callout and affordable badge. */
+
+/* keep in sync with src/data/palette.ts */
+.hud-goal, .hud-hint {
+  --ink:#14110f;
+  --iron-2:#1d1f21;
+  --rust:#8c4a2a;
+  --rust-dark:#4e2a1a;
+  --amber:#d9822b;
+  --amber-dim:#a8957a;
+  --haze:#d2bf9c;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+/* Same size rule as the plaque: the panel right edge stays < 340 px. No nowrap, so long goals wrap. */
+.hud-goal {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--rust-dark);
+  font-size: max(12px, .65em);
+  letter-spacing: .05em;
+  overflow-wrap: anywhere;
+}
+
+.hud-goal[hidden] {
+  display: none;
+}
+
+.hud-goal-title {
+  color: var(--haze);
+}
+
+.hud-goal-detail {
+  color: var(--amber-dim);
+}
+
+.hud-goal[data-ready='true'] .hud-goal-detail {
+  color: var(--amber);
+}
+
+/* Callout above the button row. .hud-buttons is position: fixed, so this anchors to it. */
+.hud-buttons .hud-hint {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  white-space: nowrap;
+  pointer-events: none;
+  padding: 6px 10px;
+  background: var(--iron-2);
+  border: 2px solid var(--amber);
+  color: var(--amber);
+  font-size: clamp(12px, 1.3vw, 15px);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.hud-hint[hidden] {
+  display: none;
+}
+
+/* Affordable count chip after the TECH INDEX label. Empty or missing attribute = no chip. */
+#hud-tech {
+  position: relative;
+}
+
+#hud-tech[data-affordable]:not([data-affordable='']):after {
+  content: attr(data-affordable);
+  margin-left: 8px;
+  padding: 0 6px;
+  background: var(--amber);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+#hud-tech.is-hinted {
+  animation: hud-tech-pulse 1200ms ease-in-out infinite;
+}
+
+@keyframes hud-tech-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(217, 130, 43, .0);
+    border-color: var(--rust);
+  }
+  50% {
+    box-shadow: 0 0 12px 3px rgba(217, 130, 43, .8);
+    border-color: var(--amber);
+  }
+}
+
+/* Scale pivot for the HUD counter bump. The value is a grid item, so it is already block-level. */
+.hud-panel .hud-row--frontier .hud-value {
+  transform-origin: right center;
+}
+
+/* Reduced motion: no pulse. The hint and chip stay (they are static). */
+@media (prefers-reduced-motion: reduce) {
+  #hud-tech.is-hinted {
+    animation: none;
+  }
+}
+
+#ui-root[data-reduced-motion="on"] #hud-tech.is-hinted {
+  animation: none;
+}

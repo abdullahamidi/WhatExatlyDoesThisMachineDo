@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { TECH_IDS } from '../../data/types';
 import type { GameState, TechDefinition, TechId } from '../../data/types';
 import { TECHNOLOGIES } from '../../data/technologies';
+import { RESOURCES } from '../../data/resources';
 import { createInitialState } from '../state';
 import { emptyResourceMap } from '../resources';
 import { isRequirementMet, requirementsMet, requirementLabel } from './requirements';
@@ -234,11 +235,25 @@ describe('describeEffect', () => {
     expect(describeEffect({ type: 'autoPct', percent: 10, res: 'pr' }, 2)).toBe('+20% PR production');
     expect(describeEffect({ type: 'rateMult', factor: 2, res: 'all' }, 2)).toBe('×4 all production');
     expect(describeEffect({ type: 'rateMult', factor: 3, res: 'rs' }, 1)).toBe('×3 RS production');
-    expect(describeEffect({ type: 'convert', amount: 0.5, res: 'ee' }, 2)).toBe('Converts ME/s into EE/s (×1)');
+    expect(describeEffect({ type: 'convert', amount: 0.5, res: 'ee' }, 2)).toBe('Converts √(ME/s) × 1 into EE/s');
+    expect(describeEffect({ type: 'convert', amount: 0.3, res: 'pr' }, 1)).toBe('Converts √(EE/s) × 0.3 into PR/s');
     expect(describeEffect({ type: 'clickEcho', seconds: 2, res: 'ee' }, 2)).toBe('Clicks echo 4s of EE/s');
     expect(describeEffect({ type: 'none' }, 1)).toBe('Effect unknown');
     expect(describeEffect({ type: 'ending' }, 1)).toBe('Engages the primary function');
     expect(describeEffect({ type: 'ending' }, 3)).toBe('Engages the primary function');
+  });
+
+  it('states the convert formula for exponents 1 and other values', () => {
+    // Real resources only use 0.5, so temporarily override convExp and restore it after.
+    const original = RESOURCES.ee.convExp;
+    try {
+      RESOURCES.ee.convExp = 1;
+      expect(describeEffect({ type: 'convert', amount: 0.5, res: 'ee' }, 2)).toBe('Converts ME/s × 1 into EE/s');
+      RESOURCES.ee.convExp = 0.25;
+      expect(describeEffect({ type: 'convert', amount: 0.5, res: 'ee' }, 2)).toBe('Converts (ME/s)^0.25 × 1 into EE/s');
+    } finally {
+      RESOURCES.ee.convExp = original;
+    }
   });
 
   it('describes the offline buffer', () => {

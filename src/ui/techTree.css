@@ -141,6 +141,22 @@
   cursor: not-allowed;
 }
 
+/* WP20: affordable-count chip (data-affordable from techTree.ts; no chip at 0). Ink on amber. */
+.tech-tab[data-affordable]:not([data-affordable="0"])::after {
+  content: attr(data-affordable);
+  margin-left: 8px;
+  padding: 0 6px;
+  background: var(--amber);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* The selected tab is amber, so its chip flips to ink-on-amber-text to stay readable. */
+.tech-tab[data-affordable][aria-selected="true"]::after {
+  background: var(--ink);
+  color: var(--amber);
+}
+
 .tech-tab:focus-visible {
   outline: 2px solid var(--amber);
   outline-offset: 2px;
@@ -161,6 +177,7 @@
   scrollbar-color: var(--rust) rgba(0, 0, 0, .35);
 }
 
+/* techTree.ts sets an inline CSS zoom on this element when the graph viewport is narrower than the era canvas (WP20 fit). */
 .tech-graph-inner {
   position: relative;
 }
@@ -189,8 +206,8 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
-  padding: 6px 10px;
+  gap: 1px;
+  padding: 6px 8px;
   overflow: hidden;
   font: inherit;
   letter-spacing: inherit;
@@ -202,12 +219,13 @@
   cursor: pointer;
 }
 
-/* .88em with no tracking fits the longest name (19 chars, "GENERATOR BLUEPRINT") in the 152 px inner width of a 176 px node. */
+/* WP20: node 144 px = 2 px borders + 8 px padding per side, so 124 px inner width at .82em with no tracking.
+   Longer names wrap to two lines; the 68 px node then fits two name lines + level + cost (line-heights below). */
 .tech-node-name {
-  font-size: max(12px, .88em);
+  font-size: max(12px, .82em);
   letter-spacing: 0;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.05;
   /* long milestone names wrap to two lines instead of ellipsizing (they carry no cost line) */
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -219,6 +237,7 @@
 .tech-node-level,
 .tech-node-cost {
   font-size: max(12px, .8em);
+  line-height: 1;
   color: var(--amber-dim);
 }
 
@@ -237,7 +256,8 @@
 }
 
 .tech-node.is-affordable {
-  box-shadow: 0 0 10px rgba(217, 130, 43, .6);
+  border-color: var(--amber);
+  box-shadow: 0 0 12px rgba(217, 130, 43, .75);
 }
 
 .tech-node.is-selected {
@@ -402,8 +422,9 @@
   animation: tech-shake 400ms linear;
 }
 
+/* WP20: two lines of install text without a layout shift. */
 #tech-feedback {
-  min-height: 1.4em;
+  min-height: 2.8em;
   color: var(--haze);
 }
 

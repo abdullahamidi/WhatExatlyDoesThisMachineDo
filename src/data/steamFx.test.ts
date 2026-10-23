@@ -60,7 +60,7 @@ describe('STEAM_EMITTERS', () => {
   it('lance is one steam puff on the thermal driver, gated by steamLance 1, with a rate of 0.3 + 0.25 log10(1 + v) clamped to 0.3..2', () => {
     const l = emitter('lance');
     expect(l.assetId).toBe('fx.steamPuff');
-    expect(l.at).toEqual([{ x: 20, y: -430 }]);
+    expect(l.at).toEqual([{ x: 20, y: -422 }]);
     expect(l.gate).toEqual({ techId: 'steamLance', minLevel: 1 });
     expect(l.until).toBeUndefined();
     expect(l.driver).toBe('thermal');

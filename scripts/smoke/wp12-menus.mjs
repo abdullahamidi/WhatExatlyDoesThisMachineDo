@@ -108,5 +108,12 @@ await page.click('#sys-data-import-text');
 const pre13 = await st();
 await page.keyboard.type('t ');
 ok('13_typing_in_textarea', { treeOpen: await treeOpen(), clicksDelta: (await st()).clicks - pre13.clicks, text: await page.$eval('#sys-data-import-text', el => el.value) });
+// 14 WP20: Space inside the tree keeps it open and the focus on a tech node
+await closeMenus();
+await page.evaluate(() => { const a = document.activeElement; if (a && a.blur) a.blur(); });
+await page.keyboard.press('t'); await page.waitForTimeout(250);
+await page.keyboard.press('Space'); await page.waitForTimeout(250);
+ok('14_tree_space', { open: await treeOpen(), focusNode: await page.evaluate(() => document.activeElement?.classList.contains('tech-node') === true) });
+await closeMenus();
 } catch (e) { res.FAILED = String(e).split('\n')[0]; }
 res.errors = errors; console.log(JSON.stringify(res, null, 1)); await browser.close();

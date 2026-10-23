@@ -2,6 +2,8 @@ import { SYSTEM_LOGS, SYSTEM_LOG_CONFIG, SYSTEM_LOG_TITLE } from '../data/system
 import type { SystemLogEntry, SystemLogTrigger } from '../data/systemLogs';
 import type { ToastMessage } from '../data/notifications';
 import type { ResourceMap } from '../data/types';
+import { CYCLE_LABEL } from '../data/prestige';
+import { cycleLabel } from '../simulation/prestige';
 
 // Pure scheduler for rare system-log toasts (WP4). No DOM, no Phaser, no mutation of inputs.
 
@@ -50,12 +52,13 @@ export function nextSystemLog(
   return null;
 }
 
-// Toast for one system log line.
-export function systemLogMessage(e: SystemLogEntry): ToastMessage {
+// Toast for one system log line. {cycle} becomes the live cycle digits (WP20), e.g. 0042.
+export function systemLogMessage(e: SystemLogEntry, cycle: number = 1): ToastMessage {
+  const digits = cycleLabel(cycle).slice(CYCLE_LABEL.prefix.length);
   return {
     key: `log:${e.id}`,
     title: SYSTEM_LOG_TITLE,
-    body: e.text,
+    body: e.text.replaceAll('{cycle}', digits),
     tone: 'system',
     durationMs: SYSTEM_LOG_CONFIG.durationMs,
   };

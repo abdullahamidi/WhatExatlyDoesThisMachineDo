@@ -1,5 +1,14 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { achievementMessage, cycleMessage, messageFor, recoveredMessage, welcomeBackMessage } from './notificationRules';
+import {
+  achievementMessage,
+  cycleMessage,
+  messageFor,
+  nextPurchaseBurst,
+  purchaseBurstMessage,
+  recoveredMessage,
+  welcomeBackMessage,
+} from './notificationRules';
+import type { PurchaseBurst } from './notificationRules';
 import { setRevealed } from './revealRules';
 import type { NotificationEvent } from './notificationRules';
 import { ACHIEVEMENTS } from '../data/achievements';
@@ -14,6 +23,7 @@ import {
 } from '../data/notifications';
 import { TECHNOLOGIES } from '../data/technologies';
 import { TECH_IDS } from '../data/types';
+import { TOAST_BURST } from '../data/ux';
 import type { OfflineReport, ResourceMap } from '../data/types';
 import { formatDuration, formatNumber } from '../utils/format';
 
@@ -297,5 +307,65 @@ describe('cycleMessage (WP14 T8a)', () => {
 
   it('title counts the cycle with the CYCLE label', () => {
     expect(cycleMessage({ cycle: 3, echoesGained: 3, echoesEarned: 6 }).title).toBe('CYCLE 0044');
+  });
+});
+
+describe('purchase bursts (WP20 T6)', () => {
+  const W = TOAST_BURST.windowMs;
+
+  it('a single step starts a burst from the level below', () => {
+    const b = nextPurchaseBurst(null, 'gearRatio', 4, 0, W);
+    expect(b).toEqual({ id: 'gearRatio', fromLevel: 3, toLevel: 4, lastMs: 0 });
+    expect(purchaseBurstMessage(b as PurchaseBurst).title).toBe('GEAR RATIO — LV 4');
+  });
+
+  it('purchases within the window merge into one LV a → b line', () => {
+    let b = nextPurchaseBurst(null, 'gearRatio', 2, 0, W);
+    b = nextPurchaseBurst(b, 'gearRatio', 3, 400, W);
+    b = nextPurchaseBurst(b, 'gearRatio', 4, 900, W);
+    expect(b).toEqual({ id: 'gearRatio', fromLevel: 1, toLevel: 4, lastMs: 900 });
+    expect(purchaseBurstMessage(b as PurchaseBurst).title).toBe('GEAR RATIO — LV 1 → 4');
+  });
+
+  it('exactly at the window edge still merges', () => {
+    const prev = nextPurchaseBurst(null, 'gearRatio', 2, 0, W);
+    const b = nextPurchaseBurst(prev, 'gearRatio', 3, W, W);
+    expect(b).toEqual({ id: 'gearRatio', fromLevel: 1, toLevel: 3, lastMs: W });
+  });
+
+  it('one millisecond past the window starts a new burst from level - 1', () => {
+    const prev = nextPurchaseBurst(null, 'gearRatio', 2, 0, W);
+    const b = nextPurchaseBurst(prev, 'gearRatio', 3, W + 1, W);
+    expect(b).toEqual({ id: 'gearRatio', fromLevel: 2, toLevel: 3, lastMs: W + 1 });
+    expect(purchaseBurstMessage(b as PurchaseBurst).title).toBe('GEAR RATIO — LV 3');
+  });
+
+  it('a different tech never merges with the previous burst', () => {
+    const prev = nextPurchaseBurst(null, 'gearRatio', 2, 0, W);
+    const b = nextPurchaseBurst(prev, 'flywheel', 3, 100, W);
+    expect(b).toEqual({ id: 'flywheel', fromLevel: 2, toLevel: 3, lastMs: 100 });
+  });
+
+  it('level 1 and level 0 start no burst, even after an open one', () => {
+    const prev = nextPurchaseBurst(null, 'gearRatio', 2, 0, W);
+    expect(nextPurchaseBurst(null, 'gearRatio', 1, 0, W)).toBeNull();
+    expect(nextPurchaseBurst(null, 'gearRatio', 0, 0, W)).toBeNull();
+    expect(nextPurchaseBurst(prev, 'gearRatio', 1, 100, W)).toBeNull();
+  });
+
+  it('message key, tone, body and duration', () => {
+    const msg = purchaseBurstMessage({ id: 'gearRatio', fromLevel: 1, toLevel: 4, lastMs: 0 });
+    expect(msg).toEqual({
+      key: 'purchase:gearRatio',
+      title: 'GEAR RATIO — LV 1 → 4',
+      body: null,
+      tone: 'info',
+      durationMs: TOAST_CONFIG.durationMs,
+    });
+  });
+
+  it('the burst arrow is U+2192', () => {
+    expect(TOAST_BURST.arrow).toBe('→');
+    expect(purchaseBurstMessage({ id: 'gearRatio', fromLevel: 1, toLevel: 4, lastMs: 0 }).title).toContain('→');
   });
 });

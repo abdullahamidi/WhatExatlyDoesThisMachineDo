@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { VIEW, WORLD, CAMERA, PIXEL_SCALE, GROUND_Y } from '../../data/world';
 import { PALETTE_CSS } from '../../data/palette';
 import { REDUCED_MOTION } from '../../data/settings';
+import { CAMERA_NUDGE } from '../../data/ux';
+import { nudgeCenter } from '../math/nudge';
 import type { Vec2 } from '../../data/machineComponents';
 import type { GameSession } from '../../simulation';
 import { motionPolicy } from '../../simulation/settings';
@@ -295,5 +297,14 @@ export class CameraController {
   private cancelRefocus(): void {
     this.refocusTween?.stop();
     this.refocusTween = null;
+  }
+
+  /** WP20 D2: after the TECH INDEX closes, ease the view toward newly released parts when they sit outside the inner box. */
+  nudgeToward(target: Vec2): void {
+    if (this.overridden || this.refocusTween !== null || this.drag?.active === true) return;
+    if (!motionPolicy(this.session.settings).cameraTween) return;
+    const next = nudgeCenter(this.center, this.zoom, target, VIEW, CAMERA_NUDGE);
+    if (next === null) return;
+    this.animateTo({ center: clampCenter(next, this.zoom, VIEW, WORLD), zoom: this.zoom });
   }
 }

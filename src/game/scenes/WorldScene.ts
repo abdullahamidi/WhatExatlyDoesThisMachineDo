@@ -261,6 +261,15 @@ export class WorldScene extends Phaser.Scene {
       session.on('settings', refreshHud),
     );
 
+    // WP20: part fly-ins wait while the TECH INDEX is open and play when it closes, with a camera nudge toward them.
+    machine.setAssemblyHold(this.ui.techTree.isOpen());
+    this.disposables.push(
+      this.ui.techTree.onOpenChange((open) => {
+        const released = machine.setAssemblyHold(open);
+        if (released.length > 0) camera.nudgeToward(machine.centroidOf(released));
+      }),
+    );
+
     this.renderHud();
   }
 

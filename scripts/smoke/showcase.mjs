@@ -413,11 +413,13 @@ try {
       treeOpen: window.__wedtmd?.techTreeOpen?.() ?? null,
       modals: window.__wedtmd?.modalCount?.() ?? null,
       focusId: document.activeElement?.id ?? null,
+      focusInTree: document.activeElement?.closest?.('#tech-overlay') != null,
     }));
     check(afterT.photo?.active === false, `showcase_F photo after T ${JSON.stringify(afterT.photo)}`);
     check(afterT.treeOpen === true, `showcase_F tech tree open ${afterT.treeOpen}`);
     check(afterT.modals === 1, `showcase_F modalCount after T ${afterT.modals}`);
-    check(afterT.focusId === 'tech-close', `showcase_F focus after T ${afterT.focusId}`);
+    // WP20: opening the tree focuses the selected node (fallback CLOSE); either way focus is inside the tree.
+    check(afterT.focusInTree === true, `showcase_F focus after T ${afterT.focusId}`);
 
     await page.keyboard.press('Escape');
     await page.waitForTimeout(600);

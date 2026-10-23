@@ -57,6 +57,6 @@ export const SETTINGS_LABELS = {
   keyTechTree: 'T',
   keyMenu: 'ESC',
   hotkeyCrank: 'CRANK',
-  hotkeyTechTree: 'TECH TREE',
+  hotkeyTechTree: 'TECH INDEX',
   hotkeyMenu: 'MENU',
 } as const;

@@ -254,7 +254,7 @@ export const TECHNOLOGIES: Record<TechId, TechDefinition> = {
     maxLevel: 20,
     effects: [{ type: 'autoPct', percent: 15, res: 'ee' }],
     requires: [{ type: 'tech', id: 'capacitorBank', minLevel: 1 }],
-    description: 'Steps voltage. Nobody specified which way. +15% EE per level.',
+    description: 'Steps voltage. Nobody specified which way. +15% EE production per level.',
     tree: { col: 3, row: 1 },
   },
   powerLines: {
@@ -292,7 +292,7 @@ export const TECHNOLOGIES: Record<TechId, TechDefinition> = {
       { type: 'lifetime', res: 'ee', amount: 4000000 },
     ],
     description: 'The machine has begun to resemble a grid node.',
-    flavor: 'Grid handshake... no response from grid.',
+    flavor: 'Grid handshake… no response from grid.',
     tree: { col: 5, row: 1 },
   },
   boiler: {
@@ -515,7 +515,7 @@ export const TECHNOLOGIES: Record<TechId, TechDefinition> = {
       { type: 'clickMult', factor: 5 },
     ],
     requires: [{ type: 'tech', id: 'harmonicCoil', minLevel: 3 }],
-    description: 'A fork rings with every turn. Clicks echo 2s of RS; x5 manual ME.',
+    description: 'A fork rings with every turn. Clicks echo 2s of RS; ×5 manual ME.',
     tree: { col: 2, row: 0 },
   },
   phaseLock: {
@@ -530,7 +530,7 @@ export const TECHNOLOGIES: Record<TechId, TechDefinition> = {
     maxLevel: null,
     effects: [{ type: 'rateMult', factor: 1.25, res: 'all' }],
     requires: [{ type: 'tech', id: 'harmonicCoil', minLevel: 5 }],
-    description: 'Twin mirrors broadcast the locked phase. x1.25 all production.',
+    description: 'Twin mirrors broadcast the locked phase. ×1.25 all production.',
     tree: { col: 2, row: 1 },
   },
   standingWave: {
@@ -647,7 +647,7 @@ export const TECHNOLOGIES: Record<TechId, TechDefinition> = {
     maxLevel: 10,
     effects: [{ type: 'rateMult', factor: 1.1, res: 'all' }],
     requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
-    description: 'Piles at both ends guy the crown to the ground. x1.1 all production per level.',
+    description: 'Piles at both ends guy the crown to the ground. ×1.1 all production per level.',
     tree: { col: 2, row: 2 },
   },
   inversionCrank: {
@@ -710,7 +710,7 @@ export const TECHNOLOGIES: Record<TechId, TechDefinition> = {
       { type: 'tech', id: 'horizonField', minLevel: 5 },
       { type: 'tech', id: 'graviticAnchor', minLevel: 3 },
     ],
-    description: 'The crown opens to the sky. x3 all production.',
+    description: 'The crown opens to the sky. ×3 all production.',
     tree: { col: 4, row: 1 },
   },
   finalAlignment: {

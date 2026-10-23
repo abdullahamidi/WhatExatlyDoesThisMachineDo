@@ -15,7 +15,7 @@ export function connectSystemLog(session: GameSession, toasts: Toasts, now: () =
       const next = nextSystemLog(tracker, session.state, now());
       if (next === null) return;
       tracker = next.tracker;
-      toasts.show(systemLogMessage(next.entry));
+      toasts.show(systemLogMessage(next.entry, session.prestige.cycle));
     } catch (error) {
       console.warn('[systemLog] check failed', error);
     }

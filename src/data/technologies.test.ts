@@ -334,10 +334,10 @@ describe('era II technology table', () => {
     expect(TECHNOLOGIES.dynamoCrank.description).toBe('The crank now feeds a dynamo. Clicks echo current.');
     expect(TECHNOLOGIES.capacitorBank.description).toBe('Stores a surge and releases it later. Doubles EE production.');
     expect(TECHNOLOGIES.sparkGap.description).toBe('A gap that should not conduct. It does. Triples manual production.');
-    expect(TECHNOLOGIES.transformer.description).toBe('Steps voltage. Nobody specified which way. +15% EE per level.');
+    expect(TECHNOLOGIES.transformer.description).toBe('Steps voltage. Nobody specified which way. +15% EE production per level.');
     expect(TECHNOLOGIES.powerLines.description).toBe('Lines run toward nothing. Doubles ME production.');
     expect(TECHNOLOGIES.substationBlueprint.description).toBe('The machine has begun to resemble a grid node.');
-    expect(TECHNOLOGIES.substationBlueprint.flavor).toBe('Grid handshake... no response from grid.');
+    expect(TECHNOLOGIES.substationBlueprint.flavor).toBe('Grid handshake… no response from grid.');
   });
 
   it('era-II techs without a given flavor have none', () => {
@@ -598,8 +598,8 @@ describe('era IV technology table', () => {
     expect(TECHNOLOGIES.harmonicCoil.description).toBe('Toroidal winding on the tower. More RS from the same pressure.');
     expect(TECHNOLOGIES.pressureResonator.description).toBe('Steam whistles on the manifold. +3 RS/s per level.');
     expect(TECHNOLOGIES.crankServo.description).toBe('A gearbox turns the crank for you, offline too. Each auto-crank yields a full click of every energy.');
-    expect(TECHNOLOGIES.echoCrank.description).toBe('A fork rings with every turn. Clicks echo 2s of RS; x5 manual ME.');
-    expect(TECHNOLOGIES.phaseLock.description).toBe('Twin mirrors broadcast the locked phase. x1.25 all production.');
+    expect(TECHNOLOGIES.echoCrank.description).toBe('A fork rings with every turn. Clicks echo 2s of RS; ×5 manual ME.');
+    expect(TECHNOLOGIES.phaseLock.description).toBe('Twin mirrors broadcast the locked phase. ×1.25 all production.');
     expect(TECHNOLOGIES.standingWave.description).toBe('The rod holds its note. +15% RS production per level.');
     expect(TECHNOLOGIES.crystalLattice.description).toBe('Quartz in the crown. Doubles PR and EE production.');
     expect(TECHNOLOGIES.harmonicConvergence.description).toBe('Every part of the machine now rings at one frequency.');
@@ -779,11 +779,11 @@ describe('era V technology table', () => {
     expect(TECHNOLOGIES.nullChamber.flavor).toBe('Chamber sealed around nothing. Nothing is rising.');
     expect(TECHNOLOGIES.containmentRing.description).toBe('Another ring around the core. More ??? from the same resonance.');
     expect(TECHNOLOGIES.resonantSiphon.description).toBe('Glass siphons arc resonance into the core. +2 ???/s and +5% ??? production per level.');
-    expect(TECHNOLOGIES.graviticAnchor.description).toBe('Piles at both ends guy the crown to the ground. x1.1 all production per level.');
+    expect(TECHNOLOGIES.graviticAnchor.description).toBe('Piles at both ends guy the crown to the ground. ×1.1 all production per level.');
     expect(TECHNOLOGIES.inversionCrank.description).toBe('Every turn leaves a turn going the other way. Clicks echo 3s of ???.');
     expect(TECHNOLOGIES.lensArray.description).toBe('Three lenses gather the core into one line. Doubles ??? production.');
     expect(TECHNOLOGIES.horizonField.description).toBe('The horizon glows on every side. +15% ??? production per level.');
-    expect(TECHNOLOGIES.skyAperture.description).toBe('The crown opens to the sky. x3 all production.');
+    expect(TECHNOLOGIES.skyAperture.description).toBe('The crown opens to the sky. ×3 all production.');
     expect(TECHNOLOGIES.finalAlignment.description).toBe('Every ring, lens and anchor now points the same way.');
     expect(TECHNOLOGIES.finalAlignment.flavor).toBe('Alignment complete. Awaiting operator.');
     expect(TECHNOLOGIES.primaryFunction.description).toBe('Engage the primary function.');
@@ -888,8 +888,8 @@ describe('era V technology table', () => {
 
   it('appends the three xf logs last, with increasing xf thresholds', () => {
     expect(SYSTEM_LOGS.slice(-3)).toEqual([
-      { id: 'units-unknown', text: 'Units not recognised. Continuing.', trigger: { kind: 'lifetime', res: 'xf', atLeast: 1000 } },
-      { id: 'cycle-0041', text: 'Cycle 0041 nearly complete.', trigger: { kind: 'lifetime', res: 'xf', atLeast: 1000000 } },
+      { id: 'units-unknown', text: 'Units not recognized. Continuing.', trigger: { kind: 'lifetime', res: 'xf', atLeast: 1000 } },
+      { id: 'cycle-0041', text: 'Cycle {cycle} nearly complete.', trigger: { kind: 'lifetime', res: 'xf', atLeast: 1000000 } },
       { id: 'operator-located', text: 'Operator identity: located.', trigger: { kind: 'lifetime', res: 'xf', atLeast: 100000000 } },
     ]);
     const xfThresholds = SYSTEM_LOGS.flatMap((e) =>

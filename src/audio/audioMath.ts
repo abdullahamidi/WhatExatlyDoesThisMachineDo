@@ -1,10 +1,13 @@
 // Pure mapping from production rate (ME/s) to audio parameters. No DOM, no WebAudio.
 
 import { AUDIO } from '../data/audio';
-import type { BedId } from '../data/audio';
-import { MUSIC } from '../data/music';
+import type { BedId, PurchaseCue } from '../data/audio';
+import type { EraNumber } from '../data/eras';
+import { RESOURCES } from '../data/resources';
+import { TECHNOLOGIES } from '../data/technologies';
 import { VOLUME_RANGE } from '../data/settings';
-import type { EndingPhase, TechId } from '../data/types';
+import type { EndingPhase, ResourceId, TechId } from '../data/types';
+import { currentEra } from '../simulation/progression/era';
 
 /** Clamp x into [lo, hi]; NaN falls back to lo; -0 comes back as +0. */
 function clampRange(x: number, lo: number, hi: number): number {
@@ -191,25 +194,17 @@ export function masterTarget(muted: boolean, unlocked: boolean, base: number = A
   return muted || !unlocked ? 0 : base * volume01;
 }
 
-/** Mix era 1..5 (WP15 D8): era I before any keystone, II..V from generator, boiler, resonatorSpire, nullChamber. */
-export type Era = 1 | 2 | 3 | 4 | 5;
-
-const ERAS: readonly Era[] = [1, 2, 3, 4, 5];
-
-/** Era from any number: floored and clamped to 1..5; non-finite -> 1. */
-function eraOf(n: number): Era {
-  if (!Number.isFinite(n)) return 1;
-  return ERAS[Math.min(ERAS.length - 1, Math.max(0, Math.floor(n) - 1))] ?? 1;
+/** Purchase cue by the era of the paying resource; unknown -> 'purchase'. */
+export function purchaseCue(res: ResourceId): PurchaseCue {
+  return AUDIO.purchaseCueByEra[eraOf(RESOURCES[res]?.era ?? 1) - 1] ?? 'purchase';
 }
 
-/** Current era from the highest owned keystone (MUSIC.keystones order: generator 2 .. nullChamber 5). None owned -> 1. */
-export function currentEra(techLevels: Readonly<Record<TechId, number>>): Era {
-  let index = -1;
-  for (let i = 0; i < MUSIC.keystones.length; i++) {
-    const entry = MUSIC.keystones[i];
-    if (entry && techLevels[entry[0]] >= 1) index = i;
-  }
-  return eraOf(index + 2);
+const ERAS: readonly EraNumber[] = [1, 2, 3, 4, 5];
+
+/** Era from any number: floored and clamped to 1..5; non-finite -> 1. */
+function eraOf(n: number): EraNumber {
+  if (!Number.isFinite(n)) return 1;
+  return ERAS[Math.min(ERAS.length - 1, Math.max(0, Math.floor(n) - 1))] ?? 1;
 }
 
 /** Ambient bed trim for an era (AUDIO.bedTrim row, era clamped to 1..5). Bad or missing data -> 1. */
@@ -231,7 +226,7 @@ const BED_PEAK_GAIN: Record<BedId, number> = {
 };
 
 /** Era in which each bed first arrives (the '-' cells of the WP15 bed table); a bed counts only from its arrival era on. */
-const BED_ARRIVAL_ERA: Record<BedId, Era> = {
+const BED_ARRIVAL_ERA: Record<BedId, EraNumber> = {
   hum: 1,
   gear: 1,
   mains: 2,
@@ -250,6 +245,72 @@ export function ambientPeakSum(era: number): number {
     if (BED_ARRIVAL_ERA[bed] <= e) sum += BED_PEAK_GAIN[bed] * bedTrim(bed, e);
   }
   return sum;
+}
+
+/** Live inputs for the ambient mix: production per second per resource, owned tech levels and the mute flag. */
+export interface AmbientInput {
+  readonly perSecond: Readonly<Record<ResourceId, number>>;
+  readonly techLevels: Readonly<Record<TechId, number>>;
+  readonly muted: boolean;
+}
+
+/** Ambient bed parameters for one update. Gains already carry the era trim; gearGain is the scale passed to synth.scheduleGearTicks. */
+export interface AmbientMix {
+  readonly era: EraNumber;
+  readonly humHz: number;
+  readonly humGain: number;
+  readonly gearRate: number;
+  readonly gearGain: number;
+  readonly mainsGain: number;
+  readonly arcRate: number;
+  readonly boilerGain: number;
+  readonly padGain: number;
+  readonly droneGain: number;
+  readonly servoGain: number;
+  readonly servoHz: number;
+}
+
+/**
+ * Ambient bed mix (WP15R): era from the owned era techs (simulation currentEra), each bed driven by its own resource rate, era trims from AUDIO.bedTrim.
+ * Muted: every gain and rate is 0 except the hum pitch (still follows ME/s), the servo pitch (minHz) and the neutral gearGain 1.
+ */
+export function ambientMix(input: AmbientInput): AmbientMix {
+  const { perSecond, techLevels, muted } = input;
+  const { me, ee, pr, rs, xf } = perSecond;
+  const era = currentEra(techLevels);
+  if (muted) {
+    return {
+      era,
+      humHz: humFrequency(me),
+      humGain: 0,
+      gearRate: 0,
+      gearGain: 1,
+      mainsGain: 0,
+      arcRate: 0,
+      boilerGain: 0,
+      padGain: 0,
+      droneGain: 0,
+      servoGain: 0,
+      servoHz: AUDIO.servo.minHz,
+    };
+  }
+  const owned = (id: TechId): boolean => Number.isFinite(techLevels[id]) && techLevels[id] >= 1;
+  const servoLevel = techLevels[AUDIO.servo.techId];
+  const servoMax = TECHNOLOGIES[AUDIO.servo.techId].maxLevel ?? 1;
+  return {
+    era,
+    humHz: humFrequency(me),
+    humGain: humGain(me) * bedTrim('hum', era),
+    gearRate: gearTickRate(me),
+    gearGain: bedTrim('gear', era),
+    mainsGain: mainsGain(ee) * bedTrim('mains', era),
+    arcRate: arcRate(ee, owned(AUDIO.arc.techId)),
+    boilerGain: boilerGain(pr, owned(AUDIO.boiler.techId)) * bedTrim('boiler', era),
+    padGain: padGain(rs, owned(AUDIO.pad.techId)) * bedTrim('pad', era),
+    droneGain: droneGain(xf, owned(AUDIO.drone.techId)) * bedTrim('drone', era),
+    servoGain: servoGain(servoLevel, servoMax) * bedTrim('servo', era),
+    servoHz: servoHz(servoLevel, servoMax),
+  };
 }
 
 /** Level set pushed to the synth: master target, wind on/off and the three bus gains. */

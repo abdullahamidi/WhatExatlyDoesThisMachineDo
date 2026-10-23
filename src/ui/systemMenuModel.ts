@@ -106,3 +106,27 @@ export function nextTab(index: number, count: number, key: TabNavKey): number {
       return count - 1;
   }
 }
+
+/** WP20 (D12): MEMORY-style tabs show once prestige matters: a second cycle, or the ending choice / postgame. */
+export function prestigeUiVisible(phase: EndingPhase, cycle: number): boolean {
+  return cycle > 1 || phase === 'choice' || phase === 'postgame';
+}
+
+/**
+ * WP20 (D12): tab index after a navigation key, skipping hidden tabs. Home / End jump to the first / last visible
+ * tab; arrows wrap. The walk ends at `index` itself, so a lone visible tab maps to itself. No visible tab gives 0.
+ */
+export function nextVisibleTab(index: number, visible: readonly boolean[], key: TabNavKey): number {
+  const count = visible.length;
+  const first = visible.indexOf(true);
+  if (first < 0) return 0;
+  if (key === 'Home') return first;
+  if (key === 'End') return visible.lastIndexOf(true);
+  const i = clampTab(index, count);
+  const step = key === 'ArrowRight' ? 1 : -1;
+  for (let k = 1; k <= count; k++) {
+    const j = (((i + step * k) % count) + count) % count;
+    if (visible[j] === true) return j;
+  }
+  return i;
+}

@@ -13,6 +13,7 @@ import {
 import type { MachineComponentId, Vec2 } from '../../data/machineComponents';
 import { HAMMER_FX } from '../../data/steamFx';
 import { REDUCED_MOTION } from '../../data/settings';
+import { ASSEMBLY_QUEUE } from '../../data/ux';
 import { motionPolicy } from '../../simulation/settings';
 import { componentDepth, machineLocalToWorld, resolveAttachment } from '../math/machineLayout';
 import { connectionOffset } from '../math/machineLinks';
@@ -34,6 +35,8 @@ function frameIndexOf(sprite: Phaser.GameObjects.Sprite): number {
 
 /** Perf probe window: number of recent update() durations kept for getUpdateStats. Debug only, not tuning. */
 const UPDATE_SAMPLE_COUNT = 120;
+/** Shared empty return value of setAssemblyHold (nothing released). */
+const NO_RELEASED: MachineComponentId[] = [];
 
 /**
  * The machine container: one sprite per component, visibility driven by tech levels.
@@ -68,6 +71,10 @@ export class MachineView {
   /** Ring buffer of the last update() durations (ms) for the perf probe; `updateCursor` is the next slot to write. */
   private readonly updateSamplesMs: number[] = [];
   private updateCursor = 0;
+  /** WP20: while true, new fly-in tweens start paused (the TECH INDEX is open). */
+  private assemblyHold = false;
+  /** WP20: ids whose paused fly-in waits for the hold to end, in creation order. */
+  private readonly held: MachineComponentId[] = [];
 
   /** Animator gate: a part moves only while visible and not assembling. */
   private readonly isActive = (id: MachineComponentId): boolean => this.visibleIds.has(id) && !this.assembling.has(id);
@@ -183,6 +190,8 @@ export class MachineView {
       .setPosition(base.x, base.y - (drop ? MACHINE_ASSEMBLY.dropArtPx : REDUCED_MOTION.assemblyDropPx))
       .setScale(drop ? MACHINE_ASSEMBLY.startScale : 1)
       .setAlpha(0);
+    // WP20: while the TECH INDEX is open the fly-in is created paused; the stagger applies to held tweens only.
+    const hold = this.assemblyHold;
     const tween = this.scene.tweens.add({
       targets: sprite,
       y: base.y,
@@ -191,6 +200,8 @@ export class MachineView {
       alpha: 1,
       duration: MACHINE_ASSEMBLY.durationMs,
       ease: drop ? MACHINE_ASSEMBLY.ease : 'Linear',
+      paused: hold,
+      delay: hold ? Math.min(this.held.length, ASSEMBLY_QUEUE.maxStaggerSteps) * ASSEMBLY_QUEUE.staggerMs : 0,
       onComplete: () => {
         this.settle(id, true);
         if (drop) {
@@ -201,6 +212,7 @@ export class MachineView {
       },
     });
     this.assembling.set(id, tween);
+    if (hold) this.held.push(id);
   }
 
   /** Exact rest state: at its base position, scale 1, alpha 1. The angle is left alone. */
@@ -246,11 +258,36 @@ export class MachineView {
   private cancelAssembly(id: MachineComponentId): void {
     this.assembling.get(id)?.stop();
     this.assembling.delete(id);
+    const at = this.held.indexOf(id); // WP20: a held fly-in cancelled by the caller is no longer waiting
+    if (at >= 0) this.held.splice(at, 1);
   }
 
   private stopAssemblies(): void {
     for (const tween of this.assembling.values()) tween.stop();
     this.assembling.clear();
+    this.held.length = 0;
+  }
+
+  /** WP20: on = new fly-ins start paused; off = the held ones play now (in queue order). Returns the ids that were released (a shared empty array when none). */
+  setAssemblyHold(on: boolean): MachineComponentId[] {
+    this.assemblyHold = on;
+    if (on || this.held.length === 0) return NO_RELEASED;
+    const ids = this.held.splice(0, this.held.length);
+    for (const id of ids) this.assembling.get(id)?.play();
+    return ids;
+  }
+
+  /** Mean world position of the given parts (MACHINE_ANCHOR when the list is empty). */
+  centroidOf(ids: readonly MachineComponentId[]): Vec2 {
+    if (ids.length === 0) return { x: MACHINE_ANCHOR.x, y: MACHINE_ANCHOR.y };
+    let x = 0;
+    let y = 0;
+    for (const id of ids) {
+      const p = this.getComponentWorldPosition(id);
+      x += p.x;
+      y += p.y;
+    }
+    return { x: x / ids.length, y: y / ids.length };
   }
 
   private destroyPuffs(): void {

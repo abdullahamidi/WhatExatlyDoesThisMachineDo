@@ -99,6 +99,8 @@ for (const name of only) {
     for (let i = 0; i < 3; i++) await p.mouse.click(cp.x, cp.y);
     await p.waitForTimeout(150);
   }
+  // WP20: an era card announced by the buys would otherwise sit in the screenshot
+  await p.evaluate(() => { const c = document.getElementById('era-card'); if (c && !c.hidden) c.click(); });
   await p.mouse.move(5, 5);
   await p.screenshot({ path: `${out}/${name}.png` });
   if (PERF && (name === 's13_era4_full' || name === 's15_era5_full')) {

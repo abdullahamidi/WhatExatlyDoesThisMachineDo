@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { SPLASH } from '../data/shell';
 import { hideSplash, onFirstFrame, setSplashProgress, splashReducedMotion, splashWidth } from './splash';
 
@@ -85,6 +86,15 @@ describe('splashReducedMotion', () => {
   it('is false without a UI root and without matchMedia', () => {
     expect(splashReducedMotion(fakeDoc({}), win(false))).toBe(false);
     expect(splashReducedMotion(fakeDoc({}), {} as Window)).toBe(false);
+  });
+});
+
+describe('index.html splash CSS', () => {
+  // The boot page fades #splash with its own CSS transition; it must match SPLASH.fadeMs or the removal lands mid-fade.
+  it('the #splash transition time equals SPLASH.fadeMs', () => {
+    const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+    const m = /#splash\{[^}]*transition:opacity (\d+)ms/.exec(html);
+    expect(Number(m?.[1])).toBe(SPLASH.fadeMs);
   });
 });
 

@@ -70,10 +70,31 @@
   cursor: pointer;
 }
 
+/* Square themed radios to match the terminal UI (native round control replaced). Focus ring: generic rule below. */
 .settings-choice input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-content: center;
+  width: 14px;
+  height: 14px;
   margin: 0;
-  accent-color: var(--amber);
+  border: 2px solid var(--rust);
+  border-radius: 0;
+  background: var(--iron-2);
+  flex: none;
   cursor: pointer;
+}
+
+.settings-choice input[type="radio"]:checked {
+  border-color: var(--amber);
+}
+
+.settings-choice input[type="radio"]:checked::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--amber);
 }
 
 .settings-toggle {

@@ -1,6 +1,8 @@
 // WP15 bundle budget. Usage: node scripts/perf/bundle-budget.mjs [distDir]   (default: dist, relative to repo root)
 // Reads the built app (index-*.js, phaser-*.js, *.css under <distDir>/assets) and public/assets.
-// Budgets come from scripts/smoke/perf-budget.json ("bundle", decimal KB / MB). Prints a table; exit 1 on any breach.
+// Limits for the raw rows come from scripts/smoke/perf-budget.json ("bundle" block, decimal KB / MB).
+// App js gzip is report-only since WP15R (program D7: raw sizes only): printed with status 'report', never a breach.
+// Prints a table; exit 1 on any breach.
 import { readdirSync, readFileSync, statSync, existsSync } from 'fs';
 import { gzipSync } from 'zlib';
 import { dirname, join, resolve } from 'path';
@@ -46,13 +48,13 @@ const rawOf = (p) => statSync(p).size;
 const gzOf = (p) => gzipSync(readFileSync(p)).length;
 
 const rows = [];
-const row = (name, value, limit, unit) => {
-  const ok = value <= limit;
-  rows.push({ name, value, limit, unit, ok });
+const row = (name, value, limit, unit, reportOnly = false) => {
+  const ok = reportOnly ? true : value <= limit;
+  rows.push({ name, value, limit: reportOnly ? '-' : limit, unit, ok, reportOnly });
 };
 
 row('app js raw (index-*.js)', sum(appJs, rawOf) / KB, budget.appRawKb, 'KB');
-row('app js gzip (index-*.js)', sum(appJs, gzOf) / KB, budget.appGzipKb, 'KB');
+row('app js gzip (index-*.js)', sum(appJs, gzOf) / KB, undefined, 'KB', true);
 row('phaser js raw (phaser-*.js)', sum(phaserJs, rawOf) / KB, budget.phaserKb, 'KB');
 row('css raw (*.css)', sum(css, rawOf) / KB, budget.cssKb, 'KB');
 const publicDir = join(root, 'public', 'assets');
@@ -63,7 +65,8 @@ const fmt = (n) => n.toFixed(1).padStart(10);
 console.log(`bundle budget (${distDir}; decimal KB)`);
 console.log('metric'.padEnd(34) + 'value'.padStart(10) + '  limit'.padEnd(12) + 'status');
 for (const r of rows) {
-  console.log(r.name.padEnd(34) + fmt(r.value) + '  ' + String(r.limit).padEnd(10) + (r.ok ? 'ok' : 'BREACH'));
+  const status = r.reportOnly ? 'report' : r.ok ? 'ok' : 'BREACH';
+  console.log(r.name.padEnd(34) + fmt(r.value) + '  ' + String(r.limit).padEnd(10) + status);
 }
 const breaches = rows.filter((r) => !r.ok);
 console.log(breaches.length === 0 ? 'bundle budget: PASS' : `bundle budget: FAIL (${breaches.length} breach)`);

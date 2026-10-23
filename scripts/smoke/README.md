@@ -75,6 +75,30 @@ Outputs:
 - `results.rects["<w>x<h>-<scale>"]` = compact `[x, y, w, h]` per element (`canvas`, `ui`, `hud`, `buttons`, `tech`,
   `system`, `settings`); title rows hold `canvas` and `title-panel`.
 
+## UX smoke (WP20): `ux.mjs`
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/ux.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/ux
+```
+
+Fresh 1280x720 context per case (`D_100` and `D_150` each get their own). Prints ONE JSON object `{ results, fail, errors }`;
+expect `fail` and `errors` to be `[]`. Each case waits for `componentState('handCrank')` before it starts.
+
+| case | checks (names in `results` / `fail`) |
+|---|---|
+| `A` (fresh) | `A_prompt_visible` (`crankPrompt()` after load), `A_no_hint`, `A_prompt_gone` (after one real click), `A_hint_visible` (`#hud-hint` shows `TECH INDEX` after 15 clicks), `A_badge` (`#hud-tech` `data-affordable` >= 1), `A_focus_node` (after `t`, focus is the `.tech-node.is-selected`), `A_tab_chip` (first `.tech-tab` `data-affordable` >= 1), `A_space_keeps_tree`, `A_space_buys` (`gearRatio` level 1 after Space), `A_feedback_flavor` (`#tech-feedback` contains `gear mesh recalibrated`), `A_held` (`gearSmall` assembling, alpha < 0.05 while the tree is open), `A_toast_coalesced` (a `LV 1 → 4` toast, at most 2 toasts), `A_toast_above` (`#toast-stack` z-index 200, no toast over `#tech-close` / `#tech-buy`), `A_fly_in_after_close` (`gearSmall` visible, alpha >= 0.99, not assembling), `A_hint_gone`, `A_goal_line` (`#hud-goal` starts with `NEXT:`) |
+| `B` (fresh) | `B_card_shown` (`#era-card` title `ERA II · ELECTRICAL`), `B_card_skipped` (a click hides it), `B_card_held` (hidden while the tree is open), `B_card_after_close` (`ERA III · PRESSURE` after Esc), `B_reduced_no_nudge` (camera `centerX` / `centerY` / `zoom` unchanged within 0.5 across the Esc; value `{ before, after }`), `B_card_reduced` (visible with `animationName` `none` under reduced motion) |
+| `C` (fresh) | `C_no_card_in_finale` (full S15 + `primaryFunction`, `#era-card` hidden 500 ms later) |
+| `D_100`, `D_150` (fresh each) | `D_<s>_fit` (`#tech-graph` `scrollWidth <= clientWidth + 1`; value `{ scrollWidth, clientWidth }`), `D_<s>_pf_selected` (selected node is `primaryFunction`), `D_<s>_pf_in_view` (its rect lies inside `#tech-graph`, 1 px), `D_<s>_menu_fixed` (`#system-panel` height equal within 1 px on every visible `#sys-tabs` tab; value = the heights), `D_<s>_memory_hidden` (`#sys-tab-memory` hidden in phase none) |
+| `perf` | `perf_click` only (report, never in `fail`): `{ ui: uiStats(), machine: machineStats() }` after 30 clicks, 100 ms apart |
+
+Screenshots in the outdir: `ux-A1-prompt.png`, `ux-A2-hint.png`, `ux-A3-tree-buy.png`, `ux-A4-flyin.png`, `ux-A5-goal.png`,
+`ux-B1-card.png`, `ux-B2-card-after-close.png`, `ux-B3-card-reduced.png`, and per uiScale `ux-D-100-tree.png`,
+`ux-D-100-menu-system.png`, `ux-D-100-menu-settings.png` (the same set with `150`).
+
+Failed checks are listed by name in `fail`; a thrown exception becomes `FAILED:<case>:<message>`. `errors` collects console
+errors, page errors and failed requests, each prefixed with the case key.
+
 ## Desktop smoke (desktop.mjs)
 
 Runs against the PACKAGED Windows exe (Steam shell, WP19 T14). It needs a built exe first: `npm run build:steam`
@@ -132,13 +156,14 @@ In a buy list, `@<techId>` jumps 8 h at a time (up to 8 jumps) until that tech i
 `@<techId>:<n>` buys that tech until its level is `n` (a rejected buy gets an 8 h jump and a retry, up to 128 rounds), then pushes `@<techId>:<n>:true|false`; e.g. `@resonantSiphon:20`.
 `PERF=1` (stages.mjs): for s13_era4_full and s15_era5_full, waits 3 s after the screenshot and prints `machineStats` (`{ meanMs, maxMs, components }`, or `null` when the hook is missing).
 `CLICK_SHOT=1` (stages.mjs): clicks the crank 3x before every stage shot so the gain block is in the screenshot.
+An `#era-card` shown at screenshot time is clicked away first (WP20).
 WP17 (energy continuity, Legacy Feeds): S11 buys `bellowsDrive` x3, S13 `gridExciter` x5, S15 `@resonantSiphon:20`, `@graviticAnchor:10`, `mainsBackfeed` x5, `steamLance` x5 (the `finale.mjs` S lists mirror `stages.mjs`).
 `hud` (every stage, one line): `{ title, visibleRows, frontier, click, clickSub, auto, right, bottom }` = `#hud-title` text, shown `.hud-res-row` count, `data-res` of `.hud-row--frontier`, `#hud-per-click` text, `#hud-per-click-me` text (`null` when hidden), `#hud-auto` text (`null` when hidden), `#hud-panel` right / bottom edge in px (`null` when missing). Expected, in the order s0 / s9 / s11 / s13 / s15 / s16:
 title `ERA I · MECHANICAL` / `ERA II · ELECTRICAL` / `ERA III · PRESSURE` / `ERA IV · RESONANCE` / `ERA V · ???` / `RESTORATION ENGINE`; visibleRows 1 / 2 / 3 / 4 / 5 / 5; frontier `me` / `ee` / `pr` / `rs` / `xf` / `xf`; auto `null` at s11 and `AUTO-CRANK 3/s` at s13; right <= 340 on every stage.
 `parts17` (s9_era2_full, s11_era3_full, s13_era4_full, s15_era5_full, s16_postgame; visibility of the 5 legacy feed parts): all `true` at s15_era5_full and s16_postgame.
 `bellowsFrames` (s11_era3_full, s15_era5_full): `componentState('bellows').frame` sampled 4 times, 350 ms apart (span >= 1 s); the frames must not all be equal.
 wp3-techtree.mjs result keys: `11_nodes` (era III tab, expect 10), `12_tab5` (fifth tab text, expect `SIGNAL ?`), `12_nodes` (era IV tab, expect 10), `13_tabs`, `11_tabCount` / `12_tabCount` / `13_tabCount` (expect 5, tabs unchanged), `13_header` (expect ends `???`), `13_nodes` (era V tab, expect 12), `13_null` (classes of `nullChamber`, `'missing'` when absent).
-wp12-menus.mjs (WP12 menus / keyboard / settings / records / export-import): `PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/wp12-menus.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke` (screenshots `wp12-0*.png` in the outdir). Keys: `1_first_crank_toasts` (contains `RECORD LOGGED`), `2_esc_menu` (true), `2_arrow_right` (selected tab = `sys-tab-settings`), `3_tab_trapped` (true after 12 Tabs), `4_settings` / `4_root_attrs` (volume 40, reduced motion on, UI scale 125, notation scientific; `#ui-root` zoom `1.25`), `5_space` (`delta` 10, `heldDelta` 0), `6_tree_t` (`[true, false]`), `7_records_firstTurn` (1), `7_records_counter`, `8_stats_clicks_cell` = `8_stats_clicks_session`, `9_hud_me_scientific` (contains `e`), `10_settings_after_reload` (same settings), `11_restored` (all true), `12_garbage` (status text, `meSame` / `clicksSame` true), `13_typing_in_textarea` (`treeOpen` false, `clicksDelta` 0). `errors` must be empty.
+wp12-menus.mjs (WP12 menus / keyboard / settings / records / export-import): `PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/wp12-menus.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke` (screenshots `wp12-0*.png` in the outdir). Keys: `1_first_crank_toasts` (contains `RECORD LOGGED`), `2_esc_menu` (true), `2_arrow_right` (selected tab = `sys-tab-settings`), `3_tab_trapped` (true after 12 Tabs), `4_settings` / `4_root_attrs` (volume 40, reduced motion on, UI scale 125, notation scientific; `#ui-root` zoom `1.25`), `5_space` (`delta` 10, `heldDelta` 0), `6_tree_t` (`[true, false]`), `7_records_firstTurn` (1), `7_records_counter`, `8_stats_clicks_cell` = `8_stats_clicks_session`, `9_hud_me_scientific` (contains `e`), `10_settings_after_reload` (same settings), `11_restored` (all true), `12_garbage` (status text, `meSame` / `clicksSame` true), `13_typing_in_textarea` (`treeOpen` false, `clicksDelta` 0), `14_tree_space` (`{ open: true, focusNode: true }`: Space inside the tree keeps it open, WP20). `errors` must be empty.
 
 `finale.mjs` (WP13 ending sequence, PRIMARY FUNCTION reveal, postgame): `PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/finale.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke`. Runs in fresh contexts: (1) buy `primaryFunction` after the era V list, HUD hidden, crank does not change clicks, `modalCount` ≥ 1; keyframes via `finaleSeek` at 1, 3.9, 5.4, 6, 6.9, 12, 15.6, 24, 30.5, 34, 40, 41.5, 45.2, 56, end (screenshots `finale-k<label>.png`); (3) 5 s playback from t 20, reload → `choice` (KEEP IT RUNNING shown, plate frame 5); (4) Esc / `t` do nothing at choice, KEEP → `postgame`, `localStorage` `state.ending.phase` postgame, crank works, reload keeps postgame, system menu BEGIN A NEW CYCLE row (WP14: enabled, reason line absent), reset from menu → plate frame 4; skip run (Esc during sequence → `choice`, t = end); reduced run (`session.updateSettings({ reducedMotion: true })` before the buy: `reduced`, overlay alpha at 15.6, wipe mode at 24, birds, beam animate, and at 42 `finale_r_42`, see WP18).
 Result keys (all `finale_*`): `finale_0_fastforward_failed` (expect `[]`), `finale_1_buy`, `finale_1_t_sequence`, `finale_k1` … `finale_kend` (each: `t`, `shot`, `plate` = name plate texture frame, `frame` = full `FinaleFrame`, plus WP18 `completeEra` = `frame.completeEra`, `hidden` = `partsVisible().hidden`, `camera` = `cameraState()` `{ zoom, centerX, centerY, relX, relY }`), `finale_2_playback_t`, `finale_3_reload_choice`, `finale_4_esc_t_choice`, `finale_4_keep`, `finale_4_crank_postgame`, `finale_5_reload_postgame` (also WP18 `camera`), `finale_6_newcycle`, `finale_7_reset`, `finale_skip`, `finale_r_start`, `finale_r_15_6`, `finale_r_24`, `finale_r_42` (WP18: `t`, `completeEra`, `camera`). `finale_FAILED` appears only if the run threw. `errors` must be empty (the KEEP click failure is also recorded there).
@@ -152,24 +177,149 @@ Env vars: `PW_PATH` (required: global Playwright dir), `PERF=1` (finale.mjs: ext
 
 ## WP15 perf smoke + bundle budget
 
-`perf.mjs` (profiling probes + budgets). Usage, after a build served on a scratch port:
-```
-PW_PATH=$(npm root -g)/playwright node scripts/smoke/perf.mjs http://localhost:<port>/ /tmp/smoke          # report
-PW_PATH=$(npm root -g)/playwright PERF_STRICT=1 node scripts/smoke/perf.mjs http://localhost:<port>/ /tmp/smoke   # exit 1 on breach
-PERF_GPU=1 ...   # also gate rAF frame p95 (<= 17 ms); report-only otherwise
-ONLY=s0_crank,finale ...   # subset of stages (stage names as in stages.mjs; "finale" = the finale probe run)
-```
-Prints ONE JSON `{ metrics, budgets, fail, errors }` on stdout (and `<outdir>/perf.json` when an outdir is given). `errors` must be empty; console / page errors also count as a `fail` entry under `PERF_STRICT=1`.
-Stages: `s0_crank`, `s9_era2_full`, `s13_era4_full`, `s15_era5_full`, `s16_postgame` (stages.mjs buy lists, fresh context each). Per stage: 10 s warm-up, then 3 samples 2 s apart (each sample reads the 120-frame `machineStats` / `uiStats` rings). `s15` also runs the tech tree probe (era V tab, median of 5 sync opens + forced layout) and the heap probe (`gc()`, then 30 s idle, `gc()`). `s16` runs a new cycle after the KEEP settle and compares `displayObjects` with `s0`. Finale: fresh context, buy list + `primaryFunction`, `finaleSeek` to t 8 / 22 / 34 / 36 (2 s window each).
-Gate values: stage means and stage maxes use the median of the 3 windows (raw per-window max is `machineMaxMsRaw` / `uiMaxMsRaw`); finale = worst probe point; `displayObjects` = max of s15, s16 and finale t34; audio = max over running samples only.
-Every probe is null-safe: a missing hook field (`audioStats` lands with T4) reports `null` and never fails the run.
+Browser perf smoke (`perf.mjs`, Chromium on the real Windows GPU) and the bundle budget (`bundle-budget.mjs`). Both read
+their limits from `scripts/smoke/perf-budget.json`. The machine is CPU-loaded by parallel workflows, so every reported
+number is the MEDIAN of 3 runs (`scripts/perf/perf-median.mjs`). A single run is for debugging only.
 
-Budgets: `scripts/smoke/perf-budget.json` only (numbers are not in the script). Env override: `PERF_<METRIC>` where the metric key is converted camelCase to SCREAMING_SNAKE:
-`PERF_MACHINE_MEAN_MS`, `PERF_MACHINE_MAX_MS` (<= 20), `PERF_UI_MEAN_MS`, `PERF_UI_MAX_MS` (<= 8), `PERF_FINALE_MEAN_MS` (<= 2), `PERF_DISPLAY_OBJECTS` (<= 500), `PERF_TECH_TREE_OPEN_MS` (<= 8), `PERF_HEAP_MB` (<= 150, MB = 1e6 bytes), `PERF_HEAP_GROWTH_MB` (<= 8), `PERF_BOOT_MS` (<= 3000, navigation start to first-frame mark), `PERF_LIVE_VOICES` (<= 48), `PERF_MUSIC_VOICES` (<= 8), `PERF_PEAK_DBFS` (<= -1), `PERF_FRAME_P95_MS` (<= 17, gated only with `PERF_GPU=1`), `PERF_CYCLE_DISPLAY_PCT` (<= 10, new cycle vs s0).
-Metric names in the JSON: `metrics.gate` (one value per budget key), `metrics.stages.<stage>`, `metrics.finale.t<8|22|34|36>`, `metrics.techTree`, `metrics.heap`, `metrics.cycle`, `metrics.frames`, `metrics.boot`.
-Note: frame max spikes come from CPU contention in the container, so the stage max gates use the median of the 3 windows; the raw max stays in the report.
+### One perf run
 
-`bundle-budget.mjs` (npm `perf:bundle`): `npm run build && npm run perf:bundle` (or `node scripts/perf/bundle-budget.mjs <distDir>`). Reads `<dist>/assets` (index-*.js app chunk <= 400 KB raw / 130 KB gzip, phaser-*.js <= 1500 KB, *.css <= 40 KB) and `public/assets` (<= 8000 KB), limits from `perf-budget.json` `bundle`, decimal KB. Prints a table; exit 1 on any breach.
+Build and serve the preview on port 4174 (see Setup), then:
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/perf.mjs "http://localhost:4174/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/perf
+```
+
+- `<preview>` is `http://localhost:4174` on this track. Keep one server on 4174; never start a second one.
+- `?debug=1` is needed for the hook `window.__wedtmd`. When the URL has no `debug` param, perf.mjs adds `debug=1` itself
+  before every page load.
+- Outdir: absolute Windows path (the session scratchpad works too). The run writes `<outdir>/perf.json`.
+- Stdout: ONE JSON object `{ metrics, budgets, fail, errors }`. Expect `fail` `[]` and `errors` `[]`.
+
+Env vars:
+
+| env | effect |
+|---|---|
+| `PW_PATH` | required: global Playwright dir (see Setup). |
+| `PERF_GPU=1` | real GPU: Chromium launches with `--use-angle=d3d11 --enable-gpu --ignore-gpu-blocklist`. Gates `frameP95Ms` and `postFrameP95Ms` (both <= 17 ms). Without it these two keys are report-only. A software renderer (SwiftShader, llvmpipe, basic render) under `PERF_GPU=1` is a fail. |
+| `PERF_HEADED=1` | headed launch. Use it as the fallback when the renderer string is SwiftShader under `PERF_GPU=1`. |
+| `PERF_PROFILE=1` | CDP CPU profile of post repeat #1, the keystone window and idle window #3. Result `top`: 10 entries `{ fn, selfMs }`, the `(idle)`, `(program)` and `(root)` nodes excluded (`(garbage collector)` kept). `.cpuprofile` files go into the outdir. The production build is minified: map hot spots by `url:line:col` against `dist/assets`. |
+| `PERF_STRICT=1` | exit 1 when `fail` is non-empty. Console and page errors count as a fail (`errors N > 0`). |
+| `ONLY=<list>` | comma list of stages to run: `s0_crank`, `s7_era1_full`, `s9_era2_full`, `s11_era3_full`, `s13_era4_full`, `s15_era5_full`, `s16_postgame`, `finale` (the finale probe run). |
+| `PERF_<METRIC>=<n>` | overrides one budget. Key camelCase to SCREAMING_SNAKE, e.g. `PERF_POST_MACHINE_MAX_MS`. Read by perf.mjs only; perf-median uses the JSON file. |
+
+Budget keys (`scripts/smoke/perf-budget.json`, top level; a value must be <= limit unless noted):
+
+| key | env override | limit |
+|---|---|---|
+| `machineMeanMs` | `PERF_MACHINE_MEAN_MS` | 4 ms |
+| `machineMaxMs` | `PERF_MACHINE_MAX_MS` | 40 ms |
+| `postMachineMaxMs` | `PERF_POST_MACHINE_MAX_MS` | 40 ms (0-3 s after a purchase) |
+| `uiMeanMs` | `PERF_UI_MEAN_MS` | 2 ms |
+| `uiMaxMs` | `PERF_UI_MAX_MS` | 8 ms |
+| `finaleMeanMs` | `PERF_FINALE_MEAN_MS` | 2 ms |
+| `displayObjects` | `PERF_DISPLAY_OBJECTS` | 500 |
+| `techTreeOpenMs` | `PERF_TECH_TREE_OPEN_MS` | 8 ms |
+| `heapMb` | `PERF_HEAP_MB` | 150 MB (MB = 1e6 bytes) |
+| `heapGrowthMb` | `PERF_HEAP_GROWTH_MB` | 8 MB |
+| `bootMs` | `PERF_BOOT_MS` | 3000 ms (navigation start to first frame) |
+| `liveVoices` | `PERF_LIVE_VOICES` | 48 |
+| `musicVoices` | `PERF_MUSIC_VOICES` | 8 |
+| `peakDbfs` | `PERF_PEAK_DBFS` | -1 dBFS |
+| `frameP95Ms` | `PERF_FRAME_P95_MS` | 17 ms (GPU only) |
+| `postFrameP95Ms` | `PERF_POST_FRAME_P95_MS` | 17 ms (GPU only) |
+| `cycleDisplayPct` | `PERF_CYCLE_DISPLAY_PCT` | 10 % (new cycle vs the pre-cycle display count) |
+
+### Stages and probes
+
+Each stage: fresh context at 1280x720, buy list = the WP17 list of `stages.mjs` (`@<tech>` and `@<tech>:<n>` markers as there).
+
+- `s0_crank`: no buys. `boot` = `navToBootMs`, `bootMs`, `bootToFirstFrameMs`. audioWiring probe: clicks the crank, opens the
+  SYSTEM menu, sets `#sys-set-musicVolume` to 0, then to 70, and reads the music bus and voices from `audioStats`.
+  `audioWiring.ok` is true / false, or null when the build has no levels. `ok === false` fails `audioWiring`.
+- `s7_era1_full`, `s9_era2_full`, `s11_era3_full`, `s13_era4_full`, `s15_era5_full`: buy lists from `stages.mjs`.
+- `s16_postgame`: same list plus `primaryFunction`, `skipFinale()` and KEEP IT RUNNING. Then a new cycle through the
+  SYSTEM menu row (WP14). `cycle.pct` = display object count after the cycle vs before it (no leak; parts are hidden,
+  not destroyed, so the check is growth, not shrink).
+- `s15_era5_full` extra: tech tree probe (era V tab, median of 5 sync opens with forced layout, `techTree.medianMs`) and
+  heap probe (`gc()` and read, 30 s idle, `gc()` and read; `heap.usedMb`, `heap.growthMb`).
+
+Idle windows (every stage): 10 s warm-up, then 3 windows of 2 s. Per window: rAF frame deltas and the `machineStats`,
+`uiStats`, `displayObjects` and `audioStats` probes (120-frame rings). Stage keys:
+- `frameP50Ms`, `frameP95Ms`, `frameMaxMs`: over all frames of the 3 windows.
+- `machineMeanMs`, `machineMaxMs`, `uiMeanMs`, `uiMaxMs`: median of the 3 windows. `machineMaxMsRaw`, `uiMaxMsRaw`: max of
+  the 3 windows (raw).
+- `displayObjects`: max of the 3 windows.
+- `audio`: `liveVoices`, `musicVoices`, `peakDb` (max over running windows), `era`, `theme`, `musicBus`.
+
+Post-purchase windows (`stage.post`, s7 / s11 / s15). Each window = settle 1 s, the purchase, then 3 s of frame and probe
+readings.
+- s7: gearRatio x3 (repeat windows), then the generator keystone after `@blueprint`.
+- s11: bellowsDrive x3, then the resonatorSpire keystone.
+- s15: steamLance x3.
+- Repeat windows are read as `post.repeat`, the keystone window as `post.keystone`. Gates `postMachineMaxMs` and
+  `postFrameP95Ms` (GPU only) take the max over them.
+
+Finale (fresh context): buy list S15 + `primaryFunction`, then `finaleSeek` to t 8, 22, 34 and 36, 2 s window each:
+`finale.t<n>` = `finaleMeanMs`, `machineMeanMs`, `machineMaxMs`, `uiMeanMs`, `uiMaxMs`, `displayObjects`. Gate
+`finaleMeanMs` = worst point.
+
+Audio eras: s7 / s9 / s11 / s13 / s15 expect era 1 / 2 / 3 / 4 / 5 (`audioEra <stage> <got> != <want>` fails).
+s16_postgame expects theme `restored` (`audioTheme` fails).
+
+Renderer: `metrics.renderer` = `{ renderer, vendor, software }` from a probe canvas (not the game canvas), read on the first
+page load. `software` is true for SwiftShader, llvmpipe or basic render.
+
+Gate values: stage means and maxes gate on the median of the 3 windows (raw per-window max in `machineMaxMsRaw` /
+`uiMaxMsRaw`). `displayObjects` = max of s15, s16 and finale t34. Audio = max over running samples only. Every probe is
+null-safe: a missing hook field reports `null` and never fails the run.
+
+Single-run JSON keys: `metrics.gate`, `metrics.stages.<stage>`, `metrics.finale.t<8|22|34|36>`, `metrics.techTree`,
+`metrics.heap`, `metrics.cycle`, `metrics.frames` (`n`, `p50Ms`, `p95Ms`, `gated`), `metrics.boot`, `metrics.renderer`,
+`metrics.audioWiring`.
+
+### Median of 3 (every reported number)
+
+Run two halves, three times each. Half A = `s0_crank,s7_era1_full,s9_era2_full,s11_era3_full`. Half B =
+`s13_era4_full,s15_era5_full,s16_postgame,finale`. Each command is its own Bash call with a 10 minute timeout
+(`timeout` 600000). `PERF_GPU=1` on all six. If a run fails with `gpu requested but renderer is software`, re-run that
+half with `PERF_HEADED=1`.
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright PERF_GPU=1 ONLY=s0_crank,s7_era1_full,s9_era2_full,s11_era3_full node scripts/smoke/perf.mjs "http://localhost:4174/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/perf/gpu-1-a
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright PERF_GPU=1 ONLY=s13_era4_full,s15_era5_full,s16_postgame,finale node scripts/smoke/perf.mjs "http://localhost:4174/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/perf/gpu-1-b
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright PERF_GPU=1 ONLY=s0_crank,s7_era1_full,s9_era2_full,s11_era3_full node scripts/smoke/perf.mjs "http://localhost:4174/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/perf/gpu-2-a
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright PERF_GPU=1 ONLY=s13_era4_full,s15_era5_full,s16_postgame,finale node scripts/smoke/perf.mjs "http://localhost:4174/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/perf/gpu-2-b
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright PERF_GPU=1 ONLY=s0_crank,s7_era1_full,s9_era2_full,s11_era3_full node scripts/smoke/perf.mjs "http://localhost:4174/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/perf/gpu-3-a
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright PERF_GPU=1 ONLY=s13_era4_full,s15_era5_full,s16_postgame,finale node scripts/smoke/perf.mjs "http://localhost:4174/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/perf/gpu-3-b
+node scripts/perf/perf-median.mjs C:/Users/<you>/AppData/Local/Temp/smoke/perf/gpu-*-a/perf.json C:/Users/<you>/AppData/Local/Temp/smoke/perf/gpu-*-b/perf.json > C:/Users/<you>/AppData/Local/Temp/smoke/perf/median.json
+node scripts/perf/perf-tables.mjs C:/Users/<you>/AppData/Local/Temp/smoke/perf/median.json
+```
+
+- `median.json` = `{ runs, renderers, gpu, gate, stages, finale, boot, budgets, audioWiring, fail }`. `gpu` is true only when
+  every input ran with `PERF_GPU=1`. Each stage holds `n` (inputs that had it, 3 expected).
+  `gate.frameP95Ms` and `gate.postFrameP95Ms` are the MAX of the per-stage median p95 values (conservative, not a pooled p95).
+- perf-median gates with the `perf-budget.json` values only; `PERF_*` overrides are not read there. `fail` = gate breaches,
+  carried run failures (`audioEra`, `audioTheme`, `audioWiring`, `gpu`, `errors`) and error counts per file.
+- `PERF_STRICT=1 node scripts/perf/perf-median.mjs ...` exits 1 when `fail` is non-empty (the JSON is still printed).
+- `perf-tables.mjs <median.json>` prints the markdown tables to stdout.
+
+### Bundle budget
+
+```
+npm run build && node scripts/perf/bundle-budget.mjs
+```
+
+npm script `perf:bundle` runs the second command (`npm run build && npm run perf:bundle` is the same). Reads
+`dist/assets`; another dist dir can be passed as the argument. Decimal KB, raw sizes only (program D7):
+
+| check | files | limit |
+|---|---|---|
+| app js raw | `index-*.js` | <= 400 KB (`appRawKb`) |
+| phaser js raw | `phaser-*.js` | <= 1500 KB (`phaserKb`) |
+| css raw | `*.css` | <= 40 KB (`cssKb`) |
+| public assets | `public/assets` total | <= 8000 KB (`publicAssetsKb`) |
+
+The gzip size of the app chunk is printed with status `report` and never breaches. A raw breach prints `BREACH` and exits 1.
 
 `src/game/math/perfBudget.test.ts` (in `npm test`): machine render target `MACHINE_BOUNDS` <= 2048 px per side and <= 16 MB RGBA; worst-case live particles (steam pool + dust + finale seeds + birds) <= 300, with steam derived from `STEAM_EMITTERS` / `MILESTONE_BURSTS` / `FINALE_BOOST` and capped by `STEAM_FX.poolSize`.
 
@@ -215,3 +365,4 @@ Main assertions (run order):
 - Teaser time never comes from wall time: each step seeks, then polls with a long cap, so a slow headless frame rate only costs wall time.
 
 Result keys: `showcase_A`, `showcase_B_k2_5`, `showcase_B_k3_9`, `showcase_B_k5_4`, `showcase_B_k6_9`, `showcase_B_k41_5`, `showcase_B_k45_2`, `showcase_B_k56`, `showcase_C`, `showcase_D`, `showcase_D2`, `showcase_C2`, `showcase_F`, `showcase_E_era2`, `showcase_E_assembling`, `showcase_E_end`, `showcase_E_stop`.
+Note: frame max spikes come from CPU contention in the container, so the stage max gates use the median of the 3 windows; the raw max stays in the report.
