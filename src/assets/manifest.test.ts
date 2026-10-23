@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ASSET_IDS } from './assetIds';
 import type { AssetId } from './assetIds';
-import { ASSET_MANIFEST, planAssetLoads, resolveAssetUrl, missingTextureIds, sheetFrameRects } from './manifest';
+import { ASSET_MANIFEST, planAssetLoads, resolveAssetUrl, missingTextureIds, sheetFrameRects, restoredTextureKey, ROT_SUFFIX, RESTORED_SUFFIX } from './manifest';
 import type { AssetEntry } from './manifest';
 import { MACHINE_COMPONENT_IDS, MACHINE_COMPONENTS } from '../data/machineComponents';
 
@@ -279,7 +279,7 @@ function withoutRotation(entry: AssetEntry): AssetEntry {
 describe('planAssetLoads', () => {
   it('loads exactly the file-backed entries of the real manifest as images (spritesheets excluded)', () => {
     const fileBacked = ASSET_IDS.filter((id) => ASSET_MANIFEST[id].file !== null && ASSET_MANIFEST[id].frame === undefined);
-    const images = planAssetLoads().filter((l) => l.kind === 'image');
+    const images = planAssetLoads().filter((l) => l.kind === 'image' && !l.key.includes('#'));
     expect(images.map((l) => l.key)).toEqual(fileBacked);
   });
 
@@ -359,7 +359,7 @@ describe('WP6c rotation sheets and sky', () => {
   });
 
   it('plans one #rot spritesheet per rotation entry with the entry frame size and frame count', () => {
-    const rotLoads = planAssetLoads().filter((l) => l.key.endsWith('#rot'));
+    const rotLoads = planAssetLoads().filter((l) => l.key.endsWith('#rot') && !l.key.includes('#restored'));
     expect(rotLoads.map((l) => l.key).sort()).toEqual(ROTATION_IDS.map((id) => id + '#rot').sort());
     for (const id of ROTATION_IDS) {
       const entry = ASSET_MANIFEST[id];
@@ -768,5 +768,160 @@ describe('WP17 legacy feed assets', () => {
       expect(load?.kind, want.id).toBe(want.frame ? 'spritesheet' : 'image');
       expect(load?.frame, want.id).toEqual(want.frame);
     }
+  });
+});
+
+/** WP18b restored variants (A17 art under machine/era5/restored/): id, file, rotation sheet (if any) and the whole-image size, equal to the original's. */
+const RESTORED_TABLE: ReadonlyArray<{ id: AssetId; file: string; rotationFile?: string; width: number; height: number }> = [
+  { id: 'machine.nullChamber', file: 'machine/era5/restored/null-chamber.png', width: 128, height: 116 },
+  { id: 'machine.nullCore', file: 'machine/era5/restored/null-core.png', rotationFile: 'machine/era5/restored/rot/null-core-rot.png', width: 64, height: 64 },
+  { id: 'machine.nullCoreGlint', file: 'machine/era5/restored/null-core-glint.png', width: 64, height: 64 },
+  { id: 'machine.ring1Back', file: 'machine/era5/restored/ring1-back.png', width: 112, height: 72 },
+  { id: 'machine.ring2Back', file: 'machine/era5/restored/ring2-back.png', width: 112, height: 72 },
+  { id: 'machine.ring3Back', file: 'machine/era5/restored/ring3-back.png', width: 112, height: 72 },
+  { id: 'machine.ring4Back', file: 'machine/era5/restored/ring4-back.png', width: 112, height: 72 },
+  { id: 'machine.ring1Front', file: 'machine/era5/restored/ring1-front.png', width: 112, height: 72 },
+  { id: 'machine.ring2Front', file: 'machine/era5/restored/ring2-front.png', width: 112, height: 72 },
+  { id: 'machine.ring3Front', file: 'machine/era5/restored/ring3-front.png', width: 112, height: 72 },
+  { id: 'machine.ring4Front', file: 'machine/era5/restored/ring4-front.png', width: 112, height: 72 },
+  { id: 'machine.ringBead', file: 'machine/era5/restored/ring-bead.png', width: 5, height: 5 },
+  { id: 'machine.siphonTube', file: 'machine/era5/restored/siphon-tube.png', width: 12, height: 30 },
+  { id: 'machine.siphonArcs1', file: 'machine/era5/restored/siphon-arcs-1.png', width: 512, height: 64 },
+  { id: 'machine.siphonArcs2', file: 'machine/era5/restored/siphon-arcs-2.png', width: 512, height: 64 },
+  { id: 'machine.siphonArcs3', file: 'machine/era5/restored/siphon-arcs-3.png', width: 512, height: 64 },
+  { id: 'machine.anchorGlow1', file: 'machine/era5/restored/anchor-glow-1.png', width: 128, height: 128 },
+  { id: 'machine.anchorGlow2', file: 'machine/era5/restored/anchor-glow-2.png', width: 128, height: 128 },
+  { id: 'machine.anchorGlow3', file: 'machine/era5/restored/anchor-glow-3.png', width: 128, height: 128 },
+  { id: 'machine.inversionGhost', file: 'machine/era5/restored/inversion-ghost.png', rotationFile: 'machine/era5/restored/rot/inversion-ghost-rot.png', width: 48, height: 48 },
+  { id: 'machine.lensLight', file: 'machine/era5/restored/lens-light.png', width: 128, height: 48 },
+  { id: 'machine.aperture', file: 'machine/era5/restored/aperture.png', width: 384, height: 28 },
+];
+
+const NODE_FS = 'node:fs';
+/** Pixel size read from the IHDR chunk of a PNG under public/assets/ (node:fs is loaded through a variable so no Node types are needed). */
+async function pngSize(file: string): Promise<{ width: number; height: number }> {
+  const fs = (await import(/* @vite-ignore */ NODE_FS)) as { readFileSync(path: URL): Uint8Array };
+  const buf = fs.readFileSync(new URL('../../public/assets/' + file, import.meta.url));
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  return { width: dv.getUint32(16), height: dv.getUint32(20) }; // IHDR: width at byte 16, height at byte 20, big endian
+}
+
+describe('A17 restored variants (WP18b)', () => {
+  it('gives exactly the 22 table ids a restored variant', () => {
+    const ids = ASSET_IDS.filter((id) => ASSET_MANIFEST[id].restored !== undefined);
+    expect(ids.length).toBe(22);
+    expect(ids.slice().sort()).toEqual(RESTORED_TABLE.map((row) => row.id).sort());
+  });
+
+  it('names each variant file by the original file rule and gives rotationFile only to rotation entries', () => {
+    for (const row of RESTORED_TABLE) {
+      const entry = ASSET_MANIFEST[row.id];
+      expect(entry.restored?.file, row.id).toBe(row.file);
+      expect(entry.file?.replace('machine/era5/', 'machine/era5/restored/'), row.id).toBe(row.file);
+      expect(entry.rotation === undefined, row.id).toBe(entry.restored?.rotationFile === undefined);
+      expect(row.rotationFile === undefined, row.id).toBe(entry.rotation === undefined);
+      if (entry.rotation !== undefined) {
+        expect(entry.rotation.file.replace('machine/era5/rot/', 'machine/era5/restored/rot/'), row.id).toBe(entry.restored?.rotationFile);
+        expect(row.rotationFile, row.id).toBe(entry.restored?.rotationFile);
+      }
+    }
+  });
+
+  it('has a disk PNG for every restored file and rotationFile (24 distinct)', () => {
+    const files = Object.keys(import.meta.glob('/public/assets/**/*.png'));
+    const used = new Set<string>();
+    for (const row of RESTORED_TABLE) {
+      const restored = ASSET_MANIFEST[row.id].restored;
+      expect(restored, row.id).toBeDefined();
+      if (restored === undefined) continue;
+      for (const path of [restored.file, restored.rotationFile]) {
+        if (path === undefined) continue;
+        expect(files, path).toContain(`/public/assets/${path}`);
+        used.add(path);
+      }
+    }
+    expect(used.size).toBe(24);
+  });
+
+  it('keeps every restored PNG at the pixel size of its original', async () => {
+    for (const row of RESTORED_TABLE) {
+      const entry = ASSET_MANIFEST[row.id];
+      const restored = entry.restored;
+      expect(restored, row.id).toBeDefined();
+      expect(entry.file, row.id).not.toBeNull();
+      if (restored === undefined || entry.file === null) continue;
+      expect(await pngSize(restored.file), row.id).toEqual(await pngSize(entry.file));
+      expect(await pngSize(entry.file), row.id).toEqual({ width: row.width, height: row.height });
+      expect({ width: entry.width, height: entry.height }, row.id).toEqual({ width: row.width, height: row.height });
+      if (entry.rotation !== undefined && restored.rotationFile !== undefined) {
+        expect(await pngSize(restored.rotationFile), row.id).toEqual(await pngSize(entry.rotation.file));
+      }
+    }
+  });
+
+  it('plans one #restored load per variant right after the original (or its #rot), with the original kind and frame', () => {
+    const loads = planAssetLoads();
+    const keys = loads.map((l) => l.key);
+    for (const row of RESTORED_TABLE) {
+      const entry = ASSET_MANIFEST[row.id];
+      const key = restoredTextureKey(row.id, false);
+      const load = loads.find((l) => l.key === key);
+      expect(load, row.id).toEqual({
+        key,
+        url: 'assets/' + row.file,
+        kind: entry.frame ? 'spritesheet' : 'image',
+        frame: entry.frame,
+      });
+      if (entry.frame === undefined) expect('frame' in (load ?? {}), row.id).toBe(false);
+      expect(keys.indexOf(key), row.id).toBe(keys.indexOf(entry.rotation ? row.id + ROT_SUFFIX : row.id) + 1);
+    }
+    const restoredLoads = loads.filter((l) => l.key.endsWith(RESTORED_SUFFIX));
+    expect(restoredLoads.length).toBe(22);
+    expect(restoredLoads.filter((l) => l.kind === 'spritesheet').length).toBe(8);
+    expect(restoredLoads.filter((l) => l.kind === 'image').length).toBe(14);
+  });
+
+  it('plans #restored#rot loads for the null core and the inversion ghost right after their #restored load and 24 restored keys in total', () => {
+    const loads = planAssetLoads();
+    const keys = loads.map((l) => l.key);
+    const cases: Array<{ id: AssetId; key: string; url: string; frame: { width: number; height: number; count: number } }> = [
+      { id: 'machine.nullCore', key: 'machine.nullCore#restored#rot', url: 'assets/machine/era5/restored/rot/null-core-rot.png', frame: { width: 64, height: 64, count: 64 } },
+      { id: 'machine.inversionGhost', key: 'machine.inversionGhost#restored#rot', url: 'assets/machine/era5/restored/rot/inversion-ghost-rot.png', frame: { width: 48, height: 48, count: 80 } },
+    ];
+    for (const want of cases) {
+      expect(loads.find((l) => l.key === want.key), want.key).toEqual({ key: want.key, url: want.url, kind: 'spritesheet', frame: want.frame });
+      expect(keys.indexOf(want.key), want.key).toBe(keys.indexOf(want.id + RESTORED_SUFFIX) + 1);
+    }
+    expect(keys.filter((k) => k.includes(RESTORED_SUFFIX)).length).toBe(24);
+  });
+
+  it('plans no restored load without a file and no #restored#rot without a rotation sheet', () => {
+    const procedural = Object.fromEntries(
+      ASSET_IDS.map((id) => [id, { ...withoutRotation(ASSET_MANIFEST[id]), file: null }]),
+    ) as Record<AssetId, AssetEntry>;
+    const custom1: Record<AssetId, AssetEntry> = {
+      ...procedural,
+      'machine.ringBead': { ...withoutRotation(ASSET_MANIFEST['machine.ringBead']), file: null, restored: { file: 'x/restored.png' } },
+    };
+    expect(planAssetLoads(custom1)).toEqual([]);
+    const custom2: Record<AssetId, AssetEntry> = {
+      ...procedural,
+      'machine.ringBead': {
+        ...withoutRotation(ASSET_MANIFEST['machine.ringBead']),
+        file: 'machine/era5/ring-bead.png',
+        restored: { file: 'machine/era5/restored/ring-bead.png', rotationFile: 'machine/era5/restored/rot/ring-bead-rot.png' },
+      },
+    };
+    expect(planAssetLoads(custom2)).toEqual([
+      { key: 'machine.ringBead', url: 'assets/machine/era5/ring-bead.png', kind: 'image' },
+      { key: 'machine.ringBead#restored', url: 'assets/machine/era5/restored/ring-bead.png', kind: 'image' },
+    ]);
+  });
+
+  it('names restored texture keys', () => {
+    expect(restoredTextureKey('machine.nullCore', false)).toBe('machine.nullCore#restored');
+    expect(restoredTextureKey('machine.nullCore', true)).toBe('machine.nullCore#restored#rot');
+    expect(ROT_SUFFIX).toBe('#rot');
+    expect(RESTORED_SUFFIX).toBe('#restored');
   });
 });

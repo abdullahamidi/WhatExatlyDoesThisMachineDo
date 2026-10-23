@@ -11,7 +11,17 @@ export interface AssetEntry {
   frame?: { width: number; height: number; count: number };
   /** Pre-rendered rotation sheet (RotSprite frames, grid layout, frame size = width x height). Loaded as `${id}#rot`. */
   rotation?: { file: string; frames: number }; // file under public/assets/
+  /** Postgame restored-accent variant (A17 art, wired WP18b): same width/height, frame layout and rotation layout as the original.
+   *  Loaded as `${id}#restored` (same kind + frame as the entry) and, with rotationFile, `${id}#restored#rot` (frame = entry.width x entry.height, count = rotation.frames). Paths under public/assets/. */
+  restored?: { file: string; rotationFile?: string };
   description: string;
+}
+
+export const ROT_SUFFIX = '#rot';
+export const RESTORED_SUFFIX = '#restored';
+/** `${id}#restored`, or `${id}#restored#rot` when rotation is true. */
+export function restoredTextureKey(id: AssetId, rotation: boolean): string {
+  return id + RESTORED_SUFFIX + (rotation ? ROT_SUFFIX : '');
 }
 
 export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
@@ -323,69 +333,85 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   },
   'machine.nullChamber': {
     id: 'machine.nullChamber', file: 'machine/era5/null-chamber.png', width: 128, height: 116, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/null-chamber.png' },
     description: 'Null chamber: a riveted lantern housing on the spire with two yoke eyes on its flanks.',
   },
   'machine.nullCore': {
     id: 'machine.nullCore', file: 'machine/era5/null-core.png', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/null-core.png', rotationFile: 'machine/era5/restored/rot/null-core-rot.png' },
     rotation: { file: 'machine/era5/rot/null-core-rot.png', frames: 64 },
     description: 'Null core seen face-on: a dark sphere with a faint rim, turned by the exotic flux.',
   },
   'machine.nullCoreGlint': {
     id: 'machine.nullCoreGlint', file: 'machine/era5/null-core-glint.png', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/null-core-glint.png' },
     description: 'Specular glint laid over the null core, a single pale highlight on the sphere.',
   },
   'machine.ring1Back': {
     id: 'machine.ring1Back', file: 'machine/era5/ring1-back.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/ring1-back.png' },
     description: 'First containment ring, back half: the arc that passes behind the core.',
   },
   'machine.ring2Back': {
     id: 'machine.ring2Back', file: 'machine/era5/ring2-back.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/ring2-back.png' },
     description: 'Second containment ring, back half: the arc that passes behind the core.',
   },
   'machine.ring3Back': {
     id: 'machine.ring3Back', file: 'machine/era5/ring3-back.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/ring3-back.png' },
     description: 'Third containment ring, back half: the arc that passes behind the core.',
   },
   'machine.ring4Back': {
     id: 'machine.ring4Back', file: 'machine/era5/ring4-back.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/ring4-back.png' },
     description: 'Fourth containment ring, back half: the outermost arc that passes behind the core.',
   },
   'machine.ring1Front': {
     id: 'machine.ring1Front', file: 'machine/era5/ring1-front.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/ring1-front.png' },
     description: 'First containment ring, front half: the arc that crosses in front of the core.',
   },
   'machine.ring2Front': {
     id: 'machine.ring2Front', file: 'machine/era5/ring2-front.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/ring2-front.png' },
     description: 'Second containment ring, front half: the arc that crosses in front of the core.',
   },
   'machine.ring3Front': {
     id: 'machine.ring3Front', file: 'machine/era5/ring3-front.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/ring3-front.png' },
     description: 'Third containment ring, front half: the arc that crosses in front of the core.',
   },
   'machine.ring4Front': {
     id: 'machine.ring4Front', file: 'machine/era5/ring4-front.png', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/ring4-front.png' },
     description: 'Fourth containment ring, front half: the outermost arc that crosses in front of the core.',
   },
   'machine.ringBead': {
     id: 'machine.ringBead', file: 'machine/era5/ring-bead.png', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/ring-bead.png' },
     description: 'Five-pixel bead that rides a containment ring.',
   },
   'machine.siphonTube': {
     id: 'machine.siphonTube', file: 'machine/era5/siphon-tube.png', width: 12, height: 30, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/siphon-tube.png' },
     description: 'Narrow glass siphon tube standing on the gallery, one of six in pairs.',
   },
   'machine.siphonArcs1': {
     id: 'machine.siphonArcs1', file: 'machine/era5/siphon-arcs-1.png', width: 512, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/siphon-arcs-1.png' },
     frame: { width: 128, height: 64, count: 4 },
     description: 'Four-frame resonance arc sheet for the first siphon pair, arcs flickering between the tubes.',
   },
   'machine.siphonArcs2': {
     id: 'machine.siphonArcs2', file: 'machine/era5/siphon-arcs-2.png', width: 512, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/siphon-arcs-2.png' },
     frame: { width: 128, height: 64, count: 4 },
     description: 'Four-frame resonance arc sheet for the second siphon pair, arcs flickering between the tubes.',
   },
   'machine.siphonArcs3': {
     id: 'machine.siphonArcs3', file: 'machine/era5/siphon-arcs-3.png', width: 512, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/siphon-arcs-3.png' },
     frame: { width: 128, height: 64, count: 4 },
     description: 'Four-frame resonance arc sheet for the third siphon pair, arcs flickering between the tubes.',
   },
@@ -395,26 +421,31 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   },
   'machine.anchorGlow1': {
     id: 'machine.anchorGlow1', file: 'machine/era5/anchor-glow-1.png', width: 128, height: 128, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/anchor-glow-1.png' },
     frame: { width: 32, height: 128, count: 4 },
     description: 'Four-frame glow sheet for the first gravitic anchor stage, a faint halo along the pile.',
   },
   'machine.anchorGlow2': {
     id: 'machine.anchorGlow2', file: 'machine/era5/anchor-glow-2.png', width: 128, height: 128, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/anchor-glow-2.png' },
     frame: { width: 32, height: 128, count: 4 },
     description: 'Four-frame glow sheet for the second gravitic anchor stage, a brighter halo along the pile.',
   },
   'machine.anchorGlow3': {
     id: 'machine.anchorGlow3', file: 'machine/era5/anchor-glow-3.png', width: 128, height: 128, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/anchor-glow-3.png' },
     frame: { width: 32, height: 128, count: 4 },
     description: 'Four-frame glow sheet for the third gravitic anchor stage, the strongest halo along the pile.',
   },
   'machine.inversionGhost': {
     id: 'machine.inversionGhost', file: 'machine/era5/inversion-ghost.png', width: 48, height: 48, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/inversion-ghost.png', rotationFile: 'machine/era5/restored/rot/inversion-ghost-rot.png' },
     rotation: { file: 'machine/era5/rot/inversion-ghost-rot.png', frames: 80 },
     description: 'Inversion ghost: a faint mirrored copy of the hand crank that trails the real crank.',
   },
   'machine.lensLight': {
     id: 'machine.lensLight', file: 'machine/era5/lens-light.png', width: 128, height: 48, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/lens-light.png' },
     frame: { width: 32, height: 48, count: 4 },
     description: 'Four-frame lens light sheet: a pale beam source at the lens base, flickering per frame.',
   },
@@ -424,6 +455,7 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   },
   'machine.aperture': {
     id: 'machine.aperture', file: 'machine/era5/aperture.png', width: 384, height: 28, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    restored: { file: 'machine/era5/restored/aperture.png' },
     frame: { width: 64, height: 28, count: 6 },
     description: 'Six-frame aperture sheet: a crown shutter that opens one leaf per frame toward the sky.',
   },
@@ -539,7 +571,7 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
 };
 
 export interface AssetLoad {
-  key: string; // an AssetId, or `${AssetId}#rot` for a rotation sheet
+  key: string; // an AssetId, `${AssetId}#rot`, `${AssetId}#restored` or `${AssetId}#restored#rot`
   url: string;
   kind: 'image' | 'spritesheet';
   frame?: AssetEntry['frame'];
@@ -553,6 +585,7 @@ export function resolveAssetUrl(entry: AssetEntry, baseUrl: string = 'assets/'):
 /**
  * Lists load descriptors in ASSET_IDS order for every file-backed entry (kind = spritesheet iff frame).
  * Each entry with a rotation sheet also gets a `${id}#rot` spritesheet load right after its own load.
+ * A file-backed entry with `restored` adds a `${id}#restored` load (and, with a rotation sheet and restored.rotationFile, `${id}#restored#rot`) right after its own / #rot loads.
  */
 export function planAssetLoads(
   manifest: Record<AssetId, AssetEntry> = ASSET_MANIFEST,
@@ -571,6 +604,23 @@ export function planAssetLoads(
       loads.push({
         key: id + '#rot',
         url: baseUrl + entry.rotation.file,
+        kind: 'spritesheet',
+        frame: { width: entry.width, height: entry.height, count: entry.rotation.frames },
+      });
+    }
+    if (entry.file !== null && entry.restored !== undefined) {
+      const restoredLoad: AssetLoad = {
+        key: restoredTextureKey(id, false),
+        url: baseUrl + entry.restored.file,
+        kind: entry.frame ? 'spritesheet' : 'image',
+      };
+      if (entry.frame !== undefined) restoredLoad.frame = entry.frame;
+      loads.push(restoredLoad);
+    }
+    if (entry.rotation !== undefined && entry.restored?.rotationFile !== undefined) {
+      loads.push({
+        key: restoredTextureKey(id, true),
+        url: baseUrl + entry.restored.rotationFile,
         kind: 'spritesheet',
         frame: { width: entry.width, height: entry.height, count: entry.rotation.frames },
       });

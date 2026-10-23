@@ -48,6 +48,7 @@ import { crankAngle, crankOffsetOnGearUp } from '../math/crankLink';
 import { componentDepth, resolveAttachment } from '../math/machineLayout';
 import { motionPolicy } from '../../simulation/settings';
 import { boostedValue } from '../math/finale';
+import { restoredComponentIds, swapTextureKey, frameIndexOfName } from '../math/restoredTextures';
 
 /** Top frame rate of any frame-cycle part in the data: the boost target for `frames` maxHz (frame parts carry no speed curve). */
 const FRAMES_MAX_HZ = MACHINE_COMPONENT_IDS.reduce((top, id) => {
@@ -125,6 +126,8 @@ function drivenOf(id: MachineComponentId): { ratio: number; phaseDeg: number } {
  * Finale (setFinale): boost lifts every speed and frame rate towards its curve max (boostedValue) and shows the
  * FINALE_BOOST.holdFrames frames; restored moves stage parts to their endingFrame. Boost 0 and not restored = unchanged.
  * Restored accent (RESTORED_ACCENT): restored with boost 0, the lamp frames stay lit (RESTORED_HOLD_FRAMES).
+ * Restored texture swap (WP18b): when restored turns true the parts of restoredComponentIds() move to their `#restored` textures, and back when it turns
+ * false or the session resets (applyRestoredTextures); the frame index is kept and the swap is instant. The generator glow (gauge) holds its lamp frame too.
  */
 export class MachineAnimator {
   private readonly session: MachineSource;
@@ -183,6 +186,8 @@ export class MachineAnimator {
   private finaleBoost = 0;
   /** Finale restored flag (setFinale): stage parts show their endingFrame. */
   private finaleRestored = false;
+  /** True while the parts of restoredComponentIds() sit on their `#restored` textures (applyRestoredTextures). */
+  private texturesRestored = false;
   private readonly unsubscribeClick: () => void;
   private readonly unsubscribeReset: () => void;
   private readonly unsubscribeMilestone: () => void;
@@ -242,6 +247,8 @@ export class MachineAnimator {
         if (sprite !== undefined) applyAngle(sprite, 0);
       }
       this.restoreBeadDepths();
+      this.finaleRestored = false;
+      this.applyRestoredTextures(false);
     });
     this.unsubscribeMilestone = session.on('milestone', ({ id }) => {
       if (id !== RESONANCE_MILESTONE_FX.techId) return;
@@ -394,6 +401,11 @@ export class MachineAnimator {
           break;
         }
         case 'gauge': {
+          const lit = RESTORED_HOLD_FRAMES[id];
+          if (lit !== undefined && this.finaleRestored && boost === 0) {
+            sprite.setFrame(lit); // restored accent: the generator glow stays at its top level once the finale boost has released
+            break;
+          }
           // Needle: the driver is low-passed, then mapped onto the log scale of the frames sheet.
           const target = driverValue(anim.driver, this.manual, me, ee, pr, rs, xf);
           const value = lowPass(this.gaugeValues.get(id) ?? 0, target, dt, anim.tauSeconds);
@@ -562,11 +574,28 @@ export class MachineAnimator {
 
   /**
    * Finale render state, pushed by the director each frame: boost 0..1 lifts speeds and frame rates towards their curve maxima
-   * and holds the FINALE_BOOST.holdFrames parts; restored moves stage parts to their endingFrame. Non-finite boost reads as 0.
+   * and holds the FINALE_BOOST.holdFrames parts; restored moves stage parts to their endingFrame; a change of restored swaps the
+   * restored textures (applyRestoredTextures). Non-finite boost reads as 0.
    */
   setFinale(f: { boost: number; restored: boolean }): void {
     this.finaleBoost = Number.isFinite(f.boost) ? Math.min(1, Math.max(0, f.boost)) : 0;
     this.finaleRestored = f.restored;
+    this.applyRestoredTextures(this.finaleRestored);
+  }
+
+  /**
+   * Restored texture swap (WP18b D2/D3): moves every part that has an A17 restored variant onto its `#restored` texture (on) or back to the
+   * original (off), keeping the frame index. A variant texture that does not exist keeps the current key. Idempotent: no-op when the state is unchanged.
+   */
+  private applyRestoredTextures(on: boolean): void {
+    if (on === this.texturesRestored) return;
+    this.texturesRestored = on;
+    for (const id of restoredComponentIds()) {
+      const sprite = this.sprites.get(id);
+      if (sprite === undefined || !sprite.scene) continue;
+      const key = swapTextureKey(MACHINE_COMPONENTS[id].assetId, sprite.texture.key, on, (k) => sprite.scene.textures.exists(k));
+      if (key !== sprite.texture.key) sprite.setTexture(key, frameIndexOfName(sprite.frame.name));
+    }
   }
 
   /** Angle of a driven part: crank parts follow the crank state and gearing, the rest follow thetaM. */

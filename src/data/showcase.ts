@@ -15,7 +15,7 @@ export const SHOWCASE_TEASER = {
   apertureAtS: 7.0,                                                    // the aperture latch gate tech is held at 0 until here
   endS: 9.5,                                                           // done; the scene keeps rendering the end frame
 } as const;
-/** Restored accent v1 'lamps lit': in the restored state with boost 0, these frame parts hold their bright frame. */
+/** Restored accent 'lamps lit': in the restored state with boost 0 these frames / gauge parts hold their bright frame (generatorGlow = top gauge frame, A17 (d)). */
 export const RESTORED_ACCENT = {
-  holdFrames: { ...FINALE_BOOST.holdFrames, crystal: RESONANCE_MILESTONE_FX.holdFrame } satisfies Partial<Record<MachineComponentId, number>>,
+  holdFrames: { ...FINALE_BOOST.holdFrames, crystal: RESONANCE_MILESTONE_FX.holdFrame, generatorGlow: 3 } satisfies Partial<Record<MachineComponentId, number>>,
 } as const;

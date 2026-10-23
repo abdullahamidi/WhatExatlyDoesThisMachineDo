@@ -1,7 +1,7 @@
-// WP13 finale smoke (WP18 additions: completeEra, hidden parts, camera per keyframe, reduced survey). Usage: PW_PATH=... [PERF=1] node finale.mjs <url> <outdir>
+// WP13 finale smoke (WP18 additions: completeEra, hidden parts, camera per keyframe, reduced survey; WP18b: restoredSwapped = number of parts on a #restored texture). Usage: PW_PATH=... [PERF=1] node finale.mjs <url> <outdir>
 // Records keys only (no asserts). Every result key starts with finale_ (plus errors / FAILED).
 // Uses the WP13 debug hook (finaleState, skipFinale, finaleSeek, displayObjects, componentState().frame,
-// session.updateSettings) and the WP18 hook fields partsVisible and cameraState; missing hook fields resolve to null, never throw.
+// session.updateSettings) and the WP18 hook fields partsVisible and cameraState and the WP18b field restoredTextures; missing hook fields resolve to null, never throw.
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PW_PATH);
@@ -79,6 +79,7 @@ const plateFrame = () => page.evaluate(() => window.__wedtmd?.componentState?.('
 const dispObjs = () => page.evaluate(() => window.__wedtmd?.displayObjects?.() ?? null);
 const partsVisible = () => page.evaluate(() => window.__wedtmd?.partsVisible?.() ?? null);
 const camState = () => page.evaluate(() => window.__wedtmd?.cameraState?.() ?? null);
+const restoredSwapped = () => page.evaluate(() => window.__wedtmd?.restoredTextures?.()?.swapped?.length ?? null);
 const machineMean = () => page.evaluate(() => window.__wedtmd?.machineStats?.()?.meanMs ?? null);
 const totalClicks = () => page.evaluate(() => window.__wedtmd.session.state.totalClicks);
 const treeOpen = () => page.evaluate(() => window.__wedtmd.techTreeOpen());
@@ -98,7 +99,7 @@ const keepClick = () => page.locator('button', { hasText: 'KEEP IT RUNNING' }).f
 const shotLog = async (label, t) => {
   await seek(t); await page.waitForTimeout(250);
   const s = await fin();
-  ok(`finale_k${label}`, { t: s?.t ?? null, shot: s?.shot ?? null, plate: await plateFrame(), frame: s?.frame ?? null, completeEra: s?.frame?.completeEra ?? null, hidden: (await partsVisible())?.hidden ?? null, camera: await camState() });
+  ok(`finale_k${label}`, { t: s?.t ?? null, shot: s?.shot ?? null, plate: await plateFrame(), frame: s?.frame ?? null, completeEra: s?.frame?.completeEra ?? null, hidden: (await partsVisible())?.hidden ?? null, camera: await camState(), restoredSwapped: await restoredSwapped() });
   await page.screenshot({ path: `${out}/finale-k${label}.png` });
 };
 // PERF=1 samples (report only): finaleState().meanMs, machineStats().meanMs, displayObjects()
@@ -143,7 +144,7 @@ try {
   ok('finale_2_playback_t', (await fin())?.t ?? null);
   await page.reload({ waitUntil: 'networkidle' }); await ready(); await page.waitForTimeout(300);
   const s3 = await fin();
-  ok('finale_3_reload_choice', { phase: s3?.phase ?? null, t: s3?.t ?? null, keepShown: await keepShown(), hudHidden: await hudHidden(), plate: await plateFrame(), restored: s3?.frame?.restored ?? null });
+  ok('finale_3_reload_choice', { phase: s3?.phase ?? null, t: s3?.t ?? null, keepShown: await keepShown(), hudHidden: await hudHidden(), plate: await plateFrame(), restored: s3?.frame?.restored ?? null, restoredSwapped: await restoredSwapped() });
   await page.screenshot({ path: `${out}/finale-choice.png` });
 
   // Esc and t do nothing at choice (no menu, no tree, overlay stays)
@@ -163,7 +164,7 @@ try {
   // reload -> postgame, no overlay, seeds on, eclipse hidden
   await page.reload({ waitUntil: 'networkidle' }); await ready(); await page.waitForTimeout(300);
   const s5 = await fin();
-  ok('finale_5_reload_postgame', { phase: s5?.phase ?? null, restored: s5?.frame?.restored ?? null, seeds: s5?.frame?.seeds ?? null, eclipse: s5?.frame?.eclipse?.kind ?? null, hudHidden: await hudHidden(), keepShown: await keepShown(), plate: await plateFrame(), displayObjects: await dispObjs(), camera: await camState() });
+  ok('finale_5_reload_postgame', { phase: s5?.phase ?? null, restored: s5?.frame?.restored ?? null, seeds: s5?.frame?.seeds ?? null, eclipse: s5?.frame?.eclipse?.kind ?? null, hudHidden: await hudHidden(), keepShown: await keepShown(), plate: await plateFrame(), displayObjects: await dispObjs(), camera: await camState(), restoredSwapped: await restoredSwapped() });
 
   // system menu: BEGIN A NEW CYCLE row (WP14: enabled, reason line absent; expect disabled false, reasonVisible false)
   await page.keyboard.press('Escape'); await page.waitForTimeout(250);
@@ -174,7 +175,7 @@ try {
   // reset from the menu in postgame -> wasteland (plate frame 4)
   await page.click('#sys-reset'); await page.click('#sys-reset'); await page.waitForTimeout(400);
   const s7 = await fin();
-  ok('finale_7_reset', { phase: s7?.phase ?? null, restored: s7?.frame?.restored ?? null, plate: await plateFrame(), me: await page.evaluate(() => window.__wedtmd.session.state.res.me) });
+  ok('finale_7_reset', { phase: s7?.phase ?? null, restored: s7?.frame?.restored ?? null, plate: await plateFrame(), me: await page.evaluate(() => window.__wedtmd.session.state.res.me), restoredSwapped: await restoredSwapped() });
   if (await menuOpen()) await page.keyboard.press('Escape');
 
   // RUN 2: skip. buy, wait 2 s, t does nothing, Esc -> choice with t at end
@@ -216,7 +217,7 @@ try {
   // WP18: the survey is skipped under reduced motion, so the camera stays on the full view (zoom 0.5)
   await seek(42); await page.waitForTimeout(250);
   const r3 = await fin();
-  ok('finale_r_42', { t: r3?.t ?? null, completeEra: r3?.frame?.completeEra ?? null, camera: await camState() });
+  ok('finale_r_42', { t: r3?.t ?? null, completeEra: r3?.frame?.completeEra ?? null, camera: await camState(), restoredSwapped: await restoredSwapped() });
   await page.screenshot({ path: `${out}/finale-reduced-42.png` });
 } catch (e) { res.finale_FAILED = String(e).split('\n')[0]; }
 res.errors = errors; console.log(JSON.stringify(res, null, 1));

@@ -6,7 +6,7 @@
   text-transform: uppercase; letter-spacing: .08em; color: var(--amber); background: var(--iron-2); border: 2px solid var(--rust); padding: 8px 14px; cursor: pointer;
   opacity: 0; transition: opacity 300ms linear; }
 .photo-chip[hidden] { display: none; }
-.photo-chip--hint, .photo-chip:hover { opacity: 1; }
+.photo-chip--hint, .photo-chip:focus-visible, .photo-chip:hover { opacity: 1; }
 .photo-chip:hover { background: var(--rust-dark); color: var(--haze); }
 .photo-chip:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 #ui-root[data-reduced-motion='on'] .photo-chip { transition: none; }

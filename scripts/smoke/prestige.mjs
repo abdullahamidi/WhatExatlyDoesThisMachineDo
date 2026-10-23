@@ -2,7 +2,8 @@
 // Usage: PW_PATH=... node prestige.mjs <url> <outdir>
 // Records keys only via ok(...) (no asserts). Every result key starts with prestige_ (plus errors / prestige_FAILED).
 // Uses the WP14 debug hook (prestige, cycleState, finaleState, skipFinale, componentState, modalCount, systemMenuOpen,
-// session.updateSettings); missing hook fields resolve to null, never throw.
+// session.updateSettings) and the WP18b fields restoredTextures and textureKey; missing hook fields resolve to null, never throw.
+// WP18b: RUN B records restoredSwapped / coreKey and pushes a mismatch into errors.
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PW_PATH);
@@ -66,6 +67,8 @@ const endingPhase = () => page.evaluate(() => window.__wedtmd.session.state.endi
 const modals = () => page.evaluate(() => window.__wedtmd.modalCount());
 const menuOpen = () => page.evaluate(() => window.__wedtmd.systemMenuOpen());
 const totalClicks = () => page.evaluate(() => window.__wedtmd.session.state.totalClicks);
+const restoredSwapped = () => page.evaluate(() => window.__wedtmd?.restoredTextures?.()?.swapped?.length ?? null);
+const coreKey = () => page.evaluate(() => window.__wedtmd?.textureKey?.('nullCore') ?? null);
 const hudCycle = () => page.evaluate(() => {
   const el = document.getElementById('hud-cycle');
   return el ? { text: (el.textContent || '').trim(), visible: !el.hidden && el.getClientRects().length > 0 } : null;
@@ -198,7 +201,11 @@ try {
   await open();
   await toChoice();
   const pg = await toPostgame();
-  ok('prestige_3_postgame', { phase: pg, modals: await modals() });
+  await page.waitForTimeout(300);
+  const pgSwapped = await restoredSwapped(), pgCore = await coreKey();
+  ok('prestige_3_postgame', { phase: pg, modals: await modals(), restoredSwapped: pgSwapped, coreKey: pgCore });
+  if (pgSwapped !== 33) errors.push(`prestige_3_postgame restoredSwapped ${pgSwapped} want 33`);
+  if (pgCore !== 'machine.nullCore#restored#rot') errors.push(`prestige_3_postgame coreKey ${pgCore} want machine.nullCore#restored#rot`);
   await page.keyboard.press('Escape'); await page.waitForTimeout(250);
   await page.click('#sys-tab-system'); await page.waitForTimeout(150);
   const row = await page.evaluate(() => {
@@ -211,7 +218,10 @@ try {
   await page.click('#cycle-confirm-begin');
   const tr3 = await runTransition();
   await page.waitForTimeout(300);
-  ok('prestige_3_after', { transition: tr3, prestige: await prestige(), hud: await hudCycle(), modals: await modals(), menuOpen: await menuOpen() });
+  const afterSwapped = await restoredSwapped(), afterCore = await coreKey();
+  ok('prestige_3_after', { transition: tr3, prestige: await prestige(), hud: await hudCycle(), modals: await modals(), menuOpen: await menuOpen(), restoredSwapped: afterSwapped, coreKey: afterCore });
+  if (afterSwapped !== 0) errors.push(`prestige_3_after restoredSwapped ${afterSwapped} want 0 (new cycle swaps back)`);
+  if (afterCore !== 'machine.nullCore#rot') errors.push(`prestige_3_after coreKey ${afterCore} want machine.nullCore#rot`);
   await shot('3-postgame-cycle2');
 
   // ---------- RUN C: (4) SETTINGS confirm OFF -> begin starts the transition directly ----------

@@ -169,6 +169,8 @@ wp12-menus.mjs (WP12 menus / keyboard / settings / records / export-import): `PW
 Result keys (all `finale_*`): `finale_0_fastforward_failed` (expect `[]`), `finale_1_buy`, `finale_1_t_sequence`, `finale_k1` … `finale_kend` (each: `t`, `shot`, `plate` = name plate texture frame, `frame` = full `FinaleFrame`, plus WP18 `completeEra` = `frame.completeEra`, `hidden` = `partsVisible().hidden`, `camera` = `cameraState()` `{ zoom, centerX, centerY, relX, relY }`), `finale_2_playback_t`, `finale_3_reload_choice`, `finale_4_esc_t_choice`, `finale_4_keep`, `finale_4_crank_postgame`, `finale_5_reload_postgame` (also WP18 `camera`), `finale_6_newcycle`, `finale_7_reset`, `finale_skip`, `finale_r_start`, `finale_r_15_6`, `finale_r_24`, `finale_r_42` (WP18: `t`, `completeEra`, `camera`). `finale_FAILED` appears only if the run threw. `errors` must be empty (the KEEP click failure is also recorded there).
 Missing hook fields (`finaleState`, `finaleSeek`, `skipFinale`, `displayObjects`, `componentState().frame`, WP18 `partsVisible`, `cameraState`) print `null`; they never throw.
 WP18 expectations (`finale.mjs`): every `finale_k<label>` now also records `completeEra`, `hidden` and `camera`; the new keys are `finale_k3_9`, `finale_k5_4`, `finale_k6_9`, `finale_k41_5`, `finale_k45_2`. `completeEra` is 3 / 4 / 5 at t 3.9 / 5.4 / 6.9 (completion steps at t 3 / 4.5 / 6). `camera` is (1320, 1380, 1) at `finale_k41_5` (baseL hold 41.0-42.0) and (2520, 1380, 1) at `finale_k45_2` (baseR hold 45.0-46.0; seek 45.2 because the 250 ms settle must stay inside the hold). `finale_5_reload_postgame.camera` is (1920, 1080, .5), the canonical portrait. `finale_r_42` has zoom .5: the survey is skipped under reduced motion. Screenshots: `finale-k<label>.png`, `finale-reduced-42.png`.
+
+WP18b expectations (restored texture swap): `finale.mjs` records `restoredSwapped` (= `restoredTextures().swapped.length`, `null` when the hook is missing) in every `finale_k<label>`, `finale_3_reload_choice`, `finale_5_reload_postgame`, `finale_7_reset` and `finale_r_42`. Expected: 0 for t < 30 (`finale_k1` ... `finale_k24`), 33 for t >= 30.5 (`finale_k30_5` ... `finale_kend`), 33 at `finale_3_reload_choice`, 33 at `finale_5_reload_postgame`, 0 at `finale_7_reset` (the menu reset reverts), 33 at `finale_r_42` (reduced motion swaps instantly too). `prestige.mjs` RUN B records `restoredSwapped` and `coreKey` in `prestige_3_postgame` (expect 33 and `machine.nullCore#restored#rot`) and in `prestige_3_after` (expect 0 and `machine.nullCore#rot`: the new cycle swaps back); a mismatch is pushed into `errors`.
 `prestige.mjs` (WP14 new cycle, Echoes, Memory perks, postgame path, confirm setting, reduced motion, hard reset): `PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/prestige.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke`. Four fresh contexts. Result keys (all `prestige_*`, checks only via `ok(...)`): (A) `prestige_0_choice`; finale BEGIN A NEW CYCLE opens the confirm dialog (`prestige_1_dialog`, gain line `+3 ECHOES`); CANCEL changes nothing (`prestige_1_cancel`); BEGIN runs the transition (`prestige_1_transition`: `started`, `maxAlpha` >= .95, `done`, `wallMs`); after it `prestige_1_after` (prestige `{cycle 2, echoesEarned 3, perks []}`, modals 0, HUD `CYCLE 0043`, toast, res all 0, only start techs, ending none, generator hidden, finale phase none, stats cycles 2); `prestige_1_record` (cycle + `CYCLE 0043` toast); `prestige_1_saved` (save has `prestige`); `prestige_1_reload` / `prestige_1_crank` (same after reload, crank works). MEMORY tab: `prestige_2_memory_head` (`ECHOES 3 (+90% ALL/S)`, `UNSPENT 3`), `prestige_2_residual` (OWNED, UNSPENT 1), `prestige_2_muscle` (wornMotor level visible at once), `prestige_2_locked` (servo / ledger / long silence disabled, `NEED` text). `prestige_6_reset` (hard reset: prestige default, no HUD cycle line). (B) `prestige_3_*`: KEEP IT RUNNING -> SYSTEM row BEGIN A NEW CYCLE enabled -> confirm -> cycle 2. (C) `prestige_4_confirm_off`: SETTINGS toggle CONFIRM NEW CYCLE OFF -> row starts the transition with no dialog. (D) `prestige_5_reduced`: reduced motion, transition ends with `lastTMs` <= 1200 (`gameMsOk`). `prestige_FAILED` only if the run threw; `errors` must be empty. Shots: `prestige-<step>.png`.
 
 Env vars: `PW_PATH` (required: global Playwright dir), `PERF=1` (finale.mjs: extra run sampling `finale_perf_s1_t8` at t 8–10, `finale_perf_s3_t22` / `finale_perf_s3_t36` at t 22–36, and `finale_perf_postgame`, each `finaleMeanMs`, `machineMeanMs`, `displayObjects`; report only), `WAIT_MS` (stages.mjs: overrides the settle wait for every stage), `FRAME_MS` / `ONLY` / `PERF` (stages.mjs, as above).
@@ -312,7 +314,7 @@ npm script `perf:bundle` runs the second command (`npm run build && npm run perf
 
 | check | files | limit |
 |---|---|---|
-| app js raw | `index-*.js` | <= 400 KB (`appRawKb`) |
+| app js raw | `index-*.js` | <= 460 KB (`appRawKb`) |
 | phaser js raw | `phaser-*.js` | <= 1500 KB (`phaserKb`) |
 | css raw | `*.css` | <= 40 KB (`cssKb`) |
 | public assets | `public/assets` total | <= 8000 KB (`publicAssetsKb`) |
@@ -331,33 +333,38 @@ Debug hook fields (`window.__wedtmd`, test-only, `src/game/debugHook.ts`). None 
 - `showcaseSeek(t)`: jumps the running teaser clock to `t` and renders at once. No-op when the teaser is not running. Does not fire `onDone`.
 - `showcaseState()`: `{ active, t, era, apertureOpen, boost, done, visible, total, hidden, camera }` of the teaser, or `null` when it is not running.
 - `showcaseStop()`: stops the teaser and wakes the World when `showcasePlay` put it to sleep.
+- `restoredTextures()` (WP18b): `{ swapped, total }` of the World machine: `swapped` = ids of the parts (of the 33 that have an A17 restored variant) whose sprite texture key contains `#restored`, `total` = 33. `null` before the world scene exists.
+- `textureKey(id)` (WP18b): the sprite texture key of one machine part, e.g. `machine.nullCore#restored#rot`; `null` without a machine or sprite.
 - `cameraState()` and `finaleState().frame.completeEra` are the existing readouts used by the WP18 keys.
 
-`showcase.mjs` (WP18 final machine showcase: finale survey, portrait, photo mode, teaser): `PW_PATH=$PW node scripts/smoke/showcase.mjs http://localhost:4173/ <outdir>`. Playwright viewport 1280 x 720 at `deviceScaleFactor` 3, so every PNG is 3840 x 2160. Each PNG size is read from its IHDR bytes; a mismatch goes to `errors`. Prints ONE JSON `{ showcase_*, shots, errors }` on stdout; `errors` must be empty. Writes 13 PNG files. Run order: A, B, C, D, C2, F, E. B, C, D, C2 and F run in one browser context (one game); A and E each open a fresh context. A run that throws adds `showcase_FAILED_<run>` and an entry in `errors`.
+`showcase.mjs` (WP18 final machine showcase: finale survey, portrait, photo mode, teaser): `PW_PATH=$PW node scripts/smoke/showcase.mjs http://localhost:4173/ <outdir>`. Playwright viewport 1280 x 720 at `deviceScaleFactor` 3, so every PNG is 3840 x 2160. Each PNG size is read from its IHDR bytes; a mismatch goes to `errors`. Prints ONE JSON `{ showcase_*, shots, errors }` on stdout; `errors` must be empty. Writes 14 PNG files. Run order: A, B, C, D, D2, C2, F, E. B, C, D, D2, C2 and F run in one browser context (one game); A and E each open a fresh context. A run that throws adds `showcase_FAILED_<run>` and an entry in `errors`. Console warnings matching `[assets] failed to load`, `[assets] size mismatch` or `has no frame` also go to `errors` (WP18b).
 
-Shots (13 PNG files in `<outdir>`):
+Shots (14 PNG files in `<outdir>`):
 - `a_era5_ruined`: run A, photo mode with the hint off, real levels, HUD hidden. Taken with the pointer not moved (`still`).
-- `b_k2_5`, `b_k3_9`, `b_k5_4`, `b_k6_9`, `b_k41_5`, `b_k45_2`, `b_k56`: run B finale keyframes. `b_k2_5` is t 2.5 (before the completion beat); `b_k3_9` / `b_k5_4` / `b_k6_9` show the completion beat (eras 3 / 4 / 5); `b_k41_5` / `b_k45_2` are the survey holds (baseL / baseR); `b_k56` is shot S4 with the portrait camera.
+- `b_k2_5`, `b_k3_9`, `b_k5_4`, `b_k6_9`, `b_k41_5`, `b_k45_2`, `b_k56`: run B finale keyframes. `b_k2_5` is t 2.0 (before the completion beat at t 3; the key keeps its name); `b_k3_9` / `b_k5_4` / `b_k6_9` show the completion beat (eras 3 / 4 / 5); `b_k41_5` / `b_k45_2` are the survey holds (baseL / baseR); `b_k56` is shot S4 with the portrait camera.
 - `c_postgame_portrait`: run C, postgame, canonical portrait pose.
 - `d_photo_postgame`: run D, VIEW MACHINE photo mode in postgame, pointer not moved.
+- `d_photo_crown`: run D2, postgame photo mode driven by real keys from the portrait (`=` x4, ArrowRight x2, ArrowUp x6): camera (2048, 696, 1.5) = 3 screen px per art px on the crown (aperture top, lens, null chamber, core, siphons, crystal, gallery). Chip blurred, pointer not moved.
 - `e_teaser_era2`: run E, teaser 300 ms after play (era II); `e_teaser_assembling`: teaser at t 3 or later (era IV parts assembling); `e_teaser_end`: teaser done (aperture open, portrait).
 
 Main assertions (run order):
-- Run A (fresh context): 45 crank clicks, then the full S15 buy list, 15 s wait for the era V sky, `photoMode(true, { hint: false })`, 1.2 s settle. Asserts: every buy ok; `partsVisible().hidden` subset of `['inversionGhost']`; `photoState().active`; `#hud-panel` visibility `hidden`; camera (1920, 1080, .5).
+- Run A (fresh context): 45 crank clicks, then the full S15 buy list, 15 s wait for the era V sky, `photoMode(true, { hint: false })`, 1.2 s settle. Asserts: every buy ok; `partsVisible().hidden` subset of `['inversionGhost']`; `photoState().active`; `#hud-panel` visibility `hidden`; camera (1920, 1080, .5). Then the exit chip is blurred and polled up to 3 s (`waitChipHidden`) until its computed opacity is <= 0.001 (the 300 ms fade is slow in 4K headless): `#photo-exit` opacity <= 0.001; `restoredTextures().swapped` is 0 of 33 (era V, no finale).
 - Run B (fresh context): 45 crank clicks, then the GREEDY buy list (copperWinding x10, firebox x10, harmonicCoil x16, containmentRing x16, bellowsDrive x3, gridExciter x5, horizonField x10, `@resonantSiphon:11`, `@graviticAnchor:4`, `@finalAlignment`; no mainsBackfeed, no steamLance). Asserts: every buy ok. Then 15 s wait, buy `primaryFunction` (asserts ok), and `finaleSeek` steps (300 ms settle unless noted):
-  - `b_k2_5` (t 2.5): completeEra 0; at least 6 hidden parts, including `siphonTube3L`, `coilStage3`, `steamLance`.
+  - `b_k2_5` (t 2.0, 150 ms settle, `partsVisible()` read before `finaleState()` because the film clock keeps running; asserts t < 3): completeEra 0; at least 6 hidden parts, including `siphonTube3L`, `coilStage3`, `steamLance`.
   - `b_k3_9`, `b_k5_4`, `b_k6_9` (250 ms settle, the film clock keeps running): completeEra 3 / 4 / 5; `coilStage3` shown at 3.9, `coilRing4` shown at 5.4; hidden subset of `['inversionGhost']` at 6.9; the real `resonantSiphon` level stays 11 (the completion beat is display only).
   - `b_k41_5` (baseL hold): camera (1320, 1380, 1).
   - `b_k45_2` (baseR hold): camera (2520, 1380, 1). Seek 45.2 so the settle stays inside the 45.0-46.0 hold.
   - `b_k56` (shot S4): camera portrait (1920, 1080, .5).
-- Run C (same context): `skipFinale`, KEEP IT RUNNING, wait for the stored phase `postgame` (3 s poll), 2.5 s settle. Asserts: phase `postgame`; `#hud-title` `RESTORATION ENGINE`; name plate frame 5; camera portrait; hidden subset of `['inversionGhost']`; `#hud-view-machine` shown with width and height > 0.
-- Run D (same context): focus `#hud-view-machine`, Enter, 3.2 s. Asserts: photo active with hint false; modalCount 1; `#hud-panel` visibility `hidden`; `#photo-exit` opacity `0`. Then a 200 px drag must change centerX, wheel -100 must raise zoom, ArrowRight must change centerX. Escape ends photo mode: photo inactive, camera portrait, `#hud-panel` visible, modalCount 0.
-- Run C2 (same context): reload. Asserts: phase `postgame`; camera portrait; hidden subset of `['inversionGhost']`.
+  - `restoredTextures().swapped.length` is 0 at `b_k2_5`, `b_k3_9`, `b_k5_4`, `b_k6_9` and 33 at `b_k41_5`, `b_k45_2`, `b_k56` (the swap starts with the name-plate beat at t 30).
+- Run C (same context): `skipFinale`, KEEP IT RUNNING, wait for the stored phase `postgame` (3 s poll), 2.5 s settle. Asserts: phase `postgame`; `#hud-title` `RESTORATION ENGINE`; name plate frame 5; camera portrait; hidden subset of `['inversionGhost']`; `#hud-view-machine` shown with width and height > 0. Restored accent: swapped 33 of 33; texture keys nullCore `machine.nullCore#restored#rot`, ring1Bead `machine.ringBead#restored`, aperture `machine.aperture#restored`; frames generatorGlow 3, crystal 2, lensLight 3, anchorGlow1L 2.
+- Run D (same context): focus `#hud-view-machine`, Enter, 3.2 s. Asserts: photo active with hint false; modalCount 1; `#hud-panel` visibility `hidden`; the focused exit chip is shown (opacity 1) when it matches `:focus-visible` (WP18b), then it is blurred and polled until hidden (opacity <= 0.001) before the shot `d_photo_postgame`. Then a 200 px drag must change centerX, wheel -100 must raise zoom, ArrowRight must change centerX. Escape ends photo mode: photo inactive, camera portrait, `#hud-panel` visible, modalCount 0.
+- Run D2 (same context, WP18b): focus `#hud-view-machine`, Enter, 1.5 s, blur the chip and poll until hidden; press `=` x4, ArrowRight x2, ArrowUp x6 (80 ms apart), 3.2 s, no mouse move. Asserts: photo active with hint false; camera (2048, 696, 1.5); chip opacity <= 0.001 (polled); swapped 33 of 33; crystal frame 2; shot `d_photo_crown`. Escape: photo inactive, camera portrait.
+- Run C2 (same context): reload. Asserts: phase `postgame`; camera portrait; hidden subset of `['inversionGhost']`; swapped 33 of 33 after the reload into postgame.
 - Run F (same context, no shot): VIEW MACHINE with Enter (hint off), ArrowRight re-arms the hint (hint on), `t` opens the tech tree. Asserts: photo inactive, tech tree open, modalCount 1, focus on `#tech-close` (not back on the HUD button). Escape closes the tree: modalCount 0. After Esc closes the tree, focus must be on `#hud-view-machine` or `#hud-tech` (never body); techTree.close() falls back there when the opener (the hidden photo exit chip) is no longer rendered.
 - Run E (fresh context, `#ui-root` visibility hidden): `showcasePlay()`, 300 ms, era 2 (shot `e_teaser_era2`). Then `showcaseSeek(2.2)` and poll until t >= 3 (60 s cap); shot `e_teaser_assembling`. Then `showcaseSeek(6.5)` and poll until done (60 s cap), 600 ms settle; shot `e_teaser_end`. Asserts: done, era 5, apertureOpen, hidden subset of `['inversionGhost']`, camera portrait, real `session.state.techLevels.generator` still 0. Then `showcaseStop()`: `showcaseState()` null, and one crank click raises `totalClicks` by exactly 1.
 - Teaser time never comes from wall time: each step seeks, then polls with a long cap, so a slow headless frame rate only costs wall time.
 
-Result keys: `showcase_A`, `showcase_B_k2_5`, `showcase_B_k3_9`, `showcase_B_k5_4`, `showcase_B_k6_9`, `showcase_B_k41_5`, `showcase_B_k45_2`, `showcase_B_k56`, `showcase_C`, `showcase_D`, `showcase_C2`, `showcase_F`, `showcase_E_era2`, `showcase_E_assembling`, `showcase_E_end`, `showcase_E_stop`.
+Result keys: `showcase_A`, `showcase_B_k2_5`, `showcase_B_k3_9`, `showcase_B_k5_4`, `showcase_B_k6_9`, `showcase_B_k41_5`, `showcase_B_k45_2`, `showcase_B_k56`, `showcase_C`, `showcase_D`, `showcase_D2`, `showcase_C2`, `showcase_F`, `showcase_E_era2`, `showcase_E_assembling`, `showcase_E_end`, `showcase_E_stop`.
 Note: frame max spikes come from CPU contention in the container, so the stage max gates use the median of the 3 windows; the raw max stays in the report.
 
 ## WP21 Steam demo edition smokes (`demo.mjs`, `demo-cases.mjs`)
@@ -419,3 +426,230 @@ returns it.
   `full` edition is unchanged.
 - Debug hook `window.__wedtmd.demoState()` returns `{ edition, phase, capReached, cardOpen, teaserActive, caption }`, or
   `null` when the demo controller is absent (full game). `phase` is `idle`, `waiting`, `teaser` or `card`.
+
+## Release verification smokes (WP16a)
+
+Release gate smokes: two shared libraries and four browser runs. Same rules as the smokes above (Node `.mjs`, Playwright through `PW_PATH`, never starts a server).
+
+- Base URL WITHOUT a query: `"<preview>/"` (trailing slash). Each script adds its own query (`debug=1`, or `debug=1&title=1`).
+- Outdir: absolute path. Each browser script writes `<outdir>/<name>.json` and prints the same JSON object to stdout (`e2e-full.json`, `a11y.json`, `soak.json`, `store-shots.json`).
+- Exit codes: `0` ok; `1` when `fail` or `errors` is non-empty; `2` usage error (missing arguments, bad env value, `PW_PATH` unset).
+- Every script clicks the crank at least 45 times before its first buy list (`wornMotor` costs 40 ME).
+- Do not rebuild `dist` while a smoke runs. The preview server re-reads `dist` on every request, so a rebuild mid-run changes the game under the smoke.
+
+### Shared libraries
+
+`scripts/smoke/lib/common.mjs`: Node built-ins only. Importing has no side effects and needs no `PW_PATH`.
+
+| Export | Meaning |
+|---|---|
+| `S7`, `S9`, `S11`, `S13`, `S15` | Cumulative buy lists per era (copies of the `stages.mjs` lists). |
+| `STAGES` | `[['s7', S7], ['s9', S9], ...]` in play order. |
+| `ERA_TITLES` | Expected HUD era title per stage (`ERA I · MECHANICAL` ... `ERA V · ???`). |
+| `HUD_ROWS` | Expected visible HUD resource rows per stage (1, 2, 3, 4, 5). |
+| `LEGACY_FEEDS` | Legacy energy feed parts: `bellowsDrive`, `gridExciter`, `mainsBackfeed`, `steamLance`. |
+| `ASSET_WARNING_RE` | Asset loader console warnings that count as errors. |
+| `GPU_ARGS` | Chromium flags for `SOAK_GPU=1` (`--use-angle=d3d11`, `--enable-gpu`, `--ignore-gpu-blocklist`). |
+| `PREVIEW_HINT` | `http://localhost:4174/` (the preview URL; never started by a smoke). |
+| `delta(prev, next)` | Items of `next` after the `prev` prefix. Throws when `prev` is not a prefix. |
+| `withQuery(base, params)` | URL with the given query parameters set. |
+| `loadChromium()` | Playwright chromium from `PW_PATH`. Exits 2 when unset. |
+| `readBudget()` | Parsed `scripts/smoke/perf-budget.json`. |
+| `makeReport()` | `{ results, fail, errors, check(name, cond, detail) }`. A failing name goes to `fail` once. |
+| `watchPage(page, errors, tag)` | Records console errors, asset warnings, page errors, failed requests and HTTP >= 400. |
+| `waitReady(page, timeoutMs)` | Waits for the debug hook and the hand crank, then a 400 ms settle. |
+| `crankClicks(page, n, gapMs)` | `n` real mouse clicks on the hand crank. |
+| `buyInPage(buys)` | Buy runner for `page.evaluate`. Entries: `<techId>`, `@<techId>:<n>`, `@<techId>`, `@blueprint`. Returns `<entry>:<bool>` per entry. |
+| `buyList(page, buys)` | Runs `buyInPage`; returns the failed entries (`[]` = every buy worked). |
+| `dismissEraCard(page)` | Clicks `#era-card` away when it is open. |
+| `hudState(page)` | `{ title, visibleRows, frontier, click, clickSub, auto, right, bottom }`, or `null` on error. |
+| `poll(page, fn, arg, capMs, stepMs)` | Re-evaluates `fn(arg)` in the page until truthy or the cap; returns the last value. |
+| `waitPhotoChipHidden(page, capMs)` | Blurs `#photo-exit`, polls its opacity to <= 0.001. Returns the final opacity. |
+| `pngSize(file)` | `{ width, height }` from the PNG IHDR. Throws when the file is not a PNG. |
+
+Self-test (pure, no browser): `node scripts/smoke/lib/common.mjs --selftest`. Prints one line `{ ok, checks }`; exit 0 when every check holds. Checks: `prefix_s7_s9`, `prefix_s9_s11`, `prefix_s11_s13`, `prefix_s13_s15`, `delta_length`, `delta_reverse_throws`, `with_query`, `png_gear_small_40`, `budget_heap_150`.
+
+`scripts/smoke/lib/a11y-audit.mjs`: page audit, Tab walker, focus log and WCAG maths. Never imports Playwright.
+
+- `DEFERRED_SCOPES` = `['#tech-overlay', '#toast-stack', '#era-card']`. These scopes belong to another package (`src/ui/techTree*`, `toasts*`, `eraCard*`). Findings inside them go to `deferred` and never fail.
+- `auditScope(page, scopeSel)` returns `{ rootCount, checked: { controls, text }, unnamed, small, contrast, deferred, inactive, indeterminate }`. Only visible elements are audited. Item kinds:
+  - `unnamed`: a control (button, link, input, tab, radio, ...) with no accessible name (aria-label, aria-labelledby, label, own text, title).
+  - `small`: text below 12 px (`fontPx`).
+  - `contrast`: text below its WCAG ratio.
+  - Each item: `{ kind, sel, text, ratio, need, fontPx }`.
+- WCAG 1.4.3: normal text >= 4.5:1; large text (>= 24 px, or >= 18.66 px at weight >= 700) >= 3:1. The foreground alpha and the opacity of the element and its ancestors count. The background is the composite of the layers from the element outwards up to the first opaque layer. Gradient backgrounds use the minimum ratio over all colour stops.
+- `inactive`: contrast items inside `:disabled`, `[aria-disabled="true"]` or `.is-locked` are exempt. They are listed here and never fail.
+- `deferred`: items of any kind inside a `DEFERRED_SCOPES` scope. Report-only. Items that are D8-exempt inactive text (disabled, `aria-disabled`, `.is-locked`) carry `inactive: true`; skip those when fixing.
+- `indeterminate`: text with no parseable colour, or with no opaque background before body. `ratio` is `null`. Report-only. These are listed as they are, whatever the scope.
+- Other exports: `tabWalk(page, n, scopeSel)` (Tab n times, 60 ms apart; each record has `tag`, `id`, `cls`, `tech`, `ring`, `named`, `inScope`). A ring is an outline >= 1 px or a box-shadow. `missingFocus(page, containerSel)` (visible enabled controls the focus log never saw; a radio group counts once). `installFocusLog`, `resetFocusLog`, `focusId`, `setUiScale(page, pct)`, `rectInViewport(page, sel, tolPx)`. Pure helpers: `parseCssColor`, `compositeOver`, `relativeLuminance`, `contrastRatio`, `neededRatio`.
+- Self-test (pure, no browser): `node scripts/smoke/lib/a11y-audit.mjs --selftest`. Prints one line `{ ok, checks, values }`; exit 0 when all 19 checks hold (contrast maths, colour parsing, `deferred_scopes_3`). Without the flag it prints usage and exits 2.
+
+### e2e-full.mjs
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/e2e-full.mjs "<preview>/" C:/Users/<you>/AppData/Local/Temp/smoke/e2e
+```
+
+One run, one fresh 1280x720 context, from the title screen to a new cycle and a reload. Real keyboard and mouse input throughout. Each step has its own guard and one screenshot. A step exception adds `FAILED:<NN>_<name>:<first line>` to `fail` and the run goes on. Wall time limit: 300000 ms.
+
+| Step | Screenshots (`e2e-<NN>-<name>.png`) | Check names | Expect |
+|---|---|---|---|
+| 01 title | `01-title` | `01_title_open`, `01_continue_hidden`, `01_new_focused` | title open; CONTINUE hidden on a fresh profile; NEW GAME focused |
+| 02 newgame | `02-newgame` | `02_title_closed`, `02_clicks` | Enter closes the title; 30 clicks (20 crank + 10 Space) |
+| 03 tree | `03-tree` | `03_tree_open`, `03_reached_gearRatio`, `03_bought_gearRatio`, `03_tree_closed` | tree opens; Gear Ratio reached by Tab and bought (level 1); tree closes |
+| 04 save | `04-save` | `04_saved` | SYSTEM > SAVE stores `gearRatio` 1 |
+| 05 continue | `05-continue` | `05_continue_focused`, `05_progress_kept` | CONTINUE focused after reload; gearRatio 1 and 30 clicks kept |
+| 06 eras | `06-eras`, `06-s7`, `06-s9`, `06-s11`, `06-s13`, `06-s15` | `06_<key>_buys`, `06_<key>_title`, `06_<key>_rows`, `06_<key>_displayObjects` (`<key>` = `s7`, `s9`, `s11`, `s13`, `s15`) | buy list all ok; HUD title = `ERA_TITLES[key]`; visible rows = `HUD_ROWS[key]`; display objects <= 500 |
+| 07 finale | `07-finale`, `07-finale-mid` | `07_buy`, `07_sequence`, `07_choice`, `07_keep_visible` | `primaryFunction` bought; sequence runs; Escape reaches the choice; KEEP visible |
+| 08 keep | `08-keep` | `08_postgame`, `08_title` | KEEP IT RUNNING enters postgame; HUD title `RESTORATION ENGINE` |
+| 09 view | `09-view`, `09-view-photo` | `09_photo_on`, `09_hud_hidden`, `09_photo_off`, `09_hud_back` | VIEW MACHINE hides the HUD; Escape restores it |
+| 10 newcycle | `10-newcycle`, `10-newcycle-confirm` | `10_menu_open`, `10_row_enabled`, `10_confirm_open`, `10_cycle2`, `10_cycle_label`, `10_fresh_run`, `10_crank_works` | BEGIN A NEW CYCLE, confirm, cycle 2; label contains `CYCLE 0043`; fresh run; crank works |
+| 11 reload | `11-reload` | `11_cycle_kept`, `11_label_kept` | SAVE, reload, CONTINUE: cycle 2 and label kept |
+| 12 footer | `12-footer` | `12_footer` | SYSTEM footer text starts with `v0.9.0` |
+| run | none | `wall_time` | `wallMs` <= 300000 |
+
+Outputs:
+- `<outdir>/e2e-full.json` (same object as stdout): `results` (per check: boolean, or `{ ok, value }` when a detail is recorded), `metrics` (per stage `s7`..`s15`: `displayObjects`, `machine` = `machineStats()`, `heapMb`), `wallMs`, `fail`, `errors`.
+- Screenshots as listed above (`e2e-<NN>-<name>.png`, one guard shot per step plus the extra shots).
+- Exit 1 when `fail` or `errors` is non-empty; 2 on missing arguments. A setup failure appears as `FAILED:setup:<msg>`.
+
+### a11y.mjs
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/a11y.mjs "<preview>/" C:/Users/<you>/AppData/Local/Temp/smoke/a11y
+```
+
+Cases. Each case adds its own query. A, E, F and G each open a fresh 1280x720 context; B, C and D share one context.
+
+| Case | Scope | What it does |
+|---|---|---|
+| `A_title` | `#title-screen` | Tab 8 times from NEW GAME; audit the title |
+| `A_credits` | `#credits-overlay` | Opens CREDITS from the title; Escape returns to the title |
+| `B_hud` | `#ui-root` | 10 Space presses (10 clicks), 10 crank clicks; Tab 6 times through the HUD |
+| `C_tree` | `#tech-overlay` | `t`; focus on a selected node; Tab 30 times; audit the tree |
+| `D_menu` | `#system-menu` | SYSTEM menu; Tab 12 times; every visible SYSTEM tab (`<tab>`) audited |
+| `E_reduced` | `#ui-root` | Reduced motion on; RESET confirm opened; no running CSS animation |
+| `F_finale` | `#finale-overlay`, `#photo-exit`, `#system-menu`, `#cycle-confirm` | Finale choice, postgame, photo mode, MEMORY tab, cycle confirm |
+| `G_scale150` | title, credits, HUD, tech tree, SYSTEM tabs | UI scale 150 after a reload; every panel inside the viewport |
+
+Check names (`<tab>` = each visible SYSTEM tab: `system`, `settings`, `stats`, `records`, `memory`, `data`; a fresh game showed `system`, `settings`, `stats`, `records`, `data`; `memory` appears later):
+
+| Case | Check names |
+|---|---|
+| `A_title` | `A_reach`, `A_trap`, `A_rings`, `A_names`, `A_contrast`, `A_font12` |
+| `A_credits` | `A_credits_trap`, `A_credits_rings`, `A_credits_names`, `A_credits_contrast`, `A_credits_esc` |
+| `B_hud` | `B_space_crank`, `B_reach`, `B_rings`, `B_names`, `B_contrast`, `B_font12` |
+| `C_tree` | `C_focus_selected`, `C_reach`, `C_rings` (audit findings go to `deferred`) |
+| `D_menu` | `D_system_reach`, `D_trap`, `D_rings`; per tab: `D_<tab>_reach`, `D_<tab>_rings`, `D_<tab>_names`, `D_<tab>_contrast`, `D_<tab>_font12` |
+| `E_reduced` | `E_root_attr`, `E_no_animations` |
+| `F_finale` | `F_buys`, `F_choice_reach`, `F_choice_trap`, `F_choice_rings`, `F_choice_names`, `F_choice_contrast`, `F_choice_font12`, `F_choice_150_inside`, `F_postgame`, `F_post_reach`, `F_photo_reach`, `F_photo_ring`, `F_photo_name`, `F_memory_names`, `F_memory_contrast`, `F_memory_font12`, `F_memory_150_inside`, `F_confirm_reach`, `F_confirm_trap`, `F_confirm_rings`, `F_confirm_names`, `F_confirm_contrast`, `F_confirm_font12`, `F_confirm_150_inside`, `F_confirm_cancel` |
+| `G_scale150` | `G_title_inside`, `G_credits_inside`, `G_hud_inside`, `G_tree_inside`, `G_menu_<tab>_inside` |
+
+Check meanings: `_reach` = every required control reached by Tab (`C_reach`: `tech-close` and `tech-buy` reached, >= 3 node ids, >= 1 tab). `_trap` = every Tab press stays inside the scope. `_rings` = every focus target (not body) shows a focus ring. `_names` = no unnamed control. `_contrast` = no text below its WCAG ratio. `_font12` = no text below 12 px. `_inside` = element rect inside the 1280x720 viewport at UI scale 150 (1 px tolerance). `D_system_reach` is reused by the `system` tab: the first failure is kept. `A_credits` has no `_font12` check.
+
+Deferred semantics (report-only, never fail):
+- Audit findings inside `#tech-overlay`, `#toast-stack` and `#era-card` go to `deferred`. These files belong to another package (`src/ui/techTree*`, `toasts*`, `eraCard*`); WP16b fixes them.
+- The known tree focus-trap gap: the `C_tree` walk (Tab 30 times in `#tech-overlay`) records focus leaving the overlay. The entry is `{ at: 'C_trap', kind: 'trap', ids: [...] }` in `deferred`. It never fails.
+- `inactive` (disabled, locked) and `indeterminate` (no colour or no opaque background) are report-only too.
+
+Outputs:
+- `<outdir>/a11y.json` (2-space JSON, same as stdout): `results`, `fail`, `deferred`, `inactive`, `indeterminate` (each audit item carries `at`, the case label), `errors`.
+- Screenshots: `a11y-A-title.png`, `a11y-A-credits.png`, `a11y-B-hud.png`, `a11y-C-tree.png`, `a11y-D-menu-<tab>.png`, `a11y-E-reduced.png`, `a11y-F-choice.png`, `a11y-F-photo.png`, `a11y-F-memory.png`, `a11y-F-confirm.png`, `a11y-G-menu.png`.
+- Failure keys: `FAILED:<case>:<first line>` (`<case>` = `A_title`, `A_credits`, `B_hud`, `C_tree`, `D_menu`, `E_reduced`, `F_finale`, `G_scale150`) or `FAILED:run:<first line>`.
+- Exit 1 when `fail` or `errors` is non-empty; 2 on missing arguments.
+
+### soak.mjs
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright SOAK_MIN=5 node scripts/smoke/soak.mjs "<preview>/" C:/Users/<you>/AppData/Local/Temp/smoke/soak
+```
+
+Env vars:
+
+| Variable | Default | Rule |
+|---|---|---|
+| `SOAK_MIN` | `30` | Run length in minutes, minimum 2. |
+| `SOAK_SAMPLE_S` | `30` | Seconds between samples, minimum 5. |
+| `SOAK_GPU` | unset | `1` = launch with the real GPU (`GPU_ARGS`, ANGLE d3d11). |
+
+A bad value exits 2 with the usage line. Chromium runs with `--js-flags=--expose-gc` (gc before each sample) and `--enable-precise-memory-info`. The validation run is `SOAK_MIN=5`. The 30 to 60 minute run belongs to WP16b.
+
+Setup: `?debug=1`; 45 crank clicks; the S15 buy list (check `setup_buys`); 15 s wait; era card dismissed.
+
+Action schedule (loop tick 250 ms; each task runs when due, never overlapping):
+
+| Task | First at | Then every | Action |
+|---|---|---|---|
+| crank | 2 s | 2 s | One real mouse click on the hand crank. |
+| buy | 15 s | 30 s | One legacy feed buy in turn (`bellowsDrive`, `gridExciter`, `mainsBackfeed`, `steamLance`). A rejected buy gets one 8 h time jump, then one retry. |
+| tech | 20 s | 60 s | `t`, 1.5 s, Escape. |
+| menu | 40 s | 90 s | Escape until no modal, Escape, click `#sys-tab-stats`, 1 s, Escape. |
+| sample | 0 s | `SOAK_SAMPLE_S` | Escape until no modal (max 3), gc(), then the probes. |
+
+The final sample runs after the loop, then `soak-end.png`.
+
+Probes per sample: `heapMb` (`performance.memory`), `displayObjects`, `toasts` (`#toast-stack .toast`), `domNodes`, `liveVoices` (`audioStats()`, `null` when absent), `machineMeanMs`.
+
+Limits. Baseline = first sample with `tSec` >= 60; last = final sample. Results land in `limits` as `{ value, limit }`.
+
+| Check | Rule | Limit (source) |
+|---|---|---|
+| `heap_cap` | max `heapMb` <= limit | 150 MB (`perf-budget.json` `heapMb`) |
+| `heap_growth` | last - baseline `heapMb` <= limit | 16 MB (`SOAK_LIMITS.heapGrowthMb`) |
+| `heap_slope` | least-squares slope of `heapMb` over samples with `tSec` >= 60, MB per min, <= limit. Needs >= 2 such samples, else fails | 1.0 MB/min (`heapSlopeMbPerMin`) |
+| `display_cap` | max `displayObjects` <= limit | 500 (`perf-budget.json` `displayObjects`) |
+| `display_growth` | last `displayObjects` <= baseline x limit | x 1.10 (`displayGrowthRatio`) |
+| `toasts_cap` | max toasts <= limit | 4 (`toastsCap`) |
+| `dom_growth` | last - baseline `domNodes` <= limit | 200 (`domGrowth`) |
+| `voices_cap` | max `liveVoices` <= limit | 48 (`perf-budget.json` `liveVoices`). Passes with `null` when no sample has `liveVoices` |
+| `voices_growth` | last - baseline `liveVoices` <= limit | 8 (`voicesGrowth`). Passes with `null` when no sample has `liveVoices` |
+
+Also: `setup_buys` (S15 list all ok) and `no_baseline` (fails when no sample reaches `tSec` 60). The perf budget's `heapGrowthMb` (8) belongs to the perf smoke; soak uses its own 16 MB.
+
+Outputs:
+- `<outdir>/soak.json` (2-space JSON) and stdout: `{ minutes, samples, baseline, last, limits, purchases: { ok, tried }, fail, errors }`. Each sample: `{ tSec, heapMb, displayObjects, toasts, domNodes, liveVoices, machineMeanMs }`.
+- `<outdir>/soak-end.png`. Progress lines `[soak] t=...` go to stderr.
+- Exit 1 when `fail` or `errors` is non-empty; 2 on usage. An exception adds `FAILED:soak:<msg>`.
+
+### store-shots.mjs
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/store-shots.mjs "<preview>/" C:/Users/<you>/AppData/Local/Temp/smoke/store
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright SIZES=2160 VARIANTS=clean node scripts/smoke/store-shots.mjs "<preview>/" C:/Users/<you>/AppData/Local/Temp/smoke/store
+```
+
+Env vars (unset or blank = all; an unknown or empty entry = usage, exit 2):
+- `SIZES` (default `1080,2160`): `1080` = viewport 1920x1080 at deviceScaleFactor 1 (PNG 1920x1080). `2160` = same viewport at deviceScaleFactor 2 (PNG 3840x2160).
+- `VARIANTS` (default `hud,clean`): `hud` = live UI. `clean` = photo mode without the hint, HUD hidden. The finale reveal clean shot (stem 08) hides `#ui-root` instead.
+
+One fresh context per size; the stems run in one continuous session per size. `VARIANTS` only drops shots; the setup always runs. Shot table in run order (`<stem>` = two-digit id; file = `<outdir>/<size>/<file stem>-<variant>.png`):
+
+| Stem | File stem | Setup | Variants |
+|---|---|---|---|
+| `01` | `01-era1-start` | `?debug=1`, 12 crank clicks (120 ms apart), 1.5 s. hud: 3 more crank clicks | hud, clean |
+| `02` | `02-era1-full` | 33 crank clicks, S7 buy list, 2.5 s | hud, clean |
+| `03` | `03-era2-generator` | S7 to S9 buys, 2.5 s | hud, clean |
+| `04` | `04-era3-boiler` | S9 to S11 buys, 2.5 s | hud, clean |
+| `05` | `05-tree-era3` | `t`, click `#tech-tab-3`, 600 ms; Escape after | hud |
+| `06` | `06-era4-spire` | S11 to S13 buys, 12 s | hud, clean |
+| `07` | `07-era5-ruined` | S13 to S15 buys, 15 s | hud, clean |
+| `10` | `10-title` | Save, reload with `title=1`, title screen open; then CONTINUE | hud |
+| `08` | `08-finale-reveal` | `primaryFunction` buy, 2 s, `finaleSeek(56)`, phase `sequence` | hud, clean (`#ui-root` hidden) |
+| `09` | `09-postgame-portrait` | `skipFinale`, KEEP IT RUNNING, phase `postgame`, 2.5 s | hud, clean |
+
+Per size: 18 PNGs (stems 01 to 04, 06, 07 and 09 give 2 each; 05 and 10 give 1; 08 gives 2). Both sizes: 36. Each PNG size is checked from its IHDR.
+
+Check names (`<size>` = `1080` or `2160`; `<stem>` = `01` to `10`; `<variant>` = `hud` or `clean`):
+- `<size>_<stem>_<variant>_png`: one per shot; the PNG is 1920x1080 (`1080`) or 3840x2160 (`2160`).
+- `<size>_<stem>_clean_hud_hidden`: clean photo shots (stems `01`, `02`, `03`, `04`, `06`, `07`, `09`); photo mode active and `#hud-panel` hidden at shot time. Only with the clean variant.
+- `<size>_02_buys`, `<size>_03_buys`, `<size>_04_buys`, `<size>_06_buys`, `<size>_07_buys`, `<size>_08_buys`: the buy list ran with every buy ok.
+- `<size>_08_sequence`: finale phase `sequence` after `finaleSeek(56)`.
+- `<size>_09_postgame`: ending phase `postgame`.
+- `<size>_10_title_open`: title screen open after the reload.
+
+Failure keys: `FAILED:<size>/<stem>:<first line>` (the run goes on with the next stem), `FAILED:<size>/setup:<first line>`, `FAILED:launch:<first line>`.
+
+Outputs:
+- `<outdir>/<size>/<file stem>-<variant>.png` (18 per size).
+- `<outdir>/store-shots.json` (2-space JSON) and stdout: `{ shots, results, fail, errors }`. Each `shots[]` entry: `{ file, size, stem, variant, width, height }`, where `file` is absolute and `stem` is the file stem.
+- Exit 0 clean; 1 when `fail` or `errors` is non-empty; 2 on a usage error.
