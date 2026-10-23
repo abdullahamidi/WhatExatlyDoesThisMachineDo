@@ -22,12 +22,13 @@
 | WP12 | Settings, accessibility, stats, achievements, save export/import, reduced motion (roadmap WP10) | ✅ done |
 | WP13 | Ending sequence, reveal, postgame, restored world (roadmap WP14) | ✅ done |
 | WP14 | New-cycle prestige: Echoes, Memory perks, MEMORY tab, cycle transition (roadmap WP15) | ✅ done |
-| WP15 | Music bed, audio mix, perf pass (roadmap WP16) | in progress (T1–T5, T8, T9 done on 2026-10-18 cloud session; T6/T7 + D1 audio left) |
+| WP15 | Music bed, audio mix, perf pass (roadmap WP16) | ✅ done (close-out WP15R: purchase cue by paying energy, audio refit, GPU re-measure) |
 | WP17 | Energy continuity (legacy sinks, every energy used every era) + era-aware HUD + gain text | ✅ done |
-| WP18 | Final machine showcase (completion beat, survey camera, postgame name/portrait/photo mode, ShowcaseScene) | ✅ done |
-| WP19 | Steam desktop shell (Electron, file saves, crash overlay, splash, title, quit/credits, fullscreen, UI anchoring) | ✅ done (branch claude/steam-shell, merge pending) |
-| WP20 | First-impression UX polish (onboarding, fly-in visible, tree fit, era cards, text sweep) | planned (D6) |
-| WP21 | Demo edition (cap at Substation Blueprint, end card + final-machine teaser, wishlist) | planned (D4) |
+| WP18 | Final machine showcase (completion beat, survey camera, postgame name/portrait/photo mode, ShowcaseScene) + WP18b restored warm core | ✅ done |
+| A17 | Art Director pass: legacy-feed part art, generator glow, gain-text placement, restored-core variants | ✅ done |
+| WP19 | Steam desktop shell (Electron, file saves, crash overlay, splash, title, quit/credits, fullscreen, UI anchoring) | ✅ done |
+| WP20 | First-impression UX polish (onboarding, fly-in visible, tree fit, era cards, text sweep) | ✅ done |
+| WP21 | Demo edition (cap at Substation Blueprint, end card + final-machine teaser, wishlist) | in progress |
 | WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | started (T1 e2e, T3 sign-off sim, T5 version landed 2026-10-18; rest planned, slimmed by D8) |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
@@ -65,11 +66,21 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   canonical postgame portrait pose (FINALE_VIEWS.full) for KEEP/reload/refocus; "lamps lit" restored accent;
   VIEW MACHINE photo mode (modal, HUD hidden, drag/wheel/arrow pan-zoom, Esc exits); ShowcaseScene (lazy, own camera,
   stand-in source, teaser API in src/game/math/teaser.ts for WP21); scripts/smoke/showcase.mjs → 13 PNGs at 3840×2160.
+- **WP19** Steam shell: Electron 44.7.0 (app:// + CSP, fuses, single instance), build:steam / build:steam-demo →
+  out/steam/<edition>/win-x64, host file saves (atomic + .bak), crash overlay, splash, title screen, credits, quit,
+  fullscreen, #ui-root anchored to the canvas (--ui-zoom), frame cap 60/78, debug hook only with ?debug=1, v0.9.0,
+  docs/STEAM_RELEASE.md. Smokes: shell, resolutions, desktop (packaged exe).
+- **A17 / WP18b** art: hand-pixelled legacy feeds (bellows, exciter insulator, backfeed string, steam lance, generator
+  glow); postgame restored accent = A17 warm-core texture variants swapped on FinaleFrame.restored + lamps lit.
+- **WP20** UX: crank prompt, TECH INDEX hint + affordable badges, fly-in after tree close + camera nudge, keyboard-safe
+  tree that fits at UI 150 %, next-goal line, era cards, toast coalescing, fixed-height menu, text sweep, crank sparks.
+- **WP15R**: purchase cue follows the paying energy; rate-driven beds refit ≥ 3× PF rates; one era source
+  (currentEra); GPU perf smoke (PERF_GPU=1, median-of-3).
 - **Art**: every sprite and background layer is PixelLab Pro in one locked palette from one style
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 2605 pass (84 files) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 3155 pass (108 files) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
