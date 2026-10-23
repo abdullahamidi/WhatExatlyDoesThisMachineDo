@@ -72,6 +72,9 @@
   font-weight: 700;
 }
 
+/* WP16b-2: one prompt at a time. While the hint callout shows, the count chip is hidden (aria-label keeps the count). */
+#hud-tech.is-hinted[data-affordable]:not([data-affordable='']):after { display: none; }
+
 #hud-tech.is-hinted {
   animation: hud-tech-pulse 1200ms ease-in-out infinite;
 }

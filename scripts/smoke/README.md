@@ -81,20 +81,21 @@ Outputs:
 PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/ux.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/ux
 ```
 
-Fresh 1280x720 context per case (`D_100` and `D_150` each get their own). Prints ONE JSON object `{ results, fail, errors }`;
+Fresh context per case, 1280x720 unless noted (`D_100`, `D_150`, `T_1280x720` and `T_1920x1080` each get their own; case T uses its viewport). Prints ONE JSON object `{ results, fail, errors }`;
 expect `fail` and `errors` to be `[]`. Each case waits for `componentState('handCrank')` before it starts.
 
 | case | checks (names in `results` / `fail`) |
 |---|---|
-| `A` (fresh) | `A_prompt_visible` (`crankPrompt()` after load), `A_no_hint`, `A_prompt_gone` (after one real click), `A_hint_visible` (`#hud-hint` shows `TECH INDEX` after 15 clicks), `A_badge` (`#hud-tech` `data-affordable` >= 1), `A_focus_node` (after `t`, focus is the `.tech-node.is-selected`), `A_tab_chip` (first `.tech-tab` `data-affordable` >= 1), `A_space_keeps_tree`, `A_space_buys` (`gearRatio` level 1 after Space), `A_feedback_flavor` (`#tech-feedback` contains `gear mesh recalibrated`), `A_held` (`gearSmall` assembling, alpha < 0.05 while the tree is open), `A_toast_coalesced` (a `LV 1 → 4` toast, at most 2 toasts), `A_toast_above` (`#toast-stack` z-index 200, no toast over `#tech-close` / `#tech-buy`), `A_fly_in_after_close` (`gearSmall` visible, alpha >= 0.99, not assembling), `A_hint_gone`, `A_goal_line` (`#hud-goal` starts with `NEXT:`) |
+| `A` (fresh) | `A_prompt_visible` (`crankPrompt()` after load), `A_no_hint`, `A_one_prompt_t0` (only the crank prompt is up at load: `#hud-hint` and `#hud-goal` hidden), `A_prompt_gone` (after one real click), `A_hint_visible` (`#hud-hint` shows `TECH INDEX` after 15 clicks), `A_badge` (`#hud-tech` `data-affordable` >= 1), `A_one_prompt_hint` (only `#hud-hint` is up after 15 clicks), `A_hint_chip_hidden` (the TECH INDEX count chip, `#hud-tech` `::after`, has `display: none` while the hint shows), `A_focus_node` (after `t`, focus is the `.tech-node.is-selected`), `A_tab_chip` (first `.tech-tab` `data-affordable` >= 1), `A_space_keeps_tree`, `A_space_buys` (`gearRatio` level 1 after Space), `A_feedback_flavor` (`#tech-feedback` contains `gear mesh recalibrated`), `A_feedback_beside_buy` (`#tech-feedback` sits right of `#tech-buy` on the same row, `#tech-level` starts below both), `A_held` (`gearSmall` assembling, alpha < 0.05 while the tree is open), `A_toast_coalesced` (a `LV 1 → 4` toast, at most 2 toasts), `A_toast_above` (`#toast-stack` z-index 200, no toast over `#tech-close` / `#tech-buy`), `A_toast_clear_tabs` (WP21: at most one toast, none over a `.tech-tab`, `#tech-close`, `#tech-buy`, `#tech-title` or `#tech-me`), `A_fly_in_after_close` (`gearSmall` visible, alpha >= 0.99, not assembling), `A_hint_gone`, `A_goal_line` (`#hud-goal` starts with `NEXT:`), `A_one_prompt_goal` (only `#hud-goal` is up after the tree closes), `A_chip_back` (the count chip is back: `#hud-tech` `::after` is not `display: none`, or `data-affordable` is absent) |
 | `B` (fresh) | `B_card_shown` (`#era-card` title `ERA II · ELECTRICAL`), `B_card_skipped` (a click hides it), `B_card_held` (hidden while the tree is open), `B_card_after_close` (`ERA III · PRESSURE` after Esc), `B_reduced_no_nudge` (camera `centerX` / `centerY` / `zoom` unchanged within 0.5 across the Esc; value `{ before, after }`), `B_card_reduced` (visible with `animationName` `none` under reduced motion) |
 | `C` (fresh) | `C_no_card_in_finale` (full S15 + `primaryFunction`, `#era-card` hidden 500 ms later) |
-| `D_100`, `D_150` (fresh each) | `D_<s>_fit` (`#tech-graph` `scrollWidth <= clientWidth + 1`; value `{ scrollWidth, clientWidth }`), `D_<s>_pf_selected` (selected node is `primaryFunction`), `D_<s>_pf_in_view` (its rect lies inside `#tech-graph`, 1 px), `D_<s>_menu_fixed` (`#system-panel` height equal within 1 px on every visible `#sys-tabs` tab; value = the heights), `D_<s>_memory_hidden` (`#sys-tab-memory` hidden in phase none) |
+| `D_100`, `D_150` (fresh each) | `D_<s>_fit` (`#tech-graph` `scrollWidth <= clientWidth + 1`; value `{ scrollWidth, clientWidth }`), `D_<s>_pf_selected` (selected node is `primaryFunction`), `D_<s>_pf_in_view` (its rect lies inside `#tech-graph`, 1 px), `D_100_graph_centered` (UI 100 only: after `#tech-tab-1` the visible nodes sit centred in `#tech-graph`, left and right gaps equal within 4 px), `D_<s>_buy_visible` / `D_<s>_buy_visible_e2` (WP21: PURCHASE has a size, sits inside the tech panel, the detail pane and the viewport, and is the element hit at its centre; `_e2` after era II and `powerLines`), `D_<s>_toast_clear_tabs` (WP21: after a `copperWinding` buy, the same toast rule as A), `D_<s>_menu_fixed` (`#system-panel` height equal within 1 px on every visible `#sys-tabs` tab; value = the heights), `D_<s>_memory_hidden` (`#sys-tab-memory` hidden in phase none) |
+| `T_1280x720`, `T_1920x1080` (fresh each, at that viewport) | After the S11 buy list (era III) and the era card click-away: `t`, tab 3, one `firebox` buy (an 8 h jump and a retry when rejected), 450 ms, for UI scale 100, 125 and 150 (`uiScale` set before each pass; the tree is closed by Escape after each). Per pass: `T_<w>x<h>_<s>_toast_shown` (exactly one visible `.toast`; detail `{ bought, vis }`), `T_<w>x<h>_<s>_toast_clear` (the toast hits none of `.tech-tab`, `#tech-close`, `#tech-buy`, `#tech-title`, `#tech-me`; the `toastClearTabs` rule). 12 checks in all |
 | `perf` | `perf_click` only (report, never in `fail`): `{ ui: uiStats(), machine: machineStats() }` after 30 clicks, 100 ms apart |
 
 Screenshots in the outdir: `ux-A1-prompt.png`, `ux-A2-hint.png`, `ux-A3-tree-buy.png`, `ux-A4-flyin.png`, `ux-A5-goal.png`,
-`ux-B1-card.png`, `ux-B2-card-after-close.png`, `ux-B3-card-reduced.png`, and per uiScale `ux-D-100-tree.png`,
-`ux-D-100-menu-system.png`, `ux-D-100-menu-settings.png` (the same set with `150`).
+`ux-B1-card.png`, `ux-B2-card-after-close.png`, `ux-B3-card-reduced.png`, and per uiScale `ux-D-100-tree.png`, `ux-D-100-tree-e2.png`,
+`ux-D-100-menu-system.png`, `ux-D-100-menu-settings.png` (the same set with `150`), and case T's six shots `ux-T-<w>x<h>-<s>.png` (`1280x720` and `1920x1080`, each at `100`, `125`, `150`).
 
 Failed checks are listed by name in `fail`; a thrown exception becomes `FAILED:<case>:<message>`. `errors` collects console
 errors, page errors and failed requests, each prefixed with the case key.
@@ -471,18 +472,18 @@ Self-test (pure, no browser): `node scripts/smoke/lib/common.mjs --selftest`. Pr
 
 `scripts/smoke/lib/a11y-audit.mjs`: page audit, Tab walker, focus log and WCAG maths. Never imports Playwright.
 
-- `DEFERRED_SCOPES` = `['#tech-overlay', '#toast-stack', '#era-card']`. These scopes belong to another package (`src/ui/techTree*`, `toasts*`, `eraCard*`). Findings inside them go to `deferred` and never fail.
-- `auditScope(page, scopeSel)` returns `{ rootCount, checked: { controls, text }, unnamed, small, contrast, deferred, inactive, indeterminate }`. Only visible elements are audited. Item kinds:
+- `DEFERRED_SCOPES` = `[]` since WP16b-2: the tree (`#tech-overlay`), toast (`#toast-stack`) and era card (`#era-card`) scopes gate now. The export stays for later packages; a scope listed there routes its findings to `deferred` (report-only).
+- `auditScope(page, scopeSel)` returns `{ rootCount, checked: { controls, text }, unnamed, small, contrast, deferred, inactive, indeterminate }`. Only visible elements are audited, and elements inside `.is-fading` (a toast or era card leaving) are skipped. Item kinds:
   - `unnamed`: a control (button, link, input, tab, radio, ...) with no accessible name (aria-label, aria-labelledby, label, own text, title).
   - `small`: text below 12 px (`fontPx`).
   - `contrast`: text below its WCAG ratio.
   - Each item: `{ kind, sel, text, ratio, need, fontPx }`.
 - WCAG 1.4.3: normal text >= 4.5:1; large text (>= 24 px, or >= 18.66 px at weight >= 700) >= 3:1. The foreground alpha and the opacity of the element and its ancestors count. The background is the composite of the layers from the element outwards up to the first opaque layer. Gradient backgrounds use the minimum ratio over all colour stops.
 - `inactive`: contrast items inside `:disabled`, `[aria-disabled="true"]` or `.is-locked` are exempt. They are listed here and never fail.
-- `deferred`: items of any kind inside a `DEFERRED_SCOPES` scope. Report-only. Items that are D8-exempt inactive text (disabled, `aria-disabled`, `.is-locked`) carry `inactive: true`; skip those when fixing.
+- `deferred`: items of any kind inside a `DEFERRED_SCOPES` scope. Report-only; empty since WP16b-2 (`DEFERRED_SCOPES` is `[]`). Items that are D8-exempt inactive text (disabled, `aria-disabled`, `.is-locked`) carry `inactive: true`; skip those when fixing.
 - `indeterminate`: text with no parseable colour, or with no opaque background before body. `ratio` is `null`. Report-only. These are listed as they are, whatever the scope.
-- Other exports: `tabWalk(page, n, scopeSel)` (Tab n times, 60 ms apart; each record has `tag`, `id`, `cls`, `tech`, `ring`, `named`, `inScope`). A ring is an outline >= 1 px or a box-shadow. `missingFocus(page, containerSel)` (visible enabled controls the focus log never saw; a radio group counts once). `installFocusLog`, `resetFocusLog`, `focusId`, `setUiScale(page, pct)`, `rectInViewport(page, sel, tolPx)`. Pure helpers: `parseCssColor`, `compositeOver`, `relativeLuminance`, `contrastRatio`, `neededRatio`.
-- Self-test (pure, no browser): `node scripts/smoke/lib/a11y-audit.mjs --selftest`. Prints one line `{ ok, checks, values }`; exit 0 when all 19 checks hold (contrast maths, colour parsing, `deferred_scopes_3`). Without the flag it prints usage and exits 2.
+- Other exports: `tabWalk(page, n, scopeSel = null, key = 'Tab')` (`key` n times, `'Tab'` or `'Shift+Tab'`, 60 ms apart; each record has `tag`, `id`, `cls`, `tech`, `ring`, `named`, `inScope`). A ring is an outline >= 1 px or a box-shadow. `missingFocus(page, containerSel)` (visible enabled controls the focus log never saw; a radio group counts once). `installFocusLog`, `resetFocusLog`, `focusId`, `setUiScale(page, pct)`, `rectInViewport(page, sel, tolPx)`. Pure helpers: `parseCssColor`, `compositeOver`, `relativeLuminance`, `contrastRatio`, `neededRatio`.
+- Self-test (pure, no browser): `node scripts/smoke/lib/a11y-audit.mjs --selftest`. Prints one line `{ ok, checks, values }`; exit 0 when all 22 checks hold (contrast maths, colour parsing, `deferred_scopes_empty`, `ink_on_amber_6_43`, `ink_on_amber_dim_6_49`, `sand_on_rust_dark_6_12`). Without the flag it prints usage and exits 2.
 
 ### e2e-full.mjs
 
@@ -519,18 +520,19 @@ Outputs:
 PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/a11y.mjs "<preview>/" C:/Users/<you>/AppData/Local/Temp/smoke/a11y
 ```
 
-Cases. Each case adds its own query. A, E, F and G each open a fresh 1280x720 context; B, C and D share one context.
+Cases. Each case adds its own query. A, E, F, G and H each open a fresh 1280x720 context; B, C and D share one context.
 
 | Case | Scope | What it does |
 |---|---|---|
 | `A_title` | `#title-screen` | Tab 8 times from NEW GAME; audit the title |
 | `A_credits` | `#credits-overlay` | Opens CREDITS from the title; Escape returns to the title |
 | `B_hud` | `#ui-root` | 10 Space presses (10 clicks), 10 crank clicks; Tab 6 times through the HUD |
-| `C_tree` | `#tech-overlay` | `t`; focus on a selected node; Tab 30 times; audit the tree |
+| `C_tree` | `#tech-overlay` | `t`; focus on the selected node (`C_focus_selected`); Tab 30 times inside the overlay (`C_trap`); CLOSE focused, Shift+Tab 3 times (`C_trap_back`); audit the tree |
 | `D_menu` | `#system-menu` | SYSTEM menu; Tab 12 times; every visible SYSTEM tab (`<tab>`) audited |
 | `E_reduced` | `#ui-root` | Reduced motion on; RESET confirm opened; no running CSS animation |
 | `F_finale` | `#finale-overlay`, `#photo-exit`, `#system-menu`, `#cycle-confirm` | Finale choice, postgame, photo mode, MEMORY tab, cycle confirm |
 | `G_scale150` | title, credits, HUD, tech tree, SYSTEM tabs | UI scale 150 after a reload; every panel inside the viewport |
+| `H_cards` | `#era-card`, `#tech-overlay`, `#toast-stack` | After the S9 buy list: era card audited (`H_card`); tree tab 2 (`H_tree2`) and tab 1 (`H_tree1`: the purchased `generatorBlueprint` milestone node and >= 3 purchased nodes) audited; one `copperWinding` purchase toast audited (`H_toast`, names not checked) |
 
 Check names (`<tab>` = each visible SYSTEM tab: `system`, `settings`, `stats`, `records`, `memory`, `data`; a fresh game showed `system`, `settings`, `stats`, `records`, `data`; `memory` appears later):
 
@@ -539,23 +541,26 @@ Check names (`<tab>` = each visible SYSTEM tab: `system`, `settings`, `stats`, `
 | `A_title` | `A_reach`, `A_trap`, `A_rings`, `A_names`, `A_contrast`, `A_font12` |
 | `A_credits` | `A_credits_trap`, `A_credits_rings`, `A_credits_names`, `A_credits_contrast`, `A_credits_esc` |
 | `B_hud` | `B_space_crank`, `B_reach`, `B_rings`, `B_names`, `B_contrast`, `B_font12` |
-| `C_tree` | `C_focus_selected`, `C_reach`, `C_rings` (audit findings go to `deferred`) |
+| `C_tree` | `C_focus_selected`, `C_reach`, `C_trap`, `C_trap_back`, `C_rings`, `C_names`, `C_contrast`, `C_font12` |
 | `D_menu` | `D_system_reach`, `D_trap`, `D_rings`; per tab: `D_<tab>_reach`, `D_<tab>_rings`, `D_<tab>_names`, `D_<tab>_contrast`, `D_<tab>_font12` |
 | `E_reduced` | `E_root_attr`, `E_no_animations` |
 | `F_finale` | `F_buys`, `F_choice_reach`, `F_choice_trap`, `F_choice_rings`, `F_choice_names`, `F_choice_contrast`, `F_choice_font12`, `F_choice_150_inside`, `F_postgame`, `F_post_reach`, `F_photo_reach`, `F_photo_ring`, `F_photo_name`, `F_memory_names`, `F_memory_contrast`, `F_memory_font12`, `F_memory_150_inside`, `F_confirm_reach`, `F_confirm_trap`, `F_confirm_rings`, `F_confirm_names`, `F_confirm_contrast`, `F_confirm_font12`, `F_confirm_150_inside`, `F_confirm_cancel` |
 | `G_scale150` | `G_title_inside`, `G_credits_inside`, `G_hud_inside`, `G_tree_inside`, `G_menu_<tab>_inside` |
+| `H_cards` | `H_buys`, `H_card_shown`, `H_card_names`, `H_card_contrast`, `H_card_font12`, `H_tree2_names`, `H_tree2_contrast`, `H_tree2_font12`, `H_tree1_milestone`, `H_tree1_purchased`, `H_tree1_names`, `H_tree1_contrast`, `H_tree1_font12`, `H_toast_shown`, `H_toast_contrast`, `H_toast_font12` |
 
-Check meanings: `_reach` = every required control reached by Tab (`C_reach`: `tech-close` and `tech-buy` reached, >= 3 node ids, >= 1 tab). `_trap` = every Tab press stays inside the scope. `_rings` = every focus target (not body) shows a focus ring. `_names` = no unnamed control. `_contrast` = no text below its WCAG ratio. `_font12` = no text below 12 px. `_inside` = element rect inside the 1280x720 viewport at UI scale 150 (1 px tolerance). `D_system_reach` is reused by the `system` tab: the first failure is kept. `A_credits` has no `_font12` check.
+Check meanings: `_reach` = every required control reached by Tab (`C_reach`: `tech-close` and `tech-buy` reached, >= 3 node ids, >= 1 tab). `_trap` = every Tab press stays inside the scope (`C_trap_back`: three Shift+Tab presses from CLOSE stay inside `#tech-overlay` and the first stop is not CLOSE). `C_focus_selected` = focus on the selected tech node after `t`. `_rings` = every focus target (not body) shows a focus ring. `_names` = no unnamed control. `_contrast` = no text below its WCAG ratio. `_font12` = no text below 12 px. `_inside` = element rect inside the 1280x720 viewport at UI scale 150 (1 px tolerance). `D_system_reach` is reused by the `system` tab: the first failure is kept. `A_credits` has no `_font12` check.
 
-Deferred semantics (report-only, never fail):
-- Audit findings inside `#tech-overlay`, `#toast-stack` and `#era-card` go to `deferred`. These files belong to another package (`src/ui/techTree*`, `toasts*`, `eraCard*`); WP16b fixes them.
-- The known tree focus-trap gap: the `C_tree` walk (Tab 30 times in `#tech-overlay`) records focus leaving the overlay. The entry is `{ at: 'C_trap', kind: 'trap', ids: [...] }` in `deferred`. It never fails.
-- `inactive` (disabled, locked) and `indeterminate` (no colour or no opaque background) are report-only too.
+`settleOverlays(page)` (WP16b-2 helper, run before the `B_hud`, `C_tree`, `H_card`, `H_tree2` and `H_toast` audits): polls (3 s cap, 100 ms step) until no `#toast-stack .toast` and no `#era-card` has `.is-fading` or a running CSS animation. The milestone toast's `toast-pulse` animation is ignored.
+
+Deferred and report-only semantics:
+- `deferred` is empty since WP16b-2: `DEFERRED_SCOPES` is `[]`, so the tree (`#tech-overlay`), toast and era-card scopes gate and their findings fail. Expected run: `fail []`, `errors []`, `deferred []`.
+- The milestone toast (gradient with a translucent top over the canvas) stays `indeterminate` (report-only, never fails).
+- Inactive items (`:disabled`, `[aria-disabled="true"]`, `.is-locked`) stay exempt: they go to `inactive` and never fail. `inactive` and `indeterminate` (no colour or no opaque background) are report-only.
 
 Outputs:
 - `<outdir>/a11y.json` (2-space JSON, same as stdout): `results`, `fail`, `deferred`, `inactive`, `indeterminate` (each audit item carries `at`, the case label), `errors`.
-- Screenshots: `a11y-A-title.png`, `a11y-A-credits.png`, `a11y-B-hud.png`, `a11y-C-tree.png`, `a11y-D-menu-<tab>.png`, `a11y-E-reduced.png`, `a11y-F-choice.png`, `a11y-F-photo.png`, `a11y-F-memory.png`, `a11y-F-confirm.png`, `a11y-G-menu.png`.
-- Failure keys: `FAILED:<case>:<first line>` (`<case>` = `A_title`, `A_credits`, `B_hud`, `C_tree`, `D_menu`, `E_reduced`, `F_finale`, `G_scale150`) or `FAILED:run:<first line>`.
+- Screenshots: `a11y-A-title.png`, `a11y-A-credits.png`, `a11y-B-hud.png`, `a11y-C-tree.png`, `a11y-D-menu-<tab>.png`, `a11y-E-reduced.png`, `a11y-F-choice.png`, `a11y-F-photo.png`, `a11y-F-memory.png`, `a11y-F-confirm.png`, `a11y-G-menu.png`, `a11y-H-card.png`, `a11y-H-tree2.png`, `a11y-H-tree1.png`, `a11y-H-toast.png`.
+- Failure keys: `FAILED:<case>:<first line>` (`<case>` = `A_title`, `A_credits`, `B_hud`, `C_tree`, `D_menu`, `E_reduced`, `F_finale`, `G_scale150`, `H_cards`) or `FAILED:run:<first line>`.
 - Exit 1 when `fail` or `errors` is non-empty; 2 on missing arguments.
 
 ### soak.mjs

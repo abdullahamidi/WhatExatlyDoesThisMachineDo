@@ -2,6 +2,7 @@
 // Cases: A (crank prompt, hint, tree buy, fly-in), B (era cards), C (no era card in the finale),
 // D_100 / D_150 (TECH INDEX and SYSTEM menu layout at uiScale 100 / 150), perf (30 clicks, report only).
 // WP21 adds A_toast_clear_tabs and D_<s>_buy_visible / _buy_visible_e2 / _toast_clear_tabs (tree toast clear of tabs, PURCHASE in view).
+// WP16b-2 adds A_one_prompt_t0 / _hint / _goal, A_hint_chip_hidden, A_chip_back, A_feedback_beside_buy, D_100_graph_centered and case T (T_<w>x<h>_<s>_toast_shown / _toast_clear).
 // Usage: PW_PATH=... node scripts/smoke/ux.mjs <url> <outdir>   (url like http://localhost:4175/?debug=1)
 // Prints ONE JSON object { results, fail, errors }; exit code 1 when fail or errors is non-empty.
 import { createRequire } from 'module';
@@ -87,10 +88,11 @@ const buyList = async (page, buys, clicks = 45) => {
 };
 
 // WP21: no more than one visible toast, and none overlaps an era tab, CLOSE or PURCHASE.
+// WP16b-2: the TECH INDEX heading (#tech-title) and the #tech-me line are blockers too (a missing one is skipped).
 const toastClearTabs = () => {
   const hits = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
   const shown = [...document.querySelectorAll('.toast')].filter(t => t.getClientRects().length > 0);
-  const blockers = [...document.querySelectorAll('.tech-tab'), document.querySelector('#tech-close'), document.querySelector('#tech-buy')]
+  const blockers = [...document.querySelectorAll('.tech-tab'), document.querySelector('#tech-close'), document.querySelector('#tech-buy'), document.querySelector('#tech-title'), document.querySelector('#tech-me')]
     .filter(b => b !== null).map(b => b.getBoundingClientRect());
   return shown.length <= 1 && shown.every(t => blockers.every(b => !hits(t.getBoundingClientRect(), b)));
 };
@@ -107,10 +109,34 @@ const buyVisible = () => {
   return hit !== null && (hit === b || b.contains(hit));
 };
 
+// WP16b-2: which guidance prompts are on screen. count = number of true values (must be 1 at every stage of the first run).
+const promptState = async page => {
+  const s = { prompt: await crankPrompt(page), hint: await isVisible(page, '#hud-hint'), goal: await isVisible(page, '#hud-goal') };
+  return { ...s, count: [s.prompt, s.hint, s.goal].filter(Boolean).length };
+};
+// WP16b-2 (runs in the page): feedback text sits to the right of PURCHASE on the same row and the level line starts below both.
+const feedbackBesideBuy = () => {
+  const buy = document.getElementById('tech-buy'), fb = document.getElementById('tech-feedback'), lvl = document.getElementById('tech-level');
+  if (!buy || !fb || !lvl || !(fb.textContent || '').trim()) return false;
+  const b = buy.getBoundingClientRect(), f = fb.getBoundingClientRect(), l = lvl.getBoundingClientRect();
+  return f.left >= b.right + 4 && f.top < b.bottom && f.bottom > b.top && l.top >= Math.max(b.bottom, f.bottom) - 1;
+};
+// WP16b-2 (runs in the page): the visible nodes sit centred in #tech-graph (equal gaps left / right within 4 px).
+const graphCentered = () => {
+  const g = document.getElementById('tech-graph');
+  const rects = [...document.querySelectorAll('.tech-node')].filter(n => n.getClientRects().length > 0).map(n => n.getBoundingClientRect());
+  if (!g || rects.length === 0) return false;
+  const gr = g.getBoundingClientRect();
+  const left = Math.min(...rects.map(r => r.left)) - gr.left, right = gr.right - Math.max(...rects.map(r => r.right));
+  return left >= 0 && right >= 0 && Math.abs(left - right) <= 4;
+};
+
 // A fresh: crank prompt, hint after 15 clicks, tree focus and tab chip, buy from the tree, fly-in on close.
 const caseA = async page => {
   ok('A_prompt_visible', (await crankPrompt(page)) === true);
   ok('A_no_hint', !(await isVisible(page, '#hud-hint')));
+  const p0 = await promptState(page);
+  ok('A_one_prompt_t0', p0.count === 1 && p0.prompt === true, p0);
   await shot(page, 'ux-A1-prompt');
   await crank(page, 1, 0);
   await page.waitForTimeout(300);
@@ -121,6 +147,9 @@ const caseA = async page => {
   ok('A_hint_visible', (await isVisible(page, '#hud-hint')) && hint !== null && hint.includes('TECH INDEX'));
   const affordable = await page.$eval('#hud-tech', el => el.getAttribute('data-affordable')).catch(() => null);
   ok('A_badge', Number.parseInt(affordable ?? '', 10) >= 1);
+  const p1 = await promptState(page);
+  ok('A_one_prompt_hint', p1.count === 1 && p1.hint === true, p1);
+  ok('A_hint_chip_hidden', await page.evaluate(() => getComputedStyle(document.getElementById('hud-tech'), '::after').display === 'none'));
   await shot(page, 'ux-A2-hint');
   await crank(page, 100);
   await page.keyboard.press('t');
@@ -138,6 +167,7 @@ const caseA = async page => {
   ok('A_space_buys', (await page.evaluate(() => window.__wedtmd.session.state.techLevels.gearRatio)) === 1);
   const feedback = (await text(page, '#tech-feedback')) ?? '';
   ok('A_feedback_flavor', feedback.toLowerCase().includes('gear mesh recalibrated'));
+  ok('A_feedback_beside_buy', await page.evaluate(feedbackBesideBuy));
   // the part is held (assembling, hidden) while the tree is open
   await page.waitForTimeout(900);
   ok('A_held', await page.evaluate(() => {
@@ -172,6 +202,9 @@ const caseA = async page => {
   ok('A_hint_gone', !(await isVisible(page, '#hud-hint')));
   const goal = (await text(page, '#hud-goal')) ?? '';
   ok('A_goal_line', goal.startsWith('NEXT:'));
+  const p2 = await promptState(page);
+  ok('A_one_prompt_goal', p2.count === 1 && p2.goal === true, p2);
+  ok('A_chip_back', await page.evaluate(() => { const el = document.getElementById('hud-tech'); return (el.getAttribute('data-affordable') ?? '') === '' || getComputedStyle(el, '::after').display !== 'none'; }));
   await shot(page, 'ux-A5-goal');
 };
 
@@ -243,6 +276,11 @@ const caseD = async (page, s) => {
   }));
   ok(`D_${s}_buy_visible`, await page.evaluate(buyVisible));
   await shot(page, `ux-D-${s}-tree`);
+  if (s === 100) {
+    await page.click('#tech-tab-1');
+    await page.waitForTimeout(200);
+    ok('D_100_graph_centered', await page.evaluate(graphCentered));
+  }
   await page.click('#tech-tab-2');
   await page.waitForTimeout(200);
   await page.click('.tech-node[data-tech=powerLines]');
@@ -273,6 +311,34 @@ const caseD = async (page, s) => {
   await shot(page, `ux-D-${s}-menu-settings`);
 };
 
+// WP16b-2 case T: the compact in-tree toast stays clear of the era tabs, the TECH INDEX heading and the #tech-me line at UI 100 / 125 / 150.
+const caseT = async (page, w, h) => {
+  await buyList(page, S11);
+  await page.waitForTimeout(2500);
+  await page.click('#era-card', { timeout: 1000 }).catch(() => {});
+  for (const s of [100, 125, 150]) {
+    await page.evaluate(sc => window.__wedtmd.session.updateSettings({ uiScale: sc }), s);
+    await page.waitForTimeout(300);
+    await page.keyboard.press('t');
+    await page.waitForTimeout(400);
+    await page.click('#tech-tab-3');
+    await page.waitForTimeout(200);
+    const bought = await page.evaluate(() => {
+      const sess = window.__wedtmd.session;
+      let r = sess.purchase('firebox');
+      if (!r.ok) { sess.update(Math.max(Date.now(), sess.state.lastSimTime || 0) + 8 * 3600e3); r = sess.purchase('firebox'); }
+      return r.ok === true;
+    });
+    await page.waitForTimeout(450);
+    const vis = await page.evaluate(() => [...document.querySelectorAll('.toast')].filter(t => t.getClientRects().length > 0).length);
+    ok(`T_${w}x${h}_${s}_toast_shown`, bought === true && vis === 1, { bought, vis });
+    ok(`T_${w}x${h}_${s}_toast_clear`, await page.evaluate(toastClearTabs));
+    await shot(page, `ux-T-${w}x${h}-${s}`);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+  }
+};
+
 // perf: 30 manual clicks 100 ms apart; the frame stats are reported only (no fail).
 const casePerf = async page => {
   await crank(page, 30, 100);
@@ -282,12 +348,12 @@ const casePerf = async page => {
   }));
 };
 
-// One fresh 1280x720 context per case; console / page errors and failed requests are tagged with the case key.
+// One fresh context per case (1280x720 unless given); console / page errors and failed requests are tagged with the case key.
 // An exception becomes FAILED:<case>:<message> in fail.
-const runCase = async (browser, key, fn) => {
+const runCase = async (browser, key, fn, viewport = { width: 1280, height: 720 }) => {
   let ctx = null;
   try {
-    ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+    ctx = await browser.newContext({ viewport, deviceScaleFactor: 1 });
     const page = await ctx.newPage();
     page.on('console', m => { if (m.type() === 'error') errors.push(`${key}: console: ${m.text()}`); });
     page.on('pageerror', e => errors.push(`${key}: pageerror: ${e.message}`));
@@ -310,6 +376,7 @@ try {
   await runCase(browser, 'B', caseB);
   await runCase(browser, 'C', caseC);
   for (const s of [100, 150]) await runCase(browser, `D_${s}`, page => caseD(page, s));
+  for (const [w, h] of [[1280, 720], [1920, 1080]]) await runCase(browser, `T_${w}x${h}`, page => caseT(page, w, h), { width: w, height: h });
   await runCase(browser, 'perf', casePerf);
 } catch (e) {
   fail.push(`FAILED:setup:${String(e && e.message ? e.message : e).split('\n')[0]}`);

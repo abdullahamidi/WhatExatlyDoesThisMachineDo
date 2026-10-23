@@ -6,8 +6,8 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// UI owned by another package. Findings inside these scopes go to `deferred`, never to fail.
-export const DEFERRED_SCOPES = ['#tech-overlay', '#toast-stack', '#era-card'];
+// WP16b-2: empty, the tree, toast and era-card scopes gate. Kept for later packages.
+export const DEFERRED_SCOPES = [];
 
 // ---- Pure maths. Each helper is self-contained (calls only the other pure helpers): auditScope injects their source. ----
 
@@ -146,6 +146,7 @@ function auditInPage(arg) {
   let text = 0;
   for (const el of candidates) {
     if (!visible(el)) continue;
+    if (el.closest('.is-fading')) continue; // leaving toast / era card
     const cs = getComputedStyle(el);
     if (el.matches(CONTROL)) {
       controls++;
@@ -286,11 +287,11 @@ function tabRecord(scopeSel) {
   };
 }
 
-// n x (Tab, wait 60 ms, record). Index i is the press number from 0. The caller focuses the start point first.
-export async function tabWalk(page, n, scopeSel = null) {
+// n x (key, wait 60 ms, record). key is 'Tab' or 'Shift+Tab'. Index i is the press number from 0. The caller focuses the start point first.
+export async function tabWalk(page, n, scopeSel = null, key = 'Tab') {
   const out = [];
   for (let i = 0; i < n; i++) {
-    await page.keyboard.press('Tab');
+    await page.keyboard.press(key);
     await page.waitForTimeout(60);
     const rec = await page.evaluate(tabRecord, scopeSel);
     out.push({ i, ...rec });
@@ -444,7 +445,10 @@ function runSelfTest() {
   const comma = attempt(() => parseCssColor('rgba(1, 2, 3, 0.25)'));
   flag('parse_rgba_comma_alpha', !!comma && comma.r === 1 && comma.g === 2 && comma.b === 3 && comma.a === 0.25, comma);
 
-  flag('deferred_scopes_3', DEFERRED_SCOPES.length === 3, DEFERRED_SCOPES.length);
+  flag('deferred_scopes_empty', DEFERRED_SCOPES.length === 0, DEFERRED_SCOPES.length);
+  near('ink_on_amber_6_43', pair('rgb(20, 17, 15)', 'rgb(217, 130, 43)'), 6.43, 0.02);
+  near('ink_on_amber_dim_6_49', pair('rgb(20, 17, 15)', 'rgb(168, 149, 122)'), 6.49, 0.02);
+  near('sand_on_rust_dark_6_12', pair('rgb(201, 178, 138)', 'rgb(78, 42, 26)'), 6.12, 0.02);
 
   const ok = Object.values(checks).every(Boolean);
   console.log(JSON.stringify({ ok, checks, values }));

@@ -128,22 +128,17 @@
   animation: none;
 }
 
-/* While the TECH INDEX is open the stack stays ABOVE its backdrop (z 200 vs 100) so purchases are seen, and moves top-left over the
-   static TECH INDEX title. It never reaches CLOSE [ESC] (top right) or PURCHASE (bottom right of the panel). */
-body:has(#tech-overlay.is-open) #toast-stack {
-  z-index: 200;
-  left: 16px;
-  right: auto;
-  align-items: flex-start;
-}
-
-body:has(#tech-overlay.is-open) .toast {
-  text-align: left;
-  max-width: min(400px, calc(46vw / var(--ui-zoom, 1)));
-}
-
-/* WP21: with the tech tree open only the newest toast shows, title only and compact, so it stays clear of the era tabs. */
+/* While the TECH INDEX is open the stack stays ABOVE its backdrop (z 200 vs 100) so purchases are seen. WP16b-2: one compact line at
+   the very top-left (top 4 px): it never reaches the TECH INDEX heading, the header readout, the era tabs, CLOSE [ESC] or PURCHASE at
+   UI 100/125/150 % (the heading top stays >= 38 CSS px below the root top when the panel is at its 94 % max height). */
+body:has(#tech-overlay.is-open) #toast-stack { z-index: 200; top: 4px; left: 16px; right: auto; align-items: flex-start; }
+body:has(#tech-overlay.is-open) .toast { text-align: left; max-width: min(400px, calc(46vw / var(--ui-zoom, 1))); }
+/* WP21: only the newest toast shows, title only. */
 body:has(#tech-overlay.is-open) #toast-stack > .toast:not(:last-child) { display: none; }
 body:has(#tech-overlay.is-open) .toast-body { display: none; }
-body:has(#tech-overlay.is-open) .toast, body:has(#tech-overlay.is-open) .toast--milestone { padding: 4px 10px; }
-body:has(#tech-overlay.is-open) .toast--milestone .toast-title { font-size: 1em; }
+body:has(#tech-overlay.is-open) .toast, body:has(#tech-overlay.is-open) .toast--milestone { padding: 3px 10px; }
+/* WP16b-2: one 13 px line with an ellipsis, whatever the tone or the title length. */
+body:has(#tech-overlay.is-open) .toast-title,
+body:has(#tech-overlay.is-open) .toast--milestone .toast-title {
+  font-size: 13px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}

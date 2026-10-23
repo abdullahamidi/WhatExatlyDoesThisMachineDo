@@ -5,6 +5,7 @@ import type { GameContext } from '../game/context';
 import type { GameSession } from '../simulation';
 import { buildEraTabs, buildTechTreeView, defaultSelection, graphFitScale, priorityTech, purchaseFailureText, purchaseFeedbackText, reachedEras, revealScroll, TECH_TREE_FIT } from './techTreeView';
 import type { EraTabView, TechDetailView, TechNodeView, TechTreeView } from './techTreeView';
+import { trapFocus } from './hotkeys';
 
 // TECH INDEX overlay (DOM). Built once; update() patches only what changed. No Phaser.
 
@@ -169,6 +170,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   let dirty = true;
   let lastStamp = '';
   let returnFocus: HTMLElement | null = null;
+  let disposeFocusTrap: (() => void) | null = null;
   let deniedTimer: number | null = null;
   // Inputs the cached view was built from; update() rebuilds only when they change or the cache is old.
   let builtLevels: object | null = null;
@@ -197,6 +199,13 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
       deniedTimer = null;
       buyButton.classList.remove('is-denied');
     }, DENIED_FLASH_MS);
+  };
+
+  /** WP16b-2: releases the Tab trap of the open tree (no-op when none is armed). */
+  const releaseFocusTrap = (): void => {
+    const dispose = disposeFocusTrap;
+    disposeFocusTrap = null;
+    if (dispose !== null) dispose();
   };
 
   const viewsOfEra = (era: number): TechView[] =>
@@ -420,6 +429,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     isOpenFlag = true;
     overlay.classList.add('is-open');
     modals.push('tech-tree', close);
+    disposeFocusTrap = trapFocus(overlay);
     dirty = true;
     update();
     layoutGraph();
@@ -432,6 +442,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   function close(): void {
     if (!isOpenFlag) return;
     isOpenFlag = false;
+    releaseFocusTrap();
     overlay.classList.remove('is-open');
     modals.remove('tech-tree');
     setFeedback('');
@@ -598,6 +609,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     openListeners.clear(); // first: teardown must not notify listeners
     if (destroyed) return;
     close();
+    releaseFocusTrap();
     destroyed = true;
     for (const unsubscribe of unsubscribes) unsubscribe();
     closeButton.removeEventListener('click', onClose);

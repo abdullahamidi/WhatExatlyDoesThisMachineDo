@@ -1,12 +1,15 @@
 // WP16a T6b a11y smoke: keyboard reach, focus traps, focus rings, accessible names, 12 px floor, WCAG contrast,
 // reduced motion and UI scale 150 across title, credits, HUD, tech tree, SYSTEM menu, finale, photo mode, cycle confirm.
+// WP16b-2: the tech tree, purchase toast and era card gate too (case H: era card, tree tabs 2 and 1, toast).
 // Usage: PW_PATH=... node scripts/smoke/a11y.mjs <base-url-without-query> <outdir>
 // base = preview URL with a trailing slash and NO query (e.g. http://localhost:4174/); each case adds its own query.
 // Prints ONE JSON object { results, fail, deferred, inactive, indeterminate, errors } to stdout and to <outdir>/a11y.json.
-// Exit 1 when fail or errors is non-empty. deferred / inactive / indeterminate are report-only and never fail the run.
+// Exit 1 when fail or errors is non-empty. Expected run: fail [], errors [], deferred [] (deferred is empty since WP16b-2).
+// inactive / indeterminate are report-only and never fail the run; the milestone toast (gradient with a translucent top
+// over the canvas) stays indeterminate. Inactive items (:disabled, [aria-disabled="true"], .is-locked) stay exempt.
 import fs from 'fs';
 import path from 'path';
-import { S15, buyList, crankClicks, loadChromium, makeReport, poll, watchPage, waitReady, withQuery } from './lib/common.mjs';
+import { S15, S9, buyList, crankClicks, loadChromium, makeReport, poll, watchPage, waitReady, withQuery } from './lib/common.mjs';
 import {
   auditScope,
   focusId,
@@ -87,6 +90,12 @@ const noModal = async page => {
     await wait(page, 150);
   }
 };
+
+// Waits until no toast / era card is fading or playing its intro (milestone toast pulse ignored). Returns the last poll value.
+const settleOverlays = page => poll(page, () => {
+  const moving = el => el.getAnimations().some(a => a.playState === 'running' && !(a instanceof CSSAnimation && a.animationName === 'toast-pulse'));
+  return [...document.querySelectorAll('#toast-stack .toast, #era-card')].every(el => !el.classList.contains('is-fading') && !moving(el));
+}, null, 3000, 100);
 
 // Visible SYSTEM menu tab ids in document order ('sys-tab-<id>' minus the prefix).
 const visibleTabs = page => page.evaluate(() => Array.from(document.querySelectorAll('#sys-tabs [role=tab]'))
@@ -184,6 +193,7 @@ const runBCD = async browser => {
       const walk = await tabWalk(page, 6, '#ui-root');
       reachCheck('B', walk, ['hud-tech', 'hud-refocus', 'hud-system']);
       ringCheck('B', walk);
+      await settleOverlays(page);
       auditChecks('B', record('B_hud', await auditScope(page, '#ui-root')));
       await shot(page, 'B-hud');
     });
@@ -201,16 +211,18 @@ const runBCD = async browser => {
       });
       check('C_focus_selected', focus.ok, focus.desc);
       const walk = await tabWalk(page, 30, '#tech-overlay');
-      // Known tree focus-trap gap (owned by another package): reported as deferred, never failing.
-      const trapped = walk.filter(r => r.inScope !== true);
-      if (trapped.length > 0) deferred.push({ at: 'C_trap', kind: 'trap', ids: trapped.map(r => r.id || `${r.tag}.${r.cls}`) });
+      trapCheck('C', walk);
       const seen = new Set(walk.map(r => r.id));
       const missing = ['tech-close', 'tech-buy'].filter(id => !seen.has(id));
       const nodes = new Set(walk.filter(r => r.cls.includes('tech-node')).map(r => r.tech || `i${r.i}`)).size;
       const tabs = walk.filter(r => r.cls.includes('tech-tab')).length;
       check('C_reach', missing.length === 0 && nodes >= 3 && tabs >= 1, { missing, nodes, tabs });
       ringCheck('C', walk);
-      record('C_tree', await auditScope(page, '#tech-overlay'));
+      await focusId(page, 'tech-close');
+      const back = await tabWalk(page, 3, '#tech-overlay', 'Shift+Tab');
+      check('C_trap_back', back.length === 3 && back.every(r => r.inScope === true) && back[0].id !== 'tech-close', back);
+      await settleOverlays(page);
+      auditChecks('C', record('C_tree', await auditScope(page, '#tech-overlay')));
       await shot(page, 'C-tree');
       await page.keyboard.press('Escape');
       await wait(page, 300);
@@ -423,6 +435,67 @@ const runG = async browser => {
   }
 };
 
+// H: era card, tech tree tabs 2 and 1 after the S9 buy list, one purchase toast.
+const runH = async browser => {
+  cur = 'H_cards';
+  const { ctx, page } = await openContext(browser);
+  try {
+    await guard('H_cards', async () => {
+      await gotoGame(page, { debug: '1' });
+      await crankClicks(page, 45);
+      const failed = await buyList(page, S9);
+      check('H_buys', failed.length === 0, failed);
+      const shown = await poll(page, () => !!document.querySelector('#era-card.is-shown:not(.is-fading)'), null, 3000, 100);
+      check('H_card_shown', shown === true, shown);
+      await settleOverlays(page);
+      auditChecks('H_card', record('H_card', await auditScope(page, '#era-card')));
+      await shot(page, 'H-card');
+      await page.click('#era-card', { timeout: 3000 }).catch(() => {});
+      await wait(page, 500);
+
+      await noModal(page);
+      await page.keyboard.press('t');
+      await wait(page, 400);
+      await page.click('#tech-tab-2');
+      await wait(page, 250);
+      await settleOverlays(page);
+      auditChecks('H_tree2', record('H_tree2', await auditScope(page, '#tech-overlay')));
+      await shot(page, 'H-tree2');
+
+      await page.click('#tech-tab-1');
+      await wait(page, 250);
+      const milestone = (await count(page, '.tech-node.is-milestone.is-purchased[data-tech=generatorBlueprint]')) > 0;
+      check('H_tree1_milestone', milestone === true, milestone);
+      const purchased = await page.evaluate(() => [...document.querySelectorAll('.tech-node.is-purchased:not(.is-milestone)')]
+        .filter(el => el.getClientRects().length > 0).length);
+      check('H_tree1_purchased', purchased >= 3, purchased);
+      auditChecks('H_tree1', record('H_tree1', await auditScope(page, '#tech-overlay')));
+      await shot(page, 'H-tree1');
+
+      const bought = await page.evaluate(() => {
+        const s = window.__wedtmd.session;
+        let r = s.purchase('copperWinding');
+        if (!r.ok) {
+          s.update(Math.max(Date.now(), s.state.lastSimTime || 0) + 8 * 3600e3);
+          r = s.purchase('copperWinding');
+        }
+        return r.ok === true;
+      });
+      await wait(page, 500);
+      await settleOverlays(page);
+      const toasts = await page.evaluate(() => [...document.querySelectorAll('#toast-stack .toast:not(.is-fading)')]
+        .filter(el => el.getClientRects().length > 0).length);
+      check('H_toast_shown', bought === true && toasts >= 1, { bought, toasts });
+      auditChecks('H_toast', record('H_toast', await auditScope(page, '#toast-stack')), { names: false });
+      await shot(page, 'H-toast');
+      await page.keyboard.press('Escape');
+      await wait(page, 300);
+    });
+  } finally {
+    await ctx.close();
+  }
+};
+
 // ---- Run ----
 
 const browser = await chromium.launch();
@@ -432,6 +505,7 @@ try {
   await runE(browser);
   await runF(browser);
   await runG(browser);
+  await runH(browser);
 } catch (e) {
   fail.push(`FAILED:run:${firstLine(e)}`);
 } finally {

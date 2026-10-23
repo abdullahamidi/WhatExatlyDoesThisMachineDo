@@ -13,6 +13,7 @@ import { resourceShort } from './revealRules';
 
 // WP20 guidance view model: the HUD next-goal line, the TECH INDEX hint and badge, and the era-unlock card.
 // Pure: no DOM, no Phaser. Each predicate is a small rule so the HUD and the tests read the same logic.
+// WP16b-2: activePrompt picks the one guidance prompt on screen (crank > TECH INDEX hint > next-goal line).
 
 export interface NextGoalView { id: TechId; title: string; detail: string; ready: boolean; progress: number }
 
@@ -96,6 +97,17 @@ export function techHintVisible(i: TechHintInput): boolean {
 /** The next-goal line appears once something is bought, and never during the finale. */
 export function goalVisible(anyPurchased: boolean, phase: EndingPhase): boolean {
   return anyPurchased && phase === 'none';
+}
+
+export type GuidancePrompt = 'crank' | 'hint' | 'goal';
+
+/** WP16b-2: the one guidance prompt on screen. Priority: crank prompt (no click yet) > TECH INDEX hint > next-goal line. Null outside phase 'none'. */
+export function activePrompt(i: TechHintInput): GuidancePrompt | null {
+  if (i.phase !== 'none') return null;
+  if (crankPromptVisible(i.totalClicks)) return 'crank';
+  if (techHintVisible(i)) return 'hint';
+  if (goalVisible(i.anyPurchased, i.phase)) return 'goal';
+  return null;
 }
 
 /** TECH INDEX badge text (capped with the overflow glyph) and its screen-reader label. */
