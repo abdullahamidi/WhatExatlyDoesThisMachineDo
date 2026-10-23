@@ -21,6 +21,12 @@ import { FinaleDirector } from '../rendering/FinaleDirector';
 import { CycleTransition } from '../rendering/CycleTransition';
 import { MachineView } from '../entities/MachineView';
 import { HandCrank } from '../entities/HandCrank';
+import { createDisplaySource } from '../sources';
+import { createPhotoModeController } from '../photoModeController';
+import type { PhotoModeController } from '../photoModeController';
+import { createPhotoOverlay } from '../../ui/photoMode';
+import { portraitPose } from '../math/showcase';
+import { PHOTO_MODE } from '../../data/photoMode';
 import { motionPolicy } from '../../simulation';
 
 /** Modal id held on the stack while the new-cycle transition runs (input lock). */
@@ -80,6 +86,7 @@ export class WorldScene extends Phaser.Scene {
   private beam: ApertureBeam | null = null;
   private finale: FinaleDirector | null = null;
   private cycleTransition: CycleTransition | null = null;
+  private photo: PhotoModeController | null = null;
   /** performance.now() of the last HUD rebuild (poll or event); the poll waits HUD_REFRESH_MS after it. */
   private hudRenderedAtMs = Number.NEGATIVE_INFINITY;
   private readonly frameTimings = new FrameTimings();
@@ -92,6 +99,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
+    // First statement: its session 'reset' subscription must run before any consumer's (see createDisplaySource).
+    const display = createDisplaySource(this.ctx.session);
     const background = new ParallaxBackground(this, this.ctx.session.state.techLevels);
     this.background = background;
     const pylonLines = PYLON_FEEDS.map(
@@ -103,13 +112,13 @@ export class WorldScene extends Phaser.Scene {
     this.dust = dust;
     // A loaded save with the spire already standing shows its rising dust at once.
     dust.setRising(this.ctx.session.state.techLevels[DUST_RISING.techId] >= DUST_RISING.minLevel, true);
-    const machine = new MachineView(this, this.ctx);
+    const machine = new MachineView(this, { session: display, feedback: this.ctx.feedback });
     this.machineView = machine;
-    const eclipse = new Eclipse(this, this.ctx.session);
+    const eclipse = new Eclipse(this, display);
     this.eclipse = eclipse;
-    const beam = new ApertureBeam(this, this.ctx.session, () => this.machineView?.latchFrame(APERTURE_BEAM.component) ?? null);
+    const beam = new ApertureBeam(this, display, () => this.machineView?.latchFrame(APERTURE_BEAM.component) ?? null);
     this.beam = beam;
-    const steamFx = new SteamFx(this, this.ctx.session, () => this.machineView);
+    const steamFx = new SteamFx(this, display, () => this.machineView);
     this.steamFx = steamFx;
     const floatingText = new FloatingText(this);
     const crank = new HandCrank(this, this.ctx, machine, floatingText);
@@ -121,6 +130,7 @@ export class WorldScene extends Phaser.Scene {
     const finaleFx = new FinaleFx(this, (beat) => this.ctx.feedback.finaleBeat.emit(beat));
     const finale = new FinaleDirector(this, {
       session: this.ctx.session,
+      display,
       newCycle: this.ctx.newCycle,
       overlay: this.ui.finaleOverlay,
       background,
@@ -142,10 +152,41 @@ export class WorldScene extends Phaser.Scene {
     this.cycleTransition = cycleTransition;
     this.ui.cycleLink.play = (onPeak, onDone) => this.playCycleTransition(onPeak, onDone);
 
+    // Photo mode (WP18, VIEW MACHINE): needs #ui-root for its overlay. Without it there is no photo mode and getPhoto() is null.
+    const photoDisposables: Array<() => void> = [];
+    const uiRoot = document.getElementById('ui-root');
+    if (uiRoot !== null) {
+      // The overlay and the controller reference each other, so the controller is late-bound.
+      let controller: PhotoModeController | null = null;
+      const overlay = createPhotoOverlay(uiRoot, {
+        onExit: () => controller?.exit(),
+        onPan: (dx, dy) => controller?.pan(dx, dy),
+        onZoom: (dir) => controller?.zoom(dir),
+      });
+      const photo = createPhotoModeController({
+        phase: () => this.ctx.session.state.ending.phase,
+        modals: this.ui.modals,
+        camera,
+        crank,
+        overlay,
+        portrait: portraitPose,
+      });
+      controller = photo;
+      this.photo = photo;
+      const offViewMachine = this.ui.hud.onViewMachine(() => {
+        photo.enter();
+      });
+      photoDisposables.push(offViewMachine, () => {
+        this.photo = null;
+        photo.destroy();
+      }, () => overlay.destroy());
+    }
+
     // The finale director drives the renderers below, so it is disposed first; the crank uses the machine
     // and the floating text, so it goes before them. The cycle transition goes before the director: a running
     // transition fires its pending peak (the cycle swap, a 'reset' the director handles) while the director still exists.
     this.disposables.push(
+      ...photoDisposables,
       () => {
         this.cycleTransition = null;
         cycleTransition.destroy();
@@ -190,6 +231,8 @@ export class WorldScene extends Phaser.Scene {
         this.background = null;
         background.destroy();
       },
+      // Last: the base 'reset' subscription goes after every consumer that reads the display levels.
+      () => display.destroy(),
     );
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       // One failing disposable must not skip the rest (e.g. the session 'reset' unsubscribe).
@@ -236,6 +279,11 @@ export class WorldScene extends Phaser.Scene {
     return this.cycleTransition;
   }
 
+  /** The photo-mode controller, or null before `create`, after its teardown, or when #ui-root is missing. */
+  getPhoto(): PhotoModeController | null {
+    return this.photo;
+  }
+
   /** Mean and max frame time (ms) of session update + HUD + tech tree over the last 120 frames (zeros before the first frame). */
   getUiStats(): { meanMs: number; maxMs: number } {
     return this.frameTimings.stats();
@@ -268,9 +316,12 @@ export class WorldScene extends Phaser.Scene {
     if (this.ctx.session.revision !== this.lastRevision && hudStart - this.hudRenderedAtMs >= HUD_REFRESH_MS) this.renderHud();
     this.ui.techTree.update();
     this.frameTimings.record((sessionEnd - sessionStart) + (performance.now() - hudStart));
+    // Photo mode ends itself when another modal sits on top or the finale runs again.
+    this.photo?.update();
     // Phaser also handles window-level mouse events, so a DOM overlay alone does not shield the canvas.
     // Gate on any modal dialog open (tech tree, system menu, reset confirm), not just the tech tree.
-    this.input.enabled = !this.ui.modals.isOpen();
+    // Photo mode keeps Phaser input on so drag and wheel pan / zoom still work.
+    this.input.enabled = !this.ui.modals.isOpen() || this.ui.modals.topId() === PHOTO_MODE.modalId;
   }
 
   /**

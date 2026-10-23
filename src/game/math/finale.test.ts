@@ -2,15 +2,22 @@ import { describe, it, expect } from 'vitest';
 import {
   easeInOutCubic, easeOutCubic, choiceStartS, finaleEndS, shotAt, viewPose, cameraPoseAt, trackValue, whiteAlpha,
   boost01, boostedValue, beamHeadPx, eclipseAt, wipeHalfWidthPx, wipeEdgeOffsetPx, wipeRects, wipeComplete,
-  typewriter, beatsBetween, flockSchedule, birdPose, finaleFrame, BEAM_MAX_PX,
+  typewriter, beatsBetween, flockSchedule, birdPose, finaleFrame, BEAM_MAX_PX, completeEraAt,
 } from './finale';
 import type { CameraPose, RevealCfg } from './finale';
 import {
-  FINALE_BEATS, FINALE_BIRDS, FINALE_REVEAL, FINALE_WHITE, FINALE_CUT, FINALE_WIPE,
+  FINALE_BEATS, FINALE_BIRDS, FINALE_REVEAL, FINALE_WHITE, FINALE_CUT, FINALE_WIPE, FINALE_SHOTS,
 } from '../../data/finale';
 import { VIEW, WORLD } from '../../data/world';
+import { clampCenter } from './camera';
 
 const START: CameraPose = { centerX: 1000, centerY: 500, zoom: 0.8 };
+
+function expectPose(actual: CameraPose, want: CameraPose): void {
+  expect(actual.centerX).toBeCloseTo(want.centerX, 6);
+  expect(actual.centerY).toBeCloseTo(want.centerY, 6);
+  expect(actual.zoom).toBeCloseTo(want.zoom, 6);
+}
 
 describe('easing', () => {
   it('cubic in-out and out are 0 at 0, 1 at 1, and clamp their input', () => {
@@ -510,6 +517,14 @@ describe('finaleFrame', () => {
     expect(f.beam.animate).toBe(false);
   });
 
+  it('completeEra: 0 before the completion beat, 4 mid sequence, 5 at the choice and in postgame', () => {
+    expect(finaleFrame({ phase: 'none', t: 0, reduced: false, start: START }).completeEra).toBe(0);
+    expect(finaleFrame({ phase: 'sequence', t: 1, reduced: false, start: START }).completeEra).toBe(0);
+    expect(finaleFrame({ phase: 'sequence', t: 5, reduced: false, start: START }).completeEra).toBe(4);
+    expect(finaleFrame({ phase: 'choice', t: 0, reduced: false, start: START }).completeEra).toBe(5);
+    expect(finaleFrame({ phase: 'postgame', t: 0, reduced: false, start: START }).completeEra).toBe(5);
+  });
+
   it('reduced choice keeps the S5 end state', () => {
     const f = finaleFrame({ phase: 'choice', t: 0, reduced: true, start: START });
     expect(f.shot).toBe('S5');
@@ -522,5 +537,57 @@ describe('finaleFrame', () => {
     expect(f.t).toBe(0);
     expect(f.shot).toBe('S0');
     expect(f.camera).toEqual(START);
+  });
+});
+
+describe('survey camera and completion beat (WP18)', () => {
+  it('baseL and baseR are zoom-1 poses on the machine base and lie inside the world unclamped', () => {
+    expect(viewPose('baseL')).toEqual({ centerX: 1320, centerY: 1380, zoom: 1 });
+    expect(viewPose('baseR')).toEqual({ centerX: 2520, centerY: 1380, zoom: 1 });
+    for (const v of ['baseL', 'baseR'] as const) {
+      const p = viewPose(v);
+      expect(clampCenter({ x: p.centerX, y: p.centerY }, p.zoom, VIEW, WORLD)).toEqual({ x: p.centerX, y: p.centerY });
+    }
+  });
+
+  it('non-reduced survey: baseL 41.0..42.0, baseR 45.0..46.0, full from 49.3 on; full before 38.5', () => {
+    expectPose(cameraPoseAt(38.4, START, false).pose, viewPose('full'));
+    for (const t of [41.0, 41.5, 42.0]) expectPose(cameraPoseAt(t, START, false).pose, viewPose('baseL'));
+    for (const t of [45.0, 45.5, 45.8, 46.0]) expectPose(cameraPoseAt(t, START, false).pose, viewPose('baseR'));
+    expectPose(cameraPoseAt(FINALE_SHOTS.s4, START, false).pose, viewPose('full'));
+    expectPose(cameraPoseAt(55, START, false).pose, viewPose('full'));
+  });
+
+  it('non-reduced survey zoom: non-decreasing into baseL, 1 across the holds, non-increasing out to full', () => {
+    let prev = cameraPoseAt(38.5, START, false).pose.zoom;
+    for (let i = 1; i <= 50; i++) {
+      const z = cameraPoseAt(38.5 + i * 0.05, START, false).pose.zoom;
+      expect(z).toBeGreaterThanOrEqual(prev - 1e-12);
+      prev = z;
+    }
+    for (let i = 0; i <= 70; i++) expect(cameraPoseAt(42 + i * 0.05, START, false).pose.zoom).toBeCloseTo(1, 9);
+    prev = cameraPoseAt(46, START, false).pose.zoom;
+    for (let i = 1; i <= 66; i++) {
+      const z = cameraPoseAt(46 + i * 0.05, START, false).pose.zoom;
+      expect(z).toBeLessThanOrEqual(prev + 1e-12);
+      prev = z;
+    }
+  });
+
+  it('reduced: the survey keys do not exist, so every film time shows the full view with no cut fade', () => {
+    for (let i = 0; i <= 130; i++) {
+      const t = 37 + i * 0.1;
+      const r = cameraPoseAt(t, START, true);
+      expect(r.pose, String(t)).toEqual(viewPose('full'));
+      expect(r.cutFade, String(t)).toBe(0);
+    }
+  });
+
+  it('completeEraAt: 0 below 3, 3 to 4.5, 4 to 6, 5 from 6; 0 for NaN, negative and infinite t', () => {
+    const cases: [number, 0 | 3 | 4 | 5][] = [
+      [2.99, 0], [3, 3], [4.49, 3], [4.5, 4], [5.99, 4], [6, 5], [99, 5],
+      [Number.NaN, 0], [-1, 0], [Number.POSITIVE_INFINITY, 0],
+    ];
+    for (const [t, era] of cases) expect(completeEraAt(t), String(t)).toBe(era);
   });
 });

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { VIEW, WORLD, CAMERA, ECLIPSE } from '../../data/world';
-import type { GameSession } from '../../simulation';
+import type { MachineSource } from '../entities/machineSource';
 import { motionPolicy } from '../../simulation/settings';
 import { effectiveMinZoom } from '../math/camera';
 import { skyPxToScrollZero, stageFrame } from '../math/parallax';
@@ -10,14 +10,14 @@ import type { FinaleFrame } from '../math/finale';
 // aperture stages (ECLIPSE data). Frame 0 is the baked sun in bg.sky, so the sprite is hidden there. The aperture
 // purchase flashes the diamond frame for ECLIPSE.diamond.ms, then the stage frame returns. Frame changes are instant.
 export class Eclipse {
-  private readonly session: GameSession;
+  private readonly session: MachineSource;
   private readonly sprite: Phaser.GameObjects.Image;
   private readonly unsubscribers: Array<() => void> = [];
   private diamondLeftMs: number | null = null; // ms left of the diamond flash; null when not flashing
   private shownFrame = -1;
   private finale: FinaleFrame['eclipse'] = { kind: 'stage' }; // finale override; 'stage' = WP11 behaviour
 
-  constructor(scene: Phaser.Scene, session: GameSession) {
+  constructor(scene: Phaser.Scene, session: MachineSource) {
     this.session = session;
     const minZoom = effectiveMinZoom(VIEW, WORLD, CAMERA.minZoom);
     const at = skyPxToScrollZero(ECLIPSE.skyPx, VIEW, minZoom);

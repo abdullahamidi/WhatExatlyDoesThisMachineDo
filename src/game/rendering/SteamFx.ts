@@ -4,7 +4,7 @@ import type { EmitterMode, SteamEmitter } from '../../data/steamFx';
 import { MACHINE_MOTION } from '../../data/machineComponents';
 import type { MachineComponentId, Vec2 } from '../../data/machineComponents';
 import { PIXEL_SCALE } from '../../data/world';
-import type { GameSession } from '../../simulation';
+import type { MachineSource } from '../entities/machineSource';
 import { motionPolicy } from '../../simulation/settings';
 import type { MachineView } from '../entities/MachineView';
 import { driverValue } from '../math/animation';
@@ -65,7 +65,7 @@ function pointAt(points: readonly Vec2[], index: number): Vec2 | undefined {
 // lives in math/steamFx. Puffs come from a bounded pool of images that are hidden while free.
 export class SteamFx {
   private readonly scene: Phaser.Scene;
-  private readonly session: GameSession;
+  private readonly session: MachineSource;
   private readonly getMachine: () => MachineView | null;
   private readonly lanes: Lane[] = STEAM_EMITTERS.map((emitter) => ({ emitter, state: freshState() }));
   private readonly free: Phaser.GameObjects.Image[] = [];
@@ -76,7 +76,7 @@ export class SteamFx {
   private lastStrikes = 0;
   private unsubscribers: Array<() => void> = [];
 
-  constructor(scene: Phaser.Scene, session: GameSession, getMachine: () => MachineView | null) {
+  constructor(scene: Phaser.Scene, session: MachineSource, getMachine: () => MachineView | null) {
     this.scene = scene;
     this.session = session;
     this.getMachine = getMachine;

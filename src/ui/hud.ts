@@ -6,7 +6,7 @@ import { HUD_ROW_IDS } from './hudView';
 import type { HudResourceRow, HudView } from './hudView';
 import { resourceShort } from './revealRules';
 
-export interface Hud { render(view: HudView): void; destroy(): void }
+export interface Hud { render(view: HudView): void; onViewMachine(fn: () => void): () => void; destroy(): void }
 
 // Initial placeholder texts; the first render replaces them (WorldScene renders on create).
 const INITIAL_CLICK = '+1 ME';
@@ -128,8 +128,14 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
   systemButton.type = 'button';
   systemButton.title = 'SYSTEM [ESC]';
   systemButton.setAttribute('aria-keyshortcuts', 'Escape');
+  // Postgame only (see HudView.viewMachine); the photo mode entry is wired by WorldScene.
+  const viewButton = createElement('button', { id: 'hud-view-machine', className: 'hud-btn', text: HUD_TEXT.viewMachine });
+  viewButton.type = 'button';
+  viewButton.title = HUD_TEXT.viewMachineTitle;
+  viewButton.hidden = true;
   buttons.appendChild(techButton);
   buttons.appendChild(refocusButton);
+  buttons.appendChild(viewButton);
   buttons.appendChild(systemButton);
 
   root.appendChild(panel);
@@ -138,8 +144,14 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
   const onTech = (): void => commands.openTechTree.emit();
   const onRefocus = (): void => commands.refocus.emit();
   const onSystem = (): void => commands.openSystemMenu.emit();
+  // Own listener set: the same fn can subscribe twice and each unsubscribe is independent.
+  const viewListeners = new Set<() => void>();
+  const onView = (): void => {
+    for (const fn of Array.from(viewListeners)) fn();
+  };
   techButton.addEventListener('click', onTech);
   refocusButton.addEventListener('click', onRefocus);
+  viewButton.addEventListener('click', onView);
   systemButton.addEventListener('click', onSystem);
 
   // Write caches: each field touches the DOM only when its value changes.
@@ -158,6 +170,7 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
     cycleEl.textContent = text;
     cycleEl.hidden = text === '';
   });
+  const setViewMachine = cachedWrite<boolean>(false, (on) => { viewButton.hidden = !on; });
 
   return {
     render(view: HudView): void {
@@ -168,11 +181,20 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
       setAuto(view.autoCrank);
       setPlaque(view.plaque);
       setCycle(view.cycle ?? '');
+      setViewMachine(view.viewMachine);
+    },
+    onViewMachine(fn: () => void): () => void {
+      // Fresh closure per subscription, so one fn can be registered twice and removed independently.
+      const wrapped = (): void => fn();
+      viewListeners.add(wrapped);
+      return () => { viewListeners.delete(wrapped); };
     },
     destroy(): void {
       techButton.removeEventListener('click', onTech);
       refocusButton.removeEventListener('click', onRefocus);
+      viewButton.removeEventListener('click', onView);
       systemButton.removeEventListener('click', onSystem);
+      viewListeners.clear();
       panel.remove();
       buttons.remove();
     },

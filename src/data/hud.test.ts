@@ -52,3 +52,10 @@ describe('HUD_TEXT row labels', () => {
     expect(HUD_TEXT.feedsPrefix).toBe('›');
   });
 });
+
+describe('HUD_TEXT view machine button', () => {
+  it('has the VIEW MACHINE label and title', () => {
+    expect(HUD_TEXT.viewMachine).toBe('VIEW MACHINE');
+    expect(HUD_TEXT.viewMachineTitle).toBe('View the whole machine (photo mode)');
+  });
+});

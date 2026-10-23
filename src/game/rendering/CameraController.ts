@@ -18,6 +18,7 @@ import {
 } from '../math/camera';
 import { visibleMachineBounds, boundsToWorld } from '../math/machineBounds';
 import type { CameraPose } from '../math/finale';
+import { portraitPose, photoPanPose, photoZoomPose } from '../math/showcase';
 
 interface DragState {
   startCenter: Vec2;
@@ -132,6 +133,33 @@ export class CameraController {
     this.animateTo(this.target());
   }
 
+  /** Current pose of the controller's own state (photo mode entry / debug). */
+  pose(): CameraPose {
+    return { centerX: this.center.x, centerY: this.center.y, zoom: this.zoom };
+  }
+
+  /** Photo mode / explicit move: tween to a pose (reduced motion: jump). Ignored while the finale overrides the camera. */
+  moveTo(pose: CameraPose): void {
+    if (this.overridden) return;
+    this.drag = null;
+    this.autoFrameSkipped = false;
+    this.animateTo({ center: { x: pose.centerX, y: pose.centerY }, zoom: pose.zoom });
+  }
+
+  /** Photo mode keyboard pan by screen px (clamped to the world). Ignored while overridden. */
+  panBy(dxScreenPx: number, dyScreenPx: number): void {
+    if (this.overridden) return;
+    this.cancelRefocus();
+    this.setPose(photoPanPose(this.pose(), dxScreenPx, dyScreenPx));
+  }
+
+  /** One zoom grid step (0.25) in (dir 1) or out (dir -1) around the current centre. Ignored while overridden. */
+  zoomStep(dir: 1 | -1): void {
+    if (this.overridden) return;
+    this.cancelRefocus();
+    this.setPose(photoZoomPose(this.pose(), dir));
+  }
+
   /**
    * Finale camera. A non-null pose is clamped like any view (world bounds, zoom range) and written at once; drag, wheel and
    * auto-frame are ignored while it is set. null releases the override and the camera keeps its current pose (no jump).
@@ -166,7 +194,13 @@ export class CameraController {
   }
 
   // Camera framing for the current machine: the default view when the machine fits it, otherwise the fitted view.
+  // The finale endings (choice / postgame) frame the canonical portrait instead, so keep, reload and refocus agree (WP18).
   private target(): { center: Vec2; zoom: number } {
+    const phase = this.session.state.ending.phase;
+    if (phase === 'choice' || phase === 'postgame') {
+      const p = portraitPose();
+      return { center: { x: p.centerX, y: p.centerY }, zoom: p.zoom };
+    }
     if (!CAMERA.autoFrame) {
       return {
         center: clampCenter({ x: CAMERA.focus.x, y: CAMERA.focus.y }, CAMERA.defaultZoom, VIEW, WORLD),
@@ -249,6 +283,13 @@ export class CameraController {
   private apply(): void {
     this.camera.setZoom(this.zoom);
     this.camera.centerOn(this.center.x, this.center.y);
+  }
+
+  // Immediate write of a pose the photo helpers already clamped (no tween).
+  private setPose(p: CameraPose): void {
+    this.center = { x: p.centerX, y: p.centerY };
+    this.zoom = p.zoom;
+    this.apply();
   }
 
   private cancelRefocus(): void {

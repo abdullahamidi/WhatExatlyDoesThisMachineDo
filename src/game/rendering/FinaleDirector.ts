@@ -3,10 +3,12 @@ import type { GameSession } from '../../simulation';
 import { motionPolicy } from '../../simulation/settings';
 import type { EndingPhase } from '../../data/types';
 import { FINALE_BOOST, FINALE_CLOCK, FINALE_PLATE, FINALE_REVEAL } from '../../data/finale';
-import type { FinaleBeat } from '../../data/finale';
+import type { CompleteEra, FinaleBeat } from '../../data/finale';
 import { MACHINE_COMPONENTS } from '../../data/machineComponents';
 import { beatsBetween, finaleEndS, finaleFrame } from '../math/finale';
 import type { CameraPose, FinaleFrame, FinaleShot } from '../math/finale';
+import { visualMaxForEra } from '../math/showcase';
+import type { DisplaySource } from '../sources';
 import { buildFinaleOverlay } from '../../ui/finaleView';
 import type { FinaleOverlayHandle } from '../../ui/finale';
 import type { NewCycleHook } from '../newCycle';
@@ -24,6 +26,7 @@ import type { Terrain } from './Terrain';
 // Finale director (WP13 T11). Owns the film clock and, each frame, pushes one FinaleFrame (math/finale.ts) to every
 // finale renderer, the camera override and the overlay. It owns no economy state: it reads the session and calls
 // only finishEndingSequence() (sequence -> choice). KEEP and new-cycle are wired in bootstrap.
+// It also owns the completion-beat display override (WP18): the display source shows the visual max per era, never the session.
 
 /** Rolling window of update() costs for the perf probe (same window as MachineView). */
 const COST_SAMPLE_COUNT = 120;
@@ -31,6 +34,8 @@ const PLATE_ID = MACHINE_COMPONENTS.namePlate.id;
 
 export interface FinaleDirectorDeps {
   session: GameSession;
+  /** Rendering-only display levels (WP18): the completion beat raises them; the machine, eclipse, beam and steam read them. */
+  display: DisplaySource;
   newCycle: NewCycleHook;
   overlay: FinaleOverlayHandle;
   background: ParallaxBackground;
@@ -66,6 +71,8 @@ export class FinaleDirector {
   private neutralApplied = false;
   private overriding = false;
   private frame: FinaleFrame | null = null;
+  /** Last completion-beat era applied to the display source; -1 = none applied yet (forces the first apply). */
+  private completeEra: CompleteEra | -1 = -1;
   /** High-water mark of the film clock: beats at or before it have fired this run (seeking back never refires). */
   private firedUpTo = 0;
   private readonly costs: number[] = [];
@@ -175,6 +182,7 @@ export class FinaleDirector {
     this.reduced = this.readReduced();
     this.start = this.cameraPose();
     this.neutralApplied = false;
+    this.completeEra = -1;
   }
 
   /** Reset: back to t 0 and the neutral (wasteland) frame at once. */
@@ -183,6 +191,7 @@ export class FinaleDirector {
     this.t = 0;
     this.firedUpTo = 0;
     this.neutralApplied = false;
+    this.completeEra = -1;
     this.present(0);
   }
 
@@ -222,6 +231,12 @@ export class FinaleDirector {
 
   private apply(frame: FinaleFrame, dtMs: number): void {
     const d = this.deps;
+    if (frame.completeEra !== this.completeEra) {
+      this.completeEra = frame.completeEra;
+      d.display.setOverride(frame.completeEra === 0 ? null : visualMaxForEra(frame.completeEra));
+      // Fly-in only in a live, non-reduced sequence; boot into choice / postgame, reduced motion, skip and seeking back are instant.
+      d.machine.refreshDisplay(this.phase() === 'sequence' && !this.reduced);
+    }
     d.background.applyFinale(frame.tracks);
     d.restoredGround.applyFinale(frame);
     d.terrain.setRestored(frame.restored);

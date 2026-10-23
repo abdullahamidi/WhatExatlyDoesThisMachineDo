@@ -1,7 +1,7 @@
-// WP13 finale smoke. Usage: PW_PATH=... [PERF=1] node finale.mjs <url> <outdir>
+// WP13 finale smoke (WP18 additions: completeEra, hidden parts, camera per keyframe, reduced survey). Usage: PW_PATH=... [PERF=1] node finale.mjs <url> <outdir>
 // Records keys only (no asserts). Every result key starts with finale_ (plus errors / FAILED).
 // Uses the WP13 debug hook (finaleState, skipFinale, finaleSeek, displayObjects, componentState().frame,
-// session.updateSettings); missing hook fields resolve to null, never throw.
+// session.updateSettings) and the WP18 hook fields partsVisible and cameraState; missing hook fields resolve to null, never throw.
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PW_PATH);
@@ -20,8 +20,9 @@ const S12 = [...S11, 'resonatorSpire'];
 const S13 = [...S12, ...Array(3).fill('crankServo'), ...Array(25).fill('harmonicCoil'), ...Array(3).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(3).fill('standingWave'), 'crystalLattice', ...Array(5).fill('gridExciter'), '@harmonicConvergence'];
 const S14 = [...S13, 'nullChamber'];
 const S15 = [...S14, ...Array(25).fill('containmentRing'), '@resonantSiphon:20', '@graviticAnchor:10', 'inversionCrank', 'lensArray', ...Array(20).fill('horizonField'), 'skyAperture', ...Array(5).fill('mainsBackfeed'), ...Array(5).fill('steamLance'), '@finalAlignment'];
-// storyboard keyframes (WP13 Validation §Smoke (2)); 'end' = just past finaleEndS (64.47)
-const KEYS = [['1', 1], ['6', 6], ['12', 12], ['15_6', 15.6], ['24', 24], ['30_5', 30.5], ['34', 34], ['40', 40], ['56', 56], ['end', 64.5]];
+// storyboard keyframes (WP13 Validation §Smoke (2)); 'end' = just past finaleEndS (64.47), sorted by t.
+// WP18: 3.9 / 5.4 / 6.9 = completion-beat eras 3 / 4 / 5; 41.5 / 45.2 = survey holds baseL (41.0-42.0) / baseR (45.0-46.0).
+const KEYS = [['1', 1], ['3_9', 3.9], ['5_4', 5.4], ['6', 6], ['6_9', 6.9], ['12', 12], ['15_6', 15.6], ['24', 24], ['30_5', 30.5], ['34', 34], ['40', 40], ['41_5', 41.5], ['45_2', 45.2], ['56', 56], ['end', 64.5]];
 
 const browser = await chromium.launch();
 let ctx = null, page = null;
@@ -76,6 +77,8 @@ const phase = async () => (await fin())?.phase ?? null;
 const seek = t => page.evaluate(t => window.__wedtmd?.finaleSeek?.(t), t);
 const plateFrame = () => page.evaluate(() => window.__wedtmd?.componentState?.('namePlate')?.frame ?? null);
 const dispObjs = () => page.evaluate(() => window.__wedtmd?.displayObjects?.() ?? null);
+const partsVisible = () => page.evaluate(() => window.__wedtmd?.partsVisible?.() ?? null);
+const camState = () => page.evaluate(() => window.__wedtmd?.cameraState?.() ?? null);
 const machineMean = () => page.evaluate(() => window.__wedtmd?.machineStats?.()?.meanMs ?? null);
 const totalClicks = () => page.evaluate(() => window.__wedtmd.session.state.totalClicks);
 const treeOpen = () => page.evaluate(() => window.__wedtmd.techTreeOpen());
@@ -95,7 +98,7 @@ const keepClick = () => page.locator('button', { hasText: 'KEEP IT RUNNING' }).f
 const shotLog = async (label, t) => {
   await seek(t); await page.waitForTimeout(250);
   const s = await fin();
-  ok(`finale_k${label}`, { t: s?.t ?? null, shot: s?.shot ?? null, plate: await plateFrame(), frame: s?.frame ?? null });
+  ok(`finale_k${label}`, { t: s?.t ?? null, shot: s?.shot ?? null, plate: await plateFrame(), frame: s?.frame ?? null, completeEra: s?.frame?.completeEra ?? null, hidden: (await partsVisible())?.hidden ?? null, camera: await camState() });
   await page.screenshot({ path: `${out}/finale-k${label}.png` });
 };
 // PERF=1 samples (report only): finaleState().meanMs, machineStats().meanMs, displayObjects()
@@ -160,7 +163,7 @@ try {
   // reload -> postgame, no overlay, seeds on, eclipse hidden
   await page.reload({ waitUntil: 'networkidle' }); await ready(); await page.waitForTimeout(300);
   const s5 = await fin();
-  ok('finale_5_reload_postgame', { phase: s5?.phase ?? null, restored: s5?.frame?.restored ?? null, seeds: s5?.frame?.seeds ?? null, eclipse: s5?.frame?.eclipse?.kind ?? null, hudHidden: await hudHidden(), keepShown: await keepShown(), plate: await plateFrame(), displayObjects: await dispObjs() });
+  ok('finale_5_reload_postgame', { phase: s5?.phase ?? null, restored: s5?.frame?.restored ?? null, seeds: s5?.frame?.seeds ?? null, eclipse: s5?.frame?.eclipse?.kind ?? null, hudHidden: await hudHidden(), keepShown: await keepShown(), plate: await plateFrame(), displayObjects: await dispObjs(), camera: await camState() });
 
   // system menu: BEGIN A NEW CYCLE row (WP14: enabled, reason line absent; expect disabled false, reasonVisible false)
   await page.keyboard.press('Escape'); await page.waitForTimeout(250);
@@ -210,6 +213,11 @@ try {
   const r2 = await fin();
   ok('finale_r_24', { t: r2?.t ?? null, wipe: r2?.frame?.wipe?.mode ?? null, beamAnimate: r2?.frame?.beam?.animate ?? null, birds: r2?.frame?.birds ?? null, displayObjects: await dispObjs() });
   await page.screenshot({ path: `${out}/finale-reduced-24.png` });
+  // WP18: the survey is skipped under reduced motion, so the camera stays on the full view (zoom 0.5)
+  await seek(42); await page.waitForTimeout(250);
+  const r3 = await fin();
+  ok('finale_r_42', { t: r3?.t ?? null, completeEra: r3?.frame?.completeEra ?? null, camera: await camState() });
+  await page.screenshot({ path: `${out}/finale-reduced-42.png` });
 } catch (e) { res.finale_FAILED = String(e).split('\n')[0]; }
 res.errors = errors; console.log(JSON.stringify(res, null, 1));
 if (ctx) await ctx.close();

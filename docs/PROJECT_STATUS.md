@@ -24,8 +24,8 @@
 | WP14 | New-cycle prestige: Echoes, Memory perks, MEMORY tab, cycle transition (roadmap WP15) | ✅ done |
 | WP15 | Music bed, audio mix, perf pass (roadmap WP16) | in progress (T1–T5, T8, T9 done on 2026-10-18 cloud session; T6/T7 + D1 audio left) |
 | WP17 | Energy continuity (legacy sinks, every energy used every era) + era-aware HUD + gain text | ✅ done |
-| WP18 | Final machine showcase (completion beat, survey camera, postgame name/portrait/photo mode, ShowcaseScene) | planned (D3) |
-| WP19 | Steam desktop shell (Electron, file saves, crash overlay, splash, title, quit/credits, fullscreen, UI anchoring) | in progress (worktree, branch claude/steam-shell) |
+| WP18 | Final machine showcase (completion beat, survey camera, postgame name/portrait/photo mode, ShowcaseScene) | ✅ done |
+| WP19 | Steam desktop shell (Electron, file saves, crash overlay, splash, title, quit/credits, fullscreen, UI anchoring) | ✅ done (branch claude/steam-shell, merge pending) |
 | WP20 | First-impression UX polish (onboarding, fly-in visible, tree fit, era cards, text sweep) | planned (D6) |
 | WP21 | Demo edition (cap at Substation Blueprint, end card + final-machine teaser, wishlist) | planned (D4) |
 | WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | started (T1 e2e, T3 sign-off sim, T5 version landed 2026-10-18; rest planned, slimmed by D8) |
@@ -59,6 +59,12 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   src/data/hud.ts, one row per energy with feeds hint, frontier row, AUTO-CRANK line); crank gain text = stacked
   tinted lines, merged within 300 ms, zoom-compensated. Smoke `@tech:n` markers reach Resonant Siphon 20 /
   Gravitic Anchor 10 (all 99+5 parts visible at the end).
+- **WP18** final machine showcase: ending renders the machine at display levels = max(real, visualMax) where
+  visualMaxLevels() is derived from component gates (rendering-only DisplaySource; simulation untouched); completion
+  beat steps era III→IV→V at S1 t 3/4.5/6 s; survey camera baseL→baseR→full in S3 (skipped under reduced motion);
+  canonical postgame portrait pose (FINALE_VIEWS.full) for KEEP/reload/refocus; "lamps lit" restored accent;
+  VIEW MACHINE photo mode (modal, HUD hidden, drag/wheel/arrow pan-zoom, Esc exits); ShowcaseScene (lazy, own camera,
+  stand-in source, teaser API in src/game/math/teaser.ts for WP21); scripts/smoke/showcase.mjs → 13 PNGs at 3840×2160.
 - **Art**: every sprite and background layer is PixelLab Pro in one locked palette from one style
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 

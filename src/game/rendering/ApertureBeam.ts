@@ -3,7 +3,7 @@ import { APERTURE_BEAM, MACHINE_ANCHOR, PIXEL_SCALE } from '../../data/world';
 import { FINALE_BEAM } from '../../data/finale';
 import { MACHINE_COMPONENTS } from '../../data/machineComponents';
 import type { TechId } from '../../data/types';
-import type { GameSession } from '../../simulation';
+import type { MachineSource } from '../entities/machineSource';
 import { ASSET_MANIFEST } from '../../assets/manifest';
 import { BEAM_MAX_PX } from '../math/finale';
 import type { FinaleFrame } from '../math/finale';
@@ -17,7 +17,7 @@ import type { FinaleFrame } from '../math/finale';
 // WP13 finale: a white tile (fx.beamWhite) grows up from the same mouth to FINALE_BEAM head height; the violet tile is
 // hidden while the finale says !violet. With no applyFinale call the white tile stays hidden and the violet logic is unchanged.
 export class ApertureBeam {
-  private readonly session: GameSession;
+  private readonly session: MachineSource;
   private readonly latchFrameOf: () => number | null;
   private readonly latch: { techId: TechId; minLevel: number } | null;
   private readonly frameCount: number;
@@ -32,7 +32,7 @@ export class ApertureBeam {
   private whiteHeightPx = -1;
   private whiteFrame = -1;
 
-  constructor(scene: Phaser.Scene, session: GameSession, latchFrameOf: () => number | null) {
+  constructor(scene: Phaser.Scene, session: MachineSource, latchFrameOf: () => number | null) {
     this.session = session;
     this.latchFrameOf = latchFrameOf;
     const animation = MACHINE_COMPONENTS[APERTURE_BEAM.component].animation;

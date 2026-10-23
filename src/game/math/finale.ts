@@ -1,9 +1,9 @@
 import type { EndingPhase } from '../../data/types';
 import {
   FINALE_BEAM, FINALE_BIRDS, FINALE_BOOST, FINALE_CAMERA, FINALE_CUT, FINALE_DUST, FINALE_ECLIPSE, FINALE_PLATE,
-  FINALE_REVEAL, FINALE_SEEDS, FINALE_SHOTS, FINALE_TRACKS, FINALE_VIEWS, FINALE_WHITE, FINALE_WIPE, FINALE_BEATS,
+  FINALE_REVEAL, FINALE_SEEDS, FINALE_SHOTS, FINALE_TRACKS, FINALE_VIEWS, FINALE_WHITE, FINALE_WIPE, FINALE_BEATS, FINALE_COMPLETE,
 } from '../../data/finale';
-import type { FinaleBeat, FinaleTrackId } from '../../data/finale';
+import type { CompleteEra, FinaleBeat, FinaleTrackId, FinaleViewId } from '../../data/finale';
 import { APERTURE_BEAM, MACHINE_ANCHOR, PIXEL_SCALE, VIEW, WORLD } from '../../data/world';
 
 // WP13 finale maths: the storyboard (ART_ERA5 §7) as pure functions of the finale clock t (seconds since the
@@ -28,6 +28,7 @@ export interface FinaleFrame {
   seeds: 'off' | 'finale' | 'postgame';
   birds: 'off' | 'finale' | 'postgame';
   boost: number;                   // 0..1 driver boost
+  completeEra: CompleteEra;       // WP18 completion beat: era whose visual max the machine shows (0 = real levels)
   camera: CameraPose | null;       // null = CameraController owns the camera
 }
 
@@ -124,8 +125,8 @@ export function shotAt(t: number): FinaleShot {
   return 'S0';
 }
 
-/** Camera pose of a named view: world = MACHINE_ANCHOR + PIXEL_SCALE * art (full 1920,1080,.5 · crown 2048,640,1). */
-export function viewPose(view: 'full' | 'crown'): CameraPose {
+/** Camera pose of a named view: world = MACHINE_ANCHOR + PIXEL_SCALE * art (full 1920,1080,.5 · crown 2048,640,1 · baseL 1320,1380,1 · baseR 2520,1380,1). */
+export function viewPose(view: FinaleViewId): CameraPose {
   const v = FINALE_VIEWS[view];
   return {
     centerX: MACHINE_ANCHOR.x + PIXEL_SCALE * v.artX,
@@ -137,7 +138,7 @@ export function viewPose(view: 'full' | 'crown'): CameraPose {
 /**
  * Camera pose at film time t. Before the first key: start. Each FINALE_CAMERA key tweens from the previous pose to
  * its view over durS (cubic in-out). reduced: no tween, a cut at key.atS + fadeMs/2 with cutFade a triangle 0 -> 1 -> 0
- * over fadeMs (the fade covers the jump).
+ * over fadeMs (the fade covers the jump). reduced 'skip' keys (WP18 survey) are not applied at all under reduced motion.
  */
 export function cameraPoseAt(t: number, start: CameraPose, reduced: boolean): { pose: CameraPose; cutFade: number } {
   const fadeS = FINALE_CUT.fadeMs / 1000;
@@ -145,6 +146,8 @@ export function cameraPoseAt(t: number, start: CameraPose, reduced: boolean): { 
   let pose: CameraPose = start;
   let cutFade = 0;
   for (const key of FINALE_CAMERA) {
+    // survey keys do not exist under reduced motion (no pose change, no cut fade, `from` is not advanced)
+    if (reduced && key.reduced === 'skip') continue;
     const to = viewPose(key.to);
     if (reduced) {
       const cutAt = key.atS + fadeS / 2;
@@ -217,6 +220,14 @@ export function boost01(t: number): number {
 export function boostedValue(actual: number, max: number, boost: number): number {
   const b = clamp01(boost);
   return Math.max(actual, actual + (max - actual) * b);
+}
+
+/** Completion beat (WP18): era of the last FINALE_COMPLETE step with atS <= t; 0 before the first step and for a non-finite t. */
+export function completeEraAt(t: number): CompleteEra {
+  if (!Number.isFinite(t)) return 0;
+  let era: CompleteEra = 0;
+  for (const step of FINALE_COMPLETE.steps) if (t >= step.atS) era = step.era;
+  return era;
 }
 
 /** White beam head height (world px above the mouth). 0 before whiteAtS; reduced: full at once; else headPxPerS, capped at BEAM_MAX_PX. */
@@ -393,6 +404,7 @@ function sequenceFrame(t: number, reduced: boolean, start: CameraPose): FinaleFr
     seeds: !reduced && t >= FINALE_SEEDS.startS ? 'finale' : 'off',
     birds: !reduced && t >= FINALE_BIRDS.firstAtS ? 'finale' : 'off',
     boost: boost01(t),
+    completeEra: completeEraAt(t),
     camera: cam.pose,
   };
 }
@@ -413,6 +425,7 @@ function postgameFrame(t: number, reduced: boolean): FinaleFrame {
     seeds: idle,
     birds: idle,
     boost: 0,
+    completeEra: 5,
     camera: null,
   };
 }
@@ -432,20 +445,22 @@ function neutralFrame(t: number): FinaleFrame {
     seeds: 'off',
     birds: 'off',
     boost: 0,
+    completeEra: 0,
     camera: null,
   };
 }
 
 /**
  * Everything the renderers need for one frame. none: neutral (today's world). sequence: the film at t. choice: the
- * film's end state (t clamped up to choiceStartS, camera on the FULL view). postgame: restored world, no overlay.
+ * film's end state (t clamped up to choiceStartS, camera on the FULL view, completeEra 5). postgame: restored world, no
+ * overlay, completeEra 5.
  */
 export function finaleFrame(i: { phase: EndingPhase; t: number; reduced: boolean; start: CameraPose }): FinaleFrame {
   const t = Number.isFinite(i.t) ? Math.max(0, i.t) : 0;
   if (i.phase === 'sequence') return sequenceFrame(t, i.reduced, i.start);
   if (i.phase === 'choice') {
     const end = sequenceFrame(Math.max(t, choiceStartS()), i.reduced, i.start);
-    return { ...end, active: true, restored: true, camera: viewPose('full') };
+    return { ...end, active: true, restored: true, camera: viewPose('full'), completeEra: 5 };
   }
   if (i.phase === 'postgame') return postgameFrame(t, i.reduced);
   return neutralFrame(t);
