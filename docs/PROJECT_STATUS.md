@@ -120,9 +120,9 @@ Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era 
   EM `claude-sonnet-5-5`, workers `claude-haiku-5-5`.
 
 ## Next recommended task
-Suggested milestones (also in README):
-1. Electricity era: Generator component, second resource, power lines from the machine.
-2. Steam/dust/glow production effects (use `fx.steam`), belt texture motion.
-3. More machine tiers and visible silhouette growth; camera auto-zoom-out as the machine grows.
-4. Audio polish + volume slider; music bed.
-5. Prestige/meta loop only after the electricity era lands.
+Steam demo program (docs/plan/STEAM_DEMO_PROGRAM.md):
+1. WP21 demo edition (running in worktree C:/Users/sanan/wedtmd-art, branch claude/ux-wp20) → merge into main.
+2. WP16 release verification (D8): quiet-machine GPU perf re-check (frame p95 ≤ 17 ms), save compat fixtures,
+   a11y, resolutions, soak, final Art Director audit, docs (README/CHANGELOG/STEAM_RELEASE/GAME_SPEC §18), store shots.
+   App chunk is 396/400 KB raw: decide code split or budget.
+Final machine shots (3840×2160, Art Director RELEASE-READY) sent to the user on 2026-10-23.
