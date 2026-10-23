@@ -127,8 +127,9 @@ def scene(out):
                 cv.alpha_composite(uf, (0, top + im.height))
     TR = os.environ.get('TRANSPARENT') == '1'
     if TR: cv = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    if not TR: layer(R5 + 'bg/mountains.png', R5 + 'finale/mountains-restored.png', .15, .45, 156, (0x5a, 0x5f, 0x63), underfill_new=(0x2e, 0x4a, 0x36))
-    if not TR: layer(R5 + 'bg/skyline.png', R5 + 'finale/skyline-restored.png', .3, .4, 220, (0x2b, 0x2e, 0x31))
+    # underfills mirror PARALLAX_LAYERS (src/data/world.ts, WP16b F5)
+    if not TR: layer(R5 + 'bg/mountains.png', R5 + 'finale/mountains-restored.png', .15, .45, 156, (0x5f, 0x52, 0x44), underfill_new=(0x2e, 0x4a, 0x36))
+    if not TR: layer(R5 + 'bg/skyline.png', R5 + 'finale/skyline-restored.png', .3, .4, 220, None, underfill_new=(0x5f, 0x8a, 0x4a))
     if not TR: layer(R5 + 'bg/pylons.png', R5 + 'bg/pylons.png', .55, .45, 156, None, (0xb8, 0xa9, 0x8f))
     if not TR: layer(R5 + 'bg/pylons-lit.png', R5 + 'bg/pylons-lit.png', .55, .7, 156, None)
     # ground

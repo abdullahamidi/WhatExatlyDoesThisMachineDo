@@ -31,11 +31,11 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   },
   'bg.mountains': {
     id: 'bg.mountains', file: 'bg/mountains.png', width: 512, height: 256, origin: { x: 0, y: 1 }, tileable: 'x',
-    description: 'Far ridge with distant ruins; tiles horizontally, period = width, ground line at y=156.',
+    description: 'Far ridge with distant ruins; tiles horizontally, period = width, ground line at y=156; rows 156-255 far-plain ramp (bottom rows #5f5244 = layer underfill).',
   },
   'bg.skyline': {
     id: 'bg.skyline', file: 'bg/skyline.png', width: 512, height: 320, origin: { x: 0, y: 1 }, tileable: 'x',
-    description: 'Ruined city skyline; tiles horizontally, period = width, ground line at y=220.',
+    description: 'Ruined city skyline; tiles horizontally, period = width, ground line at y=220; rows 220-319 transparent (layer underfill null).',
   },
   'bg.pylons': {
     id: 'bg.pylons', file: 'bg/pylons.png', width: 256, height: 256, origin: { x: 0, y: 1 }, tileable: 'x',

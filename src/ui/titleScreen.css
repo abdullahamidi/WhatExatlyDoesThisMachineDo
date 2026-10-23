@@ -98,3 +98,11 @@
   letter-spacing: .08em;
   text-transform: none;
 }
+
+/* WP16b F3: the live HUD (panel, buttons, toasts) is hidden while the title screen is open and returns when it closes.
+   Boot notices already wait for the title to close (src/game/bootstrap.ts). */
+#ui-root:has(> #title-screen.is-open) > #hud-panel,
+#ui-root:has(> #title-screen.is-open) > #hud-buttons,
+#ui-root:has(> #title-screen.is-open) > #toast-stack {
+  visibility: hidden;
+}

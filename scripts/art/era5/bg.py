@@ -193,6 +193,7 @@ def mountains_restored():
             n = get(a, x, y)
             if n == 'k1': put(o, x, y, 'b1')
             elif n == 'i3': put(o, x, y, 'g0')
+    rect(o, 0, 156, W - 1, H - 1, 'g0')   # rows >= 156 = green far fields. bg/mountains.png rows 156-255 are the far-plain ramp since WP16b (k2/s2/s1/s0/i2), so map them by row, not by colour
     for x in range(W):                                        # green foothills: lower 10 rows of the ridge above the ground line
         col = [y for y in range(156) if get(o, x, y) == 'b1']
         if not col: continue

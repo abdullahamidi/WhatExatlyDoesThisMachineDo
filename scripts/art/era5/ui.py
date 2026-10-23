@@ -1,9 +1,11 @@
 # UI art for the finale / prestige / achievements / title (ART_ERA5 §8-§10). Writes public/assets/ui/*.png
-# Usage: python3 ui.py [name ...]. LEDGER=<path> PixelLab ledger pick (job c4639c43 #8).
+# Usage: python3 ui.py [name ...] [--force]. --force lets logo() overwrite public/assets/ui/logo.png with this legacy flat plate; the shipped logo comes from logo_plate.py (WP16b F6).
+# LEDGER=<path> PixelLab ledger pick (job c4639c43 #8).
 from helpers import *
 from fonts import F3, F5, text_mask
 U = A + 'ui/'; os.makedirs(U, exist_ok=True)
-SEL = sys.argv[1:]
+FORCE = '--force' in sys.argv[1:]
+SEL = [a for a in sys.argv[1:] if a != '--force']
 def want(n): return not SEL or n in SEL
 
 def plate(W, H, face=('r5', 'r4', 'r3', 'r2'), rivets=True):
@@ -75,7 +77,11 @@ def logo():
         x = rnd.choice([rnd.randint(3, 10), rnd.randint(W - 11, W - 4)]); y = rnd.randint(3, H - 5)
         for (dx, dy) in ((0, 0), (1, 0), (0, 1)):
             if get(a, x + dx, y + dy) in ('i3', 'i2'): put(a, x + dx, y + dy, 'r2')
-    check(a, 'logo'); save(a, U + 'logo.png')
+    check(a, 'logo')
+    if FORCE or not os.path.exists(U + 'logo.png'):
+        save(a, U + 'logo.png')
+    else:
+        print('skip logo.png: the shipped logo is the WP16b bolted plate (python -I scripts/art/era5/logo_plate.py <out.png>); pass --force to overwrite it with this legacy plate')
     # mark 32x32: gear (12 teeth) with a question-mark cut-out
     m = blank(32, 32); c = 16.0
     for y in range(32):

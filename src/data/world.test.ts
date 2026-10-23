@@ -243,8 +243,8 @@ describe('WP11 sky layers (C3)', () => {
     const pick = (l: ParallaxLayerDef) => ({ id: l.id, assetId: l.assetId, scrollFactor: l.scrollFactor, bottomY: l.bottomY, depth: l.depth, alpha: l.alpha, underfill: l.underfill, tint: l.tint, visibleWhen: l.visibleWhen });
     expect(PARALLAX_LAYERS.slice(0, 5).map(pick)).toEqual([
       { id: 'sky', assetId: 'bg.sky', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background, alpha: 1, underfill: null, tint: undefined, visibleWhen: undefined },
-      { id: 'mountains', assetId: 'bg.mountains', scrollFactor: 0.15, bottomY: GROUND_Y + 200, depth: DEPTH.background + 10, alpha: 0.45, underfill: 0x5a5f63, tint: undefined, visibleWhen: undefined },
-      { id: 'skyline', assetId: 'bg.skyline', scrollFactor: 0.3, bottomY: GROUND_Y + 200, depth: DEPTH.background + 20, alpha: 0.4, underfill: 0x2b2e31, tint: undefined, visibleWhen: undefined },
+      { id: 'mountains', assetId: 'bg.mountains', scrollFactor: 0.15, bottomY: GROUND_Y + 200, depth: DEPTH.background + 10, alpha: 0.45, underfill: 0x5f5244, tint: undefined, visibleWhen: undefined },
+      { id: 'skyline', assetId: 'bg.skyline', scrollFactor: 0.3, bottomY: GROUND_Y + 200, depth: DEPTH.background + 20, alpha: 0.4, underfill: null, tint: undefined, visibleWhen: undefined },
       { id: 'pylons', assetId: 'bg.pylons', scrollFactor: 0.55, bottomY: GROUND_Y + 200, depth: DEPTH.background + 30, alpha: 0.45, underfill: null, tint: 0xb8a98f, visibleWhen: undefined },
       { id: 'pylonsLit', assetId: 'bg.pylonsLit', scrollFactor: 0.55, bottomY: GROUND_Y + 200, depth: DEPTH.background + 31, alpha: 0.7, underfill: null, tint: undefined, visibleWhen: { techId: 'powerLines', minLevel: 1 } },
     ]);
@@ -466,5 +466,14 @@ describe('FLOATING_TEXT and CRANK_PULSE', () => {
     expect(CRANK_PULSE.alphaPeak).toBe(0.9);
     expect(CRANK_PULSE.outlineArtPx).toBe(1);
     expect(CRANK_PULSE.outlineColor).toBe(PALETTE.ink);
+  });
+});
+
+describe('WP16b far plain (F5)', () => {
+  it('mountains underfill is the far-plain bottom tone 0x5f5244 (bottom rows of bg/mountains.png)', () => {
+    expect(layer('mountains').underfill).toBe(0x5f5244);
+  });
+  it('skyline has no underfill (bg/skyline.png rows 220-319 are transparent)', () => {
+    expect(layer('skyline').underfill).toBeNull();
   });
 });

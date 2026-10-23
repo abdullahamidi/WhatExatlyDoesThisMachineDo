@@ -35,8 +35,8 @@ Machine-local depths are relative to the machine container, which sits at world 
 | id | file (under `public/assets/`) | width x height | origin (pivot) | tileable | frames | layer + depth | description |
 |---|---|---|---|---|---|---|---|
 | `bg.sky` | `bg/sky.png` | 1280 x 720 | 0.5, 0.5 | none | none | parallax `sky`, scroll 0, world depth -100 | Dusty sky in the four sky palette tones as hard stepped strata, pale sun disc upper-left (light direction); screen-fixed, shown at 2x. |
-| `bg.mountains` | `bg/mountains.png` | 512 x 256 | 0, 1 | x | none | parallax `mountains`, scroll 0.15, world depth -90 | Far ridge with distant ruins; tiles horizontally, period = width, ground line at y=156. |
-| `bg.skyline` | `bg/skyline.png` | 512 x 320 | 0, 1 | x | none | parallax `skyline`, scroll 0.3, world depth -80 | Ruined city skyline; tiles horizontally, period = width, ground line at y=220. |
+| `bg.mountains` | `bg/mountains.png` | 512 x 256 | 0, 1 | x | none | parallax `mountains`, scroll 0.15, world depth -90 | Far ridge with distant ruins; tiles horizontally, period = width, ground line at y=156; rows 156-255 far-plain ramp (bottom rows #5f5244 = layer underfill). |
+| `bg.skyline` | `bg/skyline.png` | 512 x 320 | 0, 1 | x | none | parallax `skyline`, scroll 0.3, world depth -80 | Ruined city skyline; tiles horizontally, period = width, ground line at y=220; rows 220-319 transparent (layer underfill null). |
 | `bg.pylons` | `bg/pylons.png` | 256 x 256 | 0, 1 | x | none | parallax `pylons`, scroll 0.55, world depth -70 | Rusted pylons with sagging wires; tiles horizontally, period = width, ground line at y=156. |
 | `terrain.ground` | `terrain/ground.png` | 256 x 128 | 0, 0 | xy | none | ground, world depth 0 | Cracked sand ground tile that tiles in both directions. |
 | `bg.pylonsLit` | `bg/pylons-lit.png` | 256 x 256 | 0, 1 | x | none | parallax `pylonsLit`, scroll 0.55, world depth -69 | Pylons with their wires lit; the same tiling as bg.pylons, shown once the power lines are running. |
@@ -193,6 +193,8 @@ Regenerate the table: `ASSET_GUIDE_OUT=<abs path> npx vitest run src/assets/asse
 
 Layer/depth sources: `src/data/world.ts` (`PARALLAX_LAYERS`, `GROUND_LAYER`, `DUST.depth`, `DEPTH`) and
 `src/data/machineComponents.ts` (`MACHINE_LAYER_DEPTH`, component `layer`).
+
+Parallax art below its ground line must match the layer `underfill` in `PARALLAX_LAYERS` (`src/data/world.ts`), or a flat band shows whenever the camera sits above its default height: `bg.mountains` rows 156-255 are a far-plain ramp ending in `#5f5244` (= underfill `0x5f5244`); `bg.skyline` rows 220-319 are transparent (underfill `null`); `bg.mountainsRestored` / `bg.skylineRestored` keep their green fields (underfill `green0` / `green1`).
 
 ## Rendering
 
