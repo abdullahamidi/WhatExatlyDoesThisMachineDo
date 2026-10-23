@@ -314,7 +314,7 @@ npm script `perf:bundle` runs the second command (`npm run build && npm run perf
 
 | check | files | limit |
 |---|---|---|
-| app js raw | `index-*.js` | <= 400 KB (`appRawKb`) |
+| app js raw | `index-*.js` | <= 460 KB (`appRawKb`) |
 | phaser js raw | `phaser-*.js` | <= 1500 KB (`phaserKb`) |
 | css raw | `*.css` | <= 40 KB (`cssKb`) |
 | public assets | `public/assets` total | <= 8000 KB (`publicAssetsKb`) |

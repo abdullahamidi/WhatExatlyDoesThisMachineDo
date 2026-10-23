@@ -17,7 +17,7 @@
   "postFrameP95Ms": 17,
   "cycleDisplayPct": 10,
   "bundle": {
-    "appRawKb": 400,
+    "appRawKb": 460,
     "phaserKb": 1500,
     "cssKb": 40,
     "publicAssetsKb": 8000
@@ -27,7 +27,7 @@
     "postMachineMaxMs": "0-3 s after a purchase, contention-tolerant like machineMaxMs",
     "postFrameP95Ms": "GPU only (PERF_GPU=1), like frameP95Ms",
     "appGzipKb": "report-only since WP15R (program D7: raw sizes only; desktop build)",
-    "appRawKb": "raised 340->400 (STEAM_DEMO_PROGRAM D7): WP17 legacy techs/HUD + Steam demo UI",
+    "appRawKb": "raised 340->400 (D7: WP17 + demo UI), 400->460 (Director 2026-10-23: WP18-WP21 showcase/shell/UX/demo; desktop build loads from local asar, bootMs is the real gate)",
     "cssKb": "raised 30->40 (WP19 shell css: title, credits, crash overlay, splash, storage warning)",
     "cycleDisplayPct": "vs the pre-cycle display list (parts are hidden, not destroyed)"
   }
