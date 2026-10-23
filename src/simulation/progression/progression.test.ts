@@ -248,9 +248,9 @@ describe('describeEffect', () => {
   });
 
   it('describes servo auto-cranks', () => {
-    expect(describeEffect({ type: 'autoClick', perSecond: 1 }, 1)).toBe('+1 auto-cranks/s');
-    expect(describeEffect({ type: 'autoClick', perSecond: 1 }, 3)).toBe('+3 auto-cranks/s');
-    expect(describeEffect({ type: 'autoClick', perSecond: 0.5 }, 1)).toBe('+0.5 auto-cranks/s');
+    expect(describeEffect({ type: 'autoClick', perSecond: 1 }, 1)).toBe('+1 auto-cranks/s — each yields a full click of every energy');
+    expect(describeEffect({ type: 'autoClick', perSecond: 1 }, 3)).toBe('+3 auto-cranks/s — each yields a full click of every energy');
+    expect(describeEffect({ type: 'autoClick', perSecond: 0.5 }, 1)).toBe('+0.5 auto-cranks/s — each yields a full click of every energy');
   });
 });
 

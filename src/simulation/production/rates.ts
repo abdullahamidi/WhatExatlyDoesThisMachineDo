@@ -116,3 +116,19 @@ export function computeRates(
 
   return { perClick, perSecond };
 }
+
+/** Automatic crank clicks per second: sum of every `autoClick` effect x level over owned techs (level > 0). */
+export function autoClicksPerSecond(
+  techLevels: Readonly<Record<TechId, number>>,
+  techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
+): number {
+  let total = 0;
+  for (const id of TECH_IDS) {
+    const level = techLevels[id];
+    if (!(level > 0)) continue;
+    for (const effect of techs[id].effects) {
+      if (effect.type === 'autoClick') total += effect.perSecond * level;
+    }
+  }
+  return total;
+}

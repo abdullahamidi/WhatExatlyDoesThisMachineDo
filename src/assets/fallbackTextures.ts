@@ -4,11 +4,13 @@ import { ASSET_MANIFEST, missingTextureIds, sheetFrameRects } from './manifest';
 import type { Painter } from './painters/painterTypes';
 import { paintSky, paintMountains, paintSkyline, paintPylons, paintPylonsLit, paintGround, paintDust } from './painters/background';
 import { ERA2_PAINTERS } from './painters/era2';
+import { LEGACY_PAINTERS } from './painters/legacy';
 import { paintFrame, paintCrank, paintGear } from './painters/machine';
 import { paintGenericPlate } from './painters/generic';
 
 const PAINTERS: Partial<Record<AssetId, Painter>> = {
   ...ERA2_PAINTERS,
+  ...LEGACY_PAINTERS,
   'bg.sky': paintSky,
   'bg.mountains': paintMountains,
   'bg.skyline': paintSkyline,

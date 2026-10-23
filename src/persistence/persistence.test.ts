@@ -578,7 +578,7 @@ describe('era IV save compatibility (WP10)', () => {
     const parsed = JSON.parse(serialize(base, { ...DEFAULT_SETTINGS, muted: false }, 2000)) as {
       state: { techLevels: Partial<Record<TechId, number>> };
     };
-    expect(ERA_FOUR_IDS).toHaveLength(9);
+    expect(ERA_FOUR_IDS).toHaveLength(10);
     for (const id of ERA_FOUR_IDS) delete parsed.state.techLevels[id];
 
     const result = deserialize(JSON.stringify(parsed), 3000);
@@ -621,7 +621,7 @@ describe('era V save compatibility (WP11)', () => {
     const parsed = JSON.parse(serialize(base, { ...DEFAULT_SETTINGS, muted: false }, 2000)) as {
       state: { techLevels: Partial<Record<TechId, number>> };
     };
-    expect(ERA_FIVE_IDS).toHaveLength(10);
+    expect(ERA_FIVE_IDS).toHaveLength(12);
     for (const id of ERA_FIVE_IDS) delete parsed.state.techLevels[id];
 
     const result = deserialize(JSON.stringify(parsed), 3000);

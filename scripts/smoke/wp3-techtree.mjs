@@ -92,7 +92,7 @@ ok('11_tabs', { tabs: await page.$$eval('.tech-tab', bs => bs.map(b => ({ text: 
 ok('11_tabCount', await page.$$eval('.tech-tab', bs => bs.length)); // expect 5 (era V tab exists)
 await page.click('#tech-tab-3'); await page.waitForTimeout(200);
 ok('11_header', await txt('#tech-me'));
-ok('11_nodes', await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length));
+ok('11_nodes', await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length)); // expect 10 (era III tab)
 ok('11_boiler', await page.$eval('[data-tech=boiler]', e => [...e.classList]).catch(() => 'missing'));
 // era IV fast-forward (stages.mjs s13 recipe: s11 list + resonatorSpire lead-in), one page.evaluate
 await page.keyboard.press('Escape'); await page.waitForTimeout(250);
@@ -118,7 +118,7 @@ ok('12_tabCount', await page.$$eval('.tech-tab', bs => bs.length)); // expect 5 
 ok('12_tab5', await page.$$eval('.tech-tab', bs => (bs[4] ? bs[4].textContent.trim() : ''))); // expect 'SIGNAL ?'
 await page.click('#tech-tab-4'); await page.waitForTimeout(200);
 ok('12_header', await txt('#tech-me'));
-ok('12_nodes', await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length));
+ok('12_nodes', await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length)); // expect 10 (era IV tab)
 ok('12_spire', await page.$eval('[data-tech=resonatorSpire]', e => [...e.classList]).catch(() => 'missing'));
 await page.keyboard.press('Escape'); await page.waitForTimeout(250);
 // era V fast-forward (stages.mjs S13 full list written inline), one page.evaluate
@@ -143,7 +143,7 @@ ok('13_tabs', { tabs: await page.$$eval('.tech-tab', bs => bs.map(b => ({ text: 
 ok('13_tabCount', await page.$$eval('.tech-tab', bs => bs.length)); // expect 5
 await page.click('#tech-tab-5'); await page.waitForTimeout(200);
 ok('13_header', await txt('#tech-me')); // expect ends '???'
-ok('13_nodes', await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length)); // expect 10
+ok('13_nodes', await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length)); // expect 12 (era V tab)
 ok('13_null', await page.$eval('[data-tech=nullChamber]', e => [...e.classList]).catch(() => 'missing'));
 await page.keyboard.press('Escape'); await page.waitForTimeout(250);
 res.errors = errors; res.failed = failed;

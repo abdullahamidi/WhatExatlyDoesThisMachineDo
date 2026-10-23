@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { TECH_IDS } from './types';
+import { RESOURCE_IDS, TECH_IDS } from './types';
 import type { TechDefinition, TechId, Requirement } from './types';
+import { RESOURCES } from './resources';
 import { TECHNOLOGIES, TECH_LIST } from './technologies';
 import { PLAQUE_LINES } from './story';
 import { INSTALL_LINES } from './notifications';
@@ -35,7 +36,7 @@ describe('technology table', () => {
   });
 
   it('TECH_LIST follows TECH_IDS order', () => {
-    expect(TECH_LIST).toHaveLength(46);
+    expect(TECH_LIST).toHaveLength(50);
     expect(TECH_LIST.map((t) => t.id)).toEqual([...TECH_IDS]);
   });
 
@@ -91,14 +92,13 @@ describe('technology table', () => {
     expect(reachable.size).toBe(TECH_IDS.length);
   });
 
-  it('repeatables have growth > 1 and maxLevel >= 1', () => {
+  it('repeatables have growth > 1 and maxLevel null or >= 1', () => {
     for (const id of TECH_IDS) {
       const def = TECHNOLOGIES[id];
       if (def.kind === 'repeatable') {
         expect(def.growth).not.toBeNull();
         expect(def.growth as number).toBeGreaterThan(1);
-        expect(def.maxLevel).not.toBeNull();
-        expect(def.maxLevel as number).toBeGreaterThanOrEqual(1);
+        expect(def.maxLevel === null || def.maxLevel >= 1).toBe(true);
       }
     }
   });
@@ -110,6 +110,34 @@ describe('technology table', () => {
         expect(def.growth).toBeNull();
         expect(def.maxLevel).toBeNull();
       }
+    }
+  });
+
+  it('uncapped repeatables are exactly bellowsDrive, gridExciter, mainsBackfeed, steamLance', () => {
+    const uncapped = TECH_IDS.filter((id) => TECHNOLOGIES[id].kind === 'repeatable' && TECHNOLOGIES[id].maxLevel === null);
+    expect([...uncapped].sort()).toEqual(['bellowsDrive', 'gridExciter', 'mainsBackfeed', 'steamLance']);
+    for (const id of uncapped) {
+      expect(TECHNOLOGIES[id].growth as number).toBeGreaterThanOrEqual(1.4);
+    }
+  });
+
+  it('every resource has a repeatable tech of its own in each later era up to era 5', () => {
+    const missing: string[] = [];
+    for (const r of RESOURCE_IDS) {
+      for (let era = RESOURCES[r].era + 1; era <= 5; era++) {
+        const found = TECH_IDS.some((id) => {
+          const def = TECHNOLOGIES[id];
+          return def.kind === 'repeatable' && def.era === era && def.costRes === r;
+        });
+        if (!found) missing.push(`${r}@era${era}`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('Legacy Feed names fit the tree node (19 characters or fewer)', () => {
+    for (const id of ['bellowsDrive', 'gridExciter', 'mainsBackfeed', 'steamLance'] as const) {
+      expect(TECHNOLOGIES[id].name.length).toBeLessThanOrEqual(19);
     }
   });
 
@@ -167,7 +195,7 @@ describe('technology table', () => {
       harmonicConvergence: ['milestone', 0, null, null],
       nullChamber: ['unlock', 8000000, null, null],
       containmentRing: ['repeatable', 300, 1.25, 25],
-      resonantSiphon: ['repeatable', 10000000, 1.35, 20],
+      resonantSiphon: ['repeatable', 10000000, 1.3, 20],
       graviticAnchor: ['repeatable', 1500000, 1.5, 10],
       inversionCrank: ['unlock', 4000, null, null],
       lensArray: ['unlock', 12000, null, null],
@@ -175,6 +203,10 @@ describe('technology table', () => {
       skyAperture: ['unlock', 10000000, null, null],
       finalAlignment: ['milestone', 0, null, null],
       primaryFunction: ['unlock', 500000000, null, null],
+      bellowsDrive: ['repeatable', 250000, 2.5, null],
+      gridExciter: ['repeatable', 2000000, 1.4, null],
+      mainsBackfeed: ['repeatable', 20000000, 1.4, null],
+      steamLance: ['repeatable', 5000000, 1.4, null],
     };
     for (const id of TECH_IDS) {
       const [kind, baseCost, growth, maxLevel] = expected[id];
@@ -314,7 +346,7 @@ describe('era II technology table', () => {
     }
   });
 
-  it('costRes ee only on era II', () => {
+  it('era-II costRes: ee except generator and motorRetrofit (me), era I never ee', () => {
     for (const id of ERA_ONE_IDS) expect(TECHNOLOGIES[id].costRes).not.toBe('ee');
     // generator and motorRetrofit are bought with ME (C1); the rest of era II costs EE.
     const meCost: readonly TechId[] = ['generator', 'motorRetrofit'];
@@ -392,10 +424,16 @@ describe('era III technology table', () => {
           { type: 'lifetime', res: 'pr', amount: 6000000 },
         ],
       },
+      bellowsDrive: {
+        id: 'bellowsDrive', kind: 'repeatable', era: 3, costRes: 'me', baseCost: 250000, growth: 2.5, maxLevel: null,
+        tree: { col: 2, row: 2 }, branch: 'automation',
+        effects: [{ type: 'autoPct', percent: 8, res: 'pr' }],
+        requires: [{ type: 'tech', id: 'boiler', minLevel: 1 }],
+      },
     };
     expect(ERA_THREE_IDS).toEqual([
       'boiler', 'firebox', 'inductionHeater', 'steamHammer', 'superheater',
-      'condenser', 'turbine', 'reliefValves', 'pressureVesselBlueprint',
+      'condenser', 'turbine', 'reliefValves', 'pressureVesselBlueprint', 'bellowsDrive',
     ]);
     for (const id of ERA_THREE_IDS) {
       expect(project(TECHNOLOGIES[id])).toEqual(expected[id as keyof typeof expected]);
@@ -414,10 +452,12 @@ describe('era III technology table', () => {
     expect(TECHNOLOGIES.reliefValves.description).toBe('Vents what the vessel cannot hold. +4h offline buffer.');
     expect(TECHNOLOGIES.pressureVesselBlueprint.description).toBe('The machine now resembles something that holds pressure.');
     expect(TECHNOLOGIES.pressureVesselBlueprint.flavor).toBe('Containment rating exceeded by design.');
+    expect(TECHNOLOGIES.bellowsDrive.description).toBe('The old drive train works a bellows into the firebox. +8% PR production per level.');
+    expect(TECHNOLOGIES.bellowsDrive.flavor).toBeUndefined();
   });
 
   it('era-III techs without a given flavor have none', () => {
-    for (const id of ['firebox', 'inductionHeater', 'steamHammer', 'superheater', 'condenser', 'turbine', 'reliefValves'] as const) {
+    for (const id of ['firebox', 'inductionHeater', 'steamHammer', 'superheater', 'condenser', 'turbine', 'reliefValves', 'bellowsDrive'] as const) {
       expect(TECHNOLOGIES[id].flavor).toBeUndefined();
     }
   });
@@ -429,11 +469,12 @@ describe('era III technology table', () => {
     expect(TECHNOLOGIES.pressureVesselBlueprint.name).toBe('Vessel Blueprint');
   });
 
-  it('costRes: pr only on era III, ee on eras II and III', () => {
+  it('costRes in era III: ee on boiler and inductionHeater, me on bellowsDrive, pr on the rest', () => {
     for (const id of [...ERA_ONE_IDS, ...ERA_TWO_IDS]) expect(TECHNOLOGIES[id].costRes).not.toBe('pr');
     const eeCost: readonly TechId[] = ['boiler', 'inductionHeater'];
     for (const id of ERA_THREE_IDS) {
-      expect(TECHNOLOGIES[id].costRes).toBe(eeCost.includes(id) ? 'ee' : 'pr');
+      const expectedRes = id === 'bellowsDrive' ? 'me' : eeCost.includes(id) ? 'ee' : 'pr';
+      expect(TECHNOLOGIES[id].costRes).toBe(expectedRes);
     }
   });
 
@@ -453,6 +494,7 @@ describe('era III technology table', () => {
     expect(new Set(TECH_IDS.map((id) => INSTALL_LINES[id])).size).toBe(TECH_IDS.length);
     expect(INSTALL_LINES.boiler).toBe(TECHNOLOGIES.boiler.flavor);
     expect(INSTALL_LINES.pressureVesselBlueprint).toBe(TECHNOLOGIES.pressureVesselBlueprint.flavor);
+    expect(INSTALL_LINES.bellowsDrive).toBe('Bellows coupled. The fire breathes with the crank.');
     for (const id of TECH_IDS) {
       const flavor = TECHNOLOGIES[id].flavor;
       if (flavor !== undefined) expect(INSTALL_LINES[id]).toBe(flavor);
@@ -534,10 +576,16 @@ describe('era IV technology table', () => {
           { type: 'lifetime', res: 'rs', amount: 30000000 },
         ],
       },
+      gridExciter: {
+        id: 'gridExciter', kind: 'repeatable', era: 4, costRes: 'ee', baseCost: 2000000, growth: 1.4, maxLevel: null,
+        tree: { col: 3, row: 2 }, branch: 'automation',
+        effects: [{ type: 'autoPct', percent: 8, res: 'rs' }],
+        requires: [{ type: 'tech', id: 'resonatorSpire', minLevel: 1 }],
+      },
     };
     expect(ERA_FOUR_IDS).toEqual([
       'resonatorSpire', 'harmonicCoil', 'pressureResonator', 'crankServo', 'echoCrank',
-      'phaseLock', 'standingWave', 'crystalLattice', 'harmonicConvergence',
+      'phaseLock', 'standingWave', 'crystalLattice', 'harmonicConvergence', 'gridExciter',
     ]);
     for (const id of ERA_FOUR_IDS) {
       expect(project(TECHNOLOGIES[id])).toEqual(expected[id as keyof typeof expected]);
@@ -549,17 +597,19 @@ describe('era IV technology table', () => {
     expect(TECHNOLOGIES.resonatorSpire.flavor).toBe('Tower raised. It was already humming.');
     expect(TECHNOLOGIES.harmonicCoil.description).toBe('Toroidal winding on the tower. More RS from the same pressure.');
     expect(TECHNOLOGIES.pressureResonator.description).toBe('Steam whistles on the manifold. +3 RS/s per level.');
-    expect(TECHNOLOGIES.crankServo.description).toBe('A gearbox turns the crank for you. +1 crank/s per level, offline too.');
+    expect(TECHNOLOGIES.crankServo.description).toBe('A gearbox turns the crank for you, offline too. Each auto-crank yields a full click of every energy.');
     expect(TECHNOLOGIES.echoCrank.description).toBe('A fork rings with every turn. Clicks echo 2s of RS; x5 manual ME.');
     expect(TECHNOLOGIES.phaseLock.description).toBe('Twin mirrors broadcast the locked phase. x1.25 all production.');
     expect(TECHNOLOGIES.standingWave.description).toBe('The rod holds its note. +15% RS production per level.');
     expect(TECHNOLOGIES.crystalLattice.description).toBe('Quartz in the crown. Doubles PR and EE production.');
     expect(TECHNOLOGIES.harmonicConvergence.description).toBe('Every part of the machine now rings at one frequency.');
     expect(TECHNOLOGIES.harmonicConvergence.flavor).toBe('All frequencies agree. Agreement logged.');
+    expect(TECHNOLOGIES.gridExciter.description).toBe('Mains current drives the spire exciter. +8% RS production per level.');
+    expect(TECHNOLOGIES.gridExciter.flavor).toBeUndefined();
   });
 
   it('era-IV techs without a given flavor have none', () => {
-    for (const id of ['harmonicCoil', 'pressureResonator', 'crankServo', 'echoCrank', 'phaseLock', 'standingWave', 'crystalLattice'] as const) {
+    for (const id of ['harmonicCoil', 'pressureResonator', 'crankServo', 'echoCrank', 'phaseLock', 'standingWave', 'crystalLattice', 'gridExciter'] as const) {
       expect(TECHNOLOGIES[id].flavor).toBeUndefined();
     }
   });
@@ -576,10 +626,10 @@ describe('era IV technology table', () => {
     expect(new Set(keys).size).toBe(ERA_FOUR_IDS.length);
   });
 
-  it('costRes: me only on crankServo, pr on resonatorSpire and pressureResonator, rs on the rest', () => {
+  it('costRes: me only on crankServo, ee on gridExciter, pr on resonatorSpire and pressureResonator, rs on the rest', () => {
     const prCost: readonly TechId[] = ['resonatorSpire', 'pressureResonator'];
     for (const id of ERA_FOUR_IDS) {
-      const expectedRes = id === 'crankServo' ? 'me' : prCost.includes(id) ? 'pr' : 'rs';
+      const expectedRes = id === 'crankServo' ? 'me' : id === 'gridExciter' ? 'ee' : prCost.includes(id) ? 'pr' : 'rs';
       expect(TECHNOLOGIES[id].costRes).toBe(expectedRes);
     }
     expect(ERA_FOUR_IDS.filter((id) => TECHNOLOGIES[id].costRes === 'me')).toEqual(['crankServo']);
@@ -602,6 +652,7 @@ describe('era IV technology table', () => {
     expect(INSTALL_LINES.standingWave).toBe('The wave stopped moving. The tower did not.');
     expect(INSTALL_LINES.crystalLattice).toBe('Crystal seated. It was cut for this socket.');
     expect(INSTALL_LINES.harmonicConvergence).toBe('All frequencies agree. Agreement logged.');
+    expect(INSTALL_LINES.gridExciter).toBe('Exciter fed from the mains. The spire hums in phase.');
     const lines = ERA_FOUR_IDS.map((id) => INSTALL_LINES[id]);
     expect(new Set(lines).size).toBe(ERA_FOUR_IDS.length);
     for (const line of lines) expect(line.length).toBeLessThanOrEqual(60);
@@ -643,9 +694,12 @@ describe('era V technology table', () => {
         requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
       },
       resonantSiphon: {
-        id: 'resonantSiphon', kind: 'repeatable', era: 5, costRes: 'rs', baseCost: 10000000, growth: 1.35, maxLevel: 20,
+        id: 'resonantSiphon', kind: 'repeatable', era: 5, costRes: 'rs', baseCost: 10000000, growth: 1.3, maxLevel: 20,
         tree: { col: 1, row: 2 }, branch: 'automation',
-        effects: [{ type: 'autoAdd', amount: 2, res: 'xf' }],
+        effects: [
+          { type: 'autoAdd', amount: 2, res: 'xf' },
+          { type: 'autoPct', percent: 5, res: 'xf' },
+        ],
         requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
       },
       graviticAnchor: {
@@ -697,10 +751,23 @@ describe('era V technology table', () => {
         effects: [{ type: 'ending' }],
         requires: [{ type: 'tech', id: 'finalAlignment', minLevel: 1 }],
       },
+      mainsBackfeed: {
+        id: 'mainsBackfeed', kind: 'repeatable', era: 5, costRes: 'ee', baseCost: 20000000, growth: 1.4, maxLevel: null,
+        tree: { col: 3, row: 2 }, branch: 'automation',
+        effects: [{ type: 'autoPct', percent: 6, res: 'xf' }],
+        requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
+      },
+      steamLance: {
+        id: 'steamLance', kind: 'repeatable', era: 5, costRes: 'pr', baseCost: 5000000, growth: 1.4, maxLevel: null,
+        tree: { col: 4, row: 2 }, branch: 'automation',
+        effects: [{ type: 'autoPct', percent: 6, res: 'xf' }],
+        requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
+      },
     };
     expect(ERA_FIVE_IDS).toEqual([
       'nullChamber', 'containmentRing', 'resonantSiphon', 'graviticAnchor', 'inversionCrank',
       'lensArray', 'horizonField', 'skyAperture', 'finalAlignment', 'primaryFunction',
+      'mainsBackfeed', 'steamLance',
     ]);
     for (const id of ERA_FIVE_IDS) {
       expect(project(TECHNOLOGIES[id])).toEqual(expected[id as keyof typeof expected]);
@@ -711,7 +778,7 @@ describe('era V technology table', () => {
     expect(TECHNOLOGIES.nullChamber.description).toBe('A lantern on the spire holds a sphere of nothing. Converts RS into ???.');
     expect(TECHNOLOGIES.nullChamber.flavor).toBe('Chamber sealed around nothing. Nothing is rising.');
     expect(TECHNOLOGIES.containmentRing.description).toBe('Another ring around the core. More ??? from the same resonance.');
-    expect(TECHNOLOGIES.resonantSiphon.description).toBe('Glass siphons arc resonance into the core. +2 ???/s per level.');
+    expect(TECHNOLOGIES.resonantSiphon.description).toBe('Glass siphons arc resonance into the core. +2 ???/s and +5% ??? production per level.');
     expect(TECHNOLOGIES.graviticAnchor.description).toBe('Piles at both ends guy the crown to the ground. x1.1 all production per level.');
     expect(TECHNOLOGIES.inversionCrank.description).toBe('Every turn leaves a turn going the other way. Clicks echo 3s of ???.');
     expect(TECHNOLOGIES.lensArray.description).toBe('Three lenses gather the core into one line. Doubles ??? production.');
@@ -720,6 +787,14 @@ describe('era V technology table', () => {
     expect(TECHNOLOGIES.finalAlignment.description).toBe('Every ring, lens and anchor now points the same way.');
     expect(TECHNOLOGIES.finalAlignment.flavor).toBe('Alignment complete. Awaiting operator.');
     expect(TECHNOLOGIES.primaryFunction.description).toBe('Engage the primary function.');
+    expect(TECHNOLOGIES.mainsBackfeed.description).toBe('The grid runs backwards into the null gallery. +6% ??? production per level.');
+    expect(TECHNOLOGIES.steamLance.description).toBe('A riser carries live steam up the spire into the chamber. +6% ??? production per level.');
+  });
+
+  it('era-V techs without a given flavor have none', () => {
+    for (const id of ['containmentRing', 'resonantSiphon', 'graviticAnchor', 'inversionCrank', 'lensArray', 'horizonField', 'skyAperture', 'primaryFunction', 'mainsBackfeed', 'steamLance'] as const) {
+      expect(TECHNOLOGIES[id].flavor).toBeUndefined();
+    }
   });
 
   it('every era-V tech is reachable from handCrank', () => {
@@ -760,11 +835,12 @@ describe('era V technology table', () => {
     expect(new Set(keys).size).toBe(ERA_FIVE_IDS.length);
   });
 
-  it('costRes: me only on graviticAnchor, rs on nullChamber and resonantSiphon, xf on the other seven', () => {
-    const rsCost: readonly TechId[] = ['nullChamber', 'resonantSiphon'];
+  it('costRes: me on graviticAnchor, ee on mainsBackfeed, pr on steamLance, rs on nullChamber and resonantSiphon, xf on the other seven', () => {
+    const otherRes: Partial<Record<TechId, string>> = {
+      graviticAnchor: 'me', mainsBackfeed: 'ee', steamLance: 'pr', nullChamber: 'rs', resonantSiphon: 'rs',
+    };
     for (const id of ERA_FIVE_IDS) {
-      const expectedRes = id === 'graviticAnchor' ? 'me' : rsCost.includes(id) ? 'rs' : 'xf';
-      expect(TECHNOLOGIES[id].costRes).toBe(expectedRes);
+      expect(TECHNOLOGIES[id].costRes).toBe(otherRes[id] ?? 'xf');
     }
     expect(ERA_FIVE_IDS.filter((id) => TECHNOLOGIES[id].costRes === 'me')).toEqual(['graviticAnchor']);
   });
@@ -799,6 +875,8 @@ describe('era V technology table', () => {
     expect(INSTALL_LINES.skyAperture).toBe('Aperture open. The sky looked back.');
     expect(INSTALL_LINES.finalAlignment).toBe('Alignment complete. Awaiting operator.');
     expect(INSTALL_LINES.primaryFunction).toBe('Primary function engaged.');
+    expect(INSTALL_LINES.mainsBackfeed).toBe('Backfeed live. The grid answers from above.');
+    expect(INSTALL_LINES.steamLance).toBe('Lance seated. Steam climbs where steam should not.');
     for (const id of TECH_IDS) {
       expect(INSTALL_LINES[id].length).toBeGreaterThan(0);
       expect(INSTALL_LINES[id].length).toBeLessThanOrEqual(60);

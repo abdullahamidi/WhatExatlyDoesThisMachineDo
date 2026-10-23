@@ -5,7 +5,8 @@ export const TECH_IDS = ['handCrank','gearRatio','reinforcedCrank','flywheel','w
   'generator','copperWinding','motorRetrofit','dynamoCrank','capacitorBank','sparkGap','transformer','powerLines','substationBlueprint',
   'boiler','firebox','inductionHeater','steamHammer','superheater','condenser','turbine','reliefValves','pressureVesselBlueprint',
   'resonatorSpire','harmonicCoil','pressureResonator','crankServo','echoCrank','phaseLock','standingWave','crystalLattice','harmonicConvergence',
-  'nullChamber','containmentRing','resonantSiphon','graviticAnchor','inversionCrank','lensArray','horizonField','skyAperture','finalAlignment','primaryFunction'] as const;
+  'nullChamber','containmentRing','resonantSiphon','graviticAnchor','inversionCrank','lensArray','horizonField','skyAperture','finalAlignment','primaryFunction',
+  'bellowsDrive','gridExciter','mainsBackfeed','steamLance'] as const;
 export type TechId = typeof TECH_IDS[number];
 export const RESOURCE_IDS = ['me', 'ee', 'pr', 'rs', 'xf'] as const;
 export type ResourceId = typeof RESOURCE_IDS[number];

@@ -68,6 +68,32 @@ export function framesIndex(t: number, frames: number, maxHz: number, active: bo
   return Math.floor(t * maxHz) % frames; // whole steps of maxHz, wrapped to the frame count
 }
 
+/**
+ * Frame cycles of a frame part with an hz curve (cycles = frames advanced, hz = frames per second): 0 while inactive; otherwise
+ * cycles + max(0, hz) * max(0, dt), wrapped into [0, frames * 1000) so the count stays small. A non-finite hz or dt adds nothing;
+ * non-finite cycles give a non-finite result, which reads as 0. frames < 1 or non-finite gives 0.
+ */
+export function stepFrameCycles(cycles: number, hz: number, dt: number, active: boolean, frames: number): number {
+  if (!active || !Number.isFinite(frames) || frames < 1) return 0;
+  const rate = Number.isFinite(hz) ? Math.max(0, hz) : 0; // frames per second, never negative
+  const span = Number.isFinite(dt) ? Math.max(0, dt) : 0; // seconds, never negative
+  const next = cycles + rate * span; // frames advanced in total
+  if (!Number.isFinite(next)) return 0;
+  const period = frames * 1000; // wrap length
+  return noNegativeZero(((next % period) + period) % period); // positive modulo, [0, period)
+}
+
+/**
+ * Frame of a frame part with an hz curve: (floor(cycles) + offset) mod frames with a positive modulo, so staggered sheets
+ * offset their cycle. Non-finite cycles count as 0 and a non-finite offset as 0; frames < 1 or non-finite gives 0.
+ */
+export function cycleFrame(cycles: number, frames: number, offset: number): number {
+  if (!Number.isFinite(frames) || frames < 1) return 0;
+  const whole = Number.isFinite(cycles) ? Math.floor(cycles) : 0; // whole frames advanced
+  const shift = Number.isFinite(offset) ? offset : 0; // stagger of the sheet
+  return noNegativeZero((((whole + shift) % frames) + frames) % frames); // positive modulo, [0, frames)
+}
+
 /** Frame time in seconds: deltaMs / 1000 capped at maxSeconds; NaN, negative or zero input gives 0. */
 export function clampFrameSeconds(deltaMs: number, maxSeconds: number): number {
   if (!(deltaMs > 0)) return 0; // rejects NaN, negatives and zero

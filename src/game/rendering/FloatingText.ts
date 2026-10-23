@@ -2,73 +2,122 @@ import Phaser from 'phaser';
 import { CRANK_FEEDBACK, DEPTH, FLOATING_TEXT } from '../../data/world';
 import type { Vec2 } from '../../data/machineComponents';
 import { PALETTE_CSS } from '../../data/palette';
+import type { GainLine } from '../../ui/hudView';
 
-/** Pooled "+N" text that rises and fades after a click. Never creates more than floatPoolSize texts. */
+/** Most stacked lines one gain block shows (the extra lines of a longer list are dropped). */
+const MAX_BLOCK_LINES = 5;
+
+/** One pooled gain block: a container holding its stacked line texts; it rises and fades as one. */
+interface GainBlockView {
+  container: Phaser.GameObjects.Container;
+  texts: Phaser.GameObjects.Text[];
+}
+
+/**
+ * Pooled stacked crank gain text (WP17 T8). A fresh click takes the next block of the round-robin pool;
+ * a merged click re-texts the newest block in place. Lines are tinted per resource and sized in world px by the caller.
+ */
 export class FloatingText {
   private readonly scene: Phaser.Scene;
-  private readonly pool: Phaser.GameObjects.Text[] = [];
+  private readonly blocks: GainBlockView[] = [];
   private next = 0;
+  /** The block last taken by a fresh showBlock: the target of merged updates. */
+  private newest: GainBlockView | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
   }
 
-  /** Shows `text` at a world position, recycling the oldest pooled text when the pool is full. */
-  spawn(worldPos: Vec2, text: string): void {
-    const textObj = this.acquire();
-    textObj.setText(text);
-    textObj.setPosition(
-      worldPos.x + (Math.random() - 0.5) * 2 * FLOATING_TEXT.jitterX, // jitter in [-jitterX, +jitterX]
-      worldPos.y + FLOATING_TEXT.spawnOffsetY,
-    );
-    textObj.setAlpha(1).setVisible(true);
+  /**
+   * Shows the stacked gain block. `lines` are listed top-first; at most MAX_BLOCK_LINES are shown.
+   * merged = false: the block starts at worldPos. merged = true: the newest block is re-texted and keeps its position
+   * (with no block yet it is treated as fresh). Each (re)show restarts the rise and fade from the block's current y.
+   */
+  showBlock(worldPos: Vec2, lines: readonly GainLine[], fontPx: number, merged: boolean): void {
+    const reused = merged ? this.newest : null;
+    const block = reused ?? this.acquire();
+    this.newest = block;
+    const container = block.container;
+    if (reused === null) container.setPosition(worldPos.x, worldPos.y);
+
+    const scale = fontPx / FLOATING_TEXT.fontSizePx;
+    const shown = lines.slice(0, MAX_BLOCK_LINES);
+    const stepY = fontPx + FLOATING_TEXT.lineGapPx * scale;
+    shown.forEach((line, i) => {
+      // Line i sits above the bottom line: the last line of the stack is at local y 0.
+      this.textAt(block, i)
+        .setText(line.text)
+        .setFontSize(fontPx)
+        .setColor(FLOATING_TEXT.colors[line.res])
+        .setPosition(0, -(shown.length - 1 - i) * stepY)
+        .setVisible(true);
+    });
+    block.texts.slice(shown.length).forEach((textObj) => textObj.setVisible(false));
+
+    container.setAlpha(1).setVisible(true);
+    this.scene.tweens.killTweensOf(container);
     // Rise decelerates; alpha holds near 1 for the first half, then fades (Quad.easeIn), so the number stays readable.
     this.scene.tweens.add({
-      targets: textObj,
-      y: textObj.y - CRANK_FEEDBACK.floatRisePx,
+      targets: container,
+      y: container.y - CRANK_FEEDBACK.floatRisePx * scale,
       duration: CRANK_FEEDBACK.floatMs,
       ease: 'Cubic.easeOut',
     });
     this.scene.tweens.add({
-      targets: textObj,
+      targets: container,
       alpha: 0,
       duration: CRANK_FEEDBACK.floatMs,
       ease: 'Quad.easeIn',
-      onComplete: () => textObj.setVisible(false),
+      onComplete: () => container.setVisible(false),
     });
   }
 
-  /** Kills tweens and destroys every pooled text. */
+  /** Kills tweens and destroys every pooled block and text. */
   destroy(): void {
-    for (const textObj of this.pool) {
-      this.scene.tweens.killTweensOf(textObj);
-      textObj.destroy();
+    for (const block of this.blocks) {
+      // Scene teardown may already have destroyed the block; its scene is then unset.
+      if (!block.container.scene) continue;
+      this.scene.tweens.killTweensOf(block.container);
+      for (const textObj of block.texts) textObj.destroy();
+      block.container.destroy();
     }
-    this.pool.length = 0;
+    this.blocks.length = 0;
     this.next = 0;
+    this.newest = null;
   }
 
-  /** Returns the next free text: a new one while the pool is growing, else the oldest one (round-robin). */
-  private acquire(): Phaser.GameObjects.Text {
-    const existing = this.pool[this.next];
+  /** Returns the next block of the round-robin pool: a new one while the pool is growing, else the oldest one. */
+  private acquire(): GainBlockView {
+    const existing = this.blocks[this.next];
+    this.next = (this.next + 1) % FLOATING_TEXT.blockPoolSize;
     if (existing) {
-      this.scene.tweens.killTweensOf(existing);
-      this.next = (this.next + 1) % CRANK_FEEDBACK.floatPoolSize;
+      this.scene.tweens.killTweensOf(existing.container);
       return existing;
     }
+    const created: GainBlockView = {
+      container: this.scene.add.container(0, 0).setDepth(DEPTH.floatingText),
+      texts: [],
+    };
+    this.blocks.push(created);
+    return created;
+  }
+
+  /** The block's text at `index`, created on first use (indices are used in order, so the pool grows by one). */
+  private textAt(block: GainBlockView, index: number): Phaser.GameObjects.Text {
+    const existing = block.texts[index];
+    if (existing) return existing;
     const created = this.scene.add
       .text(0, 0, '', {
         fontFamily: 'monospace',
         fontSize: FLOATING_TEXT.fontSizePx + 'px',
-        color: FLOATING_TEXT.color,
+        color: FLOATING_TEXT.colors.me,
         fontStyle: 'bold',
         stroke: PALETTE_CSS.ink,
         strokeThickness: FLOATING_TEXT.strokePx,
       })
-      .setOrigin(0.5)
-      .setDepth(DEPTH.floatingText);
-    this.pool.push(created);
-    this.next = (this.next + 1) % CRANK_FEEDBACK.floatPoolSize;
+      .setOrigin(0.5, 1);
+    block.container.add(created);
+    block.texts.push(created);
     return created;
   }
 }

@@ -150,7 +150,7 @@ function levelsForEra3(n: number): Record<TechId, number> {
   return levels;
 }
 
-/** Era-I component definitions exactly as they were before WP8 (git HEAD). flywheelPulley here has no belt2. */
+/** Era-I component definitions as they were before WP8 (git HEAD), with the WP17 effects removal (flywheel, wornMotor, pistonArray hold []). flywheelPulley here has no belt2. */
 const ERA_ONE_SNAPSHOT: Readonly<Record<string, MachineComponentDefinition>> = {
   // Support: frame art and the two bearing plates (audit role: static frame, bolted to steel).
   supportFrame: {
@@ -256,7 +256,7 @@ const ERA_ONE_SNAPSHOT: Readonly<Record<string, MachineComponentDefinition>> = {
     layer: 'mid',
     animation: { kind: 'driven', ratio: -1.1666666667, phaseDeg: 0 },
     connections: [],
-    effects: [{ kind: 'glow', driver: 'automation', threshold: 10, intensity: 0.4 }],
+    effects: [],
   },
   flywheelPulley: {
     id: 'flywheelPulley', techId: 'flywheel', minLevel: 1,
@@ -284,7 +284,7 @@ const ERA_ONE_SNAPSHOT: Readonly<Record<string, MachineComponentDefinition>> = {
     layer: 'mid', depthBias: 1,
     animation: { kind: 'vibrate', driver: 'automation', amplitude: 1, speed: { base: 8, gain: 0.3, min: 2, max: 20 } },
     connections: [],
-    effects: [{ kind: 'vibrate', driver: 'automation', threshold: 1, intensity: 0.5 }],
+    effects: [],
   },
   motorPulley: {
     id: 'motorPulley', techId: 'wornMotor', minLevel: 1,
@@ -312,7 +312,7 @@ const ERA_ONE_SNAPSHOT: Readonly<Record<string, MachineComponentDefinition>> = {
     layer: 'back', depthBias: 1,
     animation: { kind: 'none' },
     connections: [],
-    effects: [{ kind: 'steam', driver: 'automation', threshold: 5, intensity: 0.6 }],
+    effects: [],
   },
 };
 
@@ -344,12 +344,13 @@ describe('machine component ids', () => {
       'siphonArcs1', 'siphonArcs2', 'siphonArcs3', 'graviticAnchorL', 'graviticAnchorR',
       'anchorGlow1L', 'anchorGlow1R', 'anchorGlow2L', 'anchorGlow2R', 'anchorGlow3L', 'anchorGlow3R',
       'inversionGhost', 'lensLight', 'lensColumn', 'aperture', 'namePlate',
+      'generatorGlow', 'bellows', 'exciterFeed', 'backfeedTerminal', 'steamLance',
     ]);
   });
 
-  it('has 99 components (61 through era IV plus 38 era V) and 60 sockets (45 plus 15 era V)', () => {
-    expect(MACHINE_COMPONENT_IDS.length).toBe(99);
-    expect(SOCKET_IDS.length).toBe(60);
+  it('has 104 components (61 through era IV, 38 era V, 5 WP17 legacy feeds) and 64 sockets (45, 15 era V, 4 legacy)', () => {
+    expect(MACHINE_COMPONENT_IDS.length).toBe(104);
+    expect(SOCKET_IDS.length).toBe(64);
   });
 });
 
@@ -418,16 +419,30 @@ describe('machine component invariants', () => {
     }
   });
 
-  it('every speed curve (vibrate, spin and orbit) has min <= max and base > 0; frames, gauge and reciprocate need none', () => {
+  it('every speed curve (vibrate, spin, orbit and frame hz) has min <= max and base > 0, hz.max stays within maxHz; gauge and reciprocate need none', () => {
     for (const def of COMPONENTS) {
       const anim = def.animation;
       if (anim.kind === 'vibrate' || anim.kind === 'spin' || anim.kind === 'orbit') {
         expect(anim.speed.min).toBeLessThanOrEqual(anim.speed.max);
         expect(anim.speed.base).toBeGreaterThan(0);
       }
+      if (anim.kind === 'frames' && anim.hz !== undefined) {
+        expect(anim.hz.min).toBeLessThanOrEqual(anim.hz.max);
+        expect(anim.hz.base).toBeGreaterThan(0);
+        expect(anim.hz.max).toBeLessThanOrEqual(anim.maxHz);
+      }
       if (anim.kind === 'frames' || anim.kind === 'gauge' || anim.kind === 'reciprocate') {
         expect('speed' in anim, def.id).toBe(false);
       }
+    }
+  });
+
+  it('only the WP17 wave, siphon-arc and bellows parts carry an hz curve; the flash parts (max 3 Hz) keep their fixed maxHz', () => {
+    const withHz = COMPONENTS.filter((def) => def.animation.kind === 'frames' && def.animation.hz !== undefined).map((def) => def.id).sort();
+    expect(withHz).toEqual(['bellows', 'dishWavesL', 'dishWavesR', 'siphonArcs1', 'siphonArcs2', 'siphonArcs3', 'spireWave']);
+    for (const id of ['sparkGap', 'fireboxGlow1', 'fireboxGlow2', 'fireboxGlow3', 'anchorGlow1L', 'anchorGlow1R', 'anchorGlow2L', 'anchorGlow2R', 'anchorGlow3L', 'anchorGlow3R', 'lensLight'] as const) {
+      const anim = MACHINE_COMPONENTS[id].animation;
+      expect(anim.kind === 'frames' && anim.maxHz <= 3 && anim.hz === undefined, id).toBe(true);
     }
   });
 
@@ -724,6 +739,11 @@ describe('era II machine data', () => {
     expect(MACHINE_COMPONENTS.generator.animation).toEqual({ kind: 'none' });
   });
 
+  it('WP17 refit: the transformer hum speed max is 18, and the capacitor rack holds no effects (its glow moved to generatorGlow)', () => {
+    expect(MACHINE_COMPONENTS.transformer.animation).toEqual({ kind: 'vibrate', driver: 'electric', amplitude: 0.5, speed: { base: 6, gain: 0.3, min: 2, max: 18 } });
+    expect(MACHINE_COMPONENTS.capacitorRack.effects).toEqual([]);
+  });
+
   it('generatorPulley is driven at ratio -1.75 and belt-linked at radius 8', () => {
     expect(MACHINE_COMPONENTS.generatorPulley.animation).toEqual({ kind: 'driven', ratio: -1.75, phaseDeg: 0 });
     expect(pointOf('generatorPulley', 'belt')).toEqual({ id: 'belt', at: { x: 0, y: 0 }, kind: 'belt', radius: 8 });
@@ -776,18 +796,22 @@ describe('era II machine data', () => {
     expect(kit.right).toBeLessThanOrEqual(motor.right);
   });
 
-  it('six cable links join two cable points: the four power cables (CR6 sag 4 and 3, era III tie) and the two era V guy cables', () => {
+  it('eight cable links join two cable points: the four power cables (CR6 sag 4 and 3, era III tie), the two era V guy cables and the two WP17 mast feeds', () => {
     const cables = MACHINE_LINKS.filter((l) => l.kind === 'cable');
-    expect(cables.length).toBe(6);
+    expect(cables.length).toBe(8);
     expect(cables.slice(0, 4)).toEqual([
       { from: { component: 'generator', point: 'termR' }, to: { component: 'capacitorRack', point: 'lugL' }, kind: 'cable', sag: 4 },
       { from: { component: 'capacitorRack', point: 'lugR' }, to: { component: 'transformer', point: 'primary' }, kind: 'cable', sag: 3 },
       { from: { component: 'transformer', point: 'bushing' }, to: { component: 'cableMast', point: 'top' }, kind: 'cable' },
       { from: { component: 'motorRetrofitKit', point: 'tie' }, to: { component: 'inductionHeater', point: 'tie' }, kind: 'cable', sag: 3 },
     ]);
-    expect(cables.slice(4)).toEqual([
+    expect(cables.slice(4, 6)).toEqual([
       { from: { component: 'nullChamber', point: 'eyeL' }, to: { component: 'graviticAnchorL', point: 'eye' }, kind: 'cable', sag: 6, cableStyle: 'guy' },
       { from: { component: 'nullChamber', point: 'eyeR' }, to: { component: 'graviticAnchorR', point: 'eye' }, kind: 'cable', sag: 6, cableStyle: 'guy' },
+    ]);
+    expect(cables.slice(6)).toEqual([
+      { from: { component: 'cableMast', point: 'top' }, to: { component: 'exciterFeed', point: 'lug' }, kind: 'cable', sag: 8 },
+      { from: { component: 'cableMast', point: 'top' }, to: { component: 'backfeedTerminal', point: 'lug' }, kind: 'cable', sag: 12 },
     ]);
     for (const link of cables) {
       expect(pointOf(link.from.component, link.from.point)?.kind).toBe('cable');
@@ -897,6 +921,14 @@ const PIPE_LINKS_EXPECTED: readonly MachineLink[] = [
 const PIPE_P4_EXPECTED: MachineLink = { from: { component: 'steamManifold', point: 'outR' }, to: { component: 'spireExciter', point: 'steam' }, kind: 'pipe',
   via: [{ x: 48, y: -176 }, { x: 48, y: -126 }], bore: 4, pipeStyle: 'steam' };
 
+/** WP17 tuyere hose: bellows nozzle to the boiler tuyere (water, bore 2, depth front - 1). */
+const PIPE_TUYERE_EXPECTED: MachineLink = { from: { component: 'bellows', point: 'nozzle' }, to: { component: 'boiler', point: 'tuyere' }, kind: 'pipe',
+  via: [{ x: -204, y: -14 }], bore: 2, depth: MACHINE_LAYER_DEPTH.front - 1, pipeStyle: 'water' };
+
+/** WP17 steam lance: the manifold right outlet to the lance steam port (steam, bore 4). */
+const PIPE_LANCE_EXPECTED: MachineLink = { from: { component: 'steamManifold', point: 'outR' }, to: { component: 'steamLance', point: 'steam' }, kind: 'pipe',
+  via: [{ x: 20, y: -176 }], bore: 4, pipeStyle: 'steam' };
+
 describe('era III machine data', () => {
   it('the 16 era-III components follow the contract table (tech, level, asset, size, origin, socket, layer, bias)', () => {
     expect(ERA_THREE_TABLE.length).toBe(16);
@@ -929,8 +961,8 @@ describe('era III machine data', () => {
     expect(ASSET_MANIFEST['machine.fireGlow3'].frame?.count).toBe(4);
   });
 
-  it('gaugeNeedle is a thermal gauge with 25 frames, log range 0..5 and tau 0.6 s, matching its manifest frame count', () => {
-    expect(MACHINE_COMPONENTS.gaugeNeedle.animation).toEqual({ kind: 'gauge', driver: 'thermal', frames: 25, minLog: 0, maxLog: 5, tauSeconds: 0.6 });
+  it('gaugeNeedle is a thermal gauge with 25 frames, log range 0..6.6 and tau 0.6 s, matching its manifest frame count', () => {
+    expect(MACHINE_COMPONENTS.gaugeNeedle.animation).toEqual({ kind: 'gauge', driver: 'thermal', frames: 25, minLog: 0, maxLog: 6.6, tauSeconds: 0.6 });
     expect(ASSET_MANIFEST['machine.gaugeNeedle'].frame?.count).toBe(25);
   });
 
@@ -939,8 +971,8 @@ describe('era III machine data', () => {
     expect(depthOf(MACHINE_COMPONENTS.hammerRam)).toBeLessThan(depthOf(MACHINE_COMPONENTS.steamHammer));
   });
 
-  it('turbineRotor spins from the thermal driver with the A1 speed curve', () => {
-    expect(MACHINE_COMPONENTS.turbineRotor.animation).toEqual({ kind: 'spin', driver: 'thermal', speed: { base: 60, gain: 1.5, min: 0, max: 540 } });
+  it('turbineRotor spins from the thermal driver with the A1 speed curve (WP17 max 660)', () => {
+    expect(MACHINE_COMPONENTS.turbineRotor.animation).toEqual({ kind: 'spin', driver: 'thermal', speed: { base: 60, gain: 1.5, min: 0, max: 660 } });
   });
 
   it('the era-III sockets sit at the contract coordinates', () => {
@@ -971,9 +1003,25 @@ describe('era III machine data', () => {
     });
   });
 
-  it('era-III wiring: the four era-III pipe links keep contract order, P4 is appended, each joins two pipe points', () => {
+  it('boiler equals its era-III definition plus the WP17 tuyere pipe point only', () => {
+    expect(MACHINE_COMPONENTS.boiler).toEqual({
+      id: 'boiler', techId: 'boiler', minLevel: 1,
+      assetId: 'machine.boiler', attach: { socket: 'boilerBase', offset: { x: 0, y: 0 } },
+      size: { width: 128, height: 96 }, origin: { x: 0.5, y: 1 },
+      layer: 'mid',
+      animation: { kind: 'none' },
+      connections: [
+        { id: 'steam', at: { x: -6, y: -91 }, kind: 'pipe' },
+        { id: 'feed', at: { x: -64, y: -46 }, kind: 'pipe' },
+        { id: 'tuyere', at: { x: 36, y: -22 }, kind: 'pipe' },
+      ],
+      effects: [],
+    });
+  });
+
+  it('era-III wiring: the four era-III pipe links keep contract order, P4 is appended, then the WP17 tuyere hose and lance; each joins two pipe points', () => {
     const pipes = MACHINE_LINKS.filter((l) => l.kind === 'pipe');
-    expect(pipes).toEqual([...PIPE_LINKS_EXPECTED, PIPE_P4_EXPECTED]);
+    expect(pipes).toEqual([...PIPE_LINKS_EXPECTED, PIPE_P4_EXPECTED, PIPE_TUYERE_EXPECTED, PIPE_LANCE_EXPECTED]);
     for (const link of pipes) {
       expect(pointOf(link.from.component, link.from.point)?.kind).toBe('pipe');
       expect(pointOf(link.to.component, link.to.point)?.kind).toBe('pipe');
@@ -994,8 +1042,10 @@ describe('era III machine data', () => {
       P3: [{ x: -246, y: -91 }, { x: -412, y: -86 }],
       W1: [{ x: -362, y: -13 }, { x: -304, y: -46 }],
       P4: [{ x: -11, y: -176 }, { x: 52, y: -126 }],
+      T1: [{ x: -216, y: -14 }, { x: -204, y: -22 }],
+      L1: [{ x: -11, y: -176 }, { x: 20, y: -371 }],
     };
-    const names = ['P1', 'P2', 'P3', 'W1', 'P4'];
+    const names = ['P1', 'P2', 'P3', 'W1', 'P4', 'T1', 'L1'];
     const pipes = MACHINE_LINKS.filter((l) => l.kind === 'pipe');
     pipes.forEach((link, i) => {
       const name = names[i] ?? '';
@@ -1013,12 +1063,14 @@ describe('era III machine data', () => {
     });
   });
 
-  it('W1 sits one layer below mid, every other pipe uses the default pipe depth, and both pipe styles carry fitting colours', () => {
+  it('W1 sits one layer below mid, the WP17 tuyere hose sits one layer below front, every other pipe uses the default pipe depth, and both pipe styles carry fitting colours', () => {
     const pipes = MACHINE_LINKS.filter((l) => l.kind === 'pipe');
     const w1 = pipes.find((l) => l.pipeStyle === 'water');
+    const hose = pipes.find((l) => l.from.component === 'bellows');
     expect(w1?.depth).toBe(MACHINE_LAYER_DEPTH.mid - 1);
+    expect(hose?.depth).toBe(MACHINE_LAYER_DEPTH.front - 1);
     for (const link of pipes) {
-      if (link === w1) continue;
+      if (link === w1 || link === hose) continue;
       expect(link.depth ?? MACHINE_LINK_STYLE.pipe.depth).toBe(MACHINE_LINK_STYLE.pipe.depth);
     }
     expect(MACHINE_LINK_STYLE.pipe.depth).toBe(MACHINE_LAYER_DEPTH.frame + 5);
@@ -1102,8 +1154,8 @@ describe('era III prefixes', () => {
 /** Era-IV component ids: the 16 appended after the era-III block (contract C3). */
 const ERA_FOUR_COMPONENT_IDS: readonly MachineComponentId[] = MACHINE_COMPONENT_IDS.slice(45, 61);
 
-/** Era-V component ids: the 38 appended after the era-IV block (WP11 contract C3). */
-const ERA_FIVE_COMPONENT_IDS: readonly MachineComponentId[] = MACHINE_COMPONENT_IDS.slice(61);
+/** Era-V component ids: the 38 appended after the era-IV block (WP11 contract C3). The five WP17 legacy feeds follow at index 99. */
+const ERA_FIVE_COMPONENT_IDS: readonly MachineComponentId[] = MACHINE_COMPONENT_IDS.slice(61, 99);
 
 /** Unlock steps of era IV in order; harmonicCoil is set to each coil ring level in turn (1, 8, 16, 25). */
 const ERA_FOUR_STEPS: readonly (readonly [TechId, number])[] = [
@@ -1128,7 +1180,7 @@ interface EraFourRow {
 const ERA_FOUR_TABLE: readonly EraFourRow[] = [
   { id: 'spireTower', techId: 'resonatorSpire', minLevel: 1, assetId: 'machine.spireTower', width: 80, height: 320, origin: { x: 0.5, y: 1 }, socket: 'spireBase', layer: 'mid', animation: { kind: 'none' }, connections: [] },
   { id: 'spireExciter', techId: 'resonatorSpire', minLevel: 1, assetId: 'machine.spireExciter', width: 24, height: 32, origin: { x: 0.5, y: 1 }, socket: 'spireBase', layer: 'mid', depthBias: 2, animation: { kind: 'none' }, connections: [{ id: 'steam', at: { x: -12, y: -16 }, kind: 'pipe' }] },
-  { id: 'spireWave', techId: 'standingWave', minLevel: 1, assetId: 'machine.spireWave', width: 16, height: 270, origin: { x: 0.5, y: 1 }, socket: 'spireRod', layer: 'mid', depthBias: 1, animation: { kind: 'frames', frames: 8, maxHz: 12, driver: 'resonance' }, connections: [] },
+  { id: 'spireWave', techId: 'standingWave', minLevel: 1, assetId: 'machine.spireWave', width: 16, height: 270, origin: { x: 0.5, y: 1 }, socket: 'spireRod', layer: 'mid', depthBias: 1, animation: { kind: 'frames', frames: 8, maxHz: 12, driver: 'resonance', hz: { base: 1, gain: 1.75, min: 2, max: 12 } }, connections: [] },
   { id: 'coilRing1', techId: 'harmonicCoil', minLevel: 1, assetId: 'machine.coilRing1', width: 62, height: 8, origin: { x: 0.5, y: 0.5 }, socket: 'coilRing1', layer: 'mid', depthBias: 3, animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' }, connections: [] },
   { id: 'coilRing2', techId: 'harmonicCoil', minLevel: 8, assetId: 'machine.coilRing2', width: 48, height: 8, origin: { x: 0.5, y: 0.5 }, socket: 'coilRing2', layer: 'mid', depthBias: 3, animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' }, connections: [] },
   { id: 'coilRing3', techId: 'harmonicCoil', minLevel: 16, assetId: 'machine.coilRing3', width: 36, height: 8, origin: { x: 0.5, y: 0.5 }, socket: 'coilRing3', layer: 'mid', depthBias: 3, animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' }, connections: [] },
@@ -1139,8 +1191,8 @@ const ERA_FOUR_TABLE: readonly EraFourRow[] = [
   { id: 'koenigFork', techId: 'echoCrank', minLevel: 1, assetId: 'machine.koenigFork', width: 22, height: 44, origin: { x: 0.5, y: 1 }, socket: 'forkBase', layer: 'mid', animation: { kind: 'frames', frames: 4, maxHz: 12, driver: 'manual' }, connections: [] },
   { id: 'emitterDishL', techId: 'phaseLock', minLevel: 1, assetId: 'machine.emitterDish', width: 40, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'dishL', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
   { id: 'emitterDishR', techId: 'phaseLock', minLevel: 1, assetId: 'machine.emitterDish', width: 40, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'dishR', layer: 'mid', depthBias: 4, flipX: true, animation: { kind: 'none' }, connections: [] },
-  { id: 'dishWavesL', techId: 'phaseLock', minLevel: 1, assetId: 'machine.dishWaves', width: 40, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'dishWavesL', layer: 'mid', depthBias: 4, animation: { kind: 'frames', frames: 6, maxHz: 8, driver: 'resonance' }, connections: [] },
-  { id: 'dishWavesR', techId: 'phaseLock', minLevel: 1, assetId: 'machine.dishWaves', width: 40, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'dishWavesR', layer: 'mid', depthBias: 4, flipX: true, animation: { kind: 'frames', frames: 6, maxHz: 8, driver: 'resonance' }, connections: [] },
+  { id: 'dishWavesL', techId: 'phaseLock', minLevel: 1, assetId: 'machine.dishWaves', width: 40, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'dishWavesL', layer: 'mid', depthBias: 4, animation: { kind: 'frames', frames: 6, maxHz: 8, driver: 'resonance', hz: { base: 1, gain: 1.12, min: 2, max: 8 } }, connections: [] },
+  { id: 'dishWavesR', techId: 'phaseLock', minLevel: 1, assetId: 'machine.dishWaves', width: 40, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'dishWavesR', layer: 'mid', depthBias: 4, flipX: true, animation: { kind: 'frames', frames: 6, maxHz: 8, driver: 'resonance', hz: { base: 1, gain: 1.12, min: 2, max: 8 } }, connections: [] },
   { id: 'crystal', techId: 'crystalLattice', minLevel: 1, assetId: 'machine.crystal', width: 32, height: 48, origin: { x: 0.5, y: 1 }, socket: 'crystalSeat', layer: 'mid', depthBias: 4, animation: { kind: 'frames', frames: 4, maxHz: 4, driver: 'resonance' }, connections: [] },
 ];
 
@@ -1258,9 +1310,9 @@ describe('era IV machine data', () => {
     for (const id of RESONANCE_MILESTONE_FX.restart) expect(MACHINE_COMPONENTS[id].animation.kind, id).toBe('frames');
   });
 
-  it('the machine has 16 links in total (14 through era IV, plus the era V guy cables G1 and G2), and P4 joins the manifold outlet to the spire exciter', () => {
-    expect(MACHINE_LINKS.length).toBe(16);
-    const p4 = MACHINE_LINKS.filter((l) => l.kind === 'pipe' && l.from.component === 'steamManifold');
+  it('the machine has 20 links in total (14 through era IV, the era V guy cables G1 and G2, the four WP17 links), and P4 joins the manifold outlet to the spire exciter', () => {
+    expect(MACHINE_LINKS.length).toBe(20);
+    const p4 = MACHINE_LINKS.filter((l) => l.kind === 'pipe' && l.to.component === 'spireExciter');
     expect(p4).toEqual([PIPE_P4_EXPECTED]);
     expect(pointPosition('steamManifold', 'outR')).toEqual({ x: -11, y: -176 });
     expect(pointPosition('spireExciter', 'steam')).toEqual({ x: 52, y: -126 });
@@ -1347,6 +1399,9 @@ const ERA_FIVE_FULL: readonly (readonly [TechId, number])[] = [
   ['lensArray', 1], ['horizonField', 20], ['skyAperture', 1], ['finalAlignment', 1], ['primaryFunction', 1],
 ];
 
+/** WP17 legacy feed techs at their unlock level (each legacy part is minLevel 1); applied on top of the era-V full stage. */
+const LEGACY_FULL: readonly (readonly [TechId, number])[] = [['bellowsDrive', 1], ['gridExciter', 1], ['mainsBackfeed', 1], ['steamLance', 1]];
+
 /** All era-I to era-IV techs at their full stage levels, then the given era-V (tech, level) overrides. */
 function levelsForEra5(steps: readonly (readonly [TechId, number])[]): Record<TechId, number> {
   const levels = levelsForEra4(ERA_FOUR_STEPS.length);
@@ -1361,13 +1416,14 @@ interface EraFiveRow {
   animation: ComponentAnimation; connections: ConnectionPoint[];
 }
 
-const SIPHON_ARC_SPEED = { base: 20, gain: 25, min: 20, max: 180 } as const;
+/** Containment bead speed (WP17 refit): the orbit speed curve shared by the four beads. */
+const BEAD_SPEED = { base: 152, gain: 0.232, min: 20, max: 360 } as const;
 
 const ERA_FIVE_TABLE: readonly EraFiveRow[] = [
   { id: 'nullGallery', techId: 'nullChamber', minLevel: 1, assetId: 'machine.nullGallery', width: 128, height: 30, origin: { x: 0.5, y: 1 }, socket: 'galleryBase', layer: 'mid', depthBias: 3, animation: { kind: 'none' }, connections: [] },
   { id: 'nullChamber', techId: 'nullChamber', minLevel: 1, assetId: 'machine.nullChamber', width: 128, height: 116, origin: { x: 0.5, y: 1 }, socket: 'chamberBase', layer: 'mid', depthBias: 5, animation: { kind: 'none' },
     connections: [{ id: 'eyeL', at: { x: -62.5, y: -109.5 }, kind: 'cable' }, { id: 'eyeR', at: { x: 62.5, y: -109.5 }, kind: 'cable' }] },
-  { id: 'nullCore', techId: 'nullChamber', minLevel: 1, assetId: 'machine.nullCore', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 7, animation: { kind: 'spin', driver: 'exotic', speed: { base: 6, gain: 30, min: 6, max: 240 } }, connections: [] },
+  { id: 'nullCore', techId: 'nullChamber', minLevel: 1, assetId: 'machine.nullCore', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 7, animation: { kind: 'spin', driver: 'exotic', speed: { base: 109, gain: 0.39, min: 6, max: 360 } }, connections: [] },
   { id: 'nullCoreGlint', techId: 'nullChamber', minLevel: 1, assetId: 'machine.nullCoreGlint', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 8, animation: { kind: 'none' }, connections: [] },
   { id: 'ring1Back', techId: 'containmentRing', minLevel: 1, assetId: 'machine.ring1Back', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6, animation: { kind: 'none' }, connections: [] },
   { id: 'ring2Back', techId: 'containmentRing', minLevel: 8, assetId: 'machine.ring2Back', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6, animation: { kind: 'none' }, connections: [] },
@@ -1378,13 +1434,13 @@ const ERA_FIVE_TABLE: readonly EraFiveRow[] = [
   { id: 'ring3Front', techId: 'containmentRing', minLevel: 16, assetId: 'machine.ring3Front', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 9, animation: { kind: 'none' }, connections: [] },
   { id: 'ring4Front', techId: 'containmentRing', minLevel: 25, assetId: 'machine.ring4Front', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 9, animation: { kind: 'none' }, connections: [] },
   { id: 'ring1Bead', techId: 'containmentRing', minLevel: 1, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
-    animation: { kind: 'orbit', ring: 1, phi0Deg: 0, dir: 1, speed: SIPHON_ARC_SPEED, speedScale: 1, frontLayer: 'front', frontBias: 0 }, connections: [] },
+    animation: { kind: 'orbit', ring: 1, phi0Deg: 0, dir: 1, speed: BEAD_SPEED, speedScale: 1, frontLayer: 'front', frontBias: 0 }, connections: [] },
   { id: 'ring2Bead', techId: 'containmentRing', minLevel: 8, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
-    animation: { kind: 'orbit', ring: 2, phi0Deg: 97, dir: -1, speed: SIPHON_ARC_SPEED, speedScale: 1.25, frontLayer: 'front', frontBias: 0 }, connections: [] },
+    animation: { kind: 'orbit', ring: 2, phi0Deg: 97, dir: -1, speed: BEAD_SPEED, speedScale: 1.25, frontLayer: 'front', frontBias: 0 }, connections: [] },
   { id: 'ring3Bead', techId: 'containmentRing', minLevel: 16, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
-    animation: { kind: 'orbit', ring: 3, phi0Deg: 194, dir: 1, speed: SIPHON_ARC_SPEED, speedScale: 1.5, frontLayer: 'front', frontBias: 0 }, connections: [] },
+    animation: { kind: 'orbit', ring: 3, phi0Deg: 194, dir: 1, speed: BEAD_SPEED, speedScale: 1.5, frontLayer: 'front', frontBias: 0 }, connections: [] },
   { id: 'ring4Bead', techId: 'containmentRing', minLevel: 25, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
-    animation: { kind: 'orbit', ring: 4, phi0Deg: 291, dir: -1, speed: SIPHON_ARC_SPEED, speedScale: 1.75, frontLayer: 'front', frontBias: 0 }, connections: [] },
+    animation: { kind: 'orbit', ring: 4, phi0Deg: 291, dir: -1, speed: BEAD_SPEED, speedScale: 1.75, frontLayer: 'front', frontBias: 0 }, connections: [] },
   { id: 'siphonTube1L', techId: 'resonantSiphon', minLevel: 1, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon1L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
   { id: 'siphonTube1R', techId: 'resonantSiphon', minLevel: 1, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon1R', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
   { id: 'siphonTube2L', techId: 'resonantSiphon', minLevel: 10, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon2L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
@@ -1392,11 +1448,11 @@ const ERA_FIVE_TABLE: readonly EraFiveRow[] = [
   { id: 'siphonTube3L', techId: 'resonantSiphon', minLevel: 20, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon3L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
   { id: 'siphonTube3R', techId: 'resonantSiphon', minLevel: 20, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon3R', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
   { id: 'siphonArcs1', techId: 'resonantSiphon', minLevel: 1, assetId: 'machine.siphonArcs1', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
-    animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 0 }, connections: [] },
+    animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 0, hz: { base: 1, gain: 1.18, min: 2, max: 8 } }, connections: [] },
   { id: 'siphonArcs2', techId: 'resonantSiphon', minLevel: 10, assetId: 'machine.siphonArcs2', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
-    animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 1 }, connections: [] },
+    animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 1, hz: { base: 1, gain: 1.18, min: 2, max: 8 } }, connections: [] },
   { id: 'siphonArcs3', techId: 'resonantSiphon', minLevel: 20, assetId: 'machine.siphonArcs3', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
-    animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 2 }, connections: [] },
+    animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 2, hz: { base: 1, gain: 1.18, min: 2, max: 8 } }, connections: [] },
   { id: 'graviticAnchorL', techId: 'graviticAnchor', minLevel: 1, assetId: 'machine.graviticAnchor', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorL', layer: 'mid', depthBias: 0,
     animation: { kind: 'none' }, connections: [{ id: 'eye', at: { x: 0, y: -121 }, kind: 'cable' }] },
   { id: 'graviticAnchorR', techId: 'graviticAnchor', minLevel: 1, assetId: 'machine.graviticAnchor', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorR', layer: 'mid', depthBias: 0,
@@ -1455,8 +1511,8 @@ describe('era V machine data (WP11)', () => {
     }
   });
 
-  it('the era-V sockets sit at the contract coordinates (15 appended seats)', () => {
-    expect(SOCKET_IDS.slice(45)).toEqual(Object.keys(ERA_FIVE_SOCKETS));
+  it('the era-V sockets sit at the contract coordinates (15 appended seats, before the four WP17 legacy seats)', () => {
+    expect(SOCKET_IDS.slice(45, 60)).toEqual(Object.keys(ERA_FIVE_SOCKETS));
     for (const [id, at] of Object.entries(ERA_FIVE_SOCKETS)) {
       expect(MACHINE_SOCKETS[id as SocketId], id).toEqual(at);
     }
@@ -1482,7 +1538,7 @@ describe('era V machine data (WP11)', () => {
     const beads = [[1, 0, 1, 1], [2, 97, -1, 1.25], [3, 194, 1, 1.5], [4, 291, -1, 1.75]] as const;
     for (const [k, phi0, dir, scale] of beads) {
       const anim = MACHINE_COMPONENTS[ringId('Bead', k)].animation;
-      expect(anim).toEqual({ kind: 'orbit', ring: k, phi0Deg: phi0, dir, speed: { base: 20, gain: 25, min: 20, max: 180 }, speedScale: scale, frontLayer: 'front', frontBias: 0 });
+      expect(anim).toEqual({ kind: 'orbit', ring: k, phi0Deg: phi0, dir, speed: { base: 152, gain: 0.232, min: 20, max: 360 }, speedScale: scale, frontLayer: 'front', frontBias: 0 });
       if (anim.kind !== 'orbit') continue;
       expect(anim.ring).toBe(k);
     }
@@ -1531,7 +1587,7 @@ describe('era V machine data (WP11)', () => {
       expect(tubeR.minLevel).toBe(levels[i]);
       const arcs = MACHINE_COMPONENTS[`siphonArcs${k}` as MachineComponentId];
       expect(arcs.minLevel).toBe(levels[i]);
-      expect(arcs.animation).toEqual({ kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: i });
+      expect(arcs.animation).toEqual({ kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: i, hz: { base: 1, gain: 1.18, min: 2, max: 8 } });
     });
   });
 
@@ -1550,7 +1606,7 @@ describe('era V machine data (WP11)', () => {
       }
     }
     const power = MACHINE_LINKS.filter((l) => l.kind === 'cable' && l.cableStyle === undefined);
-    expect(power.length).toBe(4);
+    expect(power.length).toBe(6);
   });
 
   it('MACHINE_LINK_STYLE.guy is the dark wire rope and sits below every chamber and anchor part (the sprites cover the cable ends)', () => {
@@ -1611,7 +1667,7 @@ describe('era V machine data (WP11)', () => {
   });
 
   it('the null core spins on the exotic driver; the aperture latches on skyAperture; the name plate stage has 4 gates and an ending frame inside its sheet', () => {
-    expect(MACHINE_COMPONENTS.nullCore.animation).toEqual({ kind: 'spin', driver: 'exotic', speed: { base: 6, gain: 30, min: 6, max: 240 } });
+    expect(MACHINE_COMPONENTS.nullCore.animation).toEqual({ kind: 'spin', driver: 'exotic', speed: { base: 109, gain: 0.39, min: 6, max: 360 } });
     expect(MACHINE_COMPONENTS.aperture.animation).toEqual({ kind: 'latch', techId: 'skyAperture', minLevel: 1, frames: 6, fps: 5 });
     const plate = MACHINE_COMPONENTS.namePlate.animation;
     expect(plate.kind).toBe('stage');
@@ -1676,8 +1732,8 @@ describe('era V machine data (WP11)', () => {
     for (const id of ERA_FIVE_COMPONENT_IDS) expect(start.has(id), id).toBe(id === 'namePlate');
   });
 
-  it('every era-V component is visible at the full stage', () => {
-    const visible = visibleAt(levelsForEra5(ERA_FIVE_FULL));
+  it('every component is visible at the full stage (era V, with the WP17 legacy feed techs applied)', () => {
+    const visible = visibleAt(levelsForEra5([...ERA_FIVE_FULL, ...LEGACY_FULL]));
     for (const id of MACHINE_COMPONENT_IDS) expect(visible.has(id), id).toBe(true);
   });
 

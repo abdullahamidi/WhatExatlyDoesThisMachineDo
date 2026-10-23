@@ -30,7 +30,7 @@ export interface SteamEmitter {
 export const STEAM_EMITTERS: readonly SteamEmitter[] = [
   // Boiler chimney: dark smoke, rate follows PR/s.
   { id: 'chimney', assetId: 'fx.smoke', at: [{ x: -293, y: -240 }], gate: { techId: 'boiler', minLevel: 1 },
-    driver: 'thermal', threshold: 0, mode: { kind: 'rate', base: 0.8, perLog: 0.3, min: 0.8, max: 2.5 } },
+    driver: 'thermal', threshold: 0, mode: { kind: 'rate', base: 0.8, perLog: 0.26, min: 0.8, max: 2.5 } },
   // Relief valves: bursts of steam while PR/s is high enough to vent.
   { id: 'relief', assetId: 'fx.steamPuff', at: [{ x: -218, y: -94 }, { x: -211, y: -94 }], gate: { techId: 'reliefValves', minLevel: 1 },
     driver: 'thermal', threshold: 0, mode: { kind: 'burst', count: 4, spacingMs: 120, everyMinS: 6, everyMaxS: 9, minDriver: 50 } },
@@ -43,6 +43,9 @@ export const STEAM_EMITTERS: readonly SteamEmitter[] = [
   // Calliope: three whistles on the manifold; one whistle per burst, round robin, while RS/s > 1. Spawn 4 px above each bell cap (art review: puffs at the mouth slid up the bell face and merged with the manifold stud leaks).
   { id: 'calliope', assetId: 'fx.steamPuff', at: [{ x: -72, y: -211 }, { x: -44, y: -216 }, { x: -16, y: -221 }], gate: { techId: 'pressureResonator', minLevel: 1 },
     driver: 'resonance', threshold: 0, mode: { kind: 'burst', count: 2, spacingMs: 150, everyMinS: 5, everyMaxS: 8, minDriver: 1, roundRobin: true } },
+  // WP17 Legacy Feeds: steam lance off the manifold outlet (steamLance); thermal driver, rate follows PR/s.
+  { id: 'lance', assetId: 'fx.steamPuff', at: [{ x: 20, y: -430 }], gate: { techId: 'steamLance', minLevel: 1 },
+    driver: 'thermal', threshold: 0, mode: { kind: 'rate', base: 0.3, perLog: 0.25, min: 0.3, max: 2 } },
 ];
 
 /** Shared steam puff tuning: pool size, life, frames and motion. purchaseBurstDelayMs = MACHINE_ASSEMBLY.durationMs (the valve lands first). */

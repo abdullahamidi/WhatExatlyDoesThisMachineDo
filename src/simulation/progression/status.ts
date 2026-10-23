@@ -66,7 +66,7 @@ export function describeEffect(effect: Effect, n: number): string {
     case 'offlineHours':
       return `+${fmt(effect.hours * n)}h offline buffer`;
     case 'autoClick':
-      return `+${fmt(effect.perSecond * n)} auto-cranks/s`;
+      return `+${fmt(effect.perSecond * n)} auto-cranks/s — each yields a full click of every energy`;
     case 'ending':
       return 'Engages the primary function';
     case 'none':

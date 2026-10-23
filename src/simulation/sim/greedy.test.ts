@@ -2,14 +2,15 @@ import { beforeAll, describe, it, expect } from 'vitest';
 import { RESOURCE_IDS, TECH_IDS } from '../../data/types';
 import type { GameState, ResourceId, TechDefinition, TechId, TechView } from '../../data/types';
 import { TECHNOLOGIES } from '../../data/technologies';
-import { runGreedy, maxPurchaseGap } from './greedy';
-import type { GreedyOptions, GreedyResult } from './greedy';
+import { runGreedy, maxPurchaseGap, purchaseLedger, deadMinutes, spendShare } from './greedy';
+import type { GreedyOptions, GreedyResult, LedgerEntry } from './greedy';
 import { applyClick, advance } from '../production/tick';
 import { computeRates } from '../production/rates';
 import { getAllTechViews } from '../progression/status';
 import { purchase } from '../progression/purchase';
 import { evaluateMilestones } from '../progression/milestones';
 import { createInitialState } from '../state';
+import { costAt } from '../economy/cost';
 
 const CLICKS_PER_SECOND = 4;
 
@@ -199,5 +200,123 @@ describe('maxPurchaseGap', () => {
 
   it('toT = Infinity -> Infinity', () => {
     expect(maxPurchaseGap([{ t: 4, id: 'gearRatio' }], 0, Infinity)).toBe(Infinity);
+  });
+});
+
+function buy(t: number, res: ResourceId, cost = 10): LedgerEntry {
+  return { t, id: 'gearRatio', res, level: 1, cost };
+}
+
+describe('measurement helpers (WP17)', () => {
+  it('snapshotAt leaves firstAt, purchases, maxValue and final identical to the plain run', () => {
+    const plain = runGreedy(options(1500));
+    const withSnaps = runGreedy({ ...options(1500), snapshotAt: ['gearRatio', 'wornMotor'] });
+    expect(withSnaps.firstAt).toEqual(plain.firstAt);
+    expect(withSnaps.purchases).toEqual(plain.purchases);
+    expect(withSnaps.maxValue).toEqual(plain.maxValue);
+    expect(withSnaps.final).toEqual(plain.final);
+    expect('snapshots' in plain).toBe(false);
+    expect('snapshots' in withSnaps).toBe(true);
+  });
+
+  it('snapshot is the state right after the step the tech is first owned, and is a separate object', () => {
+    const run = runGreedy({ ...options(1500), snapshotAt: ['gearRatio'] });
+    const snap = run.snapshots?.gearRatio;
+    expect(snap).toBeDefined();
+    expect(snap?.totalClicks).toBe(16);
+    expect(snap?.techLevels.gearRatio).toBe(1);
+    expect(snap).not.toBe(run.final);
+  });
+
+  it('a tech owned at t = 0 (handCrank) is snapshotted before any step', () => {
+    const run = runGreedy({ ...options(100), snapshotAt: ['handCrank'] });
+    expect(run.snapshots?.handCrank?.totalClicks).toBe(0);
+    expect(run.snapshots?.handCrank?.techLevels.handCrank).toBe(1);
+  });
+
+  it('an id never owned in the run has no snapshot key', () => {
+    const run = runGreedy({ ...options(100), snapshotAt: ['primaryFunction'] });
+    expect(run.snapshots).toBeDefined();
+    expect('primaryFunction' in (run.snapshots ?? {})).toBe(false);
+  });
+
+  it('purchaseLedger prices the 1500 s run with the era-I first buys', () => {
+    const run = runGreedy(options(1500));
+    const ledger = purchaseLedger(run.purchases);
+    expect(ledger.length).toBe(run.purchases.length);
+    expect(ledger[0]).toEqual({ t: 4, id: 'gearRatio', res: 'me', level: 1, cost: 15 });
+    expect(ledger.find((e) => e.id === 'wornMotor')).toEqual({
+      t: 13,
+      id: 'wornMotor',
+      res: TECHNOLOGIES.wornMotor.costRes,
+      level: 1,
+      cost: 40,
+    });
+  });
+
+  it('every ledger cost equals costAt(def, levelBefore) and levels step by one per buy', () => {
+    const run = runGreedy(options(1500));
+    const ledger = purchaseLedger(run.purchases);
+    const levels = { ...createInitialState(0).techLevels };
+    for (const entry of ledger) {
+      const def = TECHNOLOGIES[entry.id];
+      const levelBefore = levels[entry.id];
+      expect(entry.level).toBe(levelBefore + 1);
+      expect(entry.cost).toBe(costAt(def, levelBefore));
+      expect(entry.res).toBe(def.costRes);
+      levels[entry.id] = entry.level;
+    }
+  });
+
+  it('ledger spend in ME equals produced ME (lifetime - remaining) on the 1500 s run', () => {
+    const run = runGreedy(options(1500));
+    const ledger = purchaseLedger(run.purchases);
+    const spent = ledger.filter((e) => e.res === 'me').reduce((sum, e) => sum + e.cost, 0);
+    const produced = run.final.lifetime.me - run.final.res.me;
+    expect(produced).toBeGreaterThan(0);
+    expect(Math.abs(spent - produced) / produced).toBeLessThan(1e-9);
+  });
+
+  it('the last ledger level of every bought tech equals its final level', () => {
+    const run = runGreedy(options(1500));
+    const ledger = purchaseLedger(run.purchases);
+    for (const id of TECH_IDS) {
+      const own = ledger.filter((e) => e.id === id);
+      if (own.length === 0) continue;
+      expect(own[own.length - 1]?.level).toBe(run.final.techLevels[id]);
+    }
+  });
+
+  it('deadMinutes: last buy of the resource up to endT, in minutes', () => {
+    const ledger = [buy(100, 'ee'), buy(400, 'me')];
+    expect(deadMinutes(ledger, 'ee', 400)).toBe(5);
+  });
+
+  it('deadMinutes: no buy of the resource -> whole span endT / 60', () => {
+    const ledger = [buy(100, 'ee'), buy(400, 'me')];
+    expect(deadMinutes(ledger, 'pr', 600)).toBe(10);
+  });
+
+  it('deadMinutes: entries after endT are ignored', () => {
+    const ledger = [buy(100, 'ee'), buy(500, 'ee')];
+    expect(deadMinutes(ledger, 'ee', 400)).toBe(5);
+  });
+
+  it('deadMinutes: a buy exactly at endT gives 0', () => {
+    expect(deadMinutes([buy(400, 'me')], 'me', 400)).toBe(0);
+  });
+
+  it('spendShare: left bound exclusive, right bound inclusive, other resources ignored', () => {
+    const ledger = [buy(10, 'me', 5), buy(20, 'me', 7), buy(30, 'ee', 100), buy(40, 'me', 3)];
+    // (10, 40] for ME: t = 20 (7) and t = 40 (3); t = 10 and the EE buy are excluded.
+    expect(spendShare(ledger, 'me', 10, 40, 0, 100)).toBeCloseTo(0.1, 9);
+    expect(spendShare(ledger, 'me', 9, 10, 0, 100)).toBeCloseTo(0.05, 9);
+    expect(spendShare(ledger, 'me', 10, 10, 0, 100)).toBe(0);
+  });
+
+  it('spendShare: zero or negative produced -> 0', () => {
+    const ledger = [buy(20, 'me', 7)];
+    expect(spendShare(ledger, 'me', 0, 100, 50, 50)).toBe(0);
+    expect(spendShare(ledger, 'me', 0, 100, 50, 10)).toBe(0);
   });
 });

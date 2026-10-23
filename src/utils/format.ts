@@ -116,6 +116,29 @@ export function formatRate(n: number, notation?: NumberNotation): string {
   return `${formatNumber(n, 'floor', notation)}/s`;
 }
 
+/** HUD stock (WP17): whole units, truncated toward zero (never rounds up, never shows -0). From 1000 up: floored suffix form. */
+export function formatStock(n: number, notation?: NumberNotation): string {
+  if (!Number.isFinite(n)) return '0';
+  const whole = Math.floor(Math.abs(n) + EPSILON);
+  if (whole >= 1000) return formatNumber(n, 'floor', notation);
+  return n < 0 && whole !== 0 ? `-${String(whole)}` : String(whole);
+}
+
+/** HUD compact number (WP17): one decimal below 10 (floored, trailing zeros trimmed), whole units below 1000, floored suffix form above. */
+export function formatCompact(n: number, notation?: NumberNotation): string {
+  if (!Number.isFinite(n)) return '0';
+  const a = Math.abs(n);
+  const whole = Math.floor(a + EPSILON);
+  if (whole >= 1000) return formatNumber(n, 'floor', notation);
+  const body = a < 10 ? trimZeros((Math.floor(a * 10 + EPSILON) / 10).toFixed(1)) : String(whole);
+  return n < 0 && body !== '0' ? `-${body}` : body;
+}
+
+/** Per-second HUD rate (WP17): formatCompact + '/s'. */
+export function formatHudRate(n: number, notation?: NumberNotation): string {
+  return `${formatCompact(n, notation)}/s`;
+}
+
 export function formatDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '0s';
   const s = Math.floor(seconds);

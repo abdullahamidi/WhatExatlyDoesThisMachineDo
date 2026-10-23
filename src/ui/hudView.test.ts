@@ -1,11 +1,32 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { buildHudView, clickGainText, cycleLine, plaqueText } from './hudView';
+import { HUD_ROW_IDS, buildHudView, clickGainLines, cycleLine, hudTitle, plaqueText } from './hudView';
+import type { GainLine, HudResourceRow, HudView } from './hudView';
 import { setRevealed } from './revealRules';
 import { createInitialState, emptyResourceMap } from '../simulation';
-import type { ProductionRates, ResourceMap, TechId } from '../data/types';
+import { RESOURCE_IDS } from '../data/types';
+import type { EndingPhase, GameState, ProductionRates, ResourceId, ResourceMap, TechDefinition, TechId } from '../data/types';
+import { TECHNOLOGIES } from '../data/technologies';
 
-function stateWithMe(me: number): ReturnType<typeof createInitialState> {
-  return { ...createInitialState(0), res: { ...emptyResourceMap(), me }, lifetime: emptyResourceMap() };
+type HudState = Pick<GameState, 'res' | 'lifetime' | 'techLevels' | 'ending'>;
+
+afterEach(() => {
+  setRevealed(false);
+});
+
+/** Initial state with optional stock, lifetime, tech levels and finale phase. */
+function hudState(patch: {
+  res?: Partial<ResourceMap>;
+  lifetime?: Partial<ResourceMap>;
+  levels?: Partial<Record<TechId, number>>;
+  phase?: EndingPhase;
+} = {}): HudState {
+  const base = createInitialState(0);
+  return {
+    res: { ...emptyResourceMap(), ...patch.res },
+    lifetime: { ...emptyResourceMap(), ...patch.lifetime },
+    techLevels: { ...base.techLevels, ...patch.levels },
+    ending: { ...base.ending, phase: patch.phase ?? base.ending.phase },
+  };
 }
 
 function levelsWith(owned: readonly TechId[]): Record<TechId, number> {
@@ -14,83 +35,193 @@ function levelsWith(owned: readonly TechId[]): Record<TechId, number> {
   return levels;
 }
 
-function ratesOf(perClick: number, perSecond: Partial<ResourceMap>): ProductionRates {
+function ratesOf(perClick: Partial<ResourceMap>, perSecond: Partial<ResourceMap> = {}): ProductionRates {
   return {
-    perClick: { ...emptyResourceMap(), me: perClick },
+    perClick: { ...emptyResourceMap(), ...perClick },
     perSecond: { ...emptyResourceMap(), ...perSecond },
   };
 }
 
+function rowOf(view: HudView, id: ResourceId): HudResourceRow {
+  const row = view.rows.find((r) => r.id === id);
+  if (row === undefined) throw new Error(`no HUD row ${id}`);
+  return row;
+}
+
+function texts(lines: readonly GainLine[]): string[] {
+  return lines.map((line) => line.text);
+}
+
+describe('HUD_ROW_IDS', () => {
+  it('lists every resource, ME included', () => {
+    expect(HUD_ROW_IDS).toEqual(RESOURCE_IDS);
+    expect([...HUD_ROW_IDS]).toEqual(['me', 'ee', 'pr', 'rs', 'xf']);
+  });
+});
+
 describe('buildHudView', () => {
-  it('formats a zero state', () => {
-    const view = buildHudView(stateWithMe(0), ratesOf(1, { me: 0 }));
-    expect({ me: view.me, perClick: view.perClick, perSecond: view.perSecond }).toEqual({
-      me: '0',
-      perClick: '1',
-      perSecond: '0/s',
-    });
-  });
-
-  it('lists the four extra resource rows in ee, pr, rs, xf order, all hidden at start', () => {
-    const view = buildHudView(stateWithMe(0), ratesOf(1, { me: 0 }));
-    expect(view.rows.map((r) => r.id)).toEqual(['ee', 'pr', 'rs', 'xf']);
-    expect(view.rows.map((r) => r.label)).toEqual(['EE', 'PR', 'RS', '???']);
-    expect(view.rows.every((r) => r.visible === false)).toBe(true);
-    expect(view.rows.every((r) => r.value === '0')).toBe(true);
-    expect(view.rows.every((r) => r.perSecond === '0/s')).toBe(true);
-  });
-
-  it('formats large me with a suffix', () => {
-    expect(buildHudView(stateWithMe(1500), ratesOf(1, { me: 0 })).me).toBe('1.5K');
-  });
-
-  it('formats per-click without a rate suffix', () => {
-    expect(buildHudView(stateWithMe(0), ratesOf(12, { me: 0 })).perClick).toBe('12');
-  });
-
-  it('formats per-second as a rate', () => {
-    expect(buildHudView(stateWithMe(0), ratesOf(1, { me: 12.5 })).perSecond).toBe('12.5/s');
-    expect(buildHudView(stateWithMe(0), ratesOf(1, { me: 1500 })).perSecond).toBe('1.5K/s');
-  });
-
-  it('shows a row when only its lifetime is positive', () => {
-    const state = {
-      ...createInitialState(0),
-      res: emptyResourceMap(),
-      lifetime: { ...emptyResourceMap(), ee: 5 },
-    };
-    const ee = buildHudView(state, ratesOf(1, { me: 0 })).rows.find((r) => r.id === 'ee');
-    expect(ee?.visible).toBe(true);
-    expect(ee?.value).toBe('0');
-  });
-
-  it('shows a row when only its per-second rate is positive', () => {
-    const view = buildHudView(stateWithMe(0), ratesOf(1, { me: 0, pr: 3 }));
-    const pr = view.rows.find((r) => r.id === 'pr');
-    expect(pr?.visible).toBe(true);
-    expect(pr?.perSecond).toBe('3/s');
-    expect(view.rows.find((r) => r.id === 'ee')?.visible).toBe(false);
-  });
-
-  it('formats extra resource values and rates with suffixes', () => {
-    const state = {
-      ...createInitialState(0),
-      res: { ...emptyResourceMap(), xf: 2500 },
-      lifetime: { ...emptyResourceMap(), xf: 2500 },
-    };
-    const xf = buildHudView(state, ratesOf(1, { me: 0, xf: 1500 })).rows.find((r) => r.id === 'xf');
-    expect(xf?.value).toBe('2.5K');
-    expect(xf?.perSecond).toBe('1.5K/s');
-    expect(xf?.label).toBe('???');
+  it('starts in era I with only ME shown', () => {
+    const view = buildHudView(hudState(), ratesOf({ me: 1 }));
+    expect(view.title).toBe('ERA I · MECHANICAL');
+    expect(view.rows.map((r) => r.id)).toEqual(['me', 'ee', 'pr', 'rs', 'xf']);
+    expect(rowOf(view, 'me')).toEqual({ id: 'me', label: 'ME', value: '0', rate: '0/s', feeds: null, visible: true, frontier: true });
+    expect(view.rows.filter((r) => r.id !== 'me').every((r) => r.visible === false)).toBe(true);
+    expect(view.rows.filter((r) => r.frontier)).toHaveLength(1);
+    expect(view.click).toEqual({ primary: '+1 ME', secondary: null });
+    expect(view.autoCrank).toBeNull();
   });
 
   it('accepts a full initial game state', () => {
-    const view = buildHudView(createInitialState(0), ratesOf(1, { me: 0 }));
-    expect(view.me).toBe('0');
+    const view = buildHudView(createInitialState(0), ratesOf({ me: 1 }));
+    expect(rowOf(view, 'me').value).toBe('0');
   });
 
-  it('shows 0 for a non-finite me', () => {
-    expect(buildHudView(stateWithMe(Number.NaN), ratesOf(1, { me: 0 })).me).toBe('0');
+  it('era II: generator makes EE the frontier and ME feeds EE', () => {
+    const view = buildHudView(hudState({ levels: { generator: 1 }, lifetime: { ee: 5 } }), ratesOf({ me: 12, ee: 0 }, { me: 12.5, ee: 3.25 }));
+    expect(view.title).toBe('ERA II · ELECTRICAL');
+    expect(rowOf(view, 'me').rate).toBe('12/s');
+    expect(rowOf(view, 'me').feeds).toBe('›EE');
+    const ee = rowOf(view, 'ee');
+    expect(ee.frontier).toBe(true);
+    expect(ee.rate).toBe('3.2/s');
+    expect(view.rows.filter((r) => r.frontier).map((r) => r.id)).toEqual(['ee']);
+    expect(view.click).toEqual({ primary: '+12 ME', secondary: null });
+  });
+
+  it('click line names the frontier resource when its per-click gain is positive', () => {
+    const view = buildHudView(hudState({ levels: { generator: 1 } }), ratesOf({ me: 12, ee: 26900 }, { me: 12.5 }));
+    expect(view.click).toEqual({ primary: '+26.9K EE', secondary: '+12 ME' });
+  });
+
+  it('click line falls back to ME when the frontier per-click gain is not finite', () => {
+    const view = buildHudView(hudState({ levels: { generator: 1 } }), ratesOf({ me: 12, ee: Number.NaN }));
+    expect(view.click).toEqual({ primary: '+12 ME', secondary: null });
+  });
+
+  it('feeds name the fed resource only while that row is visible', () => {
+    expect(rowOf(buildHudView(hudState(), ratesOf({ me: 1 })), 'me').feeds).toBeNull();
+    expect(rowOf(buildHudView(hudState({ lifetime: { ee: 5 } }), ratesOf({ me: 1 })), 'me').feeds).toBe('›EE');
+    expect(rowOf(buildHudView(hudState({ levels: { generator: 1 } }), ratesOf({ me: 1 })), 'ee').feeds).toBeNull();
+    expect(rowOf(buildHudView(hudState({ levels: { generator: 1 }, lifetime: { pr: 1 } }), ratesOf({ me: 1 })), 'ee').feeds).toBe('›PR');
+  });
+
+  it('shows AUTO-CRANK clicks per second from crankServo', () => {
+    const view = buildHudView(hudState({ levels: { crankServo: 3 } }), ratesOf({ me: 1 }));
+    expect(view.autoCrank).toBe('AUTO-CRANK 3/s');
+  });
+
+  it('takes the tech table for AUTO-CRANK from the caller', () => {
+    const techs: Record<TechId, TechDefinition> = {
+      ...TECHNOLOGIES,
+      crankServo: { ...TECHNOLOGIES.crankServo, effects: [{ type: 'autoClick', perSecond: 2 }] },
+    };
+    const view = buildHudView(hudState({ levels: { crankServo: 3 } }), ratesOf({ me: 1 }), undefined, techs);
+    expect(view.autoCrank).toBe('AUTO-CRANK 6/s');
+  });
+
+  it('formats stock as whole units below 1000 and with a suffix from 1000', () => {
+    expect(rowOf(buildHudView(hudState({ res: { me: 999.9 } }), ratesOf({ me: 1 })), 'me').value).toBe('999');
+    expect(rowOf(buildHudView(hudState({ res: { me: 1500 } }), ratesOf({ me: 1 })), 'me').value).toBe('1.5K');
+  });
+
+  it('formats per-second rates compactly', () => {
+    expect(rowOf(buildHudView(hudState(), ratesOf({ me: 1 }, { me: 12.5 })), 'me').rate).toBe('12/s');
+    expect(rowOf(buildHudView(hudState(), ratesOf({ me: 1 }, { me: 1500 })), 'me').rate).toBe('1.5K/s');
+  });
+
+  it('formats extra resource values and rates with suffixes', () => {
+    const state = hudState({ res: { xf: 2500 }, lifetime: { xf: 2500 } });
+    const xf = rowOf(buildHudView(state, ratesOf({ me: 1 }, { xf: 1500 })), 'xf');
+    expect(xf.value).toBe('2.5K');
+    expect(xf.rate).toBe('1.5K/s');
+    expect(xf.label).toBe('???');
+  });
+
+  it('shows a row when only its lifetime is positive', () => {
+    const view = buildHudView(hudState({ lifetime: { ee: 5 } }), ratesOf({ me: 1 }));
+    const ee = rowOf(view, 'ee');
+    expect(ee.visible).toBe(true);
+    expect(ee.frontier).toBe(false);
+    expect(ee.value).toBe('0');
+  });
+
+  it('shows a row when only its per-second rate is positive', () => {
+    const view = buildHudView(hudState(), ratesOf({ me: 1 }, { pr: 3 }));
+    const pr = rowOf(view, 'pr');
+    expect(pr.visible).toBe(true);
+    expect(pr.rate).toBe('3/s');
+    expect(rowOf(view, 'ee').visible).toBe(false);
+  });
+
+  it('shows 0 for a non-finite stock', () => {
+    expect(rowOf(buildHudView(hudState({ res: { me: Number.NaN } }), ratesOf({ me: 1 })), 'me').value).toBe('0');
+  });
+});
+
+describe('hudTitle', () => {
+  it('gives each era its title', () => {
+    expect(hudTitle(1, 'none', false)).toBe('ERA I · MECHANICAL');
+    expect(hudTitle(2, 'none', false)).toBe('ERA II · ELECTRICAL');
+    expect(hudTitle(3, 'none', false)).toBe('ERA III · PRESSURE');
+    expect(hudTitle(4, 'none', false)).toBe('ERA IV · RESONANCE');
+    expect(hudTitle(5, 'none', false)).toBe('ERA V · ???');
+  });
+
+  it('shows the revealed title only in era V', () => {
+    expect(hudTitle(5, 'none', true)).toBe('ERA V · RESTORATION FLUX');
+    expect(hudTitle(4, 'none', true)).toBe('ERA IV · RESONANCE');
+  });
+
+  it('shows the restored title in the choice and postgame phases', () => {
+    expect(hudTitle(5, 'choice', false)).toBe('RESTORATION ENGINE');
+    expect(hudTitle(2, 'postgame', true)).toBe('RESTORATION ENGINE');
+  });
+
+  it('keeps the era title during the sequence phase', () => {
+    expect(hudTitle(5, 'sequence', false)).toBe('ERA V · ???');
+  });
+});
+
+describe('era V and the finale title', () => {
+  it('shows ??? and the xf frontier with nullChamber owned', () => {
+    const view = buildHudView(hudState({ levels: { nullChamber: 1 } }), ratesOf({ me: 1 }));
+    expect(view.title).toBe('ERA V · ???');
+    expect(rowOf(view, 'xf').frontier).toBe(true);
+    expect(rowOf(view, 'xf').label).toBe('???');
+  });
+
+  it('shows RESTORATION FLUX and the RF feed once revealed', () => {
+    setRevealed(true);
+    const view = buildHudView(hudState({ levels: { nullChamber: 1 } }), ratesOf({ me: 1, xf: 3 }));
+    expect(view.title).toBe('ERA V · RESTORATION FLUX');
+    expect(rowOf(view, 'rs').feeds).toBe('›RF');
+    expect(rowOf(view, 'xf').label).toBe('RF');
+    expect(view.click).toEqual({ primary: '+3 RF', secondary: '+1 ME' });
+  });
+
+  it('shows RESTORATION ENGINE in the choice and postgame phases, in any era', () => {
+    setRevealed(true);
+    for (const phase of ['choice', 'postgame'] as const) {
+      expect(buildHudView(hudState({ phase }), ratesOf({ me: 1 })).title).toBe('RESTORATION ENGINE');
+      expect(buildHudView(hudState({ phase, levels: { nullChamber: 1 } }), ratesOf({ me: 1 })).title).toBe('RESTORATION ENGINE');
+    }
+  });
+
+  it('keeps the unrevealed title in the sequence phase', () => {
+    expect(buildHudView(hudState({ phase: 'sequence', levels: { nullChamber: 1 } }), ratesOf({ me: 1 })).title).toBe('ERA V · ???');
+  });
+});
+
+describe('buildHudView plaque', () => {
+  it('follows techLevels and leaves every other field unchanged', () => {
+    const rates = ratesOf({ me: 12 }, { me: 12.5, ee: 3 });
+    const base = buildHudView(hudState({ res: { me: 1500 } }), rates);
+    const withPlaque = buildHudView(hudState({ res: { me: 1500 }, levels: { generatorBlueprint: 1 } }), rates);
+    expect(base.plaque).toBe('PRIMARY FUNCTION: UNKNOWN');
+    expect(withPlaque.plaque).toBe('PRIMARY FUNCTION: R?S????');
+    expect({ ...withPlaque, plaque: base.plaque }).toEqual(base);
+    expect(rowOf(base, 'me').value).toBe('1.5K');
+    expect(base.click).toEqual({ primary: '+12 ME', secondary: null });
   });
 });
 
@@ -112,99 +243,73 @@ describe('plaqueText', () => {
   });
 });
 
-describe('buildHudView plaque', () => {
-  it('follows techLevels and leaves every other field unchanged', () => {
-    const base = buildHudView(stateWithMe(1500), ratesOf(12, { me: 12.5, ee: 3 }));
-    const withPlaque = buildHudView(
-      { ...stateWithMe(1500), techLevels: levelsWith(['generatorBlueprint']) },
-      ratesOf(12, { me: 12.5, ee: 3 }),
-    );
-    expect(base.plaque).toBe('PRIMARY FUNCTION: UNKNOWN');
-    expect(withPlaque.plaque).toBe('PRIMARY FUNCTION: R?S????');
-    expect(withPlaque.me).toBe(base.me);
-    expect(withPlaque.perClick).toBe(base.perClick);
-    expect(withPlaque.perSecond).toBe(base.perSecond);
-    expect(withPlaque.rows).toEqual(base.rows);
-    expect(base.me).toBe('1.5K');
-    expect(base.perClick).toBe('12');
-    expect(base.perSecond).toBe('12.5/s');
-  });
-});
-
-describe('clickGainText', () => {
-  it('shows ME alone as +N', () => {
-    expect(clickGainText({ ...emptyResourceMap(), me: 32 })).toBe('+32');
+describe('clickGainLines', () => {
+  it('shows ME alone as one +N line', () => {
+    expect(clickGainLines({ ...emptyResourceMap(), me: 32 })).toEqual([{ res: 'me', text: '+32' }]);
   });
 
   it('shows +0 when nothing was gained', () => {
-    expect(clickGainText(emptyResourceMap())).toBe('+0');
+    expect(texts(clickGainLines(emptyResourceMap()))).toEqual(['+0']);
   });
 
-  it('lists ME and EE with two spaces between parts', () => {
-    expect(clickGainText({ ...emptyResourceMap(), me: 32, ee: 1200 })).toBe('+32 ME  +1.2K EE');
+  it('stacks EE above ME', () => {
+    expect(texts(clickGainLines({ ...emptyResourceMap(), me: 32, ee: 1200 }))).toEqual(['+1.2K EE', '+32 ME']);
   });
 
-  it('lists EE alone when ME is zero', () => {
-    expect(clickGainText({ ...emptyResourceMap(), ee: 1200 })).toBe('+1.2K EE');
+  it('stacks every gained resource, xf first', () => {
+    const lines = clickGainLines({ me: 1, ee: 2, pr: 3, rs: 4, xf: 5 });
+    expect(texts(lines)).toEqual(['+5 ???', '+4 RS', '+3 PR', '+2 EE', '+1 ME']);
+    expect(lines.map((line) => line.res)).toEqual(['xf', 'rs', 'pr', 'ee', 'me']);
   });
 
-  it('uses the short label of unknown flux', () => {
-    expect(clickGainText({ ...emptyResourceMap(), me: 5, xf: 3 })).toBe('+5 ME  +3 ???');
+  it('shows fractions with one decimal below 10', () => {
+    expect(texts(clickGainLines({ ...emptyResourceMap(), me: 5, ee: 0.5 }))).toEqual(['+0.5 EE', '+5 ME']);
   });
 
-  it('ignores NaN and negative values', () => {
-    expect(clickGainText({ ...emptyResourceMap(), me: Number.NaN })).toBe('+0');
-    expect(clickGainText({ ...emptyResourceMap(), me: -4 })).toBe('+0');
-    expect(clickGainText({ ...emptyResourceMap(), me: 7, ee: Number.NaN, pr: -2 })).toBe('+7');
+  it('ignores NaN and negative gains', () => {
+    expect(texts(clickGainLines({ ...emptyResourceMap(), me: Number.NaN }))).toEqual(['+0']);
+    expect(texts(clickGainLines({ ...emptyResourceMap(), me: -4 }))).toEqual(['+0']);
+    expect(texts(clickGainLines({ ...emptyResourceMap(), me: 7, ee: Number.NaN, pr: -2 }))).toEqual(['+7']);
   });
 
-  it('orders parts me, ee, pr, rs, xf', () => {
-    const text = clickGainText({ me: 1, ee: 2, pr: 3, rs: 4, xf: 5 });
-    expect(text).toBe('+1 ME  +2 EE  +3 PR  +4 RS  +5 ???');
+  it('uses RF for xf once revealed', () => {
+    setRevealed(true);
+    expect(texts(clickGainLines({ ...emptyResourceMap(), xf: 3 }))).toEqual(['+3 RF']);
   });
 });
 
-
 describe('xf label reveal (WP13 D4)', () => {
-  afterEach(() => {
-    setRevealed(false);
-  });
-
-  it('shows RF on the xf HUD row and in the click gain text once revealed', () => {
+  it('shows RF on the xf HUD row and in the click gain lines once revealed', () => {
     setRevealed(true);
-    const state = {
-      ...createInitialState(0),
-      res: { ...emptyResourceMap(), xf: 2500 },
-      lifetime: { ...emptyResourceMap(), xf: 2500 },
-    };
-    const xf = buildHudView(state, ratesOf(1, { me: 0, xf: 1500 })).rows.find((r) => r.id === 'xf');
-    expect(xf?.label).toBe('RF');
-    expect(clickGainText({ ...emptyResourceMap(), me: 5, xf: 3 })).toBe('+5 ME  +3 RF');
+    const state = hudState({ res: { xf: 2500 }, lifetime: { xf: 2500 } });
+    const xf = rowOf(buildHudView(state, ratesOf({ me: 1 }, { xf: 1500 })), 'xf');
+    expect(xf.label).toBe('RF');
+    expect(texts(clickGainLines({ ...emptyResourceMap(), me: 5, xf: 3 }))).toEqual(['+3 RF', '+5 ME']);
   });
 
   it('keeps the other resource labels when revealed', () => {
     setRevealed(true);
-    const view = buildHudView(stateWithMe(0), ratesOf(1, { me: 0 }));
-    expect(view.rows.map((r) => r.label)).toEqual(['EE', 'PR', 'RS', 'RF']);
+    const view = buildHudView(hudState(), ratesOf({ me: 1 }));
+    expect(view.rows.map((r) => r.label)).toEqual(['ME', 'EE', 'PR', 'RS', 'RF']);
   });
 });
 
 describe('cycle line (WP14 T8a)', () => {
   it('is null in cycle 1, so the default HUD strings do not change', () => {
     expect(cycleLine(1)).toBeNull();
-    expect(buildHudView(stateWithMe(0), ratesOf(1, { me: 0 })).cycle).toBeNull();
-    expect(buildHudView(stateWithMe(0), ratesOf(1, { me: 0 }), { cycle: 1 }).cycle).toBeNull();
+    expect(buildHudView(hudState(), ratesOf({ me: 1 })).cycle).toBeNull();
+    expect(buildHudView(hudState(), ratesOf({ me: 1 }), { cycle: 1 }).cycle).toBeNull();
   });
 
   it('shows the cycle label from cycle 2', () => {
     expect(cycleLine(2)).toBe('CYCLE 0043');
     expect(cycleLine(3)).toBe('CYCLE 0044');
-    expect(buildHudView(stateWithMe(0), ratesOf(1, { me: 0 }), { cycle: 2 }).cycle).toBe('CYCLE 0043');
+    expect(buildHudView(hudState(), ratesOf({ me: 1 }), { cycle: 2 }).cycle).toBe('CYCLE 0043');
   });
 
   it('leaves every other field unchanged', () => {
-    const base = buildHudView(stateWithMe(1500), ratesOf(12, { me: 12.5 }));
-    const cycled = buildHudView(stateWithMe(1500), ratesOf(12, { me: 12.5 }), { cycle: 2 });
+    const base = buildHudView(hudState({ res: { me: 1500 } }), ratesOf({ me: 12 }, { me: 12.5 }));
+    const cycled = buildHudView(hudState({ res: { me: 1500 } }), ratesOf({ me: 12 }, { me: 12.5 }), { cycle: 2 });
     expect({ ...cycled, cycle: null }).toEqual(base);
   });
 });
