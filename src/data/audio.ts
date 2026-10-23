@@ -4,6 +4,9 @@
 // Ambient beds that bedTrim scales per era (WP15).
 export type BedId = 'hum' | 'gear' | 'mains' | 'boiler' | 'pad' | 'servo' | 'drone' | 'wind';
 
+// One-shot cue on a purchase; chosen by the era of the paying resource (see AUDIO.purchaseCueByEra).
+export type PurchaseCue = 'purchase' | 'relay' | 'hiss' | 'forkPing' | 'swell';
+
 export const AUDIO = {
   // Master bus: target level, fade time when toggled, and how often the ambient loop updates.
   masterGain: 0.3,
@@ -14,8 +17,10 @@ export const AUDIO = {
   // Crank ratchet played on every click: short bursts spaced by tickGapMs.
   crank: { hz: 180, ticks: 3, tickGapMs: 28, decayMs: 45, gain: 0.5 },
 
-  // Light thunk on 'purchase'.
+  // Light thunk on a purchase paid with ME (purchaseCueByEra[0]).
   purchase: { hz: 140, decayMs: 120, gain: 0.45 },
+  // Purchase cue by the era of the PAYING resource (WP15R D1): index = RESOURCES[costRes].era - 1. Same rule for every tech, keystones included.
+  purchaseCueByEra: ['purchase', 'relay', 'hiss', 'forkPing', 'swell'] satisfies readonly [PurchaseCue, PurchaseCue, PurchaseCue, PurchaseCue, PurchaseCue],
 
   // Heavy clunk when a machine part lands (sine thump plus noise burst).
   clunk: { hz: 70, decayMs: 260, noiseGain: 0.5, gain: 0.9 },
@@ -27,33 +32,38 @@ export const AUDIO = {
   sting: { notesHz: [220, 277, 330], noteMs: 160, gain: 0.35 },
 
   // Ambient machine hum: frequency and gain rise with ME/s on a log curve up to maxPerSecond.
-  hum: { minHz: 48, maxHz: 96, minGain: 0.04, maxGain: 0.16, refPerSecond: 1, maxPerSecond: 5000 },
+  // maxPerSecond is at least 3x the post-finale (PF) rate of that resource (WP15R D2), so the bed does not saturate.
+  hum: { minHz: 48, maxHz: 96, minGain: 0.04, maxGain: 0.16, refPerSecond: 1, maxPerSecond: 40000 },
 
-  // Gear ticks in the background: rate in ticks/s rises with ME/s on the same log curve.
+  // Gear ticks in the background: rate in ticks/s rises with ME/s on the same log curve (the hum's maxPerSecond, WP15R D2).
   gearTick: { minPerSecond: 1.5, maxPerSecond: 14, gain: 0.12, hz: 240, decayMs: 30 },
 
   // Wind bed: lowpassed noise with a slow gust LFO on its gain.
   wind: { gain: 0.05, lowpassHz: 420, gustPeriodS: 9, gustDepth: 0.6 },
 
   // Mains hum (Era II): 50 Hz fundamental plus a 100 Hz harmonic; gain rises with EE/s on a log curve.
-  mains: { hz: 50, harmonicHz: 100, harmonicGain: 0.5, minGain: 0.02, maxGain: 0.09, refPerSecond: 1, maxPerSecond: 5000 },
+  // maxPerSecond is at least 3x the PF rate of EE (WP15R D2).
+  mains: { hz: 50, harmonicHz: 100, harmonicGain: 0.5, minGain: 0.025, maxGain: 0.09, refPerSecond: 1, maxPerSecond: 3000000 },
 
   // Arc crackle (Era II, needs the spark gap): arcs/s rise with EE/s, capped at maxRate.
-  arc: { minRate: 0.5, maxRate: 3, refPerSecond: 1, maxPerSecond: 5000, ms: 40, gain: 0.25, highpassHz: 1800 },
+  // maxPerSecond is at least 3x the PF rate of EE (WP15R D2).
+  arc: { minRate: 0.7, maxRate: 3, refPerSecond: 1, maxPerSecond: 3000000, ms: 40, gain: 0.25, highpassHz: 1800, techId: 'sparkGap' },
 
-  // Relay click on a purchase of an Era II tech: two short square clicks.
+  // Relay click on a purchase paid with EE (purchaseCueByEra): two short square clicks.
   relay: { hz: 1200, ms: 18, gapMs: 55, gain: 0.35 },
 
   // Boiler roar (Era III): lowpassed noise bed; gain rises with PR/s on a log curve up to maxPerSecond. Owned boiler only.
-  boiler: { lowpassHz: 160, minGain: 0.03, maxGain: 0.14, refPerSecond: 1, maxPerSecond: 100000 },
+  // maxPerSecond is at least 3x the PF rate of PR (WP15R D2).
+  boiler: { lowpassHz: 160, minGain: 0.03, maxGain: 0.14, refPerSecond: 1, maxPerSecond: 3500000, techId: 'boiler' },
 
-  // Steam hiss on an Era III purchase: one highpassed noise burst.
+  // Steam hiss on a purchase paid with PR (purchaseCueByEra): one highpassed noise burst.
   hiss: { ms: 260, gain: 0.3, highpassHz: 2600 },
 
   // Milestone whistle: two sines together, attack then decay. Starts after the sting; techId is the milestone that triggers it.
   whistle: { hzA: 880, hzB: 1175, ms: 1100, attackMs: 90, gain: 0.2, techId: 'pressureVesselBlueprint' },
 
   // Resonance pad (Era IV): harmonic sines on baseHz with a slow LFO on the gain; gain rises with RS/s. Owned spire only.
+  // maxPerSecond is at least 3x the PF rate of RS (WP15R D2).
   pad: {
     baseHz: 110,
     partials: [1, 2, 3],
@@ -63,11 +73,11 @@ export const AUDIO = {
     minGain: 0.02,
     maxGain: 0.08,
     refPerSecond: 1,
-    maxPerSecond: 100000,
+    maxPerSecond: 1200000,
     techId: 'resonatorSpire',
   },
 
-  // Fork ping (Era IV): two sines, a decaying ring on each manual click (echoCrank owned) and on every Era IV purchase.
+  // Fork ping (Era IV): two sines, a decaying ring on each manual click (echoCrank owned) and on every purchase paid with RS (purchaseCueByEra).
   forkPing: { hz: 512, partialRatio: 2.76, partialGain: 0.3, ms: 550, gain: 0.25, techId: 'echoCrank' },
 
   // Servo whirr (Era IV): sawtooth lowpassed, pitch and gain rise with the crank servo level (level / maxLevel).
@@ -77,9 +87,10 @@ export const AUDIO = {
   chord: { baseHz: 110, ratios: [3, 4, 5], ms: 1200, attackMs: 250, gain: 0.18, techId: 'harmonicConvergence' },
 
   // Sub-bass drone (Era V): two sines (hz and hz * partialRatio) with a slow LFO on the gain; gain rises with XF/s. Owned nullChamber only.
-  drone: { hz: 41, partialRatio: 2, partialGain: 0.3, lfoHz: 0.07, lfoDepth: 0.35, minGain: 0.02, maxGain: 0.09, refPerSecond: 1, maxPerSecond: 100000000, techId: 'nullChamber' },
+  // maxPerSecond is at least 3x the PF rate of XF (WP15R D2).
+  drone: { hz: 41, partialRatio: 2, partialGain: 0.3, lfoHz: 0.07, lfoDepth: 0.35, minGain: 0.02, maxGain: 0.09, refPerSecond: 1, maxPerSecond: 800000, techId: 'nullChamber' },
 
-  // Reversed swell (Era V purchase): filtered noise with a rising lowpass plus a sawtooth, one gain that rises over ms then stops hard.
+  // Reversed swell (purchase paid with XF via purchaseCueByEra, and the finale swell beat): filtered noise with a rising lowpass plus a sawtooth, one gain that rises over ms then stops hard.
   swell: { ms: 900, noiseLowpassFromHz: 300, noiseLowpassToHz: 2400, noiseGain: 0.18, sawHz: 110, sawGain: 0.12, gain: 0.3 },
 
   // Bead ticks (Era V milestone): `count` soft sine ticks at hz, gapMs apart, after the sting; techId is the milestone that triggers them.

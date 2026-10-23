@@ -5,6 +5,7 @@ import { AUDIO } from '../data/audio';
 import { MUSIC } from '../data/music';
 import type { MusicNoteEvent, MusicTheme, MusicThemeId } from '../data/music';
 import type { EndingPhase, TechId } from '../data/types';
+import { currentEra } from '../simulation/progression/era';
 
 /** Chance that a note slot takes a chord tone (else a scale passing tone). Musical structure from WP15 C1 (p .7). */
 
@@ -199,16 +200,12 @@ export function duckLevel(
 
 /**
  * Theme from the tech levels and ending phase (D3). Phase 'sequence' -> null (music ducked silent).
- * choice / postgame -> restored. Otherwise the highest owned keystone (MUSIC.keystones order), none -> mech.
+ * choice / postgame -> restored. Otherwise the theme of the simulation era (MUSIC.eraThemes[currentEra]).
  */
 export function musicTheme(techLevels: Readonly<Record<TechId, number>>, phase: EndingPhase): MusicThemeId | null {
   if (phase === 'sequence') return null;
   if (phase === 'choice' || phase === 'postgame') return 'restored';
-  let theme: MusicThemeId = 'mech';
-  for (const [techId, themeId] of MUSIC.keystones) {
-    if (techLevels[techId] >= 1) theme = themeId;
-  }
-  return theme;
+  return MUSIC.eraThemes[currentEra(techLevels)];
 }
 
 /**

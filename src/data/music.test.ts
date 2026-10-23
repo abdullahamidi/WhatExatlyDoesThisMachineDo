@@ -3,7 +3,7 @@ import { MUSIC } from './music';
 import type { MusicThemeId, MusicTheme } from './music';
 import { AUDIO } from './audio';
 import type { BedId } from './audio';
-import { TECHNOLOGIES } from './technologies';
+import { ERA_KEYSTONES } from './eras';
 
 const THEME_IDS: MusicThemeId[] = ['mech', 'elec', 'therm', 'reson', 'exotic', 'restored'];
 const THEMES: MusicTheme[] = THEME_IDS.map((id) => MUSIC.themes[id]);
@@ -80,17 +80,28 @@ describe('MUSIC themes', () => {
   });
 });
 
-describe('MUSIC keystones', () => {
-  it('maps generator, boiler, resonatorSpire, nullChamber in that priority order', () => {
-    expect(MUSIC.keystones.map(([tech]) => tech)).toEqual(['generator', 'boiler', 'resonatorSpire', 'nullChamber']);
-    expect(MUSIC.keystones.map(([, theme]) => theme)).toEqual(['elec', 'therm', 'reson', 'exotic']);
+describe('MUSIC eraThemes', () => {
+  it('maps eras 1..5 to mech, elec, therm, reson, exotic', () => {
+    expect(MUSIC.eraThemes).toEqual({ 1: 'mech', 2: 'elec', 3: 'therm', 4: 'reson', 5: 'exotic' });
   });
 
-  it('uses only technology ids that exist and theme ids that exist', () => {
-    for (const [tech, theme] of MUSIC.keystones) {
-      expect(TECHNOLOGIES[tech]).toBeDefined();
-      expect(MUSIC.themes[theme]).toBeDefined();
+  it('uses only existing theme ids, all distinct, and never restored', () => {
+    const values = Object.values(MUSIC.eraThemes);
+    for (const theme of values) {
+      expect(Object.keys(MUSIC.themes)).toContain(theme);
+      expect(theme).not.toBe('restored');
     }
+    expect(new Set(values).size).toBe(5);
+  });
+
+  it('gives every keystone era a theme other than the era I theme', () => {
+    for (const { era } of ERA_KEYSTONES) {
+      expect(MUSIC.eraThemes[era]).not.toBe(MUSIC.eraThemes[1]);
+    }
+  });
+
+  it('no longer carries the old keystone list', () => {
+    expect('keystones' in MUSIC).toBe(false);
   });
 });
 

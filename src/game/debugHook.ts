@@ -7,7 +7,7 @@ import type { SystemMenu } from '../ui/systemMenu';
 import type { SaveController } from '../persistence/saveController';
 import type { GameAudio } from '../audio/gameAudio';
 import type { PrestigeState } from '../data/types';
-import type { AudioStats } from '../data/music';
+import type { GameAudioStats } from '../audio/gameAudio';
 import type { CyclePreview } from '../simulation/prestige';
 import type { MachineComponentId } from '../data/machineComponents';
 import { MACHINE_COMPONENTS } from '../data/machineComponents';
@@ -59,7 +59,7 @@ declare global {
       displayObjects(): number;
       uiStats(): { meanMs: number; maxMs: number };
       perfMarks(): { bootStartMs: number; firstFrameMs: number } | null;
-      audioStats(): AudioStats | null;
+      audioStats(): GameAudioStats | null;
       prestige(): PrestigeState;
       cycleState(): CycleDebugState;
       // WP18: parts visibility probe, photo mode and the final-machine teaser (ShowcaseScene)
@@ -147,7 +147,7 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     return { bootStartMs: boot?.startTime ?? 0, firstFrameMs: firstFrame?.startTime ?? 0 };
   };
   /** Music and mix readout (WP15): theme, slot gains, duck, live and music voices, master peak. Zeros before the first gesture. */
-  const audioStats = (): AudioStats | null => extras.audio.stats();
+  const audioStats = (): GameAudioStats | null => extras.audio.stats();
   /** Visibility probe (WP18): hidden parts and counts, as the machine shows them now; null before the world scene exists. */
   const partsVisible = (): { visible: number; total: number; hidden: MachineComponentId[] } | null =>
     game.scene.getScene<WorldScene>('World')?.getMachine()?.partsVisibility() ?? null;

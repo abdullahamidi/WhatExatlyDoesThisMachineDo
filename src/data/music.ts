@@ -1,4 +1,4 @@
-import type { TechId } from './types';
+import type { EraNumber } from './eras';
 
 // Music bed tuning (WP15). Every music number lives here; src/audio only reads it.
 // Times in seconds, frequencies in Hz, gains linear (0..1). `scale` is semitones, or frequency ratios when `just` is true.
@@ -31,13 +31,8 @@ export interface MusicTheme {
   bassPeak: number;
 }
 
-// Keystone tech -> theme, highest owned wins (D3). Order is the priority order.
-const KEYSTONES: readonly (readonly [TechId, MusicThemeId])[] = [
-  ['generator', 'elec'],
-  ['boiler', 'therm'],
-  ['resonatorSpire', 'reson'],
-  ['nullChamber', 'exotic'],
-];
+// Era -> theme (WP15R D3). The era is the simulation era (highest owned keystone), the same one the HUD and the ambient beds use.
+const ERA_THEMES: Readonly<Record<EraNumber, MusicThemeId>> = { 1: 'mech', 2: 'elec', 3: 'therm', 4: 'reson', 5: 'exotic' };
 
 const THEMES: Record<MusicThemeId, MusicTheme> = {
   mech: {
@@ -80,7 +75,7 @@ const THEMES: Record<MusicThemeId, MusicTheme> = {
 
 export const MUSIC = {
   themes: THEMES,
-  keystones: KEYSTONES,
+  eraThemes: ERA_THEMES,
   busGain: 0.36,   // release tails overlap across bars: keeps the music sum <= 0.15 of full scale (WP15 review)
   chordToneChance: 0.7,   // chance a melody note is a chord tone (else a scale passing tone)
   lookaheadS: 0.5,

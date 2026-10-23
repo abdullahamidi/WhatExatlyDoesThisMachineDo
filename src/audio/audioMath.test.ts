@@ -1,11 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { AUDIO } from '../data/audio';
 import type { BedId } from '../data/audio';
+import { ERA_KEYSTONES } from '../data/eras';
+import type { EraNumber } from '../data/eras';
 import { MUSIC } from '../data/music';
-import { TECH_IDS } from '../data/types';
-import type { EndingPhase, TechId } from '../data/types';
+import { RESOURCES } from '../data/resources';
+import { TECHNOLOGIES, TECH_LIST } from '../data/technologies';
+import { RESOURCE_IDS, TECH_IDS } from '../data/types';
+import type { EndingPhase, ResourceId, TechId } from '../data/types';
 import type { LevelSnapshot } from './audioMath';
 import {
+  ambientMix,
   ambientPeakSum,
   activityLevel,
   arcRate,
@@ -14,7 +19,6 @@ import {
   busGain,
   chirpSweeps,
   chordFrequencies,
-  currentEra,
   droneGain,
   gearTickRate,
   humFrequency,
@@ -23,6 +27,7 @@ import {
   mainsGain,
   masterTarget,
   padGain,
+  purchaseCue,
   servoFraction,
   servoGain,
   servoHz,
@@ -578,25 +583,6 @@ describe('bedTrim', () => {
   });
 });
 
-describe('currentEra', () => {
-  it('is I with no keystone owned', () => {
-    expect(currentEra(levelsOwning())).toBe(1);
-    expect(currentEra(levelsOwning('handCrank', 'gearRatio'))).toBe(1);
-  });
-
-  it('maps each keystone to its era (generator II, boiler III, resonatorSpire IV, nullChamber V)', () => {
-    expect(currentEra(levelsOwning('generator'))).toBe(2);
-    expect(currentEra(levelsOwning('boiler'))).toBe(3);
-    expect(currentEra(levelsOwning('resonatorSpire'))).toBe(4);
-    expect(currentEra(levelsOwning('nullChamber'))).toBe(5);
-  });
-
-  it('the highest owned keystone wins', () => {
-    expect(currentEra(levelsOwning('generator', 'boiler'))).toBe(3);
-    expect(currentEra(levelsOwning('generator', 'boiler', 'resonatorSpire', 'nullChamber'))).toBe(5);
-  });
-});
-
 describe('ambientPeakSum', () => {
   it('era I is hum + gear + wind peaks (no trims applied yet)', () => {
     expect(ambientPeakSum(1)).toBeCloseTo(AUDIO.hum.maxGain + AUDIO.gearTick.gain + AUDIO.wind.gain, 9);
@@ -645,6 +631,190 @@ describe('mix invariants (WP15 C2)', () => {
     for (const era of ERAS) {
       const sum = ambientPeakSum(era) + music + loudest;
       expect(AUDIO.masterGain * sum, `era ${era}`).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe('purchaseCue (WP15R D1: cue by the era of the paying resource)', () => {
+  // Techs whose paying resource is from another era than the tech itself (era techs included).
+  const CROSS_ERA_TECHS: readonly TechId[] = [
+    'generator', 'motorRetrofit', 'boiler', 'inductionHeater', 'bellowsDrive', 'resonatorSpire', 'pressureResonator',
+    'crankServo', 'gridExciter', 'nullChamber', 'resonantSiphon', 'graviticAnchor', 'mainsBackfeed', 'steamLance',
+  ];
+
+  it('maps the paying resource era to its cue: me purchase, ee relay, pr hiss, rs forkPing, xf swell', () => {
+    expect(purchaseCue('me')).toBe('purchase');
+    expect(purchaseCue('ee')).toBe('relay');
+    expect(purchaseCue('pr')).toBe('hiss');
+    expect(purchaseCue('rs')).toBe('forkPing');
+    expect(purchaseCue('xf')).toBe('swell');
+  });
+
+  it('gives each resource its own cue and the table has five distinct entries', () => {
+    const cues = RESOURCE_IDS.map((id) => purchaseCue(id));
+    expect(new Set(cues).size).toBe(RESOURCE_IDS.length);
+    expect(new Set(AUDIO.purchaseCueByEra).size).toBe(5);
+  });
+
+  it('legacy techs follow the paying resource: bellowsDrive purchase, gridExciter relay, mainsBackfeed relay, steamLance hiss', () => {
+    expect(purchaseCue(TECHNOLOGIES.bellowsDrive.costRes)).toBe('purchase');
+    expect(purchaseCue(TECHNOLOGIES.gridExciter.costRes)).toBe('relay');
+    expect(purchaseCue(TECHNOLOGIES.mainsBackfeed.costRes)).toBe('relay');
+    expect(purchaseCue(TECHNOLOGIES.steamLance.costRes)).toBe('hiss');
+  });
+
+  it('every tech in TECH_LIST gets the cue of its paying resource era', () => {
+    for (const tech of TECH_LIST) {
+      expect(purchaseCue(tech.costRes), tech.id).toBe(AUDIO.purchaseCueByEra[RESOURCES[tech.costRes].era - 1]);
+    }
+  });
+
+  it('exactly the 14 cross-era techs differ from their own era cue', () => {
+    const differ = TECH_LIST
+      .filter((tech) => purchaseCue(tech.costRes) !== AUDIO.purchaseCueByEra[tech.era - 1])
+      .map((tech) => tech.id)
+      .sort();
+    expect(differ).toEqual([...CROSS_ERA_TECHS].sort());
+  });
+
+  it('an unknown resource falls back to the plain purchase thunk', () => {
+    expect(purchaseCue('zz' as unknown as ResourceId)).toBe('purchase');
+  });
+});
+
+describe('ambient bed refit (WP15R D2: maxPerSecond >= 3x post-finale rate)', () => {
+  // pf: post-finale rate of the driving resource; unlock: rate at the first unlock; old: the pre-refit curve (min, max, maxPerSecond).
+  const REFIT = [
+    { bed: 'hum', cfg: AUDIO.hum, pf: 1.2e4, unlock: 1, old: { min: 0.04, max: 0.16, maxPerSecond: 5000 }, now: () => humGain(1) },
+    { bed: 'gear', cfg: AUDIO.hum, pf: 1.2e4, unlock: 1, old: { min: 1.5, max: 14, maxPerSecond: 5000 }, now: () => gearTickRate(1) },
+    { bed: 'mains', cfg: AUDIO.mains, pf: 9.6e5, unlock: 4.17, old: { min: 0.02, max: 0.09, maxPerSecond: 5000 }, now: () => mainsGain(4.17) },
+    { bed: 'arc', cfg: AUDIO.arc, pf: 9.6e5, unlock: 4.17, old: { min: 0.5, max: 3, maxPerSecond: 5000 }, now: () => arcRate(4.17, true) },
+    { bed: 'boiler', cfg: AUDIO.boiler, pf: 1.1e6, unlock: 9.85, old: { min: 0.03, max: 0.14, maxPerSecond: 100000 }, now: () => boilerGain(9.85, true) },
+    { bed: 'pad', cfg: AUDIO.pad, pf: 3.8e5, unlock: 8.14, old: { min: 0.02, max: 0.08, maxPerSecond: 100000 }, now: () => padGain(8.14, true) },
+    { bed: 'drone', cfg: AUDIO.drone, pf: 2.5e5, unlock: 4.65, old: { min: 0.02, max: 0.09, maxPerSecond: 100000000 }, now: () => droneGain(4.65, true) },
+  ];
+
+  it.each(REFIT)('$bed: maxPerSecond is at least 3x the post-finale rate', (row) => {
+    expect(row.cfg.maxPerSecond).toBeGreaterThanOrEqual(3 * row.pf);
+  });
+
+  it.each(REFIT)('$bed: the post-finale rate stays at or below 0.95 of the curve', (row) => {
+    expect(activityLevel(row.pf, row.cfg.refPerSecond, row.cfg.maxPerSecond)).toBeLessThanOrEqual(0.95);
+  });
+
+  it.each(REFIT)('$bed: the unlock value keeps at least 0.85 of its pre-refit value', (row) => {
+    const before = row.old.min + (row.old.max - row.old.min) * activityLevel(row.unlock, 1, row.old.maxPerSecond);
+    expect(row.now()).toBeGreaterThanOrEqual(0.85 * before);
+  });
+
+  it('writes the refit leaves and the new tech gates', () => {
+    expect(AUDIO.hum.maxPerSecond).toBe(40000);
+    expect(AUDIO.mains.minGain).toBe(0.025);
+    expect(AUDIO.mains.maxPerSecond).toBe(3000000);
+    expect(AUDIO.arc.minRate).toBe(0.7);
+    expect(AUDIO.arc.maxPerSecond).toBe(3000000);
+    expect(AUDIO.arc.techId).toBe('sparkGap');
+    expect(AUDIO.boiler.maxPerSecond).toBe(3500000);
+    expect(AUDIO.boiler.techId).toBe('boiler');
+    expect(AUDIO.pad.maxPerSecond).toBe(1200000);
+    expect(AUDIO.drone.maxPerSecond).toBe(800000);
+  });
+});
+
+describe('ambientMix', () => {
+  const RATES = { me: 100, ee: 100, pr: 100, rs: 100, xf: 100 };
+  const SERVO_LEVEL = 5;
+
+  /** Levels for era e: every keystone up to e, plus wornMotor, sparkGap and the crank servo at SERVO_LEVEL. */
+  function eraLevels(era: EraNumber): Record<TechId, number> {
+    const eraTechs = ERA_KEYSTONES.filter((k) => k.era <= era).map((k) => k.techId);
+    return { ...levelsOwning(...eraTechs, 'wornMotor', 'sparkGap'), crankServo: SERVO_LEVEL };
+  }
+
+  function mixOf(owned: TechId[], muted = false) {
+    return ambientMix({ perSecond: RATES, techLevels: levelsOwning(...owned), muted });
+  }
+
+  it('reads the era from the highest owned keystone; a non-finite keystone level is not owned', () => {
+    expect(mixOf([]).era).toBe(1);
+    expect(mixOf(['boiler']).era).toBe(3);
+    const nullInfinite = levelsOwning();
+    nullInfinite.nullChamber = Infinity;
+    expect(ambientMix({ perSecond: RATES, techLevels: nullInfinite, muted: false }).era).toBe(1);
+  });
+
+  it.each(ERAS)('era %s: each gain is the base curve times its bed trim, ownership read from the levels', (e) => {
+    const levels = eraLevels(e);
+    const owned = (id: TechId): boolean => levels[id] >= 1;
+    const mix = ambientMix({ perSecond: RATES, techLevels: levels, muted: false });
+    const servoMax = TECHNOLOGIES.crankServo.maxLevel ?? 1;
+    expect(mix.era).toBe(e);
+    expect(mix.humHz).toBeCloseTo(humFrequency(100), 12);
+    expect(mix.humGain).toBeCloseTo(humGain(100) * bedTrim('hum', e), 12);
+    expect(mix.gearRate).toBeCloseTo(gearTickRate(100), 12);
+    expect(mix.gearGain).toBeCloseTo(bedTrim('gear', e), 12);
+    expect(mix.mainsGain).toBeCloseTo(mainsGain(100) * bedTrim('mains', e), 12);
+    expect(mix.arcRate).toBeCloseTo(arcRate(100, owned('sparkGap')), 12);
+    expect(mix.boilerGain).toBeCloseTo(boilerGain(100, owned('boiler')) * bedTrim('boiler', e), 12);
+    expect(mix.padGain).toBeCloseTo(padGain(100, owned('resonatorSpire')) * bedTrim('pad', e), 12);
+    expect(mix.droneGain).toBeCloseTo(droneGain(100, owned('nullChamber')) * bedTrim('drone', e), 12);
+    expect(mix.servoGain).toBeCloseTo(servoGain(SERVO_LEVEL, servoMax) * bedTrim('servo', e), 12);
+    expect(mix.servoHz).toBeCloseTo(servoHz(SERVO_LEVEL, servoMax), 12);
+  });
+
+  it('arc rate needs the spark gap', () => {
+    expect(mixOf(['generator']).arcRate).toBe(0);
+    expect(mixOf(['sparkGap']).arcRate).toBeGreaterThan(0);
+  });
+
+  it('boiler gain needs the boiler', () => {
+    expect(mixOf(['generator']).boilerGain).toBe(0);
+    expect(mixOf(['boiler']).boilerGain).toBeGreaterThan(0);
+  });
+
+  it('pad gain needs the resonance spire', () => {
+    expect(mixOf(['boiler']).padGain).toBe(0);
+    expect(mixOf(['resonatorSpire']).padGain).toBeGreaterThan(0);
+  });
+
+  it('drone gain needs the null chamber', () => {
+    expect(mixOf(['resonatorSpire']).droneGain).toBe(0);
+    expect(mixOf(['nullChamber']).droneGain).toBeGreaterThan(0);
+  });
+
+  it('muted: every gain and rate is 0, gearGain 1, servo pitch at minHz, hum pitch and era kept', () => {
+    const mix = ambientMix({ perSecond: RATES, techLevels: eraLevels(5), muted: true });
+    expect(mix.humGain).toBe(0);
+    expect(mix.gearRate).toBe(0);
+    expect(mix.mainsGain).toBe(0);
+    expect(mix.arcRate).toBe(0);
+    expect(mix.boilerGain).toBe(0);
+    expect(mix.padGain).toBe(0);
+    expect(mix.droneGain).toBe(0);
+    expect(mix.servoGain).toBe(0);
+    expect(mix.gearGain).toBe(1);
+    expect(mix.servoHz).toBe(AUDIO.servo.minHz);
+    expect(mix.humHz).toBeCloseTo(humFrequency(100), 12);
+    expect(mix.era).toBe(5);
+  });
+
+  it('NaN, negative and Infinity rates: every output is finite; NaN and negative rates give zero gains', () => {
+    for (const bad of [NaN, -5, Infinity]) {
+      const rates = { me: bad, ee: bad, pr: bad, rs: bad, xf: bad };
+      const mix = ambientMix({ perSecond: rates, techLevels: eraLevels(5), muted: false });
+      const values: number[] = Object.values(mix);
+      for (const value of values) {
+        expect(Number.isFinite(value), `${bad}`).toBe(true);
+      }
+      if (bad !== Infinity) {
+        expect(mix.humGain, `${bad}`).toBe(0);
+        expect(mix.gearRate, `${bad}`).toBe(0);
+        expect(mix.mainsGain, `${bad}`).toBe(0);
+        expect(mix.arcRate, `${bad}`).toBe(0);
+        expect(mix.boilerGain, `${bad}`).toBe(0);
+        expect(mix.padGain, `${bad}`).toBe(0);
+        expect(mix.droneGain, `${bad}`).toBe(0);
+      }
     }
   });
 });
