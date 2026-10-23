@@ -670,6 +670,11 @@ describe('machine motion, assembly and link style constants', () => {
     expect(MACHINE_LINK_STYLE.cap.size).toBe(4);
   });
 
+  it('cable raster cache holds a positive whole number of entries', () => {
+    expect(Number.isInteger(MACHINE_LINK_STYLE.cableCacheSize)).toBe(true);
+    expect(MACHINE_LINK_STYLE.cableCacheSize).toBeGreaterThan(0);
+  });
+
   it('shadows reference existing components', () => {
     expect(MACHINE_SHADOWS.length).toBe(9);
     for (const s of MACHINE_SHADOWS) {

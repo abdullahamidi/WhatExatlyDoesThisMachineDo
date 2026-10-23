@@ -43,6 +43,7 @@ await page.$eval('input[name="sys-set-uiScale"][value="125"]', el => el.click())
 await page.$eval('input[name="sys-set-notation"][value="scientific"]', el => el.click());
 await page.waitForTimeout(150);
 ok('4_settings', (await st()).settings);
+ok('4_volume_sliders', await page.$$eval('input[type="range"][id^="sys-set-"]', ns => ns.map(n => n.id)));
 ok('4_root_attrs', await page.evaluate(() => { const r = document.getElementById('ui-root'); return r ? { zoom: r.style.zoom, reducedMotion: r.dataset.reducedMotion, statusMarkers: r.dataset.statusMarkers } : null; }));
 await page.screenshot({ path: out + '/wp12-01-settings.png' });
 // 5 Space x10 = +10 clicks; held-key repeat adds 0

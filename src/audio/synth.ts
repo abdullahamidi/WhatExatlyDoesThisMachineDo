@@ -2,6 +2,8 @@
 // Tuning numbers come from AUDIO (src/data/audio.ts); the constants below are structural only.
 
 import { AUDIO } from '../data/audio';
+import { MUSIC } from '../data/music';
+import type { MusicNoteEvent, MusicTheme, MusicThemeId, MusicVoice } from '../data/music';
 import { chirpSweeps, chordFrequencies, stampPartials } from './audioMath';
 import type { ChirpSweep, StampPartial } from './audioMath';
 
@@ -18,12 +20,27 @@ const MAINS_FILTER_RATIO = 3; // mains lowpass sits at 3x the mains frequency
 const MAX_ARCS_PER_CALL = 8; // scheduling cap per scheduleArcs call
 const RELAY_CLICKS = 2; // relay purchase plays this many clicks
 const SWELL_STOP_RAMP_S = 0.005; // reversed swell drops to silence over this long at its hard stop
+const MUSIC_ATTACK_FLOOR_S = 0.002; // exponential music ramps need a nonzero span
+const MUSIC_RELEASE_FLOOR_S = 0.005; // music release shorter than this is clamped to it
+const MUSIC_STOP_FADE_S = 0.01; // time constant of a stopped music note fading to silence
+const BELL_PARTIAL_RATIO = 2.76; // bell voice partner: inharmonic fork-like partial
+const OCTAVE_RATIO = 2; // warm voice partner: sine an octave up
+const ANALYSER_FFT_SIZE = 2048; // samples read for the stats peak
+const PEAK_FLOOR_DB = -120; // stats peakDb reports silence as this
 
-/** Volume buses under the master: one-shots go to `sfx`, persistent loops and scheduled series to `ambient`. */
-export type AudioBus = 'sfx' | 'ambient';
+/** Volume buses under the master: one-shots go to `sfx`, persistent loops and scheduled series to `ambient`, music to `music`. */
+export type AudioBus = 'sfx' | 'ambient' | 'music';
 
 /** Where a call is routed: the master itself or one of the buses. */
 type AudioRoute = 'master' | AudioBus;
+
+/** Live counters for the debug readout. peakDb is null until the analyser has been armed by a first stats() call. */
+export interface SynthStats {
+  liveVoices: number; // one-shots + music notes still sounding
+  musicVoices: number; // music notes still sounding
+  dropped: number; // music notes refused at the maxVoices cap
+  peakDb: number | null; // loudest sample of the master output in the last analyser window, dBFS
+}
 
 export interface Synth {
   setMaster(target: number, rampSeconds: number): void;
@@ -34,7 +51,7 @@ export interface Synth {
   playDeny(): void; // AUDIO.deny low buzz, `count` pulses
   playSting(): void; // AUDIO.sting 3 notes
   setHum(hz: number, gain: number): void; // one persistent oscillator, ramped; gain 0 = silent
-  scheduleGearTicks(ticksPerSecond: number): void; // lookahead scheduling; 0 clears/resets the schedule
+  scheduleGearTicks(ticksPerSecond: number, gain?: number): void; // lookahead scheduling; 0 clears/resets the schedule; gain (0..) scales AUDIO.gearTick.gain, default 1
   setWind(on: boolean): void; // looped noise -> lowpass -> gain, slow gust LFO on the gain
   setMains(gain: number): void; // AUDIO.mains 50 Hz + 100 Hz pair through a lowpass; gain 0 = silent
   scheduleArcs(perSecond: number): void; // AUDIO.arc crackle bursts; 0 clears/resets the schedule; capped at arc.maxRate
@@ -52,6 +69,11 @@ export interface Synth {
   playResolveChord(): void; // AUDIO.resolveChord major triad plus octave, slow attack, long decay (finale S5)
   playChirps(): void; // AUDIO.chirp FM-ish sine sweeps, `count` of them (finale flock)
   playStamp(): void; // AUDIO.stamp low thump, lowpassed rattle and metallic click, under 300 ms (new cycle)
+  playMusicNote(slot: 0 | 1, theme: MusicThemeId, ev: MusicNoteEvent): void; // one note on a music slot; ev.startS is an absolute context time
+  setMusicSlotGain(slot: 0 | 1, gain: number, rampS: number): void; // slot level (crossfade), ramped linearly over rampS; 0 = silent
+  setMusicDuck(level: number, rampS: number): void; // ducks both slots together (0..1), ramped linearly over rampS
+  stopMusic(slot?: 0 | 1): void; // fades and stops sounding music notes (one slot, or all when omitted); slot levels are kept
+  stats(): SynthStats; // live counters and master peak (see SynthStats)
   suspend(): void; // context.suspend().catch(noop)
   resume(): void; // context.resume().catch(noop)
   isRunning(): boolean; // context.state === 'running'; false once closed or if the state cannot be read
@@ -123,34 +145,55 @@ interface ClusterSpec {
   ms: number;
 }
 
-/** The output graph: master (gain 0 until unlocked) and the two buses (unity) feeding it. */
+/** The output graph: master (gain 0 until unlocked) -> limiter -> destination, and the three buses (unity) feeding master. */
 interface Graph {
   master: GainNode;
   sfx: GainNode;
   ambient: GainNode;
+  music: GainNode;
+  limiter: DynamicsCompressorNode;
 }
 
-/** Creates the master bus at gain 0 wired to the destination, with the sfx and ambient buses under it. Returns null if WebAudio refuses. */
+/**
+ * Creates the master bus at gain 0 with the master limiter (AUDIO.limiter) between it and the destination, and the
+ * sfx, ambient and music buses under it. Returns null if WebAudio refuses.
+ */
 function openGraph(context: AudioContext): Graph | null {
   try {
     const master = context.createGain();
     master.gain.value = 0;
-    master.connect(context.destination);
+    const limiter = context.createDynamicsCompressor();
+    const l = AUDIO.limiter;
+    limiter.threshold.value = l.threshold;
+    limiter.knee.value = l.knee;
+    limiter.ratio.value = l.ratio;
+    limiter.attack.value = l.attack;
+    limiter.release.value = l.release;
+    master.connect(limiter);
+    limiter.connect(context.destination);
     const sfx = context.createGain();
     sfx.gain.value = 1;
     sfx.connect(master);
     const ambient = context.createGain();
     ambient.gain.value = 1;
     ambient.connect(master);
-    return { master, sfx, ambient };
+    const music = context.createGain();
+    music.gain.value = 1;
+    music.connect(master);
+    return { master, sfx, ambient, music, limiter };
   } catch (err) {
     console.warn('[synth] audio graph unavailable; sound disabled', err);
     return null;
   }
 }
 
+/** Count of one-shot voices still sounding: +1 when a voice starts, -1 when its nodes are released. */
+interface VoiceTally {
+  live: number;
+}
+
 /** One-shot oscillator voice with an exponential envelope. Nodes are released when it ends. */
-function playVoice(context: AudioContext, out: AudioNode, v: VoiceSpec): void {
+function playVoice(context: AudioContext, out: AudioNode, v: VoiceSpec, tally: VoiceTally): void {
   const osc = context.createOscillator();
   const env = context.createGain();
   const end = v.startAt + v.decay;
@@ -168,7 +211,9 @@ function playVoice(context: AudioContext, out: AudioNode, v: VoiceSpec): void {
   env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, end);
   osc.connect(env);
   env.connect(out);
+  tally.live += 1;
   osc.onended = () => {
+    tally.live -= 1;
     osc.disconnect();
     env.disconnect();
   };
@@ -581,6 +626,159 @@ function playStampRattle(
   src.stop(startAt + decay + STOP_PAD_S);
 }
 
+/** One music slot: note -> lowpass -> slotGain (crossfade level) -> duckGain (finale ducks) -> music bus and echo send. */
+interface MusicSlot {
+  lowpass: BiquadFilterNode;
+  slotGain: GainNode;
+  duckGain: GainNode;
+}
+
+/** Lazily built music graph: two slots plus one shared echo (delay, feedback, lowpass, send) fed from both duck gains. */
+interface MusicGraph {
+  slots: [MusicSlot, MusicSlot];
+  echoSend: GainNode;
+  echo: DelayNode;
+  echoLowpass: BiquadFilterNode;
+  echoFeedback: GainNode;
+}
+
+/** One sounding music note: its oscillators, its own envelope gain, its slot and its scheduled start (for stopMusic). */
+interface MusicNote {
+  oscs: OscillatorNode[];
+  env: GainNode;
+  slot: 0 | 1;
+  startS: number;
+}
+
+/** Oscillator layout per music voice. `detuned` plays a pair at -/+ theme.detuneCents; `partner` adds a second oscillator. */
+interface MusicVoiceShape {
+  wave: OscillatorType;
+  detuned: boolean;
+  partner: { wave: OscillatorType; ratio: number } | null;
+}
+
+const MUSIC_VOICE_SHAPES: Record<MusicVoice, MusicVoiceShape> = {
+  pluck: { wave: 'triangle', detuned: false, partner: null },
+  pulse: { wave: 'square', detuned: true, partner: null },
+  swell: { wave: 'sawtooth', detuned: true, partner: null },
+  bell: { wave: 'sine', detuned: false, partner: { wave: 'sine', ratio: BELL_PARTIAL_RATIO } },
+  reverse: { wave: 'sine', detuned: true, partner: null },
+  warm: { wave: 'triangle', detuned: false, partner: { wave: 'sine', ratio: OCTAVE_RATIO } },
+};
+
+/** Music counters: notes still sounding (released on the last oscillator's onended) and notes refused at the voice cap. */
+interface MusicTally {
+  live: number;
+  dropped: number;
+}
+
+/** Builds the two slots and the shared echo under the music bus. Slot levels start silent, duck levels at unity. */
+function openMusic(context: AudioContext, bus: GainNode): MusicGraph {
+  const m = MUSIC.space;
+  const echo = context.createDelay(m.delayS);
+  echo.delayTime.value = m.delayS;
+  const echoLowpass = context.createBiquadFilter();
+  echoLowpass.type = 'lowpass';
+  echoLowpass.frequency.value = m.lowpassHz;
+  const echoFeedback = context.createGain();
+  echoFeedback.gain.value = m.feedback;
+  const echoSend = context.createGain();
+  echoSend.gain.value = m.wet;
+  echoSend.connect(echo);
+  echo.connect(echoLowpass);
+  echoLowpass.connect(echoFeedback);
+  echoFeedback.connect(echo);
+  echoLowpass.connect(bus);
+  const makeSlot = (): MusicSlot => {
+    const lowpass = context.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = m.lowpassHz;
+    const slotGain = context.createGain();
+    slotGain.gain.value = 0;
+    const duckGain = context.createGain();
+    duckGain.gain.value = 1;
+    lowpass.connect(slotGain);
+    slotGain.connect(duckGain);
+    duckGain.connect(bus);
+    duckGain.connect(echoSend);
+    return { lowpass, slotGain, duckGain };
+  };
+  return { slots: [makeSlot(), makeSlot()], echoSend, echo, echoLowpass, echoFeedback };
+}
+
+/** Attack to the note gain, hold for the note length, release to the floor. Returns the time the envelope ends. */
+function scheduleMusicEnvelope(env: GainNode, ev: MusicNoteEvent, theme: MusicTheme): number {
+  const peak = Math.max(ENVELOPE_FLOOR, ev.gain);
+  const attack = Math.max(MUSIC_ATTACK_FLOOR_S, theme.attackS);
+  const holdEnd = ev.startS + Math.max(attack, ev.durS);
+  const end = holdEnd + Math.max(MUSIC_RELEASE_FLOOR_S, theme.releaseS);
+  env.gain.setValueAtTime(ENVELOPE_FLOOR, ev.startS);
+  env.gain.exponentialRampToValueAtTime(peak, ev.startS + attack);
+  env.gain.setValueAtTime(peak, holdEnd);
+  env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, end);
+  return end;
+}
+
+/**
+ * One music note: one or two oscillators into one envelope gain, feeding the slot lowpass. `onEnd` runs once, when the
+ * last oscillator has ended, and the nodes are disconnected then. At most three nodes per note.
+ */
+function startMusicNote(
+  context: AudioContext,
+  slot: MusicSlot,
+  slotIndex: 0 | 1,
+  theme: MusicTheme,
+  ev: MusicNoteEvent,
+  onEnd: () => void,
+): MusicNote {
+  const shape = MUSIC_VOICE_SHAPES[ev.voice];
+  const env = context.createGain();
+  const end = scheduleMusicEnvelope(env, ev, theme);
+  env.connect(slot.lowpass);
+  const parts: { wave: OscillatorType; ratio: number; cents: number }[] = [];
+  if (shape.detuned) {
+    parts.push({ wave: shape.wave, ratio: 1, cents: -theme.detuneCents });
+    parts.push({ wave: shape.wave, ratio: 1, cents: theme.detuneCents });
+  } else {
+    parts.push({ wave: shape.wave, ratio: 1, cents: 0 });
+    if (shape.partner !== null) parts.push({ wave: shape.partner.wave, ratio: shape.partner.ratio, cents: 0 });
+  }
+  let live = parts.length;
+  const oscs: OscillatorNode[] = [];
+  for (const p of parts) {
+    const osc = context.createOscillator();
+    osc.type = p.wave;
+    osc.frequency.value = ev.hz * p.ratio;
+    osc.detune.value = p.cents;
+    osc.connect(env);
+    osc.onended = () => {
+      osc.disconnect();
+      live -= 1;
+      if (live > 0) return;
+      env.disconnect();
+      onEnd();
+    };
+    osc.start(ev.startS);
+    osc.stop(end + STOP_PAD_S);
+    oscs.push(osc);
+  }
+  return { oscs, env, slot: slotIndex, startS: ev.startS };
+}
+
+/** Ramps an AudioParam linearly to `to` over rampS seconds from its current value (negative or non-finite ramps are instant). */
+function rampParam(context: AudioContext, param: AudioParam, to: number, rampS: number): void {
+  const now = context.currentTime;
+  const ramp = Number.isFinite(rampS) && rampS > 0 ? rampS : 0;
+  param.cancelScheduledValues(now);
+  param.setValueAtTime(param.value, now);
+  param.linearRampToValueAtTime(to, now + ramp);
+}
+
+/** Clamps a level to 0..1; anything non-finite is silence. */
+function clampLevel(level: number): number {
+  return Number.isFinite(level) ? Math.min(1, Math.max(0, level)) : 0;
+}
+
 export function createSynth(context: AudioContext): Synth {
   const graph = openGraph(context);
   let closed = false;
@@ -594,12 +792,77 @@ export function createSynth(context: AudioContext): Synth {
   let pad: PadNodes | null = null;
   let servo: ServoNodes | null = null;
   let drone: DroneNodes | null = null;
+  let musicGraph: MusicGraph | null = null;
+  let analyser: { node: AnalyserNode; buf: Float32Array<ArrayBuffer> } | null = null;
+  const oneShots: VoiceTally = { live: 0 };
+  const musicTally: MusicTally = { live: 0, dropped: 0 };
+  const activeNotes = new Set<MusicNote>();
   const warned = new Set<string>();
 
   function warnOnce(name: string, err: unknown): void {
     if (warned.has(name)) return;
     warned.add(name);
     console.warn(`[synth] ${name} failed`, err);
+  }
+
+  /** One-shot voice on `out`, counted in oneShots. */
+  function voice(out: AudioNode, v: VoiceSpec): void {
+    playVoice(context, out, v, oneShots);
+  }
+
+  /** The music graph, built on first use under the music bus `bus`. */
+  function getMusic(bus: GainNode): MusicGraph {
+    if (musicGraph === null) musicGraph = openMusic(context, bus);
+    return musicGraph;
+  }
+
+  /**
+   * Fades the sounding music notes (one slot, or all) to silence within a few milliseconds and stops their oscillators; the
+   * counters drop as they end. A note not yet started is stopped before its start, so it never sounds. A sounding note holds
+   * its current level first, so a future note's envelope is never wiped (cancelScheduledValues alone would reset it to gain 1).
+   */
+  function stopMusicNotes(slot?: 0 | 1): void {
+    const now = context.currentTime;
+    for (const note of activeNotes) {
+      if (slot !== undefined && note.slot !== slot) continue;
+      if (note.startS > now) {
+        for (const osc of note.oscs) osc.stop(now);
+        continue;
+      }
+      const param = note.env.gain;
+      if (typeof param.cancelAndHoldAtTime === 'function') {
+        param.cancelAndHoldAtTime(now);
+      } else {
+        param.cancelScheduledValues(now);
+        param.setValueAtTime(param.value, now);
+      }
+      param.setTargetAtTime(ENVELOPE_FLOOR, now, MUSIC_STOP_FADE_S);
+      for (const osc of note.oscs) osc.stop(now + STOP_PAD_S);
+    }
+  }
+
+  /** Master peak in dBFS over the last analyser window; the first call only arms the analyser and returns null. */
+  function readPeakDb(): number | null {
+    if (closed || graph === null) return null;
+    try {
+      if (analyser === null) {
+        const node = context.createAnalyser();
+        node.fftSize = ANALYSER_FFT_SIZE;
+        graph.limiter.connect(node);
+        analyser = { node, buf: new Float32Array(node.fftSize) };
+        return null;
+      }
+      analyser.node.getFloatTimeDomainData(analyser.buf);
+      let peak = 0;
+      for (let i = 0; i < analyser.buf.length; i++) {
+        const a = Math.abs(analyser.buf[i] ?? 0);
+        if (a > peak) peak = a;
+      }
+      return peak > 0 ? Math.max(PEAK_FLOOR_DB, 20 * Math.log10(peak)) : PEAK_FLOOR_DB;
+    } catch (err) {
+      warnOnce('stats', err);
+      return null;
+    }
   }
 
   /** Runs one public method body on its route (master or bus): no-op when closed or without a graph, errors never escape. */
@@ -645,7 +908,7 @@ export function createSynth(context: AudioContext): Synth {
         const c = AUDIO.crank;
         const t0 = context.currentTime;
         for (let i = 0; i < c.ticks; i++) {
-          playVoice(context, out, {
+          voice(out,{
             wave: 'square',
             hz: c.hz,
             startAt: t0 + (i * c.tickGapMs) / 1000,
@@ -659,7 +922,7 @@ export function createSynth(context: AudioContext): Synth {
     playPurchase(): void {
       run('playPurchase', 'sfx', (out) => {
         const p = AUDIO.purchase;
-        playVoice(context, out, {
+        voice(out,{
           wave: 'sine',
           hz: p.hz,
           dropFromHz: p.hz * PURCHASE_DROP_RATIO,
@@ -675,7 +938,7 @@ export function createSynth(context: AudioContext): Synth {
         const k = AUDIO.clunk;
         const t0 = context.currentTime;
         const decay = k.decayMs / 1000;
-        playVoice(context, out, { wave: 'sine', hz: k.hz, startAt: t0, decay, peak: k.gain });
+        voice(out,{ wave: 'sine', hz: k.hz, startAt: t0, decay, peak: k.gain });
         playNoise(context, out, getNoise(), t0, decay, k.noiseGain);
       });
     },
@@ -686,7 +949,7 @@ export function createSynth(context: AudioContext): Synth {
         const t0 = context.currentTime;
         const pulse = d.ms / 1000;
         for (let i = 0; i < d.count; i++) {
-          playVoice(context, out, {
+          voice(out,{
             wave: 'sawtooth',
             hz: d.hz,
             startAt: t0 + (i * (d.ms + d.gapMs)) / 1000,
@@ -704,7 +967,7 @@ export function createSynth(context: AudioContext): Synth {
         const t0 = context.currentTime;
         const step = s.noteMs / 1000;
         s.notesHz.forEach((hz, i) => {
-          playVoice(context, out, {
+          voice(out,{
             wave: 'triangle',
             hz,
             startAt: t0 + i * step,
@@ -727,7 +990,7 @@ export function createSynth(context: AudioContext): Synth {
       });
     },
 
-    scheduleGearTicks(ticksPerSecond: number): void {
+    scheduleGearTicks(ticksPerSecond: number, gain = 1): void {
       run('scheduleGearTicks', 'ambient', (out) => {
         if (!Number.isFinite(ticksPerSecond) || ticksPerSecond <= 0) {
           nextTickTime = 0;
@@ -737,15 +1000,18 @@ export function createSynth(context: AudioContext): Synth {
         if (nextTickTime < now) nextTickTime = now;
         const interval = 1 / ticksPerSecond;
         const g = AUDIO.gearTick;
+        const level = Number.isFinite(gain) && gain > 0 ? gain : 0;
         let count = 0;
         while (nextTickTime < now + AUDIO.lookaheadSeconds && count < MAX_TICKS_PER_CALL) {
-          playVoice(context, out, {
-            wave: 'triangle',
-            hz: g.hz,
-            startAt: nextTickTime,
-            decay: g.decayMs / 1000,
-            peak: g.gain,
-          });
+          if (level > 0) {
+            voice(out,{
+              wave: 'triangle',
+              hz: g.hz,
+              startAt: nextTickTime,
+              decay: g.decayMs / 1000,
+              peak: g.gain * level,
+            });
+          }
           nextTickTime += interval;
           count++;
         }
@@ -796,7 +1062,7 @@ export function createSynth(context: AudioContext): Synth {
         const r = AUDIO.relay;
         const t0 = context.currentTime;
         for (let i = 0; i < RELAY_CLICKS; i++) {
-          playVoice(context, out, {
+          voice(out,{
             wave: 'square',
             hz: r.hz,
             startAt: t0 + (i * (r.ms + r.gapMs)) / 1000,
@@ -846,8 +1112,8 @@ export function createSynth(context: AudioContext): Synth {
         const f = AUDIO.forkPing;
         const t0 = context.currentTime;
         const decay = f.ms / 1000;
-        playVoice(context, out, { wave: 'sine', hz: f.hz, startAt: t0, decay, peak: f.gain });
-        playVoice(context, out, {
+        voice(out,{ wave: 'sine', hz: f.hz, startAt: t0, decay, peak: f.gain });
+        voice(out,{
           wave: 'sine',
           hz: f.hz * f.partialRatio,
           startAt: t0,
@@ -906,7 +1172,7 @@ export function createSynth(context: AudioContext): Synth {
         const delay = Number.isFinite(delaySeconds) && delaySeconds > 0 ? delaySeconds : 0;
         const t0 = context.currentTime + delay;
         for (let i = 0; i < b.count; i++) {
-          playVoice(context, out, {
+          voice(out,{
             wave: 'sine',
             hz: b.hz,
             startAt: t0 + (i * b.gapMs) / 1000,
@@ -946,7 +1212,7 @@ export function createSynth(context: AudioContext): Synth {
           const startAt = t0 + p.startS;
           switch (p.kind) {
             case 'thump':
-              playVoice(context, out, {
+              voice(out,{
                 wave: 'sine',
                 hz: p.hz,
                 dropFromHz: s.thumpDropHz,
@@ -969,6 +1235,59 @@ export function createSynth(context: AudioContext): Synth {
           }
         }
       });
+    },
+
+    playMusicNote(slot: 0 | 1, theme: MusicThemeId, ev: MusicNoteEvent): void {
+      run('playMusicNote', 'music', (out) => {
+        if (!Number.isFinite(ev.startS) || !Number.isFinite(ev.durS) || !Number.isFinite(ev.hz) || ev.hz <= 0) return;
+        if (musicTally.live >= MUSIC.maxVoices) {
+          musicTally.dropped += 1;
+          return;
+        }
+        const t = MUSIC.themes[theme];
+        const g = getMusic(out);
+        const s = g.slots[slot];
+        s.lowpass.frequency.value = t.lowpassHz;
+        const note = startMusicNote(context, s, slot, t, { ...ev, durS: Math.max(0, ev.durS) }, () => {
+          musicTally.live -= 1;
+          activeNotes.delete(note);
+        });
+        activeNotes.add(note);
+        musicTally.live += 1;
+      });
+    },
+
+    setMusicSlotGain(slot: 0 | 1, gain: number, rampS: number): void {
+      run('setMusicSlotGain', 'music', (out) => {
+        const to = clampLevel(gain);
+        if (musicGraph === null && to === 0) return; // silent and never started: no nodes needed
+        const g = getMusic(out);
+        rampParam(context, g.slots[slot].slotGain.gain, to, rampS);
+      });
+    },
+
+    setMusicDuck(level: number, rampS: number): void {
+      run('setMusicDuck', 'music', (out) => {
+        const to = clampLevel(level);
+        if (musicGraph === null && to === 1) return; // unducked and never started: no nodes needed
+        const g = getMusic(out);
+        for (const s of g.slots) rampParam(context, s.duckGain.gain, to, rampS);
+      });
+    },
+
+    stopMusic(slot?: 0 | 1): void {
+      run('stopMusic', 'music', () => {
+        stopMusicNotes(slot);
+      });
+    },
+
+    stats(): SynthStats {
+      return {
+        liveVoices: oneShots.live + musicTally.live,
+        musicVoices: musicTally.live,
+        dropped: musicTally.dropped,
+        peakDb: readPeakDb(),
+      };
     },
 
     suspend(): void {
@@ -1019,6 +1338,19 @@ export function createSynth(context: AudioContext): Synth {
         drone?.partialLevel.disconnect();
         drone?.gain.disconnect();
         drone?.depth.disconnect();
+        stopMusicNotes();
+        if (musicGraph !== null) {
+          for (const s of musicGraph.slots) {
+            s.lowpass.disconnect();
+            s.slotGain.disconnect();
+            s.duckGain.disconnect();
+          }
+          musicGraph.echoSend.disconnect();
+          musicGraph.echo.disconnect();
+          musicGraph.echoLowpass.disconnect();
+          musicGraph.echoFeedback.disconnect();
+        }
+        analyser?.node.disconnect();
       } catch (err) {
         warnOnce('close', err);
       }

@@ -160,6 +160,49 @@ export function rasterCable(a: Vec2, b: Vec2, sag: number): Vec2[] {
   return out;
 }
 
+/**
+ * Bounded least-recently-used map keyed by string. get() and set() both make the key the newest; set() past capacity
+ * evicts the oldest key. Values are stored as given (no copy), so a hit returns the same object.
+ */
+export class LruCache<V> {
+  private readonly entries = new Map<string, V>(); // Map keeps insertion order: first key is the oldest
+  private readonly capacity: number;
+
+  constructor(capacity: number) {
+    this.capacity = Number.isFinite(capacity) ? Math.max(0, Math.floor(capacity)) : 0; // non-finite: caching off
+  }
+
+  /** Stored value for key, or undefined; a hit becomes the newest entry. */
+  get(key: string): V | undefined {
+    if (!this.entries.has(key)) return undefined;
+    const value = this.entries.get(key) as V; // present: checked above
+    this.entries.delete(key);
+    this.entries.set(key, value);
+    return value;
+  }
+
+  /** Stores value under key as the newest entry, then evicts the oldest entries past capacity. */
+  set(key: string, value: V): void {
+    this.entries.delete(key);
+    this.entries.set(key, value);
+    while (this.entries.size > this.capacity) {
+      const oldest = this.entries.keys().next();
+      if (oldest.done) break;
+      this.entries.delete(oldest.value);
+    }
+  }
+
+  /** Number of stored entries. */
+  get size(): number {
+    return this.entries.size;
+  }
+
+  /** True when key is stored; does not change recency. */
+  has(key: string): boolean {
+    return this.entries.has(key);
+  }
+}
+
 /** Pixels of an arc: n = max(1, ceil(|sweep| * radius / 0.5)) samples, rounded, consecutive duplicates dropped. */
 export function rasterArc(arc: Arc): Vec2[] {
   const { centre, radius, startRad, sweepRad } = arc;

@@ -22,13 +22,13 @@
 | WP12 | Settings, accessibility, stats, achievements, save export/import, reduced motion (roadmap WP10) | ✅ done |
 | WP13 | Ending sequence, reveal, postgame, restored world (roadmap WP14) | ✅ done |
 | WP14 | New-cycle prestige: Echoes, Memory perks, MEMORY tab, cycle transition (roadmap WP15) | ✅ done |
-| WP15 | Music bed, audio mix, perf pass (roadmap WP16) | in progress |
+| WP15 | Music bed, audio mix, perf pass (roadmap WP16) | in progress (T1–T5, T8, T9 done on 2026-10-18 cloud session; T6/T7 + D1 audio left) |
 | WP17 | Energy continuity (legacy sinks, every energy used every era) + era-aware HUD + gain text | ✅ done |
 | WP18 | Final machine showcase (completion beat, survey camera, postgame name/portrait/photo mode, ShowcaseScene) | planned (D3) |
 | WP19 | Steam desktop shell (Electron, file saves, crash overlay, splash, title, quit/credits, fullscreen, UI anchoring) | in progress (worktree, branch claude/steam-shell) |
 | WP20 | First-impression UX polish (onboarding, fly-in visible, tree fit, era cards, text sweep) | planned (D6) |
 | WP21 | Demo edition (cap at Substation Blueprint, end card + final-machine teaser, wishlist) | planned (D4) |
-| WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | planned (WP16.md, slimmed by D8) |
+| WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | started (T1 e2e, T3 sign-off sim, T5 version landed 2026-10-18; rest planned, slimmed by D8) |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -63,7 +63,7 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 2503 pass (79 files) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 2605 pass (84 files) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.

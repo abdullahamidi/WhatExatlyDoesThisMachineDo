@@ -4,7 +4,7 @@ import type { GameState, ResourceId, TechDefinition, TechId, TechView } from '..
 import { TECHNOLOGIES } from '../../data/technologies';
 import { runGreedy, maxPurchaseGap, purchaseLedger, deadMinutes, spendShare } from './greedy';
 import type { GreedyOptions, GreedyResult, LedgerEntry } from './greedy';
-import { applyClick, advance } from '../production/tick';
+import { applyClick, advance, offlineCapSeconds } from '../production/tick';
 import { computeRates } from '../production/rates';
 import { getAllTechViews } from '../progression/status';
 import { purchase } from '../progression/purchase';
@@ -318,5 +318,100 @@ describe('measurement helpers (WP17)', () => {
     const ledger = [buy(20, 'me', 7)];
     expect(spendShare(ledger, 'me', 0, 100, 50, 50)).toBe(0);
     expect(spendShare(ledger, 'me', 0, 100, 50, 10)).toBe(0);
+  });
+});
+
+// Automation-only play for schedule tests: no clicks, and buyIntervalSeconds 1e6 keeps the buy tick
+// off every step of the short runs below (ratio t / 1e6 never rounds to an exact tick for t < 5e5).
+const QUIET = { clicksPerSecond: 0, stepSeconds: 1, buyIntervalSeconds: 1e6 };
+
+describe('runGreedy schedule (profile D offline blocks)', () => {
+  const base = createInitialState(0);
+  const automated = { ...base, techLevels: { ...base.techLevels, wornMotor: 1 } };
+
+  it('absent schedule: the result has no wallSeconds key', () => {
+    const run = runGreedy(options(300));
+    expect('wallSeconds' in run).toBe(false);
+  });
+
+  it('schedule with 0 offline seconds is identical to the continuous run (wallSeconds = active seconds)', () => {
+    const continuous = runGreedy(options(1500));
+    const scheduled = runGreedy({ ...options(1500), schedule: { activeSeconds: 300, offlineSeconds: 0 } });
+    expect(scheduled.firstAt).toEqual(continuous.firstAt);
+    expect(scheduled.purchases).toEqual(continuous.purchases);
+    expect(scheduled.maxValue).toEqual(continuous.maxValue);
+    expect(scheduled.final).toEqual(continuous.final);
+    expect(scheduled.wallSeconds).toBe(1500);
+  });
+
+  it('an offline block grants exactly the capped gain (8 h cap binds for 10 h away)', () => {
+    const r = computeRates(automated).perSecond.me;
+    expect(r).toBeGreaterThan(0);
+    expect(offlineCapSeconds(automated.techLevels)).toBe(28800);
+    const continuous = runGreedy({ ...QUIET, seconds: 200, initial: automated });
+    const away = runGreedy({
+      ...QUIET,
+      seconds: 200,
+      initial: automated,
+      schedule: { activeSeconds: 100, offlineSeconds: 36000 },
+    });
+    expect(away.final.res.me - continuous.final.res.me).toBeCloseTo(r * 28800, 9);
+    expect(away.wallSeconds).toBe(36200);
+  });
+
+  it('an offline block shorter than the cap grants its full elapsed gain', () => {
+    const r = computeRates(automated).perSecond.me;
+    const continuous = runGreedy({ ...QUIET, seconds: 200, initial: automated });
+    const away = runGreedy({
+      ...QUIET,
+      seconds: 200,
+      initial: automated,
+      schedule: { activeSeconds: 100, offlineSeconds: 1000 },
+    });
+    expect(away.final.res.me - continuous.final.res.me).toBeCloseTo(r * 1000, 9);
+    expect(away.wallSeconds).toBe(1200);
+  });
+
+  it('Relief Valves raise the offline cap to 12 h', () => {
+    const vented = { ...automated, techLevels: { ...automated.techLevels, reliefValves: 1 } };
+    const r = computeRates(vented).perSecond.me;
+    expect(offlineCapSeconds(vented.techLevels)).toBe(43200);
+    const continuous = runGreedy({ ...QUIET, seconds: 200, initial: vented });
+    const away = runGreedy({
+      ...QUIET,
+      seconds: 200,
+      initial: vented,
+      schedule: { activeSeconds: 100, offlineSeconds: 50000 },
+    });
+    expect(away.final.res.me - continuous.final.res.me).toBeCloseTo(r * 43200, 9);
+  });
+
+  it('no offline block after the last active block', () => {
+    const continuous = runGreedy({ ...QUIET, seconds: 100, initial: automated });
+    const away = runGreedy({
+      ...QUIET,
+      seconds: 100,
+      initial: automated,
+      schedule: { activeSeconds: 100, offlineSeconds: 36000 },
+    });
+    expect(away.final).toEqual(continuous.final);
+    expect(away.wallSeconds).toBe(100);
+  });
+
+  it('offline blocks add no clicks', () => {
+    const continuous = runGreedy({ ...options(20), buyIntervalSeconds: 1e6 });
+    const away = runGreedy({
+      ...options(20),
+      buyIntervalSeconds: 1e6,
+      schedule: { activeSeconds: 10, offlineSeconds: 1000 },
+    });
+    expect(away.final.totalClicks).toBe(continuous.final.totalClicks);
+    expect(away.final.totalClicks).toBe(80);
+  });
+
+  it('rejects an active block that is not a whole number of steps', () => {
+    expect(() =>
+      runGreedy({ ...options(20), stepSeconds: 2, schedule: { activeSeconds: 5, offlineSeconds: 10 } }),
+    ).toThrow(RangeError);
   });
 });

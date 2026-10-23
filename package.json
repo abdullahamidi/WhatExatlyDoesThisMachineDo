@@ -1,15 +1,17 @@
 {
   "name": "what-exactly-does-this-machine-do",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm test && npm run build && node scripts/perf/bundle-budget.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "perf:bundle": "node scripts/perf/bundle-budget.mjs"
   },
   "dependencies": {
     "phaser": "3.90.0"

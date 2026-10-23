@@ -1,0 +1,30 @@
+{
+  "machineMeanMs": 4,
+  "machineMaxMs": 40,
+  "uiMeanMs": 2,
+  "uiMaxMs": 8,
+  "finaleMeanMs": 2,
+  "displayObjects": 500,
+  "techTreeOpenMs": 8,
+  "heapMb": 150,
+  "heapGrowthMb": 8,
+  "bootMs": 3000,
+  "liveVoices": 48,
+  "musicVoices": 8,
+  "peakDbfs": -1,
+  "frameP95Ms": 17,
+  "cycleDisplayPct": 10,
+  "bundle": {
+    "appRawKb": 400,
+    "appGzipKb": 110,
+    "phaserKb": 1500,
+    "cssKb": 30,
+    "publicAssetsKb": 8000
+  },
+  "_notes": {
+    "machineMaxMs": "window max is contention-sensitive in the shared CI container (quiet runs <=5 ms); machineMeanMs is the real gate",
+    "appGzipKb": "raised 100->110 for the WP15 music code",
+    "appRawKb": "raised 340->400 (STEAM_DEMO_PROGRAM D7): WP17 legacy techs/HUD + Steam demo UI",
+    "cycleDisplayPct": "vs the pre-cycle display list (parts are hidden, not destroyed)"
+  }
+}

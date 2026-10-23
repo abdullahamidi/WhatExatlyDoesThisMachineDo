@@ -3,11 +3,11 @@ import { NOTATIONS, SETTINGS_LABELS, UI_SCALES, VOLUME_RANGE } from '../../data/
 import type { NumberNotation, SettingsState, UiScale } from '../../data/types';
 
 export type SettingsSection = 'audio' | 'display' | 'access';
-export type VolumeId = 'masterVolume' | 'sfxVolume' | 'ambientVolume';
+export type VolumeId = 'masterVolume' | 'sfxVolume' | 'ambientVolume' | 'musicVolume';
 export type RadioId = 'notation' | 'uiScale';
 export type ToggleId = 'reducedMotion' | 'statusMarkers' | 'screenShake' | 'confirmNewCycle';
 
-export const VOLUME_IDS: readonly VolumeId[] = ['masterVolume', 'sfxVolume', 'ambientVolume'];
+export const VOLUME_IDS: readonly VolumeId[] = ['masterVolume', 'sfxVolume', 'ambientVolume', 'musicVolume'];
 
 export interface RadioOption { value: string; label: string; checked: boolean }
 
@@ -129,6 +129,8 @@ export function volumePatch(id: VolumeId, value: number): Partial<SettingsState>
       return { sfxVolume: value };
     case 'ambientVolume':
       return { ambientVolume: value };
+    case 'musicVolume':
+      return { musicVolume: value };
   }
 }
 

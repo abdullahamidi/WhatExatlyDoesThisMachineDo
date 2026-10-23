@@ -1,7 +1,9 @@
 // Pure model for the SYSTEM menu: two-step reset reducer and button labels (WP4), NEW CYCLE row (WP13).
-import { MUTE_LABELS, RESET_LABELS, SAVE_LABELS, SYSTEM_MENU_CONFIG } from '../data/systemMenu';
+import { MUTE_LABELS, RESET_LABELS, SAVE_LABELS, SYSTEM_MENU_CONFIG, VERSION_TEXT } from '../data/systemMenu';
 import { FINALE_CHOICE } from '../data/finale';
+import { APP_VERSION } from '../data/version';
 import type { EndingPhase } from '../data/types';
+import { SAVE_VERSION } from '../persistence/schema';
 
 export type ResetState = { stage: 'idle' } | { stage: 'armed'; armedAt: number };
 
@@ -64,6 +66,19 @@ export function newCycleRow(phase: EndingPhase, reason: string | null): NewCycle
     label: FINALE_CHOICE.cycle.label,
     reason: reason ?? '',
   };
+}
+
+/**
+ * SYSTEM tab version footer text: "v1.0.0 · SAVE v2". Lives here (not in src/data) because it reads the save schema
+ * version, and src/data must not import persistence.
+ */
+export function versionFooter(): string {
+  return `${VERSION_TEXT.appPrefix}${APP_VERSION}${VERSION_TEXT.separator}${VERSION_TEXT.savePrefix}${SAVE_VERSION}`;
+}
+
+/** Accessible name for the version footer: "Version 1.0.0". */
+export function versionAriaLabel(): string {
+  return `${VERSION_TEXT.ariaPrefix}${APP_VERSION}`;
 }
 
 export type TabNavKey = 'ArrowRight' | 'ArrowLeft' | 'Home' | 'End';

@@ -173,6 +173,7 @@ export const MACHINE_LINK_STYLE = {
   rod: { edge: 0x3e4246, core: 0x7d8286, eye: 0x5a5f63, eyeCentre: 0xa3a6a4, eyeRadius: 2 },
   cap: { size: 4, hi: 0xa3a6a4, body: 0x7d8286, ring: 0x1f2225 },
   cable: { depth: MACHINE_LAYER_DEPTH.front + 1, core: 0x2f5a62, hi: 0x5fa8b4, sagArtPx: 10 },
+  cableCacheSize: 64, // rastered cable cores kept by MachineLinks (LRU), so vibrating cable ends do not re-raster every column
   // Era V guy cables: dark wire rope under the anchor sprites (cableStyle 'guy').
   guy: { depth: MACHINE_LAYER_DEPTH.frame + 5, core: 0x3e4246, under: 0x1f2225 },
   // Era III pipes: steam (bright iron, flanged) and feed water (dark, flanged). Fitting colours are the ART_ERA3 section 4 constants.

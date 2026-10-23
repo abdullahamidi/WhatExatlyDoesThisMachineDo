@@ -169,6 +169,13 @@
   align-self: flex-end;
 }
 
+/* WP16 T5 version footer: SYSTEM tab, bottom. Min 12 px like the other menu text. */
+#sys-version {
+  margin-top: auto;
+  font-size: max(12px, 1em);
+  color: var(--amber-dim);
+}
+
 @keyframes sys-reset-pulse {
   0%, 100% { border-color: var(--rust); }
   50% { border-color: var(--haze); }

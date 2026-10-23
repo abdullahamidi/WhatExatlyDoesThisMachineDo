@@ -1,14 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { AUDIO } from '../data/audio';
-import type { EndingPhase } from '../data/types';
+import type { BedId } from '../data/audio';
+import { MUSIC } from '../data/music';
+import { TECH_IDS } from '../data/types';
+import type { EndingPhase, TechId } from '../data/types';
 import type { LevelSnapshot } from './audioMath';
 import {
+  ambientPeakSum,
   activityLevel,
   arcRate,
+  bedTrim,
   boilerGain,
   busGain,
   chirpSweeps,
   chordFrequencies,
+  currentEra,
   droneGain,
   gearTickRate,
   humFrequency,
@@ -23,6 +29,10 @@ import {
   stampPartials,
   windAllowed,
 } from './audioMath';
+import { musicContribution } from './musicMath';
+
+const BEDS: BedId[] = ['hum', 'gear', 'mains', 'boiler', 'pad', 'servo', 'drone', 'wind'];
+const ERAS = [1, 2, 3, 4, 5] as const;
 
 const SAMPLE_INPUTS = [0, -5, NaN, Infinity, 1e12, 0.001, 1];
 
@@ -382,7 +392,7 @@ describe('servo maths', () => {
 });
 
 describe('levelsChanged', () => {
-  const BASE: LevelSnapshot = { master: 0.5, wind: true, sfxBus: 1, ambientBus: 0.5 };
+  const BASE: LevelSnapshot = { master: 0.5, wind: true, sfxBus: 1, ambientBus: 0.5, musicBus: 0.42 };
 
   it('is true when nothing was applied yet', () => {
     expect(levelsChanged(null, BASE)).toBe(true);
@@ -397,6 +407,7 @@ describe('levelsChanged', () => {
     expect(levelsChanged(BASE, { ...BASE, wind: false })).toBe(true);
     expect(levelsChanged(BASE, { ...BASE, sfxBus: 0.5 })).toBe(true);
     expect(levelsChanged(BASE, { ...BASE, ambientBus: 0 })).toBe(true);
+    expect(levelsChanged(BASE, { ...BASE, musicBus: 0 })).toBe(true);
   });
 
   it('treats NaN as equal to NaN and 0 as different from -0', () => {
@@ -527,5 +538,113 @@ describe('windAllowed', () => {
 
   it.each(TABLE)('phase %s -> %s', (phase, allowed) => {
     expect(windAllowed(phase)).toBe(allowed);
+  });
+});
+
+function levelsOwning(...owned: TechId[]): Record<TechId, number> {
+  const levels = {} as Record<TechId, number>;
+  for (const id of TECH_IDS) levels[id] = 0;
+  for (const id of owned) levels[id] = 1;
+  return levels;
+}
+
+describe('bedTrim', () => {
+  it('returns the AUDIO.bedTrim value for each bed and era', () => {
+    for (const bed of BEDS) {
+      for (const era of ERAS) {
+        expect(bedTrim(bed, era)).toBe(AUDIO.bedTrim[bed][era - 1]);
+      }
+    }
+  });
+
+  it('is in (0, 1] and never grows as eras arrive (older beds recede)', () => {
+    for (const bed of BEDS) {
+      let prev = Number.POSITIVE_INFINITY;
+      for (const era of ERAS) {
+        const trim = bedTrim(bed, era);
+        expect(trim).toBeGreaterThan(0);
+        expect(trim).toBeLessThanOrEqual(1);
+        expect(trim).toBeLessThanOrEqual(prev);
+        prev = trim;
+      }
+    }
+  });
+
+  it('clamps the era to 1..5 and treats bad input as era I', () => {
+    expect(bedTrim('hum', 0)).toBe(bedTrim('hum', 1));
+    expect(bedTrim('hum', 9)).toBe(bedTrim('hum', 5));
+    expect(bedTrim('hum', Number.NaN)).toBe(bedTrim('hum', 1));
+    expect(bedTrim('mains', 2.7)).toBe(bedTrim('mains', 2));
+  });
+});
+
+describe('currentEra', () => {
+  it('is I with no keystone owned', () => {
+    expect(currentEra(levelsOwning())).toBe(1);
+    expect(currentEra(levelsOwning('handCrank', 'gearRatio'))).toBe(1);
+  });
+
+  it('maps each keystone to its era (generator II, boiler III, resonatorSpire IV, nullChamber V)', () => {
+    expect(currentEra(levelsOwning('generator'))).toBe(2);
+    expect(currentEra(levelsOwning('boiler'))).toBe(3);
+    expect(currentEra(levelsOwning('resonatorSpire'))).toBe(4);
+    expect(currentEra(levelsOwning('nullChamber'))).toBe(5);
+  });
+
+  it('the highest owned keystone wins', () => {
+    expect(currentEra(levelsOwning('generator', 'boiler'))).toBe(3);
+    expect(currentEra(levelsOwning('generator', 'boiler', 'resonatorSpire', 'nullChamber'))).toBe(5);
+  });
+});
+
+describe('ambientPeakSum', () => {
+  it('era I is hum + gear + wind peaks (no trims applied yet)', () => {
+    expect(ambientPeakSum(1)).toBeCloseTo(AUDIO.hum.maxGain + AUDIO.gearTick.gain + AUDIO.wind.gain, 9);
+  });
+
+  it('counts a bed only from its arrival era (boiler not before era III)', () => {
+    expect(ambientPeakSum(2)).toBeCloseTo(
+      AUDIO.hum.maxGain * bedTrim('hum', 2) +
+        AUDIO.gearTick.gain * bedTrim('gear', 2) +
+        AUDIO.mains.maxGain * bedTrim('mains', 2) +
+        AUDIO.wind.gain,
+      9,
+    );
+  });
+});
+
+describe('mix invariants (WP15 C2)', () => {
+  const ONE_SHOT_GAINS: number[] = [
+    AUDIO.crank.gain,
+    AUDIO.purchase.gain,
+    AUDIO.clunk.gain,
+    AUDIO.deny.gain,
+    AUDIO.sting.gain,
+    AUDIO.relay.gain,
+    AUDIO.hiss.gain,
+    AUDIO.whistle.gain,
+    AUDIO.forkPing.gain,
+    AUDIO.chord.gain,
+    AUDIO.swell.gain,
+    AUDIO.resolveChord.gain,
+    AUDIO.chirp.gain,
+    AUDIO.stamp.thumpGain,
+    AUDIO.beadTick.gain,
+    AUDIO.arc.gain,
+  ];
+
+  it('bed sum x trim <= 0.45 in every era', () => {
+    for (const era of ERAS) {
+      expect(ambientPeakSum(era), `era ${era}`).toBeLessThanOrEqual(0.45);
+    }
+  });
+
+  it('ambient + music + loudest one-shot <= 1.0 at the limiter input (after master gain)', () => {
+    const music = Math.max(...Object.values(MUSIC.themes).map((t) => musicContribution(t)));
+    const loudest = Math.max(...ONE_SHOT_GAINS);
+    for (const era of ERAS) {
+      const sum = ambientPeakSum(era) + music + loudest;
+      expect(AUDIO.masterGain * sum, `era ${era}`).toBeLessThanOrEqual(1);
+    }
   });
 });

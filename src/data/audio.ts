@@ -111,12 +111,12 @@ export const AUDIO = {
 
   // Ambient bed trims per era I..V (WP15 D8): older beds recede as later eras arrive. 1 = no change (before the bed exists it is 1).
   bedTrim: {
-    hum: [1, 0.85, 0.7, 0.6, 0.5],
-    gear: [1, 0.85, 0.7, 0.6, 0.5],
-    mains: [1, 1, 0.8, 0.7, 0.6],
-    boiler: [1, 1, 1, 0.8, 0.7],
-    pad: [1, 1, 1, 1, 0.8],
-    servo: [1, 1, 1, 1, 0.9],
+    hum: [1, 0.85, 0.65, 0.4, 0.3],
+    gear: [1, 0.85, 0.65, 0.4, 0.3],
+    mains: [1, 1, 0.8, 0.5, 0.4],
+    boiler: [1, 1, 1, 0.6, 0.5],
+    pad: [1, 1, 1, 1, 0.7],
+    servo: [1, 1, 1, 1, 0.7],
     drone: [1, 1, 1, 1, 1],
     wind: [1, 1, 1, 1, 1],
   } satisfies Record<BedId, readonly [number, number, number, number, number]>,
