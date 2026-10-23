@@ -1,6 +1,8 @@
 # Project Status
 
 ## Current milestone
+**Steam demo program (2026-10-23)** — see docs/plan/STEAM_DEMO_PROGRAM.md (decisions D1–D8, two tracks).
+
 **Vertical slice — release-quality.** WP1–WP6 done. GAME_SPEC §16/§17 PASS; Art Director verdict RELEASE-READY (docs/plan/ART_AUDIT.md phases 1–5).
 
 ## Roadmap
@@ -21,7 +23,12 @@
 | WP13 | Ending sequence, reveal, postgame, restored world (roadmap WP14) | ✅ done |
 | WP14 | New-cycle prestige: Echoes, Memory perks, MEMORY tab, cycle transition (roadmap WP15) | ✅ done |
 | WP15 | Music bed, audio mix, perf pass (roadmap WP16) | in progress |
-| WP16 | Release: full balance, end-to-end smoke, docs, final art audit (roadmap WP17) | planned (WP16.md) |
+| WP17 | Energy continuity (legacy sinks, every energy used every era) + era-aware HUD + gain text | planned (STEAM_DEMO_PROGRAM D1/D2) |
+| WP18 | Final machine showcase (completion beat, survey camera, postgame name/portrait/photo mode, ShowcaseScene) | planned (D3) |
+| WP19 | Steam desktop shell (Electron, file saves, crash overlay, splash, title, quit/credits, fullscreen, UI anchoring) | planned (D5) |
+| WP20 | First-impression UX polish (onboarding, fly-in visible, tree fit, era cards, text sweep) | planned (D6) |
+| WP21 | Demo edition (cap at Substation Blueprint, end card + final-machine teaser, wishlist) | planned (D4) |
+| WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | planned (WP16.md, slimmed by D8) |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
