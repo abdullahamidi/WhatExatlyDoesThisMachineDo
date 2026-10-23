@@ -29,7 +29,7 @@
 | WP19 | Steam desktop shell (Electron, file saves, crash overlay, splash, title, quit/credits, fullscreen, UI anchoring) | ✅ done |
 | WP20 | First-impression UX polish (onboarding, fly-in visible, tree fit, era cards, text sweep) | ✅ done |
 | WP21 | Demo edition (cap at Substation Blueprint, end card + final-machine teaser, wishlist) | ✅ done |
-| WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | WP16a ✅ · WP16b-1 store polish ✅ · WP16b-2 docs + a11y/UX (running) · WP16b-3 soak/GPU perf/final AD audit (next) |
+| WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | WP16a ✅ · WP16b-1 store polish ✅ · WP16b-2 docs + a11y/UX ✅ · WP16b-3 soak/GPU perf/final AD audit (running) |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -89,11 +89,16 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 - **WP16b-1** store polish: Art Director far-plain ramp under the ridge (grey band gone), transparent skyline underside, bolted logo
   plate; HUD hidden behind the title; store-shots fixes + store-top5.json (07 era V clean, 06 spire, 03 generator, 05 tree,
   09 postgame clean); art script guards (logo_plate.py). AD RELEASE-READY at 1080/2160.
+- **WP16b-2** release docs + deferred a11y/UX: README (editions, energies, commands, save locations), CHANGELOG.md 0.9.0,
+  STEAM_RELEASE release checklist + store assets (3 rows PENDING WP16b-3), GAME_SPEC §18 note; tech tree focus trap (trapFocus),
+  palette contrast for purchased (sand) and milestone (amber→amber-dim) nodes, a11y DEFERRED_SCOPES empty (tree/toast/era card
+  gate); compact one-line in-tree toast clear of heading/tabs at UI 100/125/150; one guidance prompt at a time (activePrompt);
+  stable tree panel (fixed height, PURCHASE + feedback one row, graph centred). AD RELEASE-READY (round 2).
 - **Art**: every sprite and background layer is PixelLab Pro in one locked palette from one style
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 3396 pass (119 files) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 3409 pass (119 files) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
@@ -134,9 +139,8 @@ Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era 
 
 ## Next recommended task
 Steam demo program (docs/plan/STEAM_DEMO_PROGRAM.md), WP16 release verification:
-1. WP16b-2 (running in worktree C:/Users/sanan/wedtmd-shell, branch claude/release-wp16): README, CHANGELOG, STEAM_RELEASE checklist,
-   GAME_SPEC §18 note; tree focus trap + node contrast (a11y deferred scopes gate again); toast vs tree heading; first-screen guidance.
-2. WP16b-3 (after merge, nothing in parallel): 30–60 min soak, quiet-machine GPU perf (frame p95 ≤ 17 ms), final Art Director audit
-   incl. 1080p and Steam Deck 1280×800, final store shots, PROJECT_STATUS final.
-Budgets: app raw 460 KB (full 401.5, demo 403.5), css 44 KB (full 39.0, demo 41.7 incl. lazy END card css; WP21 D10 sign-off).
+1. WP16b-3 (running in the main tree, nothing in parallel): 30–60 min soak, quiet-machine GPU perf (frame p95 ≤ 17 ms),
+   final Art Director audit incl. 1080p and Steam Deck 1280×800 (UI 100/150), era V store-shot plate spoiler decision, final store
+   shots 1080/2160, STEAM_RELEASE PENDING rows, PROJECT_STATUS final.
+Budgets: app raw 460 KB (full 401.8, demo 403.7), css 44 KB (full 39.9, demo 42.6 incl. lazy END card css; WP21 D10 sign-off).
 Final machine shots (3840×2160, AD RELEASE-READY) and demo teaser/END card shots sent to the user on 2026-10-23.
