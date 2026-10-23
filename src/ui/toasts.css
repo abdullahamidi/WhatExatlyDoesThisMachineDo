@@ -14,7 +14,7 @@
 
 /* top-right column: never covers x < 900 at 1280x720 (right 16 + width 360); audit defect 11 */
 #toast-stack {
-  position: fixed;
+  position: absolute;
   top: 16px;
   right: 16px;
   left: auto;
@@ -30,7 +30,7 @@
 .toast {
   position: relative;
   box-sizing: border-box;
-  max-width: min(360px, 92vw);
+  max-width: min(360px, calc(92vw / var(--ui-zoom, 1)));
   padding: 8px 14px;
   background: var(--iron-2);
   border: 2px solid var(--rust);

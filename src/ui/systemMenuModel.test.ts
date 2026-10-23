@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel, nextTab, clampTab, leavingTab, newCycleRow } from './systemMenuModel';
+import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel, nextTab, clampTab, leavingTab, newCycleRow, tabIndexFor, shellRows } from './systemMenuModel';
 import type { ResetState } from './systemMenuModel';
 import { SYSTEM_MENU_CONFIG } from '../data/systemMenu';
 import { FINALE_CHOICE } from '../data/finale';
@@ -162,6 +162,32 @@ describe('leavingTab', () => {
   it('returns null when the selection stays on the same tab', () => {
     expect(leavingTab(2, 2)).toBeNull();
     expect(leavingTab(0, 0)).toBeNull();
+  });
+});
+
+describe('tabIndexFor', () => {
+  const TABS = ['system', 'settings', 'stats'];
+
+  it('returns the index of a known tab id', () => {
+    expect(tabIndexFor(TABS, 'settings')).toBe(1);
+    expect(tabIndexFor(TABS, 'stats')).toBe(2);
+    expect(tabIndexFor(TABS, 'system')).toBe(0);
+  });
+
+  it('unknown id, undefined id and an empty list give 0', () => {
+    expect(tabIndexFor(TABS, 'nope')).toBe(0);
+    expect(tabIndexFor(TABS, undefined)).toBe(0);
+    expect(tabIndexFor([], 'settings')).toBe(0);
+    expect(tabIndexFor([], undefined)).toBe(0);
+  });
+});
+
+describe('shellRows', () => {
+  it('maps hasCredits to credits and canQuit to quit, all four combinations', () => {
+    expect(shellRows({ hasCredits: false, canQuit: false })).toEqual({ credits: false, quit: false });
+    expect(shellRows({ hasCredits: true, canQuit: false })).toEqual({ credits: true, quit: false });
+    expect(shellRows({ hasCredits: false, canQuit: true })).toEqual({ credits: false, quit: true });
+    expect(shellRows({ hasCredits: true, canQuit: true })).toEqual({ credits: true, quit: true });
   });
 });
 

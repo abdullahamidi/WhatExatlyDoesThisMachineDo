@@ -79,6 +79,18 @@ export function leavingTab(from: number, to: number): number | null {
   return from === to ? null : from;
 }
 
+/** Index of the tab with `id`; 0 when `id` is undefined or not in the list. */
+export function tabIndexFor(tabIds: readonly string[], id: string | undefined): number {
+  if (id === undefined) return 0;
+  const index = tabIds.indexOf(id);
+  return index < 0 ? 0 : index;
+}
+
+/** WP19 shell rows in the SYSTEM tab: CREDITS and QUIT TO DESKTOP show only when their hooks are given. */
+export function shellRows(o: { hasCredits: boolean; canQuit: boolean }): { credits: boolean; quit: boolean } {
+  return { credits: o.hasCredits, quit: o.canQuit };
+}
+
 /** Tab index after a navigation key. Arrows wrap; Home / End jump to the ends. */
 export function nextTab(index: number, count: number, key: TabNavKey): number {
   if (count <= 0) return 0;

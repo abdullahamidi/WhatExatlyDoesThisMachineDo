@@ -3,10 +3,18 @@ import type { GameContext } from './context';
 import type { PurchaseFailure } from '../data/types';
 import type { FinaleBeat } from '../data/finale';
 import type { MachineComponentId } from '../data/machineComponents';
+import type { ToastMessage } from '../data/notifications';
+import { FRAME_RATE } from '../data/display';
+import { APP_VERSION } from '../data/version';
 import { createNewCycleController } from './newCycle';
 import { MENU_TABS } from '../data/systemMenu';
 import { createSignal } from '../utils/signal';
+import { versionLine, versionAriaLabel } from '../utils/versionLine';
+import { debugEnabled } from '../utils/debugFlag';
+import { getHost } from '../platform/host';
 import { SaveManager, browserStorage } from '../persistence/saveManager';
+import { pickStorage } from '../persistence/hostStorage';
+import { SAVE_VERSION } from '../persistence/schema';
 import { startSession } from '../persistence/startup';
 import { createSaveController } from '../persistence/saveController';
 import { createModalStack, bindEscapeToStack } from '../ui/modalStack';
@@ -17,6 +25,13 @@ import { achievementMessage, recoveredMessage, welcomeBackMessage } from '../ui/
 import { createTechTree } from '../ui/techTree';
 import { createSystemMenu } from '../ui/systemMenu';
 import type { SystemMenuPanel } from '../ui/systemMenu';
+import { createViewportSync } from '../ui/viewportSync';
+import { createFullscreen } from '../ui/fullscreen';
+import { createCredits, CREDITS_STACK_ID } from '../ui/credits';
+import { createTitleScreen, TITLE_STACK_ID } from '../ui/titleScreen';
+import { shouldShowTitle } from '../ui/titleModel';
+import { showStorageWarning } from '../ui/storageWarning';
+import { registerCrashSaver } from '../ui/crashOverlay';
 import { createFinaleOverlay } from '../ui/finale';
 import { createCycleConfirm } from '../ui/cycleConfirm';
 import { setRevealed } from '../ui/revealRules';
@@ -40,6 +55,8 @@ import { installDebugHook } from './debugHook';
 // UI and modal stack, start autosave and unload saves, then the audio controller and the Phaser game.
 // Reset only runs through the save controller. Recovered-save and welcome-back toasts come from the
 // StartupResult, because the boot 'offline' event fires before any listener exists.
+// WP19: the desktop host (when present) supplies the save storage, the title screen holds the boot notices until
+// it closes, the crash overlay saves through the same controller, and the UI root follows the canvas viewport.
 /** One disposer for several session subscriptions. */
 function joinUnsubscribes(...unsubscribes: Array<() => void>): () => void {
   return () => {
@@ -47,10 +64,23 @@ function joinUnsubscribes(...unsubscribes: Array<() => void>): () => void {
   };
 }
 
-export function bootstrap(): Phaser.Game {
-  const saveManager = new SaveManager(browserStorage());
+export interface BootOptions {
+  /** WP21 passes 'DEMO'. */
+  editionLabel?: string | null;
+  /** default window.location.search */
+  search?: string;
+}
+
+export function bootstrap(opts: BootOptions = {}): Phaser.Game {
+  const search = opts.search ?? window.location.search;
+  const editionLabel = opts.editionLabel ?? null;
+  const host = getHost(window);
+  const picked = pickStorage({ host, legacy: browserStorage });
+  const saveManager = new SaveManager(picked.storage);
   const startup = startSession(saveManager, Date.now());
   const session = startup.session;
+  const version = versionLine(APP_VERSION, SAVE_VERSION, editionLabel);
+  const versionAria = versionAriaLabel(APP_VERSION, editionLabel);
 
   // One Escape listener for the whole page lifetime; it closes only the top-most modal.
   const modals = createModalStack();
@@ -58,6 +88,13 @@ export function bootstrap(): Phaser.Game {
 
   const root = document.getElementById('ui-root');
   if (!root) throw new Error('#ui-root missing');
+  // Saves fall back to memory (no host, no usable localStorage): the banner says so.
+  if (picked.kind === 'memory') showStorageWarning(root);
+
+  // The UI root follows the game canvas rect. The game is created at the end of boot; until then the viewport
+  // stands in with the base height.
+  let game: Phaser.Game | null = null;
+  const viewport = createViewportSync({ root, canvas: () => game?.canvas ?? null, uiScale: () => session.settings.uiScale });
 
   // New cycle (WP14): the controller replaces the WP13 stub. The transition port is late-bound (WorldScene sets it
   // when the scene starts; before that the transition is a plain swap). closeDialogs reads the tech tree and menu
@@ -81,6 +118,8 @@ export function bootstrap(): Phaser.Game {
   });
   // Hotkeys and the menu stay shut while a cycle transition runs or its confirm dialog is up (EM decision 4).
   const newCycleHoldsKeys = (): boolean => newCycle.isBusy() || modals.has('cycleConfirm');
+  // The title and CREDITS modals keep the tech tree and menu hotkeys shut too (WP19).
+  const shellHoldsKeys = (): boolean => modals.has(TITLE_STACK_ID) || modals.has(CREDITS_STACK_ID);
 
   const ctx: GameContext = {
     session,
@@ -102,6 +141,22 @@ export function bootstrap(): Phaser.Game {
 
   const saveController = createSaveController({ session, saveManager });
   saveController.start();
+  // Every save path ends here: the controller write, then the host flush (a no-op for the browser storages).
+  const flushSaves = (): void => {
+    saveController.saveNow();
+    picked.flush();
+  };
+  // The crash overlay saves through the same path; it reports success only when both writes worked.
+  registerCrashSaver(() => {
+    const ok = saveController.saveNow();
+    const flushed = picked.flush();
+    return ok && flushed;
+  });
+  // QUIT TO DESKTOP exists only with a host. Progress is flushed before the process exits.
+  const quitToDesktop = host === null ? undefined : (): void => {
+    flushSaves();
+    host.quit();
+  };
 
   // D9: a brand-new save starts with reduced motion when the OS asks for it. Read here only.
   // Skipped after a read error: the 'settings' save would overwrite a possibly good stored save.
@@ -113,17 +168,21 @@ export function bootstrap(): Phaser.Game {
     session.updateSettings({ reducedMotion: true });
   }
   // Settings applier: once now and on every 'settings' event. Notation is the module default read by the
-  // formatters; UI scale and the marker / motion flags are root attributes the CSS reads.
+  // formatters; the UI scale (zoom, written by the viewport sync) and the marker / motion flags are root
+  // attributes the CSS reads.
   const applySettings = (): void => {
     const s = session.settings;
     setDefaultNotation(s.notation);
     const attrs = uiRootAttrs(s);
-    root.style.zoom = attrs.zoom;
+    viewport.sync();
     root.dataset.statusMarkers = attrs.statusMarkers;
     root.dataset.reducedMotion = attrs.reducedMotion;
   };
   applySettings();
   session.on('settings', applySettings);
+
+  // Session-only fullscreen: the host when present, the browser Fullscreen API otherwise (SETTINGS > DISPLAY row).
+  const fullscreen = createFullscreen(host);
 
   // SYSTEM menu tabs after SYSTEM. Each panel reaches the game only through its narrow deps.
   const panels: readonly SystemMenuPanel[] = [
@@ -134,6 +193,7 @@ export function bootstrap(): Phaser.Game {
         get: () => session.settings,
         update: (patch) => session.updateSettings(patch),
         subscribe: (fn) => session.on('settings', () => fn()),
+        fullscreen,
       }),
     },
     {
@@ -187,6 +247,8 @@ export function bootstrap(): Phaser.Game {
     },
   ];
 
+  // CREDITS modal: opened from the SYSTEM menu here and from the title screen.
+  const credits = createCredits(root, { modals });
   const systemMenu = createSystemMenu(root, {
     isMuted: () => session.settings.muted,
     setMuted: (m) => session.setMuted(m),
@@ -195,6 +257,9 @@ export function bootstrap(): Phaser.Game {
     modals,
     panels,
     ending: { phase: () => session.state.ending.phase, newCycle: ctx.newCycle },
+    quit: quitToDesktop,
+    openCredits: () => credits.open(),
+    footer: { text: version, ariaLabel: versionAria },
   });
   // The two dialogs are mutually exclusive: opening one closes the other.
   ctx.commands.openSystemMenu.on(() => {
@@ -228,24 +293,29 @@ export function bootstrap(): Phaser.Game {
     modals,
     crank: () => ctx.commands.crank.emit(),
     toggleTechTree: () => {
-      if (isFinaleLocked(session.state.ending) || newCycleHoldsKeys()) return;
+      if (isFinaleLocked(session.state.ending) || newCycleHoldsKeys() || shellHoldsKeys()) return;
       if (techTree.isOpen()) techTree.close();
       else ctx.commands.openTechTree.emit();
     },
     openMenu: () => {
-      if (isFinaleLocked(session.state.ending) || newCycleHoldsKeys()) return;
+      if (isFinaleLocked(session.state.ending) || newCycleHoldsKeys() || shellHoldsKeys()) return;
       ctx.commands.openSystemMenu.emit();
     },
   });
 
-  // Boot-time notices. Shown once here; later offline reports (tab return) use connectOfflineNotices.
-  if (startup.load.status === 'recovered') toasts.show(recoveredMessage());
+  // Boot-time notices. Queued and shown once: at once when the title is not shown, else when the title closes
+  // (NEW GAME drops them). Later offline reports (tab return) use connectOfflineNotices.
+  const bootNotices: ToastMessage[] = [];
+  const showBootNotices = (): void => {
+    for (const m of bootNotices.splice(0)) toasts.show(m);
+  };
+  if (startup.load.status === 'recovered') bootNotices.push(recoveredMessage());
   const welcome = welcomeBackMessage(startup.offline);
-  if (welcome !== null) toasts.show(welcome);
+  if (welcome !== null) bootNotices.push(welcome);
   // Achievements the boot catch-up unlocked (WP15 T8): their listener ran before connectAchievements, so no repeat.
   if (startup.bootAchievements.length > 0) {
     const bootAchievements = achievementMessage(startup.bootAchievements);
-    if (bootAchievements !== null) toasts.show(bootAchievements);
+    if (bootAchievements !== null) bootNotices.push(bootAchievements);
   }
   connectNotifications(session, toasts);
   connectAchievements(session, toasts);
@@ -253,21 +323,45 @@ export function bootstrap(): Phaser.Game {
   connectOfflineNotices(session, toasts);
   connectSystemLog(session, toasts);
 
+  // Title screen (WP19). Shown on a normal boot; the boot notices wait behind it. CONTINUE and Esc release them.
+  // NEW GAME erases the save (when there is one) and drops the notices. Quit exists only on the desktop host.
+  const hasSave = startup.load.status !== 'new';
+  const title = createTitleScreen(root, {
+    modals,
+    hasSave,
+    canQuit: quitToDesktop !== undefined,
+    versionLine: version,
+    versionAria,
+    onClose: (result) => {
+      if (result === 'newGame') {
+        if (hasSave) saveController.resetProgress();
+        bootNotices.length = 0;
+      } else {
+        showBootNotices();
+      }
+    },
+    openSettings: () => systemMenu.open(MENU_TABS.settings.id),
+    openCredits: () => credits.open(),
+    quit: () => quitToDesktop?.(),
+  });
+  if (shouldShowTitle({ search, phase: session.state.ending.phase })) title.open();
+  else showBootNotices();
+
   // Unload saves: the tab may be closed before the next autosave tick.
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') saveController.saveNow();
+    if (document.visibilityState === 'hidden') flushSaves();
   });
   window.addEventListener('pagehide', () => {
-    saveController.saveNow();
+    flushSaves();
   });
   window.addEventListener('beforeunload', () => {
-    saveController.saveNow();
+    flushSaves();
   });
 
   // Creates no AudioContext here; the first gesture does.
   const audio = createGameAudio(session, ctx.feedback, window);
 
-  const game = new Phaser.Game({
+  game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
     width: VIEW.width,
@@ -278,8 +372,17 @@ export function bootstrap(): Phaser.Game {
     input: { mouse: { preventDefaultWheel: true } },
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     audio: { noAudio: true },
+    fps: { target: FRAME_RATE.target, limit: FRAME_RATE.limit },
+    disableContextMenu: true,
     scene: [new BootScene(), new WorldScene(ctx, { hud, techTree, modals, finaleOverlay, finaleLink, cycleLink })],
   });
-  installDebugHook(session, game, techTree, { modals, systemMenu, saveController, audio, newCycle });
+  // The UI root re-fits when the game resizes and once the game is ready (the first sync may run before the canvas).
+  game.scale.on(Phaser.Scale.Events.RESIZE, () => viewport.sync());
+  game.events.once(Phaser.Core.Events.READY, () => viewport.sync());
+  viewport.sync();
+  // The debug hook is test-only: never with a packaged desktop host, and only with ?debug or a dev build.
+  if (debugEnabled(search, import.meta.env.DEV) && host?.isPackaged !== true) {
+    installDebugHook(session, game, techTree, { modals, systemMenu, saveController, audio, newCycle });
+  }
   return game;
 }

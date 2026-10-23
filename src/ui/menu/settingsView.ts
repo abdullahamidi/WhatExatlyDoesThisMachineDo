@@ -1,4 +1,5 @@
 // SETTINGS tab model (WP12 T7). Pure: maps SettingsState to control descriptors and to patches. No DOM.
+import { DISPLAY_TEXT } from '../../data/display';
 import { NOTATIONS, SETTINGS_LABELS, UI_SCALES, VOLUME_RANGE } from '../../data/settings';
 import type { NumberNotation, SettingsState, UiScale } from '../../data/types';
 
@@ -42,6 +43,14 @@ export interface ToggleControl {
 }
 
 export type SettingsControl = VolumeControl | RadioControl | ToggleControl;
+
+/** FULLSCREEN row of the DISPLAY section. Session-only: not a SettingsState field. */
+export interface FullscreenRow {
+  label: string;
+  stateText: string;
+  pressed: boolean;
+  hint: string;
+}
 
 export interface UiRootAttrs {
   zoom: string;
@@ -156,11 +165,22 @@ export function toggleAction(id: ToggleId, s: Readonly<SettingsState>): Partial<
   }
 }
 
+/** FULLSCREEN row descriptor for the given state (ON / OFF). */
+export function fullscreenRow(on: boolean): FullscreenRow {
+  return {
+    label: DISPLAY_TEXT.fullscreen,
+    stateText: on ? SETTINGS_LABELS.on : SETTINGS_LABELS.off,
+    pressed: on,
+    hint: DISPLAY_TEXT.fullscreenKeys,
+  };
+}
+
 /** Keyboard help lines for the bottom of the SETTINGS tab. */
 export function hotkeyHelpLines(): string[] {
   return [
     `${SETTINGS_LABELS.keyCrank}  ${SETTINGS_LABELS.hotkeyCrank}`,
     `${SETTINGS_LABELS.keyTechTree}  ${SETTINGS_LABELS.hotkeyTechTree}`,
     `${SETTINGS_LABELS.keyMenu}  ${SETTINGS_LABELS.hotkeyMenu}`,
+    `${DISPLAY_TEXT.fullscreenKeys}  ${DISPLAY_TEXT.fullscreen}`,
   ];
 }

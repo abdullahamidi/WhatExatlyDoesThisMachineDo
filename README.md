@@ -30,6 +30,12 @@ npm install
 | `npm test` | Runs the Vitest suite once (simulation, persistence, data, UI-model and math tests). |
 | `npm run build` | Type-checks, then produces the production bundle in `dist/`. |
 | `npm run preview` | Serves the built `dist/` locally (default http://localhost:4173). Run `npm run build` first. |
+| `npm run verify` | Typecheck + test + build. |
+| `npm run desktop:dev` | Builds, then runs the Electron shell on `desktop/`. |
+| `npm run build:steam` | Packaged Windows build in `out/steam/full/win-x64/`. |
+| `npm run build:steam-demo` | Same for the demo edition folder `out/steam/demo/win-x64/`. |
+
+Steam packaging, SteamPipe and Auto-Cloud details: [`docs/STEAM_RELEASE.md`](docs/STEAM_RELEASE.md).
 
 Balance simulation only:
 

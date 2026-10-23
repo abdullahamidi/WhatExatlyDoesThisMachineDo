@@ -11,7 +11,7 @@
   --amber:#d9822b;
   --amber-dim:#a8957a;
   --haze:#d2bf9c;
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 160;
   pointer-events: none;
@@ -36,7 +36,7 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  max-width: calc(100vw - 32px);
+  max-width: calc(100% - 32px);
 }
 
 .finale-plate {

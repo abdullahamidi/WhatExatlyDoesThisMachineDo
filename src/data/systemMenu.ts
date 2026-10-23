@@ -30,6 +30,8 @@ export const MENU_TEXT = {
   close: 'CLOSE [ESC]',
   save: 'SAVE STATE',
   cancel: 'CANCEL',
+  credits: 'CREDITS',
+  quit: 'QUIT TO DESKTOP',
 } as const;
 
 // Tab bar entries. The SYSTEM tab is always first; deps.panels add tabs after it.
