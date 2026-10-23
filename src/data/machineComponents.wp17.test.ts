@@ -121,10 +121,10 @@ const LEGACY: readonly { tech: TechId; part: MachineComponentId }[] = [
 
 /** The four WP17 seats: socket, machine-local position and the one part that sits on it. */
 const NEW_SEATS: readonly { socket: SocketId; at: Vec2; part: MachineComponentId }[] = [
-  { socket: 'bellowsSeat', at: { x: -232, y: 0 }, part: 'bellows' },
-  { socket: 'exciterFeedSeat', at: { x: 88, y: -110 }, part: 'exciterFeed' },
-  { socket: 'backfeedSeat', at: { x: 120, y: -395 }, part: 'backfeedTerminal' },
-  { socket: 'lanceSeat', at: { x: 20, y: -395 }, part: 'steamLance' },
+  { socket: 'bellowsSeat', at: { x: -242, y: 0 }, part: 'bellows' },
+  { socket: 'exciterFeedSeat', at: { x: 80, y: -110 }, part: 'exciterFeed' },
+  { socket: 'backfeedSeat', at: { x: 120, y: -414 }, part: 'backfeedTerminal' },
+  { socket: 'lanceSeat', at: { x: 20, y: -414 }, part: 'steamLance' },
 ];
 
 /** Parts with a frames animation and no hz curve, so they never flash faster than 3 Hz. */
@@ -162,20 +162,20 @@ describe('WP17 legacy feed parts', () => {
 });
 
 describe('WP17 machine links and cables', () => {
-  it('the bellows hose runs (-216,-14) to (-204,-14) to (-204,-22): nozzle into the boiler tuyere', () => {
+  it('the bellows hose runs (-212,-11) to (-204,-11) to (-204,-22): nozzle into the boiler tuyere', () => {
     const link = linkBetween('bellows', 'boiler');
     expect(link.kind).toBe('pipe');
     expect(link.from.point).toBe('nozzle');
     expect(link.to.point).toBe('tuyere');
-    expect(pathOf(link)).toEqual([{ x: -216, y: -14 }, { x: -204, y: -14 }, { x: -204, y: -22 }]);
+    expect(pathOf(link)).toEqual([{ x: -212, y: -11 }, { x: -204, y: -11 }, { x: -204, y: -22 }]);
   });
 
-  it('the steam lance runs (-11,-176) to (20,-176) to (20,-371): manifold outlet into the lance steam port', () => {
+  it('the steam lance runs (-11,-176) to (20,-176) to (20,-382): manifold outlet into the lance steam port', () => {
     const link = linkBetween('steamManifold', 'steamLance');
     expect(link.kind).toBe('pipe');
     expect(link.from.point).toBe('outR');
     expect(link.to.point).toBe('steam');
-    expect(pathOf(link)).toEqual([{ x: -11, y: -176 }, { x: 20, y: -176 }, { x: 20, y: -371 }]);
+    expect(pathOf(link)).toEqual([{ x: -11, y: -176 }, { x: 20, y: -176 }, { x: 20, y: -382 }]);
   });
 
   it('the two new pipes are axis-aligned with non-zero segments', () => {
@@ -196,11 +196,11 @@ describe('WP17 machine links and cables', () => {
     expect(feed.kind).toBe('cable');
     expect(feed.from.point).toBe('top');
     expect(feed.to.point).toBe('lug');
-    expect(pointPosition('exciterFeed', 'lug')).toEqual({ x: 88, y: -132 });
+    expect(pointPosition('exciterFeed', 'lug')).toEqual({ x: 82, y: -137 });
     expect(backfeed.kind).toBe('cable');
     expect(backfeed.from.point).toBe('top');
     expect(backfeed.to.point).toBe('lug');
-    expect(pointPosition('backfeedTerminal', 'lug')).toEqual({ x: 120, y: -373 });
+    expect(pointPosition('backfeedTerminal', 'lug')).toEqual({ x: 120, y: -388 });
   });
 
   it('the link list has 20 entries after WP17', () => {
@@ -288,5 +288,27 @@ describe('WP17 speed continuity against the old curves', () => {
 
   it('turbine rotor at driver 800 equals the old curve (base 60, gain 1.5, min 0, max 540)', () => {
     expect(speedAt(speedCurveOf('turbineRotor'), 800)).toBeCloseTo(speedAt({ base: 60, gain: 1.5, min: 0, max: 540 }, 800), 9);
+  });
+});
+
+describe('A17 legacy part placement', () => {
+  it('generatorGlow sits under the belt and the generator pulley (mid + 4) and over the coil stages', () => {
+    expect(MACHINE_COMPONENTS.generatorGlow.layer).toBe('mid');
+    expect(MACHINE_COMPONENTS.generatorGlow.depthBias).toBe(4);
+    expect(MACHINE_COMPONENTS.generatorPulley.depthBias).toBe(5);
+    expect(MACHINE_COMPONENT_IDS.indexOf('generatorGlow')).toBeGreaterThan(MACHINE_COMPONENT_IDS.indexOf('coilStage3'));
+  });
+
+  it('the backfeed terminal and the steam lance hang from the null gallery deck underside (y -414)', () => {
+    for (const id of ['backfeedTerminal', 'steamLance'] as const) {
+      expect(boundsOf(MACHINE_COMPONENTS[id]).top, id).toBe(-414);
+    }
+  });
+
+  it('the exciter feed stands on the frame girder between the spire exciter and the right spire leg', () => {
+    const b = boundsOf(MACHINE_COMPONENTS.exciterFeed);
+    expect(b.bottom).toBe(-110);
+    expect(b.left).toBeGreaterThanOrEqual(72);
+    expect(b.right).toBeLessThanOrEqual(88);
   });
 });

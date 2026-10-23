@@ -928,7 +928,7 @@ const PIPE_P4_EXPECTED: MachineLink = { from: { component: 'steamManifold', poin
 
 /** WP17 tuyere hose: bellows nozzle to the boiler tuyere (water, bore 2, depth front - 1). */
 const PIPE_TUYERE_EXPECTED: MachineLink = { from: { component: 'bellows', point: 'nozzle' }, to: { component: 'boiler', point: 'tuyere' }, kind: 'pipe',
-  via: [{ x: -204, y: -14 }], bore: 2, depth: MACHINE_LAYER_DEPTH.front - 1, pipeStyle: 'water' };
+  via: [{ x: -204, y: -11 }], bore: 2, depth: MACHINE_LAYER_DEPTH.front - 1, pipeStyle: 'water' };
 
 /** WP17 steam lance: the manifold right outlet to the lance steam port (steam, bore 4). */
 const PIPE_LANCE_EXPECTED: MachineLink = { from: { component: 'steamManifold', point: 'outR' }, to: { component: 'steamLance', point: 'steam' }, kind: 'pipe',
@@ -1047,8 +1047,8 @@ describe('era III machine data', () => {
       P3: [{ x: -246, y: -91 }, { x: -412, y: -86 }],
       W1: [{ x: -362, y: -13 }, { x: -304, y: -46 }],
       P4: [{ x: -11, y: -176 }, { x: 52, y: -126 }],
-      T1: [{ x: -216, y: -14 }, { x: -204, y: -22 }],
-      L1: [{ x: -11, y: -176 }, { x: 20, y: -371 }],
+      T1: [{ x: -212, y: -11 }, { x: -204, y: -22 }],
+      L1: [{ x: -11, y: -176 }, { x: 20, y: -382 }],
     };
     const names = ['P1', 'P2', 'P3', 'W1', 'P4', 'T1', 'L1'];
     const pipes = MACHINE_LINKS.filter((l) => l.kind === 'pipe');

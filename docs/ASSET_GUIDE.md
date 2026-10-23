@@ -45,11 +45,11 @@ Machine-local depths are relative to the machine container, which sits at world 
 | `machine.piston` | `machine/piston-array.png` | 96 x 64 | 0.5, 1 (bottom-centre) | none | none | machine layer `back`, depth 0 | Piston array whose base sits at the bottom of the sprite, pumping up and down. |
 | `machine.crankBrace` | `machine/crank-brace.png` | 48 x 48 | 0.5, 0.5 (centre) | none | none | machine layer `front`, depth 31 | Riveted doubler strap and bolted boss flange that overlay the hand crank. |
 | `fx.steam` | `fx/steam.png` | 16 x 16 | 0.5, 0.5 (centre) | none | none | reserved: no renderer yet (steam effect is data only) | Steam puff particle released by working pistons. |
-| `machine.generatorGlow` | none (`file: null`, procedural; PixelLab art pending, Art Director A17) | 384 x 64 | 0.5, 0.5 (centre) | none | 4 (96 x 64 cells) | machine layer `mid`, depth 26 (bias 6) | Four-frame cyan winding glow laid over the generator housing, brighter frames as EE/s rises. Transparent over the belt pulley circle (r 11 at texture 52,49). |
-| `machine.bellows` | none (`file: null`, procedural; PixelLab art pending, Art Director A17) | 160 x 24 | 0.5, 1 (bottom-centre) | none | 4 (40 x 24 cells) | machine layer `front`, depth 30 | Four-frame leather bellows between two boards that open and close; the nozzle tip (texture 36,10) feeds the boiler firebox. |
-| `machine.exciterFeed` | none (`file: null`, procedural; PixelLab art pending, Art Director A17) | 16 x 24 | 0.5, 1 (bottom-centre) | none | none | machine layer `mid`, depth 23 | Short insulator post with a cyan cap; the cable lug is the cap (texture 8,2). |
-| `machine.backfeedTerminal` | none (`file: null`, procedural; PixelLab art pending, Art Director A17) | 16 x 24 | 0.5, 0 (top-centre) | none | none | machine layer `mid`, depth 24 | Hanging terminal plate with insulator discs and violet accents; the cable lug is the bottom cap (texture 8,22). |
-| `machine.steamLance` | none (`file: null`, procedural; PixelLab art pending, Art Director A17) | 16 x 24 | 0.5, 0 (top-centre) | none | none | machine layer `mid`, depth 25 | Steam valve block with a rust handwheel and a flanged port at the bottom (texture 8,24). |
+| `machine.generatorGlow` | `machine/legacy/generator-glow.png` (A17) | 384 x 64 | 0.5, 0.5 (centre) | none | 4 (96 x 64 cells) | machine layer `mid`, depth 24 (bias 4: over coil stage 3, under the belt and generator pulley at 25) | Four-frame EE gauge overlay laid 1:1 on `era2/generator.png` (frame = EE/s level): field-coil turn gaps, armature air-gap ring (r 8.6..10.4 round texture 52,49), terminal caps, level-3 brush sparks (inside the generator silhouette except the sparks, which rise up to 2 px above the terminal caps). |
+| `machine.bellows` | `machine/legacy/bellows.png` (A17) | 240 x 28 | 0.5, 1 (bottom-centre) | none | 4 (60 x 28 cells: open, half, closed, half) | machine layer `front`, depth 30 | Great forge bellows in side elevation on two iron legs: sand-plank boards hinged at the iron snout, leather side with fold ribs, pole handle; nozzle core rows 16..17 at the right edge (texture 59) = the 2-bore hose to the boiler tuyere. |
+| `machine.exciterFeed` | `machine/legacy/exciter-feed.png` (A17) | 16 x 28 | 0.5, 1 (bottom-centre) | none | none | machine layer `mid`, depth 23 | Cyan glass insulator (3 sheds) on a riveted terminal box, copper strap into the spire exciter's right flank (texture x 0); the cable lug is the cap (texture 10,1). |
+| `machine.backfeedTerminal` | `machine/legacy/backfeed-terminal.png` (A17) | 16 x 28 | 0.5, 0 (top-centre) | none | none | machine layer `mid`, depth 24 | Suspension string hung under the null gallery deck: hanger plate with violet lead-in bushing, 4 cyan glass cap-and-pin discs, conductor clamp, copper jumper; the cable lug is the bottom cap (texture 8,26). |
+| `machine.steamLance` | `machine/legacy/steam-lance.png` (A17) | 16 x 32 | 0.5, 0 (top-centre) | none | none | machine layer `mid`, depth 25 | Steam lance valve hung under the null gallery deck: bolted mount plate, globe valve with a face-on rust handwheel, flanged 4-bore inlet stub at the bottom (port texture 8,32) that the steam riser joins. |
 
 Layer/depth sources: `src/data/world.ts` (`PARALLAX_LAYERS`, `GROUND_LAYER`, `DUST.depth`, `DEPTH`) and
 `src/data/machineComponents.ts` (`MACHINE_LAYER_DEPTH`, component `layer`).
@@ -97,7 +97,19 @@ Layer/depth sources: `src/data/world.ts` (`PARALLAX_LAYERS`, `GROUND_LAYER`, `DU
   plate with an X (`paintGenericPlate`): `machine.flywheel`, `machine.motor`, `machine.piston`, `fx.steam`.
 - WP17 legacy feed parts (`machine.generatorGlow`, `machine.bellows`, `machine.exciterFeed`, `machine.backfeedTerminal`,
   `machine.steamLance`) use `LEGACY_PAINTERS` in `src/assets/painters/legacy.ts`.
+  Since A17 these ids have PNGs (`machine/legacy/`); the painters are only the load-failure fallback and approximate the art
+  (older, smaller geometry inside the larger A17 textures).
 - Generated ids are logged once: `[assets] generated fallback textures: <ids>`.
+
+## A17 art sources and inert variants
+
+- `scripts/art/a17/build.py` regenerates `machine/legacy/*.png` (hand-pixelled, locked palette, alpha 0/255) and stamps the
+  tuyere collar on `machine/era3/boiler.png` (rows 72..74, cols 97..102). Rerun after any change to `era2/generator.png`
+  (the glow is laid 1:1 on it).
+- `scripts/art/a17/restored.py` writes `machine/era5/restored/` (+ `restored/rot/`): the postgame "restored machine" accent,
+  a per-pixel palette swap of the era V energy sprites (null core inverted to a warm lit core; glint, beads, lens light warm;
+  rings, arcs, siphon fluid, anchor glows, inversion ghost, aperture horns and chamber violet pixels pale steam-white).
+  Same sizes, frames and rotation sheets as the originals. Inert until WP18 wires a restored texture swap (ART_AUDIT A17).
 
 ## Size mismatch warning
 

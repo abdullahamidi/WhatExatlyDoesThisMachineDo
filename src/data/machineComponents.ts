@@ -114,7 +114,7 @@ export const MACHINE_SOCKETS: Record<SocketId, Vec2> = {
   siphon2R: { x: 110, y: -418 }, siphon3L: { x: 42, y: -418 }, siphon3R: { x: 86, y: -418 }, siphonArcs: { x: 64, y: -468 },
   anchorL: { x: -520, y: 0 }, anchorR: { x: 520, y: 0 }, plateSeat: { x: 64, y: -96 },
   // WP17 Legacy Feeds seats: bellows (left of the boiler), exciter feed, mains backfeed and steam lance (top of the spire).
-  bellowsSeat: { x: -232, y: 0 }, exciterFeedSeat: { x: 88, y: -110 }, backfeedSeat: { x: 120, y: -395 }, lanceSeat: { x: 20, y: -395 },
+  bellowsSeat: { x: -242, y: 0 }, exciterFeedSeat: { x: 80, y: -110 }, backfeedSeat: { x: 120, y: -414 }, lanceSeat: { x: 20, y: -414 },
 };
 
 /** Motion: manual activity decay, frame clamp and rest threshold (compares the DRIVER value, not speed). */
@@ -221,7 +221,7 @@ export const MACHINE_LINKS: readonly MachineLink[] = [
   { from: { component: 'nullChamber', point: 'eyeL' }, to: { component: 'graviticAnchorL', point: 'eye' }, kind: 'cable', sag: 6, cableStyle: 'guy' },
   { from: { component: 'nullChamber', point: 'eyeR' }, to: { component: 'graviticAnchorR', point: 'eye' }, kind: 'cable', sag: 6, cableStyle: 'guy' },
   // WP17 Legacy Feeds: bellows hose into the boiler tuyere (water, depth front - 1: over mid, under the bellows); mast cables to the exciter feed and the backfeed terminal; steam lance off the manifold.
-  { from: { component: 'bellows', point: 'nozzle' }, to: { component: 'boiler', point: 'tuyere' }, kind: 'pipe', via: [{ x: -204, y: -14 }], bore: 2, depth: MACHINE_LAYER_DEPTH.front - 1, pipeStyle: 'water' },
+  { from: { component: 'bellows', point: 'nozzle' }, to: { component: 'boiler', point: 'tuyere' }, kind: 'pipe', via: [{ x: -204, y: -11 }], bore: 2, depth: MACHINE_LAYER_DEPTH.front - 1, pipeStyle: 'water' },
   { from: { component: 'cableMast', point: 'top' }, to: { component: 'exciterFeed', point: 'lug' }, kind: 'cable', sag: 8 },
   { from: { component: 'cableMast', point: 'top' }, to: { component: 'backfeedTerminal', point: 'lug' }, kind: 'cable', sag: 12 },
   { from: { component: 'steamManifold', point: 'outR' }, to: { component: 'steamLance', point: 'steam' }, kind: 'pipe', via: [{ x: 20, y: -176 }], bore: 4, pipeStyle: 'steam' },
@@ -1213,7 +1213,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     id: 'generatorGlow', techId: 'generator', minLevel: 1,
     assetId: 'machine.generatorGlow', attach: { socket: 'generatorMount', offset: { x: 0, y: 0 } },
     size: { width: 96, height: 64 }, origin: { x: 0.5, y: 0.5 },
-    layer: 'mid', depthBias: 6,
+    layer: 'mid', depthBias: 4,
     animation: { kind: 'gauge', driver: 'electric', frames: 4, minLog: 0, maxLog: 6.5, tauSeconds: 1 },
     connections: [],
     effects: [],
@@ -1222,40 +1222,40 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
   bellows: {
     id: 'bellows', techId: 'bellowsDrive', minLevel: 1,
     assetId: 'machine.bellows', attach: { socket: 'bellowsSeat', offset: { x: 0, y: 0 } },
-    size: { width: 40, height: 24 }, origin: { x: 0.5, y: 1 },
+    size: { width: 60, height: 28 }, origin: { x: 0.5, y: 1 },
     layer: 'front',
     animation: { kind: 'frames', frames: 4, maxHz: 4, driver: 'automation', hz: { base: 1, gain: 0.6, min: 1, max: 4 } },
-    connections: [{ id: 'nozzle', at: { x: 16, y: -14 }, kind: 'pipe' }],
+    connections: [{ id: 'nozzle', at: { x: 30, y: -11 }, kind: 'pipe' }],
     effects: [],
   },
   // Grid exciter feed (gridExciter): static insulator post; its cable lug is the cap.
   exciterFeed: {
     id: 'exciterFeed', techId: 'gridExciter', minLevel: 1,
     assetId: 'machine.exciterFeed', attach: { socket: 'exciterFeedSeat', offset: { x: 0, y: 0 } },
-    size: { width: 16, height: 24 }, origin: { x: 0.5, y: 1 },
+    size: { width: 16, height: 28 }, origin: { x: 0.5, y: 1 },
     layer: 'mid', depthBias: 3,
     animation: { kind: 'none' },
-    connections: [{ id: 'lug', at: { x: 0, y: -22 }, kind: 'cable' }],
+    connections: [{ id: 'lug', at: { x: 2, y: -27 }, kind: 'cable' }],
     effects: [],
   },
   // Mains backfeed terminal (mainsBackfeed): hanging terminal plate; its cable lug is the bottom cap.
   backfeedTerminal: {
     id: 'backfeedTerminal', techId: 'mainsBackfeed', minLevel: 1,
     assetId: 'machine.backfeedTerminal', attach: { socket: 'backfeedSeat', offset: { x: 0, y: 0 } },
-    size: { width: 16, height: 24 }, origin: { x: 0.5, y: 0 },
+    size: { width: 16, height: 28 }, origin: { x: 0.5, y: 0 },
     layer: 'mid', depthBias: 4,
     animation: { kind: 'none' },
-    connections: [{ id: 'lug', at: { x: 0, y: 22 }, kind: 'cable' }],
+    connections: [{ id: 'lug', at: { x: 0, y: 26 }, kind: 'cable' }],
     effects: [],
   },
   // Steam lance (steamLance): valve block with a flanged steam port at the bottom, fed from the manifold outlet.
   steamLance: {
     id: 'steamLance', techId: 'steamLance', minLevel: 1,
     assetId: 'machine.steamLance', attach: { socket: 'lanceSeat', offset: { x: 0, y: 0 } },
-    size: { width: 16, height: 24 }, origin: { x: 0.5, y: 0 },
+    size: { width: 16, height: 32 }, origin: { x: 0.5, y: 0 },
     layer: 'mid', depthBias: 5,
     animation: { kind: 'none' },
-    connections: [{ id: 'steam', at: { x: 0, y: 24 }, kind: 'pipe' }],
+    connections: [{ id: 'steam', at: { x: 0, y: 32 }, kind: 'pipe' }],
     effects: [],
   },
 };

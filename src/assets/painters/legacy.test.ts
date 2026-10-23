@@ -177,9 +177,9 @@ describe('machine.bellows sheet', () => {
   const rects = painter === undefined ? [] : record(painter, entry);
   const cells = sheetFrameRects(entry);
 
-  it('has four 40x24 cells at x 0, 40, 80, 120', () => {
-    expect(cells.map((c) => c.x)).toEqual([0, 40, 80, 120]);
-    expect(cells.every((c) => c.width === 40 && c.height === 24 && c.y === 0)).toBe(true);
+  it('has four 60x28 cells at x 0, 60, 120, 180', () => {
+    expect(cells.map((c) => c.x)).toEqual([0, 60, 120, 180]);
+    expect(cells.every((c) => c.width === 60 && c.height === 28 && c.y === 0)).toBe(true);
   });
 
   it('covers the nozzle tip pixel (36,10) in every cell', () => {
