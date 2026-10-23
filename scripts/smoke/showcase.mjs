@@ -1,8 +1,8 @@
-// WP18 showcase smoke: final machine (display levels, survey, portrait, VIEW MACHINE photo mode, teaser).
+// WP18 showcase smoke (WP18b: restored texture swap probes, photo chip focus, crown close-up): final machine (display levels, survey, portrait, VIEW MACHINE photo mode, teaser).
 // Usage: PW_PATH=<playwright dir> node scripts/smoke/showcase.mjs <url> <outdir>
-// Runs: A, B, C, D, C2, F, E (B-C-D-C2-F share one context, E is a fresh one).
-// Writes 13 PNGs into <outdir> (3840x2160: viewport 1280x720 at deviceScaleFactor 3) and prints ONE JSON:
-// showcase_* result objects, shots (13 entries), errors (must be empty). Reads only window.__wedtmd.
+// Runs: A, B, C, D, D2, C2, F, E (B-C-D-D2-C2-F share one context, E is a fresh one).
+// Writes 14 PNGs into <outdir> (3840x2160: viewport 1280x720 at deviceScaleFactor 3) and prints ONE JSON:
+// showcase_* result objects, shots (14 entries), errors (must be empty). Reads only window.__wedtmd.
 // A missing hook field resolves to null and fails its assertion.
 import { createRequire } from 'module';
 import { mkdirSync } from 'fs';
@@ -20,6 +20,9 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
 const PORTRAIT = { x: 1920, y: 1080, z: 0.5 };
 const cameraOk = (cam, x, y, z) => !!cam && near(cam.centerX, x, 2) && near(cam.centerY, y, 2) && near(cam.zoom, z, 0.01);
 const atPortrait = cam => cameraOk(cam, PORTRAIT.x, PORTRAIT.y, PORTRAIT.z);
+const RESTORED_TOTAL = 33;   // machine parts that have an A17 restored variant
+// crown close-up by real keys from the portrait: `=` x4 (zoom .5 -> 1.5), ArrowRight x2 (+64 world px each), ArrowUp x6 (-64 each) -> camera (2048, 696, 1.5)
+const CROWN = { zoomIn: 4, right: 2, up: 6, x: 2048, y: 696, z: 1.5 };
 // every hidden part is the 3 s inversion ghost; a missing list (null) fails
 const inv = hidden => Array.isArray(hidden) && hidden.every(id => id === 'inversionGhost');
 const failedBuys = r => r.filter(x => !x.endsWith(':true'));
@@ -46,7 +49,10 @@ const open = async () => {
   if (ctx) await ctx.close();
   ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 3 });
   page = await ctx.newPage();
-  page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+  page.on('console', m => {
+    if (m.type() === 'error') errors.push('console: ' + m.text());
+    else if (m.type() === 'warning' && /\[assets\] (failed to load|size mismatch)|has no frame/.test(m.text())) errors.push('console warning: ' + m.text());
+  });
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   await page.goto(url, { waitUntil: 'networkidle' });
   await ready();
@@ -95,6 +101,28 @@ const modals = () => page.evaluate(() => window.__wedtmd?.modalCount?.() ?? null
 const photoState = () => page.evaluate(() => window.__wedtmd?.photoState?.() ?? null);
 const photoMode = (on, opts) => page.evaluate(({ on, opts }) => window.__wedtmd?.photoMode?.(on, opts) ?? null, { on, opts });
 const showcase = () => page.evaluate(() => window.__wedtmd?.showcaseState?.() ?? null);
+const restored = () => page.evaluate(() => window.__wedtmd?.restoredTextures?.() ?? null);
+const texKey = id => page.evaluate(id => window.__wedtmd?.textureKey?.(id) ?? null, id);
+const frameOf = id => page.evaluate(id => window.__wedtmd?.componentState?.(id)?.frame ?? null, id);
+// exit chip: computed opacity, focus, :focus-visible match; null when the chip is not in the DOM
+const chipState = () => page.evaluate(() => {
+  const el = document.getElementById('photo-exit');
+  if (!el) return null;
+  return { opacity: getComputedStyle(el).opacity, focused: document.activeElement === el, focusVisible: el.matches(':focus-visible') };
+});
+// store shots must not show a focus-visible chip: drop focus from it (no-op when it is not focused)
+const blurChip = () => page.evaluate(() => { const el = document.getElementById('photo-exit'); if (el && document.activeElement === el) el.blur(); });
+// the chip fades over 300 ms (slower under 4K WebGL frames): poll up to 3 s until its computed opacity is <= 0.001; returns the last chipState()
+const waitChipHidden = async () => { for (let i = 0; i < 30; i++) { const c = await chipState(); if (c && parseFloat(c.opacity) <= 0.001) return c; await page.waitForTimeout(100); } return chipState(); };
+// true when the chip state is read and invisible
+const chipHidden = c => c !== null && parseFloat(c.opacity) <= 0.001;
+// asserts the swapped-part count (want 0 or RESTORED_TOTAL) and total === RESTORED_TOTAL; returns the swapped count (null when the hook is missing)
+const checkRestored = async (key, want) => {
+  const r = await restored();
+  const n = Array.isArray(r?.swapped) ? r.swapped.length : null;
+  check(n === want && r?.total === RESTORED_TOTAL, `${key} restored swapped ${n} total ${r?.total ?? null} want ${want}/${RESTORED_TOTAL}`);
+  return n;
+};
 const resonantSiphon = () => page.evaluate(() => window.__wedtmd?.session?.state?.techLevels?.resonantSiphon ?? null);
 const totalClicks = () => page.evaluate(() => window.__wedtmd?.session?.state?.totalClicks ?? null);
 const computed = (id, prop) => page.evaluate(({ id, prop }) => { const el = document.getElementById(id); return el ? getComputedStyle(el)[prop] : null; }, { id, prop });
@@ -140,6 +168,8 @@ try {
     await page.waitForTimeout(15000);
     const entered = await photoMode(true, { hint: false });
     await page.waitForTimeout(1200);
+    await blurChip();
+    const chipA = await waitChipHidden();
     const hidden = (await parts())?.hidden ?? null;
     check(inv(hidden), `showcase_A hidden parts: ${JSON.stringify(hidden)}`);
     const photo = await photoState();
@@ -148,10 +178,12 @@ try {
     check(hudVisibility === 'hidden', `showcase_A hud-panel visibility ${hudVisibility}`);
     const camera = await cameraState();
     check(atPortrait(camera), `showcase_A camera ${JSON.stringify(camera)}`);
+    check(chipHidden(chipA), `showcase_A exit chip ${JSON.stringify(chipA)}`);
+    const restoredA = await checkRestored('showcase_A', 0);
     // no pointer move: the exit chip must stay invisible
     await shot('a_era5_ruined', { still: true });
     await photoMode(false);
-    res.showcase_A = { buyFailed, entered, hidden, photo, camera, hudVisibility };
+    res.showcase_A = { buyFailed, entered, hidden, photo, camera, hudVisibility, chip: chipA, restoredSwapped: restoredA };
   });
 
   // RUN B: completion beat and survey on the greedy machine; RUN C continues the same context to postgame.
@@ -163,14 +195,16 @@ try {
     const primaryFunction = await buyList(['primaryFunction']);
     check(primaryFunction.includes('primaryFunction:true'), `showcase_B primaryFunction ${primaryFunction.join(',')}`);
     await page.waitForTimeout(300);
-    await seek(2.5);
-    await page.waitForTimeout(300);
-    const fs25 = await fin();
+    // the film clock keeps running in 'sequence': seek early and read parts() before fin() so both probes stay before the completion step at t 3
+    await seek(2.0);
+    await page.waitForTimeout(150);
     const hidden25 = (await parts())?.hidden ?? null;
+    const fs25 = await fin();
+    check(fs25 !== null && fs25.t < 3, `showcase_B_k2_5 film clock passed the completion step: t ${fs25?.t ?? null}`);
     const must25 = ['siphonTube3L', 'coilStage3', 'steamLance'];
     check(Array.isArray(hidden25) && hidden25.length >= 6 && must25.every(id => hidden25.includes(id)), `showcase_B_k2_5 hidden: ${JSON.stringify(hidden25)}`);
     check(fs25?.frame?.completeEra === 0, `showcase_B_k2_5 completeEra ${fs25?.frame?.completeEra ?? null}`);
-    res.showcase_B_k2_5 = { buyFailed, primaryFunction, t: fs25?.t ?? null, completeEra: fs25?.frame?.completeEra ?? null, hidden: hidden25 };
+    res.showcase_B_k2_5 = { buyFailed, primaryFunction, seekT: 2.0, t: fs25?.t ?? null, completeEra: fs25?.frame?.completeEra ?? null, hidden: hidden25, restoredSwapped: await checkRestored('showcase_B_k2_5', 0) };
     await shot('b_k2_5');
 
     // Completion steps (FINALE_COMPLETE 3 / 4.5 / 6): the film clock keeps running in 'sequence', so each
@@ -192,7 +226,7 @@ try {
       else check(Array.isArray(hidden) && !hidden.includes(k.mustShow), `${k.key} ${k.mustShow} hidden`);
       // the real session keeps its greedy levels: the completion beat is display-only
       check(siphon === 11, `${k.key} real resonantSiphon ${siphon} want 11`);
-      res[k.key] = { seekT: k.t, t: fs?.t ?? null, completeEra, hidden, resonantSiphon: siphon };
+      res[k.key] = { seekT: k.t, t: fs?.t ?? null, completeEra, hidden, resonantSiphon: siphon, restoredSwapped: await checkRestored(k.key, 0) };
       await shot(k.shotName);
     }
 
@@ -201,14 +235,14 @@ try {
     await page.waitForTimeout(300);
     const cam415 = await cameraState();
     check(cameraOk(cam415, 1320, 1380, 1), `showcase_B_k41_5 camera ${JSON.stringify(cam415)}`);
-    res.showcase_B_k41_5 = { camera: cam415 };
+    res.showcase_B_k41_5 = { camera: cam415, restoredSwapped: await checkRestored('showcase_B_k41_5', RESTORED_TOTAL) };
     await shot('b_k41_5');
 
     await seek(45.2);
     await page.waitForTimeout(300);
     const cam452 = await cameraState();
     check(cameraOk(cam452, 2520, 1380, 1), `showcase_B_k45_2 camera ${JSON.stringify(cam452)}`);
-    res.showcase_B_k45_2 = { camera: cam452 };
+    res.showcase_B_k45_2 = { camera: cam452, restoredSwapped: await checkRestored('showcase_B_k45_2', RESTORED_TOTAL) };
     await shot('b_k45_2');
 
     await seek(56);
@@ -217,7 +251,7 @@ try {
     const cam56 = await cameraState();
     check(fs56?.shot === 'S4', `showcase_B_k56 shot ${fs56?.shot ?? null}`);
     check(atPortrait(cam56), `showcase_B_k56 camera ${JSON.stringify(cam56)}`);
-    res.showcase_B_k56 = { shot: fs56?.shot ?? null, camera: cam56 };
+    res.showcase_B_k56 = { shot: fs56?.shot ?? null, camera: cam56, restoredSwapped: await checkRestored('showcase_B_k56', RESTORED_TOTAL) };
     await shot('b_k56');
   });
 
@@ -240,7 +274,14 @@ try {
     check(atPortrait(camera), `showcase_C camera ${JSON.stringify(camera)}`);
     check(inv(hidden), `showcase_C hidden parts: ${JSON.stringify(hidden)}`);
     check(viewMachine !== null && viewMachine.hidden === false && viewMachine.w > 0 && viewMachine.h > 0, `showcase_C view button ${JSON.stringify(viewMachine)}`);
-    res.showcase_C = { storedPhase: sp, phase: fs?.phase ?? null, title, plate, camera, hidden, viewMachine };
+    const restoredC = await checkRestored('showcase_C', RESTORED_TOTAL);
+    const keys = { nullCore: await texKey('nullCore'), ring1Bead: await texKey('ring1Bead'), aperture: await texKey('aperture') };
+    check(keys.nullCore === 'machine.nullCore#restored#rot', `showcase_C nullCore key ${keys.nullCore}`);
+    check(keys.ring1Bead === 'machine.ringBead#restored', `showcase_C ring1Bead key ${keys.ring1Bead}`);
+    check(keys.aperture === 'machine.aperture#restored', `showcase_C aperture key ${keys.aperture}`);
+    const lit = { generatorGlow: await frameOf('generatorGlow'), crystal: await frameOf('crystal'), lensLight: await frameOf('lensLight'), anchorGlow1L: await frameOf('anchorGlow1L') };
+    check(lit.generatorGlow === 3 && lit.crystal === 2 && lit.lensLight === 3 && lit.anchorGlow1L === 2, `showcase_C lamp frames ${JSON.stringify(lit)} want 3/2/3/2`);
+    res.showcase_C = { storedPhase: sp, phase: fs?.phase ?? null, title, plate, camera, hidden, viewMachine, restoredSwapped: restoredC, keys, lit };
     await shot('c_postgame_portrait');
   });
 
@@ -252,11 +293,15 @@ try {
     const photo = await photoState();
     const modalCount = await modals();
     const hudVisibility = await computed('hud-panel', 'visibility');
-    const chipOpacity = await computed('photo-exit', 'opacity');
+    const chip = await chipState();
     check(photo?.active === true && photo?.hint === false, `showcase_D photo state ${JSON.stringify(photo)}`);
     check(modalCount === 1, `showcase_D modalCount ${modalCount}`);
     check(hudVisibility === 'hidden', `showcase_D hud-panel visibility ${hudVisibility}`);
-    check(chipOpacity === '0', `showcase_D exit chip opacity ${chipOpacity}`);
+    check(chip?.focused === true, `showcase_D exit chip focused ${JSON.stringify(chip)}`);
+    check(chip !== null && (!chip.focusVisible || chip.opacity === '1'), `showcase_D focus-visible chip must be shown ${JSON.stringify(chip)}`);
+    await blurChip();
+    const chipBlurred = await waitChipHidden();
+    check(chipHidden(chipBlurred), `showcase_D exit chip after blur ${JSON.stringify(chipBlurred)}`);
     await shot('d_photo_postgame', { still: true });
 
     const c0 = await cameraState();
@@ -294,9 +339,41 @@ try {
     check(hudAfter === 'visible', `showcase_D hud-panel after Esc ${hudAfter}`);
     check(modalsAfter === 0, `showcase_D modalCount after Esc ${modalsAfter}`);
     res.showcase_D = {
-      photo, modalCount, hudVisibility, chipOpacity, dragged, zoomed, arrowPanned,
+      photo, modalCount, hudVisibility, chip, chipBlurred, dragged, zoomed, arrowPanned,
       exit: { photo: photoAfter, camera: cameraAfter, hudVisibility: hudAfter, modalCount: modalsAfter },
     };
+  });
+
+  // RUN D2 (same context, postgame): crown close-up by real keys from the portrait. `=` x4 (zoom .5 -> 1.5), ArrowRight x2 (+64 world px each at zoom 1.5),
+  // ArrowUp x6 (-64 each): camera (2048, 696, 1.5) = 3 screen px per art px on the crown (aperture top, lens, null chamber, core, siphons, crystal, gallery).
+  await run('D2', async () => {
+    await page.focus('#hud-view-machine');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(1500);
+    await blurChip();
+    await waitChipHidden();
+    const press =async (key, n) => { for (let i = 0; i < n; i++) { await page.keyboard.press(key); await page.waitForTimeout(80); } };
+    await press('=', CROWN.zoomIn);
+    await press('ArrowRight', CROWN.right);
+    await press('ArrowUp', CROWN.up);
+    await page.waitForTimeout(3200);   // the key hint (2.5 s) fades and the camera settles; the pointer does not move
+    const photo = await photoState();
+    const camera = await cameraState();
+    const chip = await waitChipHidden();
+    const crystal = await frameOf('crystal');
+    check(photo?.active === true && photo?.hint === false, `showcase_D2 photo state ${JSON.stringify(photo)}`);
+    check(cameraOk(camera, CROWN.x, CROWN.y, CROWN.z), `showcase_D2 camera ${JSON.stringify(camera)} want ${CROWN.x},${CROWN.y},${CROWN.z}`);
+    check(chipHidden(chip), `showcase_D2 exit chip ${JSON.stringify(chip)}`);
+    const swapped = await checkRestored('showcase_D2', RESTORED_TOTAL);
+    check(crystal === 2, `showcase_D2 crystal frame ${crystal} want 2`);
+    await shot('d_photo_crown', { still: true });
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(900);
+    const photoAfter = await photoState();
+    const cameraAfter = await cameraState();
+    check(photoAfter?.active === false, `showcase_D2 photo after Esc ${JSON.stringify(photoAfter)}`);
+    check(atPortrait(cameraAfter), `showcase_D2 camera after Esc ${JSON.stringify(cameraAfter)}`);
+    res.showcase_D2 = { photo, camera, chip, crystal, restoredSwapped: swapped, exit: { photo: photoAfter, camera: cameraAfter } };
   });
 
   // RUN C2 (same context): reload keeps postgame and lands on the canonical portrait with every part shown.
@@ -311,7 +388,8 @@ try {
     check(fs?.phase === 'postgame', `showcase_C2 phase ${fs?.phase ?? null}`);
     check(atPortrait(camera), `showcase_C2 camera ${JSON.stringify(camera)}`);
     check(inv(hidden), `showcase_C2 hidden parts: ${JSON.stringify(hidden)}`);
-    res.showcase_C2 = { storedPhase: sp, phase: fs?.phase ?? null, camera, hidden };
+    const restoredC2 = await checkRestored('showcase_C2', RESTORED_TOTAL);
+    res.showcase_C2 = { storedPhase: sp, phase: fs?.phase ?? null, camera, hidden, restoredSwapped: restoredC2 };
   });
 
   // RUN F (same context, postgame): VIEW MACHINE with Enter (hint off), ArrowRight re-arms the hint, T opens the

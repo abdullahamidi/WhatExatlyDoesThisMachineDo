@@ -101,7 +101,7 @@ Layer/depth sources: `src/data/world.ts` (`PARALLAX_LAYERS`, `GROUND_LAYER`, `DU
   (older, smaller geometry inside the larger A17 textures).
 - Generated ids are logged once: `[assets] generated fallback textures: <ids>`.
 
-## A17 art sources and inert variants
+## A17 art sources and restored variants
 
 - `scripts/art/a17/build.py` regenerates `machine/legacy/*.png` (hand-pixelled, locked palette, alpha 0/255) and stamps the
   tuyere collar on `machine/era3/boiler.png` (rows 72..74, cols 97..102). Rerun after any change to `era2/generator.png`
@@ -109,7 +109,16 @@ Layer/depth sources: `src/data/world.ts` (`PARALLAX_LAYERS`, `GROUND_LAYER`, `DU
 - `scripts/art/a17/restored.py` writes `machine/era5/restored/` (+ `restored/rot/`): the postgame "restored machine" accent,
   a per-pixel palette swap of the era V energy sprites (null core inverted to a warm lit core; glint, beads, lens light warm;
   rings, arcs, siphon fluid, anchor glows, inversion ghost, aperture horns and chamber violet pixels pale steam-white).
-  Same sizes, frames and rotation sheets as the originals. Inert until WP18 wires a restored texture swap (ART_AUDIT A17).
+  Same sizes, frames and rotation sheets as the originals (22 files + 2 rot sheets, about 52 KB). Wired by WP18b, see below.
+
+### Restored variants (WP18b)
+
+- Manifest: `AssetEntry.restored?: { file; rotationFile? }` on the 22 era V energy ids (null chamber, core, glint, ring halves, bead, siphon tube and arcs, anchor glows, inversion ghost, lens light, aperture). Paths are under `public/assets/`.
+- Texture keys: `<id>#restored` and, with `rotationFile`, `<id>#restored#rot`. `planAssetLoads` emits them right after the original and `#rot` loads; `BootScene` loads them at boot (24 extra loads, about 52 KB). A variant has the same size, frame layout and rotation layout as the original; `src/assets/manifest.test.ts` enforces the PNG sizes.
+- Trigger: `MachineAnimator.setFinale` moves the parts that have a variant onto their `#restored` textures when the finale frame `restored` flag turns true (name-plate beat at t 30 of the ending sequence, choice, postgame, and a reload into choice or postgame), and back when it turns false (seek back below t 30, menu reset, new cycle). The swap is instant in every motion mode. `ShowcaseScene` (the teaser) never swaps.
+- A variant that is missing or failed to load keeps the original texture; there is no painter fallback for restored keys.
+- Regenerate the PNGs with `python -I scripts/art/a17/restored.py`.
+- Add a variant for another id: put the PNG (same size) under `<dir>/restored/`, add `restored: { file }` to its manifest entry, add a row to the restored table in `src/assets/manifest.test.ts`. No code change.
 
 ## Size mismatch warning
 

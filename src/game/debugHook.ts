@@ -14,6 +14,7 @@ import { MACHINE_COMPONENTS } from '../data/machineComponents';
 import { MACHINE_ANCHOR } from '../data/world';
 import { SHOWCASE_SCENE_KEY } from '../data/showcase';
 import { machineLocalToWorld, resolveAttachment } from './math/machineLayout';
+import { isRestoredKey, restoredComponentIds } from './math/restoredTextures';
 import { worldToClient } from './math/camera';
 import type { WorldScene } from './scenes/WorldScene';
 import { ShowcaseScene } from './scenes/ShowcaseScene';
@@ -69,6 +70,9 @@ declare global {
       showcaseSeek(t: number): void;
       showcaseState(): ShowcaseState | null;
       showcaseStop(): void;
+      // WP18b restored accent probes (World machine)
+      restoredTextures(): { swapped: MachineComponentId[]; total: number } | null;
+      textureKey(id: MachineComponentId): string | null;
     };
   }
 }
@@ -178,6 +182,20 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
   const showcaseStop = (): void => {
     ShowcaseScene.stop(game);
   };
+  /** Restored texture probe (WP18b): ids of the parts of restoredComponentIds() whose sprite shows a `#restored` texture, and how many parts have a variant; null without a World machine. */
+  const restoredTextures = (): { swapped: MachineComponentId[]; total: number } | null => {
+    const machine = game.scene.getScene<WorldScene>('World')?.getMachine() ?? null;
+    if (machine === null) return null;
+    const ids = restoredComponentIds();
+    const swapped = ids.filter((id) => {
+      const key = machine.getComponentSprite(id)?.texture.key;
+      return key !== undefined && isRestoredKey(key);
+    });
+    return { swapped, total: ids.length };
+  };
+  /** Texture key of one machine part's sprite (WP18b); null without a World machine or sprite. */
+  const textureKey = (id: MachineComponentId): string | null =>
+    game.scene.getScene<WorldScene>('World')?.getMachine()?.getComponentSprite(id)?.texture.key ?? null;
   window.__wedtmd = {
     session,
     crankClientPoint,
@@ -205,5 +223,7 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     showcaseSeek,
     showcaseState,
     showcaseStop,
+    restoredTextures,
+    textureKey,
   };
 }

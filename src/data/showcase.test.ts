@@ -18,24 +18,28 @@ describe('showcase data', () => {
 describe('restored accent hold frames', () => {
   const holds: Partial<Record<string, number>> = RESTORED_ACCENT.holdFrames;
 
-  it('every key is a real frames component with its hold frame inside the sheet', () => {
+  it('every key is a frames or gauge component with its hold frame in [0, anim.frames)', () => {
     for (const id of Object.keys(holds)) {
       expect(MACHINE_COMPONENT_IDS as readonly string[]).toContain(id);
       const frame = holds[id];
       const anim = MACHINE_COMPONENTS[id as MachineComponentId].animation;
-      expect(anim.kind).toBe('frames');
-      if (anim.kind !== 'frames' || frame === undefined) continue;
+      expect(['frames', 'gauge']).toContain(anim.kind);
+      if ((anim.kind !== 'frames' && anim.kind !== 'gauge') || frame === undefined) continue;
       expect(frame).toBeGreaterThanOrEqual(0);
       expect(frame).toBeLessThan(anim.frames);
     }
   });
 
-  it('keeps the finale boost holds unchanged and adds crystal at frame 2', () => {
+  it('keeps the finale boost holds unchanged, adds crystal at frame 2 and generatorGlow at its top gauge frame', () => {
     for (const [id, frame] of Object.entries(FINALE_BOOST.holdFrames)) {
       expect(holds[id]).toBe(frame);
     }
     expect(holds.crystal).toBe(2);
-    expect(Object.keys(holds).sort()).toEqual([...Object.keys(FINALE_BOOST.holdFrames), 'crystal'].sort());
+    expect(holds.generatorGlow).toBe(3);
+    const glow = MACHINE_COMPONENTS.generatorGlow.animation;
+    expect(glow.kind).toBe('gauge');
+    if (glow.kind === 'gauge') expect(holds.generatorGlow).toBe(glow.frames - 1);
+    expect(Object.keys(holds).sort()).toEqual([...Object.keys(FINALE_BOOST.holdFrames), 'crystal', 'generatorGlow'].sort());
   });
 });
 
