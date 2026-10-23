@@ -11,6 +11,8 @@ import type {
   TechView,
 } from '../../data/types';
 import { costAt, canAfford } from '../economy/cost';
+import { eraAllowed } from './edition';
+import type { EraCap } from './edition';
 import { isRequirementMet, requirementLabel, requirementsMet } from './requirements';
 
 /** Derives the player-facing status of a technology from the current state. */
@@ -18,9 +20,12 @@ export function getTechStatus(
   state: GameState,
   id: TechId,
   techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
+  maxEra: EraCap = null,
 ): TechStatus {
   const level = state.techLevels[id];
   const def = techs[id];
+  // Edition cap wins over ownership: a demo save may still hold era-III levels in memory.
+  if (!eraAllowed(def, maxEra)) return 'locked';
   if (def.kind === 'starting') return level >= 1 ? 'purchased' : 'available';
   if (def.kind === 'milestone') return level >= 1 ? 'purchased' : 'locked';
   if (def.kind === 'unlock') {
@@ -102,10 +107,11 @@ export function getTechView(
   state: GameState,
   id: TechId,
   techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
+  maxEra: EraCap = null,
 ): TechView {
   const def = techs[id];
   const level = state.techLevels[id];
-  const status = getTechStatus(state, id, techs);
+  const status = getTechStatus(state, id, techs, maxEra);
   const requirements: RequirementView[] = def.requires.map((req) => ({
     req,
     met: isRequirementMet(state, req),
@@ -132,6 +138,7 @@ export function getTechView(
     requirements,
     currentEffectText: level === 0 ? 'None' : effectText(def.effects, level),
     nextEffectText,
+    demoLocked: !eraAllowed(def, maxEra),
   };
 }
 
@@ -139,6 +146,7 @@ export function getTechView(
 export function getAllTechViews(
   state: GameState,
   techs: Record<TechId, TechDefinition> = TECHNOLOGIES,
+  maxEra: EraCap = null,
 ): TechView[] {
-  return TECH_IDS.map((id) => getTechView(state, id, techs));
+  return TECH_IDS.map((id) => getTechView(state, id, techs, maxEra));
 }

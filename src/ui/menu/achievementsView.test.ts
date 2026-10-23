@@ -1,11 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { achievementCards, counterText } from './achievementsView';
+import { achievementCards, achievementInEdition, counterText, editionAchievements } from './achievementsView';
 import { ACHIEVEMENTS, ACHIEVEMENT_IDS, ACHIEVEMENT_LIST, UI_ART } from '../../data/achievements';
 import type { AchievementDefinition } from '../../data/achievements';
 import { ACHIEVEMENT_TEXT, BADGE_VIEW } from '../../data/notifications';
 import type { AchievementsState } from '../../data/types';
 
 const none: AchievementsState['unlocked'] = {};
+
+// The 18 rows visible in the era-2 demo, in list order.
+const DEMO_IDS = [
+  'firstTurn', 'steadyHand', 'tireless', 'unrelenting', 'shiftWorker', 'wornMotor', 'fullStroke', 'blueprint',
+  'tinkerer', 'engineer', 'eraElectric', 'noGrid', 'kilowatt', 'shortNap', 'longSilence', 'sevenDigits',
+  'thirteenDigits', 'bigNumber',
+] as const;
+
+function withCondition(condition: AchievementDefinition['condition']): AchievementDefinition {
+  return { ...ACHIEVEMENTS.firstTurn, condition };
+}
 
 describe('achievementCards: locked and unlocked', () => {
   it('returns one card per definition in definition order', () => {
@@ -137,5 +148,63 @@ describe('counterText', () => {
 
   it('uses the given total', () => {
     expect(counterText({ firstTurn: 1 }, 4)).toBe('1/4 LOGGED');
+  });
+
+  it('counts only the given ids', () => {
+    expect(counterText({ firstTurn: 1, restoration: 2 }, DEMO_IDS.length, DEMO_IDS)).toBe('1/18 LOGGED');
+    expect(counterText({ firstTurn: 1, restoration: 2 })).toBe('2/33 LOGGED');
+  });
+});
+
+describe('editionAchievements', () => {
+  it('demo (maxEra 2) keeps the 18 era-2 rows in list order', () => {
+    expect(editionAchievements(2).map((d) => d.id)).toEqual([...DEMO_IDS]);
+  });
+
+  it('full game (null) is the whole list, as a new array', () => {
+    const all = editionAchievements(null);
+    expect(all).toEqual(ACHIEVEMENT_LIST);
+    expect(all).not.toBe(ACHIEVEMENT_LIST);
+  });
+
+  it('filters the given definitions', () => {
+    expect(editionAchievements(2, [ACHIEVEMENTS.restoration, ACHIEVEMENTS.tireless]).map((d) => d.id)).toEqual(['tireless']);
+  });
+});
+
+describe('achievementInEdition', () => {
+  it('null cap keeps every row', () => {
+    for (const def of ACHIEVEMENT_LIST) expect(achievementInEdition(def, null)).toBe(true);
+  });
+
+  it('tech: era above the cap is hidden, era at the cap is shown', () => {
+    expect(achievementInEdition(ACHIEVEMENTS.eraThermal, 2)).toBe(false);
+    expect(achievementInEdition(ACHIEVEMENTS.eraElectric, 2)).toBe(true);
+  });
+
+  it('maxRate: depends on the resource era', () => {
+    expect(achievementInEdition(ACHIEVEMENTS.kilowatt, 2)).toBe(true);
+    expect(achievementInEdition(ACHIEVEMENTS.rollingBoil, 2)).toBe(false);
+  });
+
+  it('lifetime: any resource is always reachable, a named one follows its era', () => {
+    expect(achievementInEdition(ACHIEVEMENTS.thirteenDigits, 2)).toBe(true);
+    expect(achievementInEdition(withCondition({ type: 'lifetime', res: 'me', atLeast: 1 }), 2)).toBe(true);
+    expect(achievementInEdition(withCondition({ type: 'lifetime', res: 'pr', atLeast: 1 }), 2)).toBe(false);
+  });
+
+  it('techsOwned: the target must fit inside the cap (18 techs at era 2)', () => {
+    expect(achievementInEdition(ACHIEVEMENTS.fullIndex, 2)).toBe(false);
+    expect(achievementInEdition(withCondition({ type: 'techsOwned', atLeast: 18 }), 2)).toBe(true);
+  });
+
+  it('prestige rows are never in a capped edition', () => {
+    expect(achievementInEdition(ACHIEVEMENTS.echoes, 2)).toBe(false);
+    expect(achievementInEdition(ACHIEVEMENTS.keeper, 2)).toBe(false);
+  });
+
+  it('stat: cycle rows are hidden, other stats are shown', () => {
+    expect(achievementInEdition(ACHIEVEMENTS.newCycle, 2)).toBe(false);
+    expect(achievementInEdition(ACHIEVEMENTS.firstTurn, 2)).toBe(true);
   });
 });

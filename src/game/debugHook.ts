@@ -23,6 +23,7 @@ import type { FinaleState } from './rendering/FinaleDirector';
 import type { FinaleFrame } from './math/finale';
 import type { CycleTransitionState } from './rendering/CycleTransition';
 import type { NewCycleController } from './newCycle';
+import type { DemoEndDebugState } from '../ui/demoEndModel';
 
 /** Live objects the hook reads from. Read-only views only; no mutation helpers. */
 export interface DebugExtras {
@@ -31,6 +32,8 @@ export interface DebugExtras {
   saveController: SaveController;
   audio: GameAudio;
   newCycle: NewCycleController;
+  /** WP21: demo end state; null in the full build or before the demo module loads. */
+  demo?: () => DemoEndDebugState | null;
 }
 
 /** Cycle state for smokes: controller busy flag + preview, and the transition clock (inactive without a scene). */
@@ -71,6 +74,8 @@ declare global {
       showcaseSeek(t: number): void;
       showcaseState(): ShowcaseState | null;
       showcaseStop(): void;
+      // WP21: demo end state (phase, cap, card and teaser flags); null outside the demo build
+      demoState(): DemoEndDebugState | null;
       // WP18b restored accent probes (World machine)
       restoredTextures(): { swapped: MachineComponentId[]; total: number } | null;
       textureKey(id: MachineComponentId): string | null;
@@ -230,6 +235,7 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     showcaseSeek,
     showcaseState,
     showcaseStop,
+    demoState: () => extras.demo?.() ?? null,
     restoredTextures,
     textureKey,
   };

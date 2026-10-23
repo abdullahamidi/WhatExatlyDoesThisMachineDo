@@ -1,5 +1,6 @@
 import './achievementsPanel.css';
 import { ACHIEVEMENT_LIST } from '../../data/achievements';
+import type { AchievementDefinition } from '../../data/achievements';
 import type { AchievementsState } from '../../data/types';
 import { achievementCards, counterText } from './achievementsView';
 import type { AchievementCard, SpriteView } from './achievementsView';
@@ -10,6 +11,8 @@ import type { AchievementCard, SpriteView } from './achievementsView';
 export interface RecordsPanelDeps {
   getUnlocked(): Readonly<AchievementsState>;
   subscribe(fn: () => void): () => void;
+  // Rows to show (an edition's subset). Default: every achievement.
+  defs?: readonly AchievementDefinition[];
 }
 
 interface CardView {
@@ -63,6 +66,8 @@ export function createAchievementsPanel(
   host: HTMLElement,
   deps: RecordsPanelDeps,
 ): { refresh(): void; destroy(): void } {
+  const defs = deps.defs ?? ACHIEVEMENT_LIST;
+  const ids = defs.map((d) => d.id);
   const wrap = el('div', 'ach-panel');
   const counter = el('div', 'ach-counter');
   counter.setAttribute('aria-live', 'polite');
@@ -71,7 +76,7 @@ export function createAchievementsPanel(
   wrap.append(counter, list);
 
   const views = new Map<string, CardView>();
-  for (const def of ACHIEVEMENT_LIST) {
+  for (const def of defs) {
     const view = buildCard();
     view.root.dataset.achievementId = def.id;
     views.set(def.id, view);
@@ -101,9 +106,9 @@ export function createAchievementsPanel(
   function refresh(): void {
     if (destroyed) return;
     const { unlocked } = deps.getUnlocked();
-    const text = counterText(unlocked);
+    const text = counterText(unlocked, defs.length, ids);
     if (counter.textContent !== text) counter.textContent = text;
-    for (const card of achievementCards(unlocked)) {
+    for (const card of achievementCards(unlocked, defs)) {
       const view = views.get(card.id);
       if (view === undefined) continue;
       const signature = signatureOf(card);

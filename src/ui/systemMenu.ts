@@ -3,7 +3,7 @@ import { MENU_REFRESH_MS, MENU_TABS, MENU_TEXT, SYSTEM_MENU_CONFIG } from '../da
 import { UI_ART } from '../data/achievements';
 import { trapFocus } from './hotkeys';
 import type { ModalStack } from './modalStack';
-import { clampTab, leavingTab, muteLabel, newCycleRow, nextVisibleTab, reduceReset, resetLabel, saveFeedbackLabel, shellRows, tabIndexFor } from './systemMenuModel';
+import { clampTab, demoEndingRow, leavingTab, muteLabel, newCycleRow, nextVisibleTab, reduceReset, resetLabel, saveFeedbackLabel, shellRows, tabIndexFor } from './systemMenuModel';
 import type { NewCycleRow, ResetState, TabNavKey } from './systemMenuModel';
 import type { EndingPhase } from '../data/types';
 import type { NewCycleHook } from '../game/newCycle';
@@ -42,6 +42,8 @@ export interface SystemMenuDeps {
   openCredits?: () => void;
   /** WP19: QUIT TO DESKTOP row (SYSTEM tab). Omitted = row never shows. */
   quit?: () => void;
+  /** WP21: DEMO ENDING row (SYSTEM tab). Omitted = row never exists. Click closes the menu, then calls open(). */
+  demoEnding?: { reached(): boolean; open(): void };
   /** WP19: version footer (SYSTEM tab, last). Omitted = no footer. */
   footer?: { text: string; ariaLabel: string };
 }
@@ -175,6 +177,10 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
   creditsButton.type = 'button';
   const quitButton = createElement('button', { id: 'sys-quit', className: 'sys-btn', text: MENU_TEXT.quit });
   quitButton.type = 'button';
+  // WP21 DEMO ENDING row: built always, attached only when deps.demoEnding is given; shown in open() per demoEndingRow.
+  const demoEndButton = createElement('button', { id: 'sys-demo-end', className: 'sys-btn', text: MENU_TEXT.demoEnding });
+  demoEndButton.type = 'button';
+  demoEndButton.hidden = true;
   const feedbackEl = createElement('div', { id: 'sys-feedback' });
   feedbackEl.setAttribute('aria-live', 'polite');
   const closeButton = createElement('button', { id: 'sys-close', className: 'sys-btn', text: MENU_TEXT.close });
@@ -182,6 +188,7 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
 
   systemPane.append(muteButton, saveButton, resetButton, cancelButton, newCycleButton, newCycleReason);
   if (shell.credits) systemPane.append(creditsButton);
+  if (deps.demoEnding !== undefined) systemPane.append(demoEndButton);
   if (shell.quit) systemPane.append(quitButton);
   systemPane.append(feedbackEl);
   if (deps.footer !== undefined) {
@@ -233,6 +240,14 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     else newCycleButton.setAttribute('aria-description', cycleRow.reason);
     newCycleReason.hidden = !cycleRow.visible || cycleRow.reason === '';
     newCycleReason.textContent = cycleRow.reason;
+  };
+
+  // WP21 DEMO ENDING row: absent without the dep, otherwise shown once the cap tech is reached.
+  const refreshDemoEnding = (): void => {
+    demoEndButton.hidden = !demoEndingRow({
+      available: deps.demoEnding !== undefined,
+      reached: deps.demoEnding?.reached() ?? false,
+    }).visible;
   };
 
   const clearFeedback = (): void => {
@@ -352,6 +367,7 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     activateTab(indexOfTab(tabId), false);
     refreshMute();
     refreshNewCycle();
+    refreshDemoEnding();
     disposeFocusTrap = trapFocus(overlay);
     modals.push(MENU_STACK_ID, close);
     menuRefresh.start();
@@ -415,6 +431,12 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     deps.quit?.();
   };
 
+  // WP21 DEMO ENDING: close first so the END card opens on a clean menu (focus, modal stack), then hand over.
+  const onDemoEnding = (): void => {
+    close();
+    deps.demoEnding?.open();
+  };
+
   const onClose = (): void => {
     close();
   };
@@ -452,6 +474,7 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
   newCycleButton.addEventListener('click', onNewCycle);
   creditsButton.addEventListener('click', onCredits);
   quitButton.addEventListener('click', onQuit);
+  demoEndButton.addEventListener('click', onDemoEnding);
   closeButton.addEventListener('click', onClose);
   overlay.addEventListener('click', onBackdropClick);
   selectTab(0);
@@ -482,6 +505,7 @@ export function createSystemMenu(root: HTMLElement, deps: SystemMenuDeps): Syste
     newCycleButton.removeEventListener('click', onNewCycle);
     creditsButton.removeEventListener('click', onCredits);
     quitButton.removeEventListener('click', onQuit);
+    demoEndButton.removeEventListener('click', onDemoEnding);
     closeButton.removeEventListener('click', onClose);
     overlay.removeEventListener('click', onBackdropClick);
     if (feedbackTimer !== null) {

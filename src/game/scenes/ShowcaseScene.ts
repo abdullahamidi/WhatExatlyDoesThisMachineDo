@@ -5,11 +5,12 @@ import { PALETTE_CSS } from '../../data/palette';
 import { SHOWCASE_SCENE_KEY, SHOWCASE_TEASER } from '../../data/showcase';
 import { TECHNOLOGIES } from '../../data/technologies';
 import type { MachineComponentId } from '../../data/machineComponents';
-import type { SettingsState } from '../../data/types';
+import type { SettingsState, TechId } from '../../data/types';
 import { motionPolicy } from '../../simulation/settings';
 import { createSignal } from '../../utils/signal';
 import { clampCenter, clampZoom, effectiveMinZoom } from '../math/camera';
 import type { CameraPose } from '../math/finale';
+import { capPlateLevels } from '../math/plateCap';
 import { apertureGate } from '../math/showcase';
 import { teaserFrame, teaserRates } from '../math/teaser';
 import type { TeaserEra, TeaserFrame } from '../math/teaser';
@@ -41,6 +42,8 @@ export interface ShowcasePlayOptions {
   sleepWorld?: boolean;
   /** Called once when the teaser reaches its end. Not called by stop or seek. */
   onDone?: () => void;
+  /** Caps the stand-in nameplate at this plaque milestone (gates after it read as unmet). The demo passes its cap tech so the teaser plate never spells the answer. */
+  plateMaxTech?: TechId;
 }
 
 export interface ShowcaseState {
@@ -54,6 +57,8 @@ export interface ShowcaseState {
   total: number;
   hidden: MachineComponentId[];
   camera: CameraPose;
+  /** namePlate sprite frame (plaque milestone); null when the teaser is inactive. */
+  plateFrame: number | null;
 }
 
 export class ShowcaseScene extends Phaser.Scene {
@@ -65,6 +70,7 @@ export class ShowcaseScene extends Phaser.Scene {
   private frame: TeaserFrame | null = null;
   private doneFired = false;
   private onDone?: () => void;
+  private plateMaxTech: TechId | null = null;
   private source: StandInSource | null = null;
   // Last frame applied to the stand-in: applyLevels compares against these to find era steps and the aperture opening.
   private lastLevels: TeaserFrame['levels'] | null = null;
@@ -126,9 +132,10 @@ export class ShowcaseScene extends Phaser.Scene {
     this.frame = null;
     this.doneFired = false;
     this.onDone = data.onDone;
+    this.plateMaxTech = data.plateMaxTech ?? null;
 
     const f0 = teaserFrame(0, this.reduced);
-    const source = createStandInSource({ levels: f0.levels, settings, perSecond: teaserRates(f0.era, false) });
+    const source = createStandInSource({ levels: capPlateLevels(f0.levels, this.plateMaxTech), settings, perSecond: teaserRates(f0.era, false) });
     this.source = source;
     this.lastLevels = f0.levels;
     this.lastEra = f0.era;
@@ -234,6 +241,7 @@ export class ShowcaseScene extends Phaser.Scene {
         total: 0,
         hidden: [],
         camera: { centerX: 0, centerY: 0, zoom: CAMERA.defaultZoom },
+        plateFrame: null,
       };
     }
     const f = this.frame ?? teaserFrame(this.t, this.reduced);
@@ -250,6 +258,7 @@ export class ShowcaseScene extends Phaser.Scene {
       total: parts.total,
       hidden: parts.hidden,
       camera: { centerX: cam.midPoint.x, centerY: cam.midPoint.y, zoom: cam.zoom },
+      plateFrame: machine.getComponentState('namePlate').frame,
     };
   }
 
@@ -262,7 +271,7 @@ export class ShowcaseScene extends Phaser.Scene {
     if (source === null || f.levels === this.lastLevels) return;
     const eraChanged = f.era !== this.lastEra;
     const opened = f.apertureOpen && !this.lastOpen;
-    source.setLevels(f.levels);
+    source.setLevels(capPlateLevels(f.levels, this.plateMaxTech));
     source.setRates(teaserRates(f.era, f.apertureOpen));
     if (eraChanged || instant || !opened) this.machine?.refreshDisplay(!instant && !this.reduced);
     if (opened && !instant) {

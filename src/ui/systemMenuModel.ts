@@ -91,6 +91,11 @@ export function shellRows(o: { hasCredits: boolean; canQuit: boolean }): { credi
   return { credits: o.hasCredits, quit: o.canQuit };
 }
 
+/** WP21: DEMO ENDING row in the SYSTEM tab: shown only in the demo edition once the cap tech is owned. */
+export function demoEndingRow(o: { available: boolean; reached: boolean }): { visible: boolean } {
+  return { visible: o.available && o.reached };
+}
+
 /** Tab index after a navigation key. Arrows wrap; Home / End jump to the ends. */
 export function nextTab(index: number, count: number, key: TabNavKey): number {
   if (count <= 0) return 0;

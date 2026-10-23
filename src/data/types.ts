@@ -82,8 +82,9 @@ export interface TechView {
   id: TechId; def: TechDefinition; status: TechStatus; level: number;
   nextCost: number | null; affordable: boolean; requirements: RequirementView[];
   currentEffectText: string; nextEffectText: string | null;
+  demoLocked: boolean;                     // true when the edition era cap forbids this tech (WP21 demo)
 }
-export type PurchaseFailure = 'locked' | 'maxed' | 'owned' | 'insufficient' | 'notPurchasable';
+export type PurchaseFailure = 'locked' | 'maxed' | 'owned' | 'insufficient' | 'notPurchasable' | 'demo';
 export type PurchaseResult =
   | { ok: true; state: GameState; cost: number; newLevel: number }
   | { ok: false; reason: PurchaseFailure };

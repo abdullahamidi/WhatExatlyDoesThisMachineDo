@@ -2,6 +2,8 @@ import { TECHNOLOGIES } from '../../data/technologies';
 import { TECH_IDS } from '../../data/types';
 import type { GameState, TechDefinition, TechId } from '../../data/types';
 import { costAt, canAfford } from '../economy/cost';
+import { eraAllowed } from './edition';
+import type { EraCap } from './edition';
 import { requirementsMet } from './requirements';
 
 // WP20 pure mirror of getTechView(...).affordable. The TECH INDEX badge counts these on every HUD
@@ -12,11 +14,13 @@ function isAffordable(
   state: Pick<GameState, 'res' | 'lifetime' | 'techLevels'>,
   id: TechId,
   techs: Readonly<Record<TechId, TechDefinition>>,
+  maxEra: EraCap,
 ): boolean {
   const def = techs[id];
   const level = state.techLevels[id];
   const owned = level >= 1;
   if (def.kind === 'starting' || def.kind === 'milestone') return false;
+  if (!eraAllowed(def, maxEra)) return false;
   if (def.kind === 'unlock' && owned) return false;
   if (def.kind === 'repeatable' && def.maxLevel !== null && level >= def.maxLevel) return false;
   // An owned repeatable stays buyable even if its requirements have lapsed (status.ts treats it as available).
@@ -28,6 +32,7 @@ function isAffordable(
 export function affordableTechIds(
   state: Pick<GameState, 'res' | 'lifetime' | 'techLevels'>,
   techs: Readonly<Record<TechId, TechDefinition>> = TECHNOLOGIES,
+  maxEra: EraCap = null,
 ): TechId[] {
-  return TECH_IDS.filter((id) => isAffordable(state, id, techs));
+  return TECH_IDS.filter((id) => isAffordable(state, id, techs, maxEra));
 }

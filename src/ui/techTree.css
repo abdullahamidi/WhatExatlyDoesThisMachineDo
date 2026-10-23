@@ -326,11 +326,16 @@
 
 /* ---- detail ---- */
 
+/* WP21: the pane takes the rest of the panel and scrolls; PURCHASE sits first in the side column (order -2) so it stays in view. */
 #tech-detail {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
   gap: 14px;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-height: 5.5em;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rust) rgba(0, 0, 0, .35);
   padding-top: 10px;
   border-top: 1px solid var(--rust-dark);
 }
@@ -403,8 +408,9 @@
 }
 
 #tech-buy {
+  order: -2;
   align-self: flex-start;
-  margin-top: 4px;
+  margin: 0 0 4px;
 }
 
 #tech-buy[disabled] {
@@ -424,6 +430,7 @@
 
 /* WP20: two lines of install text without a layout shift. */
 #tech-feedback {
+  order: -1;
   min-height: 2.8em;
   color: var(--haze);
 }

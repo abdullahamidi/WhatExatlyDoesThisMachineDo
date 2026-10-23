@@ -19,7 +19,7 @@
   "bundle": {
     "appRawKb": 460,
     "phaserKb": 1500,
-    "cssKb": 40,
+    "cssKb": 44,
     "publicAssetsKb": 8000
   },
   "_notes": {
@@ -28,7 +28,7 @@
     "postFrameP95Ms": "GPU only (PERF_GPU=1), like frameP95Ms",
     "appGzipKb": "report-only since WP15R (program D7: raw sizes only; desktop build)",
     "appRawKb": "raised 340->400 (D7: WP17 + demo UI), 400->460 (Director 2026-10-23: WP18-WP21 showcase/shell/UX/demo; desktop build loads from local asar, bootMs is the real gate)",
-    "cssKb": "raised 30->40 (WP19 shell css: title, credits, crash overlay, splash, storage warning)",
+    "cssKb": "raised 30->40 (WP19 shell css: title, credits, crash overlay, splash, storage warning), 40->44 (Director 2026-10-23, WP21 D10 sign-off: dist-demo counts the lazy demoEnd css chunk 2.75 KB; full dist 39.0 KB)",
     "cycleDisplayPct": "vs the pre-cycle display list (parts are hidden, not destroyed)"
   }
 }

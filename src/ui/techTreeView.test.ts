@@ -18,6 +18,7 @@ import {
 } from './techTreeView';
 import { getAllTechViews, getTechView, createInitialState, emptyResourceMap } from '../simulation';
 import { TECHNOLOGIES } from '../data/technologies';
+import { DEMO_TEXT } from '../data/demo';
 import type { GameState, ResourceMap, TechDefinition, TechId, TechView } from '../data/types';
 import { TECH_IDS } from '../data/types';
 import { setDefaultNotation } from '../utils/format';
@@ -289,7 +290,7 @@ describe('techTreeView', () => {
     it('buildEraTabs: fresh state gives one reached, selected ERA I · ME tab', () => {
       const tabs = buildEraTabs(eraOneViewsOf(createInitialState(0)), emptyResourceMap(), 1);
       expect(tabs).toEqual([
-        { era: 1, label: 'ERA I · ME', reached: true, selected: true, resourceText: '0 ME', affordable: 0, ariaLabel: 'ERA I · ME' },
+        { era: 1, label: 'ERA I · ME', reached: true, fullGame: false, selected: true, resourceText: '0 ME', affordable: 0, ariaLabel: 'ERA I · ME' },
       ]);
     });
 
@@ -297,7 +298,7 @@ describe('techTreeView', () => {
       const views = getAllTechViews(createInitialState(0), ERA_TWO_LOCKED);
       const tabs = buildEraTabs(views, emptyResourceMap(), 1);
       expect(tabs).toHaveLength(5);
-      const placeholder = { label: 'SIGNAL ?', reached: false, selected: false, resourceText: '', affordable: 0, ariaLabel: 'SIGNAL ?' };
+      const placeholder = { label: 'SIGNAL ?', reached: false, fullGame: false, selected: false, resourceText: '', affordable: 0, ariaLabel: 'SIGNAL ?' };
       expect(tabs[1]).toEqual({ era: 2, ...placeholder });
       expect(tabs[2]).toEqual({ era: 3, ...placeholder });
       expect(tabs[3]).toEqual({ era: 4, ...placeholder });
@@ -309,7 +310,7 @@ describe('techTreeView', () => {
       const views = getAllTechViews(stateWith({ res }), ERA_TWO_AVAILABLE);
       const tabs = buildEraTabs(views, res, 2);
       expect(tabs[1]).toEqual({
-        era: 2, label: 'ERA II · EE', reached: true, selected: true, resourceText: '1.2K EE',
+        era: 2, label: 'ERA II · EE', reached: true, fullGame: false, selected: true, resourceText: '1.2K EE',
         affordable: 1, ariaLabel: 'ERA II · EE, 1 affordable',
       });
     });
@@ -503,7 +504,7 @@ describe('techTreeView', () => {
         const res = resWithMe(15);
         const tabs = buildEraTabs(viewsWith({}, res), res, 1);
         expect(tabs[0]).toEqual({
-          era: 1, label: 'ERA I · ME', reached: true, selected: true, resourceText: '15 ME',
+          era: 1, label: 'ERA I · ME', reached: true, fullGame: false, selected: true, resourceText: '15 ME',
           affordable: 1, ariaLabel: 'ERA I · ME, 1 affordable',
         });
         expect(tabs[1]?.affordable).toBe(0);
@@ -604,6 +605,53 @@ describe('techTreeView', () => {
         expect(view.height).toBe(296);
       });
     });
+  });
+});
+
+describe('demo edition views (WP21)', () => {
+  // Era II reached (generator owned), era III and up above the demo cap of 2.
+  const MID_RES: ResourceMap = { ...emptyResourceMap(), me: 5000, ee: 1200 };
+  const mid = stateWith({
+    res: MID_RES,
+    techLevels: { ...createInitialState(0).techLevels, generatorBlueprint: 1, generator: 1 },
+  });
+  const capped = getAllTechViews(mid, TECHNOLOGIES, 2);
+
+  it('reaches only eras I and II in the capped mid state', () => {
+    expect(reachedEras(capped)).toEqual([1, 2]);
+  });
+
+  it('shows FULL GAME on the era III-V tabs above the cap', () => {
+    const tabs = buildEraTabs(capped, MID_RES, 1);
+    expect(tabs.slice(2)).toEqual([
+      { era: 3, label: 'FULL GAME', reached: false, fullGame: true, selected: false, resourceText: '', affordable: 0, ariaLabel: 'ERA III · FULL GAME' },
+      { era: 4, label: 'FULL GAME', reached: false, fullGame: true, selected: false, resourceText: '', affordable: 0, ariaLabel: 'ERA IV · FULL GAME' },
+      { era: 5, label: 'FULL GAME', reached: false, fullGame: true, selected: false, resourceText: '', affordable: 0, ariaLabel: 'ERA V · FULL GAME' },
+    ]);
+  });
+
+  it('keeps the tabs of the reached eras identical to the full game', () => {
+    const tabs = buildEraTabs(capped, MID_RES, 1);
+    const fullTabs = buildEraTabs(getAllTechViews(mid), MID_RES, 1);
+    expect(tabs.slice(0, 2)).toEqual(fullTabs.slice(0, 2));
+  });
+
+  it('keeps SIGNAL ? and fullGame false on every tab without a cap', () => {
+    const tabs = buildEraTabs(getAllTechViews(createInitialState(0)), emptyResourceMap(), 1);
+    expect(tabs.map((tab) => tab.fullGame)).toEqual([false, false, false, false, false]);
+    expect(tabs.slice(1).map((tab) => tab.label)).toEqual(['SIGNAL ?', 'SIGNAL ?', 'SIGNAL ?', 'SIGNAL ?']);
+  });
+
+  it('marks a demo-locked tech as FULL GAME ONLY and not buyable', () => {
+    const views = capped.filter((v) => v.def.era === 3);
+    const view = buildTechTreeView(views, MID_RES, 'boiler', 3);
+    expect(view.detail?.buyState).toBe('demo');
+    expect(view.detail?.buyLabel).toBe('FULL GAME ONLY');
+    expect(view.detail?.buyEnabled).toBe(false);
+  });
+
+  it('gives the demo failure text the FULL GAME ONLY copy', () => {
+    expect(purchaseFailureText('demo', 0)).toBe(DEMO_TEXT.fullGameOnly);
   });
 });
 

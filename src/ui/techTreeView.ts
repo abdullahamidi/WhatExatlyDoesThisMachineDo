@@ -1,4 +1,5 @@
 import { formatCost, formatNumber } from '../utils/format';
+import { DEMO_TEXT } from '../data/demo';
 import { ERA_KEYSTONES } from '../data/eras';
 import { INSTALL_LINES } from '../data/notifications';
 import { RESOURCES } from '../data/resources';
@@ -13,7 +14,8 @@ export const TECH_TREE_LAYOUT = { nodeWidth: 144, nodeHeight: 68, colGap: 14, ro
 export const TECH_TREE_FIT = { maxWidthPx: 1140, minScale: 0.6, revealPadPx: 12 } as const;
 
 export type TechKindLabel = 'ORIGIN' | 'UNLOCK' | 'REPEATABLE' | 'MILESTONE';
-export type BuyState = 'buy' | 'insufficient' | 'locked' | 'maxed' | 'owned' | 'automatic';
+// 'demo': the tech sits above the demo era cap, so it can never be bought in this edition.
+export type BuyState = 'buy' | 'insufficient' | 'locked' | 'maxed' | 'owned' | 'automatic' | 'demo';
 
 export interface TechNodeView {
   id: TechId; name: string; status: TechStatus; kindLabel: TechKindLabel; milestone: boolean;
@@ -29,7 +31,8 @@ export interface TechDetailView {
 }
 export interface TechTreeView { width: number; height: number; headerText: string; nodes: TechNodeView[]; edges: TechEdgeView[]; detail: TechDetailView | null }
 // affordable: buyable techs in the era (0 when unreached). ariaLabel appends the count when > 0.
-export interface EraTabView { era: number; label: string; reached: boolean; selected: boolean; resourceText: string; affordable: number; ariaLabel: string }
+// fullGame: the era lies above the demo cap (shown as FULL GAME, never reached).
+export interface EraTabView { era: number; label: string; reached: boolean; fullGame: boolean; selected: boolean; resourceText: string; affordable: number; ariaLabel: string }
 
 const ROMAN_ERAS = ['I', 'II', 'III', 'IV', 'V'] as const;
 
@@ -104,18 +107,33 @@ export function reachedEras(views: readonly TechView[]): number[] {
   return [...eras].sort((a, b) => a - b);
 }
 
-/** One tab per era present in `views` (ascending). Unreached eras show a placeholder. */
+/** One tab per era present in `views` (ascending). Unreached eras show a placeholder; demo-capped eras show FULL GAME. */
 export function buildEraTabs(
   views: readonly TechView[],
   res: Readonly<ResourceMap>,
   selectedEra: number,
 ): EraTabView[] {
   const reached = new Set(reachedEras(views));
+  // Checked before the placeholder: a capped era is never reached, but it is not an unknown signal either.
+  const fullGameEras = new Set(views.filter((view) => view.demoLocked).map((view) => view.def.era));
   const eras = [...new Set(views.map((view) => view.def.era))].sort((a, b) => a - b);
   return eras.map((era): EraTabView => {
+    if (fullGameEras.has(era)) {
+      const roman = ROMAN_ERAS[era - 1] ?? String(era);
+      return {
+        era,
+        label: DEMO_TEXT.fullGameTab,
+        reached: false,
+        fullGame: true,
+        selected: era === selectedEra,
+        resourceText: '',
+        affordable: 0,
+        ariaLabel: `ERA ${roman} · ${DEMO_TEXT.fullGameTab}`,
+      };
+    }
     const isReached = reached.has(era);
     if (!isReached) {
-      return { era, label: 'SIGNAL ?', reached: false, selected: era === selectedEra, resourceText: '', affordable: 0, ariaLabel: 'SIGNAL ?' };
+      return { era, label: 'SIGNAL ?', reached: false, fullGame: false, selected: era === selectedEra, resourceText: '', affordable: 0, ariaLabel: 'SIGNAL ?' };
     }
     const eraRes = eraResourceOf(era);
     const short = resourceShort(eraRes);
@@ -126,6 +144,7 @@ export function buildEraTabs(
       era,
       label,
       reached: true,
+      fullGame: false,
       selected: era === selectedEra,
       resourceText: `${formatNumber(res[eraRes])} ${short}`,
       affordable,
@@ -147,6 +166,7 @@ export function purchaseFailureText(reason: PurchaseFailure, shortfall: number, 
     case 'maxed': return 'MAXIMUM LEVEL';
     case 'owned': return 'ALREADY INSTALLED';
     case 'notPurchasable': return 'CANNOT BE PURCHASED';
+    case 'demo': return DEMO_TEXT.fullGameOnly;
   }
 }
 
@@ -221,6 +241,7 @@ function statusLabelOf(view: TechView): TechDetailView['statusLabel'] {
 /** Purchase button state, evaluated in priority order. */
 function buyStateOf(view: TechView): BuyState {
   const def = view.def;
+  if (view.demoLocked) return 'demo';
   if (def.kind === 'milestone') return view.level === 0 ? 'automatic' : 'owned';
   if ((def.kind === 'unlock' || def.kind === 'starting') && view.level >= 1) return 'owned';
   if (isAtMaxLevel(view)) return 'maxed';
@@ -238,6 +259,7 @@ function buyLabelOf(state: BuyState, view: TechView, costText: string | null): s
     case 'maxed': return 'MAXIMUM LEVEL';
     case 'owned': return view.def.kind === 'milestone' ? 'ACHIEVED' : 'INSTALLED';
     case 'automatic': return 'MILESTONE — AUTOMATIC';
+    case 'demo': return DEMO_TEXT.fullGameOnly;
   }
 }
 

@@ -79,7 +79,8 @@ export function createGuidance(root: HTMLElement, deps: GuidanceDeps): Guidance 
     if (destroyed) return;
     const s = deps.session.state;
     const techs = deps.session.techs;
-    const count = affordableTechIds(s, techs).length;
+    const maxEra = deps.session.maxEra;
+    const count = affordableTechIds(s, techs, maxEra).length;
     const owned = anyPurchased(s.techLevels, techs);
     setBadge(count);
     setHint(techHintVisible({
@@ -90,7 +91,7 @@ export function createGuidance(root: HTMLElement, deps: GuidanceDeps): Guidance 
       treeOpen: deps.techTree.isOpen(),
       cycle: deps.session.prestige.cycle,
     }));
-    const goal = goalVisible(owned, s.ending.phase) ? nextGoal(s, deps.session.rates, techs) : null;
+    const goal = goalVisible(owned, s.ending.phase) ? nextGoal(s, deps.session.rates, techs, maxEra) : null;
     setGoalOn(goal !== null);
     if (goal === null) return;
     setGoalTitle(goal.title);

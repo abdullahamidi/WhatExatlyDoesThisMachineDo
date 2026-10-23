@@ -15,6 +15,9 @@ export const SAVE_BACKUP_KEY = 'wedtmd.save.corrupt';
 /** localStorage key where the current save is copied before a player import overwrites it. */
 export const SAVE_PREIMPORT_KEY = 'wedtmd.save.preimport';
 
+/** localStorage key where the demo boot keeps the ORIGINAL save text when it had to clamp it to the demo era cap. */
+export const SAVE_FULLGAME_KEY = 'wedtmd.save.fullgame';
+
 /** Largest simulated time step applied by a single update, in seconds. */
 export const MAX_UPDATE_SECONDS = OFFLINE_CAP_SECONDS;
 

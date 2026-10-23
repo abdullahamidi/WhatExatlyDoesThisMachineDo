@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel, nextTab, clampTab, leavingTab, newCycleRow, tabIndexFor, shellRows, prestigeUiVisible, nextVisibleTab } from './systemMenuModel';
+import { reduceReset, muteLabel, resetLabel, saveFeedbackLabel, nextTab, clampTab, leavingTab, newCycleRow, tabIndexFor, shellRows, demoEndingRow, prestigeUiVisible, nextVisibleTab } from './systemMenuModel';
 import type { ResetState } from './systemMenuModel';
 import { SYSTEM_MENU_CONFIG } from '../data/systemMenu';
 import { FINALE_CHOICE } from '../data/finale';
@@ -188,6 +188,15 @@ describe('shellRows', () => {
     expect(shellRows({ hasCredits: true, canQuit: false })).toEqual({ credits: true, quit: false });
     expect(shellRows({ hasCredits: false, canQuit: true })).toEqual({ credits: false, quit: true });
     expect(shellRows({ hasCredits: true, canQuit: true })).toEqual({ credits: true, quit: true });
+  });
+});
+
+describe('demoEndingRow', () => {
+  it('shows only when available (demo edition) and reached (cap tech owned), all four combinations', () => {
+    expect(demoEndingRow({ available: false, reached: false })).toEqual({ visible: false });
+    expect(demoEndingRow({ available: false, reached: true })).toEqual({ visible: false });
+    expect(demoEndingRow({ available: true, reached: false })).toEqual({ visible: false });
+    expect(demoEndingRow({ available: true, reached: true })).toEqual({ visible: true });
   });
 });
 

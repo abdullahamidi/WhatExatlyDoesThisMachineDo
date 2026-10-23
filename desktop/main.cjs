@@ -15,17 +15,28 @@ const {
   session,
   shell,
 } = require('electron');
+const { editionOf, userDirName, windowTitle, appUserModelId } = require('./edition.cjs');
+
+// The packager writes wedtmdEdition into the staged package.json. The unpackaged dev run reads
+// desktop/package.json, which has no edition, so it is the full game.
+function readOwnPackageJson() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+  } catch (_err) {
+    return null;
+  }
+}
+const EDITION = editionOf(readOwnPackageJson());
 
 // 1. Constants
 
 const APP_HOST = 'wedtmd';
 const START_URL = 'app://wedtmd/index.html';
 const APP_PREFIX = 'app://wedtmd/';
-const USER_DIR = 'WhatExactlyDoesThisMachineDo';
-const APP_USER_MODEL_ID = 'com.abdullahamidi.wedtmd';
+const APP_USER_MODEL_ID = appUserModelId(EDITION);
 const WINDOW = Object.freeze({ width: 1280, height: 720, minWidth: 960, minHeight: 540 });
 const BG = '#0d0b09';
-const TITLE = 'What Exactly Does This Machine Do?';
+const TITLE = windowTitle(EDITION);
 const LOG_MAX_BYTES = 1048576;
 const LOG_MSG_MAX = 2000;
 const SAVE_MAX_BYTES = 8388608;
@@ -58,7 +69,7 @@ const WINDOW_SAVE_DELAY_MS = 500;
 const RELOAD_LIMIT = 3;
 const RELOAD_WINDOW_MS = 60000;
 const CRASH_TEXT = 'The game stopped several times. Your saves are in '
-  + path.join('%APPDATA%', USER_DIR, 'saves') + '.';
+  + path.join('%APPDATA%', userDirName(EDITION, true), 'saves') + '.';
 const SHOW_FALLBACK_MS = 10000;
 const ERR_ABORTED = -3;
 const LOAD_FAIL_TEXT = 'The game files could not be loaded. In Steam use Properties > Installed Files > Verify integrity of game files, or reinstall the game.';
@@ -638,7 +649,7 @@ function setUserData() {
     app.setPath('userData', custom);
     return;
   }
-  const dir = USER_DIR + (app.isPackaged ? '' : '-dev');
+  const dir = userDirName(EDITION, app.isPackaged);
   app.setPath('userData', path.join(app.getPath('appData'), dir));
 }
 

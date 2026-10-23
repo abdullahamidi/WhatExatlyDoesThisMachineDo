@@ -1,0 +1,85 @@
+/* END OF DEMO flow (WP21 T12): final-machine teaser layer and END OF DEMO card, above the HUD.
+   The root class demo-teaser-on hides the rest of #ui-root while the teaser plays. Esc: shared modal stack. */
+
+/* keep in sync with src/data/palette.ts */
+#demo-teaser,
+#demo-end {
+  --ink:#14110f; --iron-2:#1d1f21; --rust:#8c4a2a; --rust-dark:#4e2a1a;
+  --amber:#d9822b; --amber-dim:#a8957a; --haze:#d2bf9c;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(11px, 1.3vw, 15px);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--amber);
+}
+
+#demo-teaser[hidden], #demo-teaser [hidden], #demo-end [hidden] { display: none !important; }
+
+#ui-root.demo-teaser-on > :not(#demo-teaser):not(#demo-end) { visibility: hidden !important; pointer-events: none !important; }
+
+/* Teaser: full-bleed click target (a click anywhere skips); the caption plaque sits near the bottom. */
+#demo-teaser { position: absolute; inset: 0; z-index: 150; pointer-events: auto; cursor: pointer; }
+
+.demo-teaser-box {
+  position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%);
+  box-sizing: border-box; width: min(640px, calc(92vw / var(--ui-zoom, 1))); padding: 10px 18px;
+  text-align: center; background: rgba(13, 11, 9, .72); border: 2px solid var(--rust);
+  box-shadow: 0 0 0 2px var(--ink), inset 0 0 14px rgba(0, 0, 0, .6);
+}
+
+#demo-teaser-kicker { font-size: .8em; color: var(--amber-dim); }
+
+#demo-teaser-caption { margin-top: 4px; font-size: 1.2em; text-transform: none; color: var(--haze); }
+
+/* Card: full-bleed backdrop, centred panel. z 210 keeps it above the toasts (200). */
+#demo-end {
+  position: absolute; inset: 0; z-index: 210; display: none; align-items: center; justify-content: center;
+  box-sizing: border-box; padding: 16px; background: rgba(13, 11, 9, .55); pointer-events: auto;
+}
+
+#demo-end.is-open { display: flex; }
+
+#demo-end-panel {
+  box-sizing: border-box; max-width: min(560px, calc(92vw / var(--ui-zoom, 1)));
+  padding: 18px 22px; background: var(--iron-2); border: 2px solid var(--rust); text-align: center;
+  box-shadow: 0 0 0 2px var(--ink), inset 0 0 18px rgba(0, 0, 0, .6);
+}
+
+#demo-end-title { margin: 0 0 10px; font-size: 20px; font-weight: normal; color: var(--haze); }
+
+#demo-end-body { margin: 0 0 16px; font-size: 14px; text-transform: none; color: var(--amber-dim); }
+
+.demo-end-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+
+/* Buttons do not inherit font or case by default. */
+#demo-skip, .demo-btn, .demo-link { font: inherit; letter-spacing: inherit; text-transform: inherit; }
+
+/* SKIP chip (top right of the teaser) and card buttons: HUD button look. */
+#demo-skip, .demo-btn {
+  color: var(--amber); background: var(--iron-2); border: 2px solid var(--rust); padding: 8px 14px; cursor: pointer;
+}
+
+#demo-skip { position: absolute; top: 16px; right: 16px; }
+
+#demo-skip:hover, .demo-btn:hover { background: var(--rust-dark); color: var(--haze); }
+
+.demo-btn--primary { border-color: var(--amber); color: var(--haze); }
+
+/* Text link below the button row. */
+.demo-link {
+  margin-top: 12px; padding: 4px; color: var(--amber-dim); background: none; border: 0;
+  text-decoration: underline; cursor: pointer;
+}
+
+.demo-link:hover { color: var(--amber); }
+
+#demo-skip:focus-visible, .demo-btn:focus-visible, .demo-link:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+@keyframes demo-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* Fades only when the OS allows motion; the Settings toggle below switches them off too. */
+@media (prefers-reduced-motion: no-preference) {
+  #demo-teaser:not([hidden]), #demo-end.is-open { animation: demo-fade 280ms ease-out; }
+}
+
+#ui-root[data-reduced-motion="on"] #demo-end, #ui-root[data-reduced-motion="on"] #demo-teaser { animation: none; }

@@ -66,3 +66,28 @@ describe('affordableTechIds', () => {
     expect(affordableTechIds(stateOf({}, { me: 15 }), techs)).not.toContain('gearRatio');
   });
 });
+
+describe('affordableTechIds with an era cap', () => {
+  const capFixtures: GameState[] = [
+    stateOf({}),
+    stateOf(
+      { handCrank: 1, gearRatio: 15, wornMotor: 1, motorTuning: 5, pistonArray: 1, generatorBlueprint: 1, generator: 1, powerLines: 1, sparkGap: 1 },
+      { me: 1e12, ee: 1e9 },
+    ),
+    stateOf({ substationBlueprint: 1 }, { ee: 1e12 }),
+  ];
+
+  it('equals the affordable views under the cap on every fixture', () => {
+    for (const state of capFixtures) {
+      const expected = getAllTechViews(state, TECHNOLOGIES, 2).filter((v) => v.affordable).map((v) => v.id);
+      expect(affordableTechIds(state, TECHNOLOGIES, 2)).toEqual(expected);
+    }
+  });
+
+  it('drops an era-III tech that the full game can buy', () => {
+    const state = stateOf({ substationBlueprint: 1 }, { ee: 1e12 });
+    expect(affordableTechIds(state)).toContain('boiler');
+    expect(affordableTechIds(state, TECHNOLOGIES, 2)).not.toContain('boiler');
+    expect(affordableTechIds(state, TECHNOLOGIES, null)).toContain('boiler');
+  });
+});

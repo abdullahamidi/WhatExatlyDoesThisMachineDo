@@ -22,14 +22,19 @@ function etaSuffix(remaining: number, rate: number): string {
   return `${NEXT_GOAL.sep}${NEXT_GOAL.etaPrefix}${formatDuration(Math.ceil(remaining / rate))}`;
 }
 
-/** The first sequence goal the player has not finished, with what it still needs. Null when none is left or the finale runs. */
+/**
+ * The first sequence goal the player has not finished, with what it still needs. Null when none is left or the finale runs.
+ * `maxEra` (demo cap) drops the goals above it, so the chain ends at the cap tech instead of pointing past it.
+ */
 export function nextGoal(
   state: Pick<GameState, 'res' | 'lifetime' | 'techLevels' | 'ending'>,
   rates: Readonly<ProductionRates>,
   techs: Readonly<Record<TechId, TechDefinition>> = TECHNOLOGIES,
+  maxEra: number | null = null,
 ): NextGoalView | null {
   if (state.ending.phase !== 'none') return null;
-  const id = NEXT_GOAL.sequence.find((seqId) => state.techLevels[seqId] < 1);
+  const sequence = NEXT_GOAL.sequence.filter((seqId) => maxEra === null || techs[seqId].era <= maxEra);
+  const id = sequence.find((seqId) => state.techLevels[seqId] < 1);
   if (id === undefined) return null;
   const def = techs[id];
   const base = { id, title: `${NEXT_GOAL.prefix}${def.name.toUpperCase()}` };

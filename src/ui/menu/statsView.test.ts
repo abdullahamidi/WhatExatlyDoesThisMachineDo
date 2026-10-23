@@ -106,3 +106,31 @@ describe('BEST CYCLE row (WP14 T8a)', () => {
     ]);
   });
 });
+
+describe('edition row options (WP21 T7)', () => {
+  it('hideCycles drops the CYCLE and BEST CYCLE rows', () => {
+    const labels = statsRows(stats({ cycles: 2, bestCycleSeconds: 9000 }), undefined, { hideCycles: true }).map((r) => r.label);
+    expect(labels).not.toContain(STATS_VIEW_LABELS.cycle);
+    expect(labels).not.toContain(STATS_VIEW_LABELS.bestCycle);
+    expect(labels).toEqual(['PLAYTIME', 'TIME AWAY', 'LONGEST ABSENCE', 'CLICKS', 'PURCHASES']);
+  });
+
+  it('maxEra 2 drops the rows of resources past the cap and keeps EE', () => {
+    const labels = statsRows(
+      stats({ lifetime: resources({ ee: 5, pr: 7, xf: 1 }), maxPerSecond: resources({ ee: 1, pr: 1, xf: 1 }) }),
+      undefined,
+      { maxEra: 2 },
+    ).map((r) => r.label);
+    expect(labels).toContain('EE TOTAL');
+    expect(labels).toContain('EE BEST RATE');
+    expect(labels).not.toContain('PR TOTAL');
+    expect(labels).not.toContain('PR BEST RATE');
+    expect(labels).not.toContain('??? TOTAL');
+  });
+
+  it('no options and null cap keep every row', () => {
+    const full = stats({ cycles: 2, bestCycleSeconds: 9000, lifetime: resources({ pr: 7 }), maxPerSecond: resources({ pr: 1 }) });
+    expect(statsRows(full, undefined, {})).toEqual(statsRows(full));
+    expect(statsRows(full, undefined, { hideCycles: false, maxEra: null })).toEqual(statsRows(full));
+  });
+});
