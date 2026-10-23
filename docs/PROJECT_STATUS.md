@@ -28,8 +28,8 @@
 | A17 | Art Director pass: legacy-feed part art, generator glow, gain-text placement, restored-core variants | ✅ done |
 | WP19 | Steam desktop shell (Electron, file saves, crash overlay, splash, title, quit/credits, fullscreen, UI anchoring) | ✅ done |
 | WP20 | First-impression UX polish (onboarding, fly-in visible, tree fit, era cards, text sweep) | ✅ done |
-| WP21 | Demo edition (cap at Substation Blueprint, end card + final-machine teaser, wishlist) | in progress |
-| WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | WP16a done (compat matrix, e2e-full/a11y/soak/store-shots smokes, ASSET_GUIDE guard); WP16b after WP21 |
+| WP21 | Demo edition (cap at Substation Blueprint, end card + final-machine teaser, wishlist) | ✅ done |
+| WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | WP16a ✅ · WP16b-1 store polish ✅ · WP16b-2 docs + a11y/UX (running) · WP16b-3 soak/GPU perf/final AD audit (next) |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -81,11 +81,19 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   ring, contrast, reduced motion, UI 150; WP21-owned scopes deferred, inactive text flagged), soak (SOAK_MIN, 5 min flat: heap 92.5 MB),
   store-shots (18 shots × 1080/2160, hud/clean); shared libs scripts/smoke/lib/{common,a11y-audit}.mjs. Fixes: active menu tab contrast,
   armed reset pulse stops under in-game reduced motion, title version colour (haze).
+- **WP21** demo edition: src/data/edition.ts (full|demo by Vite mode), era > 2 refused ('demo'), demo boot/import clamp
+  (original save kept in wedtmd.save.fullgame), capTech milestone +4 s → ShowcaseScene teaser (violet ruined world, plate capped
+  RES?OR?) → END OF DEMO card (WISHLIST / KEEP TINKERING / REPLAY TEASER / QUIT on desktop), SYSTEM row DEMO ENDING; demo hides
+  later records, MEMORY, new cycle; build:demo → dist-demo, build:steam-demo (separate userData). Cap timing A 60:23 · B 72:52 ·
+  new player 98:29 · C 148:28 (guarded). WP20 follow-ups: compact newest toast in the tree, PURCHASE visible at UI 150 %.
+- **WP16b-1** store polish: Art Director far-plain ramp under the ridge (grey band gone), transparent skyline underside, bolted logo
+  plate; HUD hidden behind the title; store-shots fixes + store-top5.json (07 era V clean, 06 spire, 03 generator, 05 tree,
+  09 postgame clean); art script guards (logo_plate.py). AD RELEASE-READY at 1080/2160.
 - **Art**: every sprite and background layer is PixelLab Pro in one locked palette from one style
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 3225 pass (110 files) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 3396 pass (119 files) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
@@ -125,9 +133,10 @@ Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era 
   EM `claude-sonnet-5-5`, workers `claude-haiku-5-5`.
 
 ## Next recommended task
-Steam demo program (docs/plan/STEAM_DEMO_PROGRAM.md):
-1. WP21 demo edition (running in worktree C:/Users/sanan/wedtmd-art, branch claude/ux-wp20) → merge into main.
-2. WP16 release verification (D8): quiet-machine GPU perf re-check (frame p95 ≤ 17 ms), save compat fixtures,
-   a11y, resolutions, soak, final Art Director audit, docs (README/CHANGELOG/STEAM_RELEASE/GAME_SPEC §18), store shots.
-   App chunk is 396/400 KB raw: decide code split or budget.
-Final machine shots (3840×2160, Art Director RELEASE-READY) sent to the user on 2026-10-23.
+Steam demo program (docs/plan/STEAM_DEMO_PROGRAM.md), WP16 release verification:
+1. WP16b-2 (running in worktree C:/Users/sanan/wedtmd-shell, branch claude/release-wp16): README, CHANGELOG, STEAM_RELEASE checklist,
+   GAME_SPEC §18 note; tree focus trap + node contrast (a11y deferred scopes gate again); toast vs tree heading; first-screen guidance.
+2. WP16b-3 (after merge, nothing in parallel): 30–60 min soak, quiet-machine GPU perf (frame p95 ≤ 17 ms), final Art Director audit
+   incl. 1080p and Steam Deck 1280×800, final store shots, PROJECT_STATUS final.
+Budgets: app raw 460 KB (full 401.5, demo 403.5), css 44 KB (full 39.0, demo 41.7 incl. lazy END card css; WP21 D10 sign-off).
+Final machine shots (3840×2160, AD RELEASE-READY) and demo teaser/END card shots sent to the user on 2026-10-23.
