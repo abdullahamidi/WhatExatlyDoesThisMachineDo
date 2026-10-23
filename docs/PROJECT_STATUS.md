@@ -29,7 +29,7 @@
 | WP19 | Steam desktop shell (Electron, file saves, crash overlay, splash, title, quit/credits, fullscreen, UI anchoring) | ✅ done |
 | WP20 | First-impression UX polish (onboarding, fly-in visible, tree fit, era cards, text sweep) | ✅ done |
 | WP21 | Demo edition (cap at Substation Blueprint, end card + final-machine teaser, wishlist) | in progress |
-| WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | started (T1 e2e, T3 sign-off sim, T5 version landed 2026-10-18; rest planned, slimmed by D8) |
+| WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | WP16a done (compat matrix, e2e-full/a11y/soak/store-shots smokes, ASSET_GUIDE guard); WP16b after WP21 |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -76,11 +76,16 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   tree that fits at UI 150 %, next-goal line, era cards, toast coalescing, fixed-height menu, text sweep, crank sparks.
 - **WP15R**: purchase cue follows the paying energy; rate-driven beds refit ≥ 3× PF rates; one era source
   (currentEra); GPU perf smoke (PERF_GPU=1, median-of-3).
+- **WP16a** release tooling: 7 historical-shape save fixtures through codec/session/host/export (src/persistence/compat.test.ts);
+  ASSET_GUIDE guard (src/assets/assetGuide.test.ts, regenerable tables); smokes e2e-full (title → cycle 2), a11y (reachability, focus
+  ring, contrast, reduced motion, UI 150; WP21-owned scopes deferred, inactive text flagged), soak (SOAK_MIN, 5 min flat: heap 92.5 MB),
+  store-shots (18 shots × 1080/2160, hud/clean); shared libs scripts/smoke/lib/{common,a11y-audit}.mjs. Fixes: active menu tab contrast,
+  armed reset pulse stops under in-game reduced motion, title version colour (haze).
 - **Art**: every sprite and background layer is PixelLab Pro in one locked palette from one style
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 3155 pass (108 files) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 3225 pass (110 files) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
