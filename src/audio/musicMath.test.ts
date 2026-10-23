@@ -3,6 +3,7 @@ import { MUSIC } from '../data/music';
 import type { MusicNoteEvent, MusicTheme, MusicThemeId } from '../data/music';
 import { TECH_IDS } from '../data/types';
 import type { EndingPhase, TechId } from '../data/types';
+import { currentEra } from '../simulation/progression/era';
 import {
   barSeconds,
   chordAt,
@@ -249,7 +250,7 @@ describe('musicTheme', () => {
     expect(musicTheme(levelsOwning('generator', 'nullChamber', 'boiler'), 'none')).toBe('exotic');
   });
 
-  it('choice and postgame play restored whatever the keystones', () => {
+  it('choice and postgame play restored whatever the tech levels', () => {
     const all = levelsOwning('generator', 'boiler', 'resonatorSpire', 'nullChamber');
     const phases: EndingPhase[] = ['choice', 'postgame'];
     for (const phase of phases) {
@@ -266,6 +267,33 @@ describe('musicTheme', () => {
     const ids: MusicThemeId[] = ['mech', 'elec', 'therm', 'reson', 'exotic', 'restored'];
     const got = musicTheme(levelsOwning('nullChamber'), 'none');
     expect(ids).toContain(got);
+  });
+});
+
+describe('musicTheme follows the simulation era (WP15R)', () => {
+  const ERA_TECHS: readonly TechId[] = ['generator', 'boiler', 'resonatorSpire', 'nullChamber'];
+
+  it('equals MUSIC.eraThemes[currentEra] for all 16 subsets of the era techs', () => {
+    for (let mask = 0; mask < 16; mask++) {
+      const owned = ERA_TECHS.filter((_, i) => (mask & (1 << i)) !== 0);
+      const levels = levelsOwning(...owned);
+      expect(musicTheme(levels, 'none'), `mask ${mask}`).toBe(MUSIC.eraThemes[currentEra(levels)]);
+    }
+  });
+
+  it('treats non-finite levels as not owned', () => {
+    const infiniteNull = zeroLevels();
+    infiniteNull.nullChamber = Number.POSITIVE_INFINITY;
+    expect(musicTheme(infiniteNull, 'none')).toBe('mech');
+
+    const nanBoiler = zeroLevels();
+    nanBoiler.boiler = Number.NaN;
+    expect(musicTheme(nanBoiler, 'none')).toBe('mech');
+
+    const generatorAndInfiniteSpire = zeroLevels();
+    generatorAndInfiniteSpire.generator = 1;
+    generatorAndInfiniteSpire.resonatorSpire = Number.POSITIVE_INFINITY;
+    expect(musicTheme(generatorAndInfiniteSpire, 'none')).toBe('elec');
   });
 });
 

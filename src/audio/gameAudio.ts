@@ -8,19 +8,26 @@ import { AUDIO } from '../data/audio';
 import { MUSIC } from '../data/music';
 import type { AudioStats, MusicThemeId } from '../data/music';
 import type { SettingsState } from '../data/types';
-import { TECHNOLOGIES } from '../data/technologies';
 import type { GameFeedback } from '../game/context';
 import type { GameSession } from '../simulation';
-import { arcRate, bedTrim, boilerGain, busGain, currentEra, droneGain, gearTickRate, humFrequency, humGain, levelsChanged, mainsGain, masterTarget, padGain, servoGain, servoHz, windAllowed } from './audioMath';
-import type { LevelSnapshot } from './audioMath';
+import { ambientMix, busGain, levelsChanged, masterTarget, purchaseCue, windAllowed } from './audioMath';
+import type { AmbientMix, LevelSnapshot } from './audioMath';
 import { barSeconds, crossfadeGains, duckLevel, eventsInWindow, musicAllowed, musicTheme } from './musicMath';
 import { createSynth } from './synth';
 import type { Synth } from './synth';
 
+/** Readout for the debug hook: the synth and music readout plus the last level set and ambient mix (WP15R). */
+export interface GameAudioStats extends AudioStats {
+  /** Last level set pushed to the synth by applyLevels; null before unlock (and after dispose). */
+  readonly levels: LevelSnapshot | null;
+  /** Last ambient mix pushed by tick; null before the first tick (and after dispose). */
+  readonly ambient: AmbientMix | null;
+}
+
 export interface GameAudio {
   readonly unlocked: boolean;
   /** Live readout for the debug hook (WP15): theme, slot gains, duck, voices, peak. All zeros and nulls before the first gesture. */
-  stats(): AudioStats;
+  stats(): GameAudioStats;
   dispose(): void;
 }
 
@@ -90,6 +97,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
   let timer: number | null = null;
   let unsubscribers: Array<() => void> = [];
   let appliedLevels: LevelSnapshot | null = null; // last set pushed to the synth; the tick skips unchanged sets
+  let lastMix: AmbientMix | null = null; // last ambient mix pushed by the tick (readout only)
   let windStopped = false; // finale windStop beat fired: wind off for the rest of the sequence (cleared when the phase is 'none')
   const slots: [MusicSlot, MusicSlot] = [newMusicSlot(), newMusicSlot()];
   let activeSlot: 0 | 1 = 0; // slot of the current theme; the other one is the outgoing or idle slot
@@ -275,12 +283,9 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
   }
 
   /**
-   * Update loop: hum and gear ticks follow the current ME/s; mains and arcs follow EE/s; the boiler roar follows PR/s;
-   * the resonance pad follows RS/s (owned spire only); the servo whirr follows the crank servo level;
-   * the sub-bass drone follows XF/s (owned nullChamber only). The volume levels are checked each tick (pushed on change only).
-   * Ambient beds are multiplied by their era trim (AUDIO.bedTrim); wind has no gain parameter in the synth (its trim
-   * is 1 in every era, so nothing is lost).
-   * The music controller runs before the mute branch so muting stops the notes. Muted keeps the hum pitch and drops only its gain.
+   * Update loop, once per tick: the levels (pushed on change only) and the music controller run first, so muting stops
+   * the notes. Then the ambient mix (ambientMix, WP15R) is pushed to the beds. Mute handling, era trims and the
+   * rate-to-gain curves live in ambientMix; this function only forwards its numbers to the synth and keeps the readout.
    */
   function tick(): void {
     try {
@@ -292,32 +297,16 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
       } catch (error) {
         warnOnce('music', error);
       }
-      const ps = session.rates.perSecond.me;
-      const ee = session.rates.perSecond.ee;
-      const pr = session.rates.perSecond.pr;
-      const rs = session.rates.perSecond.rs;
-      if (session.settings.muted) {
-        s.setHum(humFrequency(ps), 0);
-        s.scheduleGearTicks(0);
-        s.setMains(0);
-        s.scheduleArcs(0);
-        s.setBoiler(0);
-        s.setPad(0);
-        s.setDrone(0);
-        s.setServo(0, AUDIO.servo.minHz);
-        return;
-      }
-      const era = currentEra(session.state.techLevels);
-      s.setHum(humFrequency(ps), humGain(ps) * bedTrim('hum', era));
-      s.scheduleGearTicks(gearTickRate(ps), bedTrim('gear', era));
-      s.setMains(mainsGain(ee) * bedTrim('mains', era));
-      s.scheduleArcs(arcRate(ee, session.state.techLevels.sparkGap >= 1));
-      s.setBoiler(boilerGain(pr, session.state.techLevels.boiler >= 1) * bedTrim('boiler', era));
-      s.setPad(padGain(rs, session.state.techLevels[AUDIO.pad.techId] >= 1) * bedTrim('pad', era));
-      s.setDrone(droneGain(session.rates.perSecond.xf, session.state.techLevels[AUDIO.drone.techId] >= 1) * bedTrim('drone', era));
-      const servoLevel = session.state.techLevels[AUDIO.servo.techId];
-      const servoMax = TECHNOLOGIES[AUDIO.servo.techId].maxLevel ?? 1;
-      s.setServo(servoGain(servoLevel, servoMax) * bedTrim('servo', era), servoHz(servoLevel, servoMax));
+      const mix = ambientMix({ perSecond: session.rates.perSecond, techLevels: session.state.techLevels, muted: session.settings.muted });
+      lastMix = mix;
+      s.setHum(mix.humHz, mix.humGain);
+      s.scheduleGearTicks(mix.gearRate, mix.gearGain);
+      s.setMains(mix.mainsGain);
+      s.scheduleArcs(mix.arcRate);
+      s.setBoiler(mix.boilerGain);
+      s.setPad(mix.padGain);
+      s.setDrone(mix.droneGain);
+      s.setServo(mix.servoGain, mix.servoHz);
     } catch (error) {
       warnOnce('update', error);
     }
@@ -386,16 +375,28 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
           if (session.state.techLevels[AUDIO.forkPing.techId] >= 1) s.playForkPing();
         }),
       ),
-      session.on('purchase', ({ id }) => {
+      // Cue = era of the paying resource (WP15R D1), not the era of the tech bought.
+      session.on('purchase', ({ res }) => {
         try {
           const s = synth;
           if (s && !session.settings.muted) {
-            const era = TECHNOLOGIES[id].era;
-            if (era >= 5) s.playSwell();
-            else if (era >= 4) s.playForkPing();
-            else if (era === 3) s.playHiss();
-            else if (era === 2) s.playRelay();
-            else s.playPurchase();
+            switch (purchaseCue(res)) {
+              case 'purchase':
+                s.playPurchase();
+                break;
+              case 'relay':
+                s.playRelay();
+                break;
+              case 'hiss':
+                s.playHiss();
+                break;
+              case 'forkPing':
+                s.playForkPing();
+                break;
+              case 'swell':
+                s.playSwell();
+                break;
+            }
           }
         } catch (error) {
           warnOnce('purchase', error);
@@ -500,6 +501,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     const s = synth;
     synth = null;
     appliedLevels = null;
+    lastMix = null;
     unlocked = false;
     slots[0] = newMusicSlot();
     slots[1] = newMusicSlot();
@@ -519,12 +521,12 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
   }
 
   /** Idle readout: nothing has been created yet (or the controller is disposed). */
-  function idleStats(): AudioStats {
-    return { unlocked: false, running: false, theme: null, slotGains: [0, 0], duck: 0, liveVoices: 0, musicVoices: 0, dropped: 0, peakDb: null };
+  function idleStats(): GameAudioStats {
+    return { unlocked: false, running: false, theme: null, slotGains: [0, 0], duck: 0, liveVoices: 0, musicVoices: 0, dropped: 0, peakDb: null, levels: null, ambient: null };
   }
 
-  /** Live readout for the debug hook. Never throws; reads the synth counters and the controller state. */
-  function stats(): AudioStats {
+  /** Live readout for the debug hook. Never throws; reads the synth counters, the controller state, the last levels and mix. */
+  function stats(): GameAudioStats {
     const s = synth;
     if (!s) return idleStats();
     try {
@@ -539,6 +541,8 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
         musicVoices: counters.musicVoices,
         dropped: counters.dropped,
         peakDb: counters.peakDb,
+        levels: appliedLevels,
+        ambient: lastMix,
       };
     } catch (error) {
       warnOnce('stats', error);
