@@ -10,6 +10,7 @@
   --amber:#d9822b;
   --amber-dim:#a8957a;
   --haze:#d2bf9c;
+  --steam:#e8e0cc;
   position: absolute;
   inset: 0;
   z-index: 150;
@@ -96,7 +97,7 @@
 .sys-tab.is-active {
   background: var(--rust);
   border-color: var(--rust);
-  color: var(--haze);
+  color: var(--steam);
 }
 
 .sys-tab:focus-visible {
@@ -193,4 +194,8 @@
   #sys-reset.is-armed {
     animation: none;
   }
+}
+
+#ui-root[data-reduced-motion="on"] #sys-reset.is-armed {
+  animation: none;
 }

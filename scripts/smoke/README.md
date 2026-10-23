@@ -366,3 +366,230 @@ Main assertions (run order):
 
 Result keys: `showcase_A`, `showcase_B_k2_5`, `showcase_B_k3_9`, `showcase_B_k5_4`, `showcase_B_k6_9`, `showcase_B_k41_5`, `showcase_B_k45_2`, `showcase_B_k56`, `showcase_C`, `showcase_D`, `showcase_D2`, `showcase_C2`, `showcase_F`, `showcase_E_era2`, `showcase_E_assembling`, `showcase_E_end`, `showcase_E_stop`.
 Note: frame max spikes come from CPU contention in the container, so the stage max gates use the median of the 3 windows; the raw max stays in the report.
+
+## Release verification smokes (WP16a)
+
+Release gate smokes: two shared libraries and four browser runs. Same rules as the smokes above (Node `.mjs`, Playwright through `PW_PATH`, never starts a server).
+
+- Base URL WITHOUT a query: `"<preview>/"` (trailing slash). Each script adds its own query (`debug=1`, or `debug=1&title=1`).
+- Outdir: absolute path. Each browser script writes `<outdir>/<name>.json` and prints the same JSON object to stdout (`e2e-full.json`, `a11y.json`, `soak.json`, `store-shots.json`).
+- Exit codes: `0` ok; `1` when `fail` or `errors` is non-empty; `2` usage error (missing arguments, bad env value, `PW_PATH` unset).
+- Every script clicks the crank at least 45 times before its first buy list (`wornMotor` costs 40 ME).
+- Do not rebuild `dist` while a smoke runs. The preview server re-reads `dist` on every request, so a rebuild mid-run changes the game under the smoke.
+
+### Shared libraries
+
+`scripts/smoke/lib/common.mjs`: Node built-ins only. Importing has no side effects and needs no `PW_PATH`.
+
+| Export | Meaning |
+|---|---|
+| `S7`, `S9`, `S11`, `S13`, `S15` | Cumulative buy lists per era (copies of the `stages.mjs` lists). |
+| `STAGES` | `[['s7', S7], ['s9', S9], ...]` in play order. |
+| `ERA_TITLES` | Expected HUD era title per stage (`ERA I · MECHANICAL` ... `ERA V · ???`). |
+| `HUD_ROWS` | Expected visible HUD resource rows per stage (1, 2, 3, 4, 5). |
+| `LEGACY_FEEDS` | Legacy energy feed parts: `bellowsDrive`, `gridExciter`, `mainsBackfeed`, `steamLance`. |
+| `ASSET_WARNING_RE` | Asset loader console warnings that count as errors. |
+| `GPU_ARGS` | Chromium flags for `SOAK_GPU=1` (`--use-angle=d3d11`, `--enable-gpu`, `--ignore-gpu-blocklist`). |
+| `PREVIEW_HINT` | `http://localhost:4174/` (the preview URL; never started by a smoke). |
+| `delta(prev, next)` | Items of `next` after the `prev` prefix. Throws when `prev` is not a prefix. |
+| `withQuery(base, params)` | URL with the given query parameters set. |
+| `loadChromium()` | Playwright chromium from `PW_PATH`. Exits 2 when unset. |
+| `readBudget()` | Parsed `scripts/smoke/perf-budget.json`. |
+| `makeReport()` | `{ results, fail, errors, check(name, cond, detail) }`. A failing name goes to `fail` once. |
+| `watchPage(page, errors, tag)` | Records console errors, asset warnings, page errors, failed requests and HTTP >= 400. |
+| `waitReady(page, timeoutMs)` | Waits for the debug hook and the hand crank, then a 400 ms settle. |
+| `crankClicks(page, n, gapMs)` | `n` real mouse clicks on the hand crank. |
+| `buyInPage(buys)` | Buy runner for `page.evaluate`. Entries: `<techId>`, `@<techId>:<n>`, `@<techId>`, `@blueprint`. Returns `<entry>:<bool>` per entry. |
+| `buyList(page, buys)` | Runs `buyInPage`; returns the failed entries (`[]` = every buy worked). |
+| `dismissEraCard(page)` | Clicks `#era-card` away when it is open. |
+| `hudState(page)` | `{ title, visibleRows, frontier, click, clickSub, auto, right, bottom }`, or `null` on error. |
+| `poll(page, fn, arg, capMs, stepMs)` | Re-evaluates `fn(arg)` in the page until truthy or the cap; returns the last value. |
+| `waitPhotoChipHidden(page, capMs)` | Blurs `#photo-exit`, polls its opacity to <= 0.001. Returns the final opacity. |
+| `pngSize(file)` | `{ width, height }` from the PNG IHDR. Throws when the file is not a PNG. |
+
+Self-test (pure, no browser): `node scripts/smoke/lib/common.mjs --selftest`. Prints one line `{ ok, checks }`; exit 0 when every check holds. Checks: `prefix_s7_s9`, `prefix_s9_s11`, `prefix_s11_s13`, `prefix_s13_s15`, `delta_length`, `delta_reverse_throws`, `with_query`, `png_gear_small_40`, `budget_heap_150`.
+
+`scripts/smoke/lib/a11y-audit.mjs`: page audit, Tab walker, focus log and WCAG maths. Never imports Playwright.
+
+- `DEFERRED_SCOPES` = `['#tech-overlay', '#toast-stack', '#era-card']`. These scopes belong to another package (`src/ui/techTree*`, `toasts*`, `eraCard*`). Findings inside them go to `deferred` and never fail.
+- `auditScope(page, scopeSel)` returns `{ rootCount, checked: { controls, text }, unnamed, small, contrast, deferred, inactive, indeterminate }`. Only visible elements are audited. Item kinds:
+  - `unnamed`: a control (button, link, input, tab, radio, ...) with no accessible name (aria-label, aria-labelledby, label, own text, title).
+  - `small`: text below 12 px (`fontPx`).
+  - `contrast`: text below its WCAG ratio.
+  - Each item: `{ kind, sel, text, ratio, need, fontPx }`.
+- WCAG 1.4.3: normal text >= 4.5:1; large text (>= 24 px, or >= 18.66 px at weight >= 700) >= 3:1. The foreground alpha and the opacity of the element and its ancestors count. The background is the composite of the layers from the element outwards up to the first opaque layer. Gradient backgrounds use the minimum ratio over all colour stops.
+- `inactive`: contrast items inside `:disabled`, `[aria-disabled="true"]` or `.is-locked` are exempt. They are listed here and never fail.
+- `deferred`: items of any kind inside a `DEFERRED_SCOPES` scope. Report-only. Items that are D8-exempt inactive text (disabled, `aria-disabled`, `.is-locked`) carry `inactive: true`; skip those when fixing.
+- `indeterminate`: text with no parseable colour, or with no opaque background before body. `ratio` is `null`. Report-only. These are listed as they are, whatever the scope.
+- Other exports: `tabWalk(page, n, scopeSel)` (Tab n times, 60 ms apart; each record has `tag`, `id`, `cls`, `tech`, `ring`, `named`, `inScope`). A ring is an outline >= 1 px or a box-shadow. `missingFocus(page, containerSel)` (visible enabled controls the focus log never saw; a radio group counts once). `installFocusLog`, `resetFocusLog`, `focusId`, `setUiScale(page, pct)`, `rectInViewport(page, sel, tolPx)`. Pure helpers: `parseCssColor`, `compositeOver`, `relativeLuminance`, `contrastRatio`, `neededRatio`.
+- Self-test (pure, no browser): `node scripts/smoke/lib/a11y-audit.mjs --selftest`. Prints one line `{ ok, checks, values }`; exit 0 when all 19 checks hold (contrast maths, colour parsing, `deferred_scopes_3`). Without the flag it prints usage and exits 2.
+
+### e2e-full.mjs
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/e2e-full.mjs "<preview>/" C:/Users/<you>/AppData/Local/Temp/smoke/e2e
+```
+
+One run, one fresh 1280x720 context, from the title screen to a new cycle and a reload. Real keyboard and mouse input throughout. Each step has its own guard and one screenshot. A step exception adds `FAILED:<NN>_<name>:<first line>` to `fail` and the run goes on. Wall time limit: 300000 ms.
+
+| Step | Screenshots (`e2e-<NN>-<name>.png`) | Check names | Expect |
+|---|---|---|---|
+| 01 title | `01-title` | `01_title_open`, `01_continue_hidden`, `01_new_focused` | title open; CONTINUE hidden on a fresh profile; NEW GAME focused |
+| 02 newgame | `02-newgame` | `02_title_closed`, `02_clicks` | Enter closes the title; 30 clicks (20 crank + 10 Space) |
+| 03 tree | `03-tree` | `03_tree_open`, `03_reached_gearRatio`, `03_bought_gearRatio`, `03_tree_closed` | tree opens; Gear Ratio reached by Tab and bought (level 1); tree closes |
+| 04 save | `04-save` | `04_saved` | SYSTEM > SAVE stores `gearRatio` 1 |
+| 05 continue | `05-continue` | `05_continue_focused`, `05_progress_kept` | CONTINUE focused after reload; gearRatio 1 and 30 clicks kept |
+| 06 eras | `06-eras`, `06-s7`, `06-s9`, `06-s11`, `06-s13`, `06-s15` | `06_<key>_buys`, `06_<key>_title`, `06_<key>_rows`, `06_<key>_displayObjects` (`<key>` = `s7`, `s9`, `s11`, `s13`, `s15`) | buy list all ok; HUD title = `ERA_TITLES[key]`; visible rows = `HUD_ROWS[key]`; display objects <= 500 |
+| 07 finale | `07-finale`, `07-finale-mid` | `07_buy`, `07_sequence`, `07_choice`, `07_keep_visible` | `primaryFunction` bought; sequence runs; Escape reaches the choice; KEEP visible |
+| 08 keep | `08-keep` | `08_postgame`, `08_title` | KEEP IT RUNNING enters postgame; HUD title `RESTORATION ENGINE` |
+| 09 view | `09-view`, `09-view-photo` | `09_photo_on`, `09_hud_hidden`, `09_photo_off`, `09_hud_back` | VIEW MACHINE hides the HUD; Escape restores it |
+| 10 newcycle | `10-newcycle`, `10-newcycle-confirm` | `10_menu_open`, `10_row_enabled`, `10_confirm_open`, `10_cycle2`, `10_cycle_label`, `10_fresh_run`, `10_crank_works` | BEGIN A NEW CYCLE, confirm, cycle 2; label contains `CYCLE 0043`; fresh run; crank works |
+| 11 reload | `11-reload` | `11_cycle_kept`, `11_label_kept` | SAVE, reload, CONTINUE: cycle 2 and label kept |
+| 12 footer | `12-footer` | `12_footer` | SYSTEM footer text starts with `v0.9.0` |
+| run | none | `wall_time` | `wallMs` <= 300000 |
+
+Outputs:
+- `<outdir>/e2e-full.json` (same object as stdout): `results` (per check: boolean, or `{ ok, value }` when a detail is recorded), `metrics` (per stage `s7`..`s15`: `displayObjects`, `machine` = `machineStats()`, `heapMb`), `wallMs`, `fail`, `errors`.
+- Screenshots as listed above (`e2e-<NN>-<name>.png`, one guard shot per step plus the extra shots).
+- Exit 1 when `fail` or `errors` is non-empty; 2 on missing arguments. A setup failure appears as `FAILED:setup:<msg>`.
+
+### a11y.mjs
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/a11y.mjs "<preview>/" C:/Users/<you>/AppData/Local/Temp/smoke/a11y
+```
+
+Cases. Each case adds its own query. A, E, F and G each open a fresh 1280x720 context; B, C and D share one context.
+
+| Case | Scope | What it does |
+|---|---|---|
+| `A_title` | `#title-screen` | Tab 8 times from NEW GAME; audit the title |
+| `A_credits` | `#credits-overlay` | Opens CREDITS from the title; Escape returns to the title |
+| `B_hud` | `#ui-root` | 10 Space presses (10 clicks), 10 crank clicks; Tab 6 times through the HUD |
+| `C_tree` | `#tech-overlay` | `t`; focus on a selected node; Tab 30 times; audit the tree |
+| `D_menu` | `#system-menu` | SYSTEM menu; Tab 12 times; every visible SYSTEM tab (`<tab>`) audited |
+| `E_reduced` | `#ui-root` | Reduced motion on; RESET confirm opened; no running CSS animation |
+| `F_finale` | `#finale-overlay`, `#photo-exit`, `#system-menu`, `#cycle-confirm` | Finale choice, postgame, photo mode, MEMORY tab, cycle confirm |
+| `G_scale150` | title, credits, HUD, tech tree, SYSTEM tabs | UI scale 150 after a reload; every panel inside the viewport |
+
+Check names (`<tab>` = each visible SYSTEM tab: `system`, `settings`, `stats`, `records`, `memory`, `data`; a fresh game showed `system`, `settings`, `stats`, `records`, `data`; `memory` appears later):
+
+| Case | Check names |
+|---|---|
+| `A_title` | `A_reach`, `A_trap`, `A_rings`, `A_names`, `A_contrast`, `A_font12` |
+| `A_credits` | `A_credits_trap`, `A_credits_rings`, `A_credits_names`, `A_credits_contrast`, `A_credits_esc` |
+| `B_hud` | `B_space_crank`, `B_reach`, `B_rings`, `B_names`, `B_contrast`, `B_font12` |
+| `C_tree` | `C_focus_selected`, `C_reach`, `C_rings` (audit findings go to `deferred`) |
+| `D_menu` | `D_system_reach`, `D_trap`, `D_rings`; per tab: `D_<tab>_reach`, `D_<tab>_rings`, `D_<tab>_names`, `D_<tab>_contrast`, `D_<tab>_font12` |
+| `E_reduced` | `E_root_attr`, `E_no_animations` |
+| `F_finale` | `F_buys`, `F_choice_reach`, `F_choice_trap`, `F_choice_rings`, `F_choice_names`, `F_choice_contrast`, `F_choice_font12`, `F_choice_150_inside`, `F_postgame`, `F_post_reach`, `F_photo_reach`, `F_photo_ring`, `F_photo_name`, `F_memory_names`, `F_memory_contrast`, `F_memory_font12`, `F_memory_150_inside`, `F_confirm_reach`, `F_confirm_trap`, `F_confirm_rings`, `F_confirm_names`, `F_confirm_contrast`, `F_confirm_font12`, `F_confirm_150_inside`, `F_confirm_cancel` |
+| `G_scale150` | `G_title_inside`, `G_credits_inside`, `G_hud_inside`, `G_tree_inside`, `G_menu_<tab>_inside` |
+
+Check meanings: `_reach` = every required control reached by Tab (`C_reach`: `tech-close` and `tech-buy` reached, >= 3 node ids, >= 1 tab). `_trap` = every Tab press stays inside the scope. `_rings` = every focus target (not body) shows a focus ring. `_names` = no unnamed control. `_contrast` = no text below its WCAG ratio. `_font12` = no text below 12 px. `_inside` = element rect inside the 1280x720 viewport at UI scale 150 (1 px tolerance). `D_system_reach` is reused by the `system` tab: the first failure is kept. `A_credits` has no `_font12` check.
+
+Deferred semantics (report-only, never fail):
+- Audit findings inside `#tech-overlay`, `#toast-stack` and `#era-card` go to `deferred`. These files belong to another package (`src/ui/techTree*`, `toasts*`, `eraCard*`); WP16b fixes them.
+- The known tree focus-trap gap: the `C_tree` walk (Tab 30 times in `#tech-overlay`) records focus leaving the overlay. The entry is `{ at: 'C_trap', kind: 'trap', ids: [...] }` in `deferred`. It never fails.
+- `inactive` (disabled, locked) and `indeterminate` (no colour or no opaque background) are report-only too.
+
+Outputs:
+- `<outdir>/a11y.json` (2-space JSON, same as stdout): `results`, `fail`, `deferred`, `inactive`, `indeterminate` (each audit item carries `at`, the case label), `errors`.
+- Screenshots: `a11y-A-title.png`, `a11y-A-credits.png`, `a11y-B-hud.png`, `a11y-C-tree.png`, `a11y-D-menu-<tab>.png`, `a11y-E-reduced.png`, `a11y-F-choice.png`, `a11y-F-photo.png`, `a11y-F-memory.png`, `a11y-F-confirm.png`, `a11y-G-menu.png`.
+- Failure keys: `FAILED:<case>:<first line>` (`<case>` = `A_title`, `A_credits`, `B_hud`, `C_tree`, `D_menu`, `E_reduced`, `F_finale`, `G_scale150`) or `FAILED:run:<first line>`.
+- Exit 1 when `fail` or `errors` is non-empty; 2 on missing arguments.
+
+### soak.mjs
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright SOAK_MIN=5 node scripts/smoke/soak.mjs "<preview>/" C:/Users/<you>/AppData/Local/Temp/smoke/soak
+```
+
+Env vars:
+
+| Variable | Default | Rule |
+|---|---|---|
+| `SOAK_MIN` | `30` | Run length in minutes, minimum 2. |
+| `SOAK_SAMPLE_S` | `30` | Seconds between samples, minimum 5. |
+| `SOAK_GPU` | unset | `1` = launch with the real GPU (`GPU_ARGS`, ANGLE d3d11). |
+
+A bad value exits 2 with the usage line. Chromium runs with `--js-flags=--expose-gc` (gc before each sample) and `--enable-precise-memory-info`. The validation run is `SOAK_MIN=5`. The 30 to 60 minute run belongs to WP16b.
+
+Setup: `?debug=1`; 45 crank clicks; the S15 buy list (check `setup_buys`); 15 s wait; era card dismissed.
+
+Action schedule (loop tick 250 ms; each task runs when due, never overlapping):
+
+| Task | First at | Then every | Action |
+|---|---|---|---|
+| crank | 2 s | 2 s | One real mouse click on the hand crank. |
+| buy | 15 s | 30 s | One legacy feed buy in turn (`bellowsDrive`, `gridExciter`, `mainsBackfeed`, `steamLance`). A rejected buy gets one 8 h time jump, then one retry. |
+| tech | 20 s | 60 s | `t`, 1.5 s, Escape. |
+| menu | 40 s | 90 s | Escape until no modal, Escape, click `#sys-tab-stats`, 1 s, Escape. |
+| sample | 0 s | `SOAK_SAMPLE_S` | Escape until no modal (max 3), gc(), then the probes. |
+
+The final sample runs after the loop, then `soak-end.png`.
+
+Probes per sample: `heapMb` (`performance.memory`), `displayObjects`, `toasts` (`#toast-stack .toast`), `domNodes`, `liveVoices` (`audioStats()`, `null` when absent), `machineMeanMs`.
+
+Limits. Baseline = first sample with `tSec` >= 60; last = final sample. Results land in `limits` as `{ value, limit }`.
+
+| Check | Rule | Limit (source) |
+|---|---|---|
+| `heap_cap` | max `heapMb` <= limit | 150 MB (`perf-budget.json` `heapMb`) |
+| `heap_growth` | last - baseline `heapMb` <= limit | 16 MB (`SOAK_LIMITS.heapGrowthMb`) |
+| `heap_slope` | least-squares slope of `heapMb` over samples with `tSec` >= 60, MB per min, <= limit. Needs >= 2 such samples, else fails | 1.0 MB/min (`heapSlopeMbPerMin`) |
+| `display_cap` | max `displayObjects` <= limit | 500 (`perf-budget.json` `displayObjects`) |
+| `display_growth` | last `displayObjects` <= baseline x limit | x 1.10 (`displayGrowthRatio`) |
+| `toasts_cap` | max toasts <= limit | 4 (`toastsCap`) |
+| `dom_growth` | last - baseline `domNodes` <= limit | 200 (`domGrowth`) |
+| `voices_cap` | max `liveVoices` <= limit | 48 (`perf-budget.json` `liveVoices`). Passes with `null` when no sample has `liveVoices` |
+| `voices_growth` | last - baseline `liveVoices` <= limit | 8 (`voicesGrowth`). Passes with `null` when no sample has `liveVoices` |
+
+Also: `setup_buys` (S15 list all ok) and `no_baseline` (fails when no sample reaches `tSec` 60). The perf budget's `heapGrowthMb` (8) belongs to the perf smoke; soak uses its own 16 MB.
+
+Outputs:
+- `<outdir>/soak.json` (2-space JSON) and stdout: `{ minutes, samples, baseline, last, limits, purchases: { ok, tried }, fail, errors }`. Each sample: `{ tSec, heapMb, displayObjects, toasts, domNodes, liveVoices, machineMeanMs }`.
+- `<outdir>/soak-end.png`. Progress lines `[soak] t=...` go to stderr.
+- Exit 1 when `fail` or `errors` is non-empty; 2 on usage. An exception adds `FAILED:soak:<msg>`.
+
+### store-shots.mjs
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/store-shots.mjs "<preview>/" C:/Users/<you>/AppData/Local/Temp/smoke/store
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright SIZES=2160 VARIANTS=clean node scripts/smoke/store-shots.mjs "<preview>/" C:/Users/<you>/AppData/Local/Temp/smoke/store
+```
+
+Env vars (unset or blank = all; an unknown or empty entry = usage, exit 2):
+- `SIZES` (default `1080,2160`): `1080` = viewport 1920x1080 at deviceScaleFactor 1 (PNG 1920x1080). `2160` = same viewport at deviceScaleFactor 2 (PNG 3840x2160).
+- `VARIANTS` (default `hud,clean`): `hud` = live UI. `clean` = photo mode without the hint, HUD hidden. The finale reveal clean shot (stem 08) hides `#ui-root` instead.
+
+One fresh context per size; the stems run in one continuous session per size. `VARIANTS` only drops shots; the setup always runs. Shot table in run order (`<stem>` = two-digit id; file = `<outdir>/<size>/<file stem>-<variant>.png`):
+
+| Stem | File stem | Setup | Variants |
+|---|---|---|---|
+| `01` | `01-era1-start` | `?debug=1`, 12 crank clicks (120 ms apart), 1.5 s. hud: 3 more crank clicks | hud, clean |
+| `02` | `02-era1-full` | 33 crank clicks, S7 buy list, 2.5 s | hud, clean |
+| `03` | `03-era2-generator` | S7 to S9 buys, 2.5 s | hud, clean |
+| `04` | `04-era3-boiler` | S9 to S11 buys, 2.5 s | hud, clean |
+| `05` | `05-tree-era3` | `t`, click `#tech-tab-3`, 600 ms; Escape after | hud |
+| `06` | `06-era4-spire` | S11 to S13 buys, 12 s | hud, clean |
+| `07` | `07-era5-ruined` | S13 to S15 buys, 15 s | hud, clean |
+| `10` | `10-title` | Save, reload with `title=1`, title screen open; then CONTINUE | hud |
+| `08` | `08-finale-reveal` | `primaryFunction` buy, 2 s, `finaleSeek(56)`, phase `sequence` | hud, clean (`#ui-root` hidden) |
+| `09` | `09-postgame-portrait` | `skipFinale`, KEEP IT RUNNING, phase `postgame`, 2.5 s | hud, clean |
+
+Per size: 18 PNGs (stems 01 to 04, 06, 07 and 09 give 2 each; 05 and 10 give 1; 08 gives 2). Both sizes: 36. Each PNG size is checked from its IHDR.
+
+Check names (`<size>` = `1080` or `2160`; `<stem>` = `01` to `10`; `<variant>` = `hud` or `clean`):
+- `<size>_<stem>_<variant>_png`: one per shot; the PNG is 1920x1080 (`1080`) or 3840x2160 (`2160`).
+- `<size>_<stem>_clean_hud_hidden`: clean photo shots (stems `01`, `02`, `03`, `04`, `06`, `07`, `09`); photo mode active and `#hud-panel` hidden at shot time. Only with the clean variant.
+- `<size>_02_buys`, `<size>_03_buys`, `<size>_04_buys`, `<size>_06_buys`, `<size>_07_buys`, `<size>_08_buys`: the buy list ran with every buy ok.
+- `<size>_08_sequence`: finale phase `sequence` after `finaleSeek(56)`.
+- `<size>_09_postgame`: ending phase `postgame`.
+- `<size>_10_title_open`: title screen open after the reload.
+
+Failure keys: `FAILED:<size>/<stem>:<first line>` (the run goes on with the next stem), `FAILED:<size>/setup:<first line>`, `FAILED:launch:<first line>`.
+
+Outputs:
+- `<outdir>/<size>/<file stem>-<variant>.png` (18 per size).
+- `<outdir>/store-shots.json` (2-space JSON) and stdout: `{ shots, results, fail, errors }`. Each `shots[]` entry: `{ file, size, stem, variant, width, height }`, where `file` is absolute and `stem` is the file stem.
+- Exit 0 clean; 1 when `fail` or `errors` is non-empty; 2 on a usage error.
