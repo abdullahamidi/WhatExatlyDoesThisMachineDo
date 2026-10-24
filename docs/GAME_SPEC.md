@@ -219,3 +219,21 @@ Append-only note. Nothing above this line was changed.
 - Requirements beyond §1–§17 now live in `docs/plan/ROADMAP_FULL.md` (full game), `docs/plan/STEAM_DEMO_PROGRAM.md` (decisions D1–D8, they
   win over older plans) and the work-package plans `docs/plan/WP17.md` to `docs/plan/WP21.md`, `docs/plan/WP16.md`, `docs/plan/WP16a.md`.
 - Release evidence: `docs/STEAM_RELEASE.md` §15. Changes: `CHANGELOG.md`. Balance deviations from §6: `README.md` (Balance).
+
+### 18.2 User directive (2026-10-24): evolving parts and a living world
+Append-only note. Nothing above this line was changed.
+- **Evolving parts.** Upgrading a part changes how it looks, not only how fast it runs. Every repeatable part track evolves through 3 or 5
+  visual tiers (MK I SALVAGED to MK V AS BUILT; 5 when the track's reachable cap is 18 or more) at fixed, reachable levels, with a short tier-up
+  beat that never blocks input. Tiers are rendering only: no save field, no balance change. Design `docs/plan/PART_TIERS.md`, plan `docs/plan/WP22.md`.
+- **A living world.** The scene is no longer the machine alone. Six denizens (two people, two animals, two objects) stand on the wings of the
+  scene, change with each era, and may turn to the camera and address the player with a rare single line (mysterious, funny or creepy by era).
+  The world gets stranger, not better, until the finale. The environment changes a little each era (small, local, partly wrong); the finale's
+  restoration wipe stays the only large change. Design `docs/plan/STORY_BIBLE.md` (text, timing) and `docs/plan/DENIZEN_ART.md` (art, staging);
+  plan `docs/plan/WP23.md` (WP23a eras I-II and the demo, WP23b eras III-V, finale, postgame, cycle 2+).
+- **Superseded, for the denizen and environment layer only:** §10 "No NPCs/dialogue" (denizens may speak; "use sparingly" still applies);
+  §4 "Environment relatively static"; §1 "barren, silent"; the ART_ERA5 convention of no people in the finale or the restored world.
+- **Still in force:** the machine stays the focal point and an exterior structure; denizens never face, touch, overlap or walk through the machine
+  (§4); no denizen line names the machine's function or contains "RESTOR", so every reveal stays in the machine's own text; the denizens are
+  fragments of the prior world, not survivors and not observers ("Humanity is seemingly gone" holds); people in the restored world follow the
+  Art Director's conditions (DENIZEN_ART §8.1).
+- Persistence and settings: one optional `world` block in save v2 (lines seen) and one setting, WORLD VOICES ON / RARE / OFF. No save version bump.

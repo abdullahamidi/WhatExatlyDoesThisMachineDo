@@ -5,7 +5,7 @@ import type { FinaleBeat } from '../data/finale';
 import type { MachineComponentId } from '../data/machineComponents';
 import { RESOURCE_IDS } from '../data/types';
 import type { GameState, PurchaseFailure, ResourceMap, TechId } from '../data/types';
-import type { GameFeedback } from '../game/context';
+import type { GameFeedback, PartEvolvedEvent, PartTorquedEvent } from '../game/context';
 import { GameSession } from '../simulation';
 import { createInitialState } from '../simulation/state';
 import { emptyResourceMap } from '../simulation/resources';
@@ -133,6 +133,8 @@ function createFeedback(): GameFeedback {
     purchaseDenied: createSignal<PurchaseFailure>(),
     partLanded: createSignal<MachineComponentId>(),
     finaleBeat: createSignal<FinaleBeat>(),
+    partEvolved: createSignal<PartEvolvedEvent>(),
+    partTorqued: createSignal<PartTorquedEvent>(),
   };
 }
 

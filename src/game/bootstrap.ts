@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { GameContext } from './context';
+import type { GameContext, PartEvolvedEvent, PartTorquedEvent } from './context';
 import type { PurchaseFailure } from '../data/types';
 import type { FinaleBeat } from '../data/finale';
 import type { MachineComponentId } from '../data/machineComponents';
@@ -143,7 +143,10 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
   const ctx: GameContext = {
     session,
     commands: { refocus: createSignal(), openTechTree: createSignal(), openSystemMenu: createSignal(), crank: createSignal() },
-    feedback: { purchaseDenied: createSignal<PurchaseFailure>(), partLanded: createSignal<MachineComponentId>(), finaleBeat: createSignal<FinaleBeat>() },
+    feedback: {
+      purchaseDenied: createSignal<PurchaseFailure>(), partLanded: createSignal<MachineComponentId>(), finaleBeat: createSignal<FinaleBeat>(),
+      partEvolved: createSignal<PartEvolvedEvent>(), partTorqued: createSignal<PartTorquedEvent>(),
+    },
     modals,
     newCycle,
   };
