@@ -4,19 +4,19 @@ import { MACHINE_COMPONENT_IDS, MACHINE_COMPONENTS } from '../../data/machineCom
 import type { MachineComponentId } from '../../data/machineComponents';
 import { frameIndexOfName, isRestoredKey, restoredComponentIds, swapTextureKey } from './restoredTextures';
 
-/** The 33 era V parts with a restored (postgame) variant, in MACHINE_COMPONENT_IDS order. */
+/** The 34 era V parts with a restored (postgame) variant, in MACHINE_COMPONENT_IDS order. */
 const RESTORED_IDS: MachineComponentId[] = [
   'nullChamber', 'nullCore', 'nullCoreGlint', 'ring1Back', 'ring2Back', 'ring3Back', 'ring4Back',
   'ring1Front', 'ring2Front', 'ring3Front', 'ring4Front', 'ring1Bead', 'ring2Bead', 'ring3Bead', 'ring4Bead',
   'siphonTube1L', 'siphonTube1R', 'siphonTube2L', 'siphonTube2R', 'siphonTube3L', 'siphonTube3R',
   'siphonArcs1', 'siphonArcs2', 'siphonArcs3', 'anchorGlow1L', 'anchorGlow1R', 'anchorGlow2L', 'anchorGlow2R',
-  'anchorGlow3L', 'anchorGlow3R', 'inversionGhost', 'lensLight', 'aperture',
+  'anchorGlow3L', 'anchorGlow3R', 'inversionGhost', 'lensLight', 'aperture', 'ring1Bead2',
 ];
 
 describe('restoredComponentIds', () => {
-  it('is exactly the 33 restored parts in MACHINE_COMPONENT_IDS order', () => {
+  it('is exactly the 34 restored parts in MACHINE_COMPONENT_IDS order', () => {
     expect(restoredComponentIds()).toEqual(RESTORED_IDS);
-    expect(restoredComponentIds()).toHaveLength(33);
+    expect(restoredComponentIds()).toHaveLength(34);
   });
 
   it('is frozen and cached (same reference on repeat)', () => {

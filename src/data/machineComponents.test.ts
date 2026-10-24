@@ -345,11 +345,12 @@ describe('machine component ids', () => {
       'anchorGlow1L', 'anchorGlow1R', 'anchorGlow2L', 'anchorGlow2R', 'anchorGlow3L', 'anchorGlow3R',
       'inversionGhost', 'lensLight', 'lensColumn', 'aperture', 'namePlate',
       'generatorGlow', 'bellows', 'exciterFeed', 'backfeedTerminal', 'steamLance',
+      'ring1Bead2',
     ]);
   });
 
-  it('has 104 components (61 through era IV, 38 era V, 5 WP17 legacy feeds) and 64 sockets (45, 15 era V, 4 legacy)', () => {
-    expect(MACHINE_COMPONENT_IDS.length).toBe(104);
+  it('has 105 components (61 through era IV, 39 era V, 5 WP17 legacy feeds) and 64 sockets (45, 15 era V, 4 legacy)', () => {
+    expect(MACHINE_COMPONENT_IDS.length).toBe(105);
     expect(SOCKET_IDS.length).toBe(64);
   });
 });
@@ -1159,8 +1160,8 @@ describe('era III prefixes', () => {
 /** Era-IV component ids: the 16 appended after the era-III block (contract C3). */
 const ERA_FOUR_COMPONENT_IDS: readonly MachineComponentId[] = MACHINE_COMPONENT_IDS.slice(45, 61);
 
-/** Era-V component ids: the 38 appended after the era-IV block (WP11 contract C3). The five WP17 legacy feeds follow at index 99. */
-const ERA_FIVE_COMPONENT_IDS: readonly MachineComponentId[] = MACHINE_COMPONENT_IDS.slice(61, 99);
+/** Era-V component ids: the 38 appended after the era-IV block (WP11 contract C3), then WP22 ring1Bead2 (the last id of the list). The five WP17 legacy feeds follow at index 99. */
+const ERA_FIVE_COMPONENT_IDS: readonly MachineComponentId[] = [...MACHINE_COMPONENT_IDS.slice(61, 99), 'ring1Bead2'];
 
 /** Unlock steps of era IV in order; harmonicCoil is set to each coil ring level in turn (1, 8, 16, 25). */
 const ERA_FOUR_STEPS: readonly (readonly [TechId, number])[] = [
@@ -1448,15 +1449,15 @@ const ERA_FIVE_TABLE: readonly EraFiveRow[] = [
     animation: { kind: 'orbit', ring: 4, phi0Deg: 291, dir: -1, speed: BEAD_SPEED, speedScale: 1.75, frontLayer: 'front', frontBias: 0 }, connections: [] },
   { id: 'siphonTube1L', techId: 'resonantSiphon', minLevel: 1, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon1L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
   { id: 'siphonTube1R', techId: 'resonantSiphon', minLevel: 1, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon1R', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
-  { id: 'siphonTube2L', techId: 'resonantSiphon', minLevel: 10, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon2L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
-  { id: 'siphonTube2R', techId: 'resonantSiphon', minLevel: 10, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon2R', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
-  { id: 'siphonTube3L', techId: 'resonantSiphon', minLevel: 20, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon3L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
-  { id: 'siphonTube3R', techId: 'resonantSiphon', minLevel: 20, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon3R', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
+  { id: 'siphonTube2L', techId: 'resonantSiphon', minLevel: 5, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon2L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
+  { id: 'siphonTube2R', techId: 'resonantSiphon', minLevel: 5, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon2R', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
+  { id: 'siphonTube3L', techId: 'resonantSiphon', minLevel: 10, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon3L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
+  { id: 'siphonTube3R', techId: 'resonantSiphon', minLevel: 10, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon3R', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
   { id: 'siphonArcs1', techId: 'resonantSiphon', minLevel: 1, assetId: 'machine.siphonArcs1', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
     animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 0, hz: { base: 1, gain: 1.18, min: 2, max: 8 } }, connections: [] },
-  { id: 'siphonArcs2', techId: 'resonantSiphon', minLevel: 10, assetId: 'machine.siphonArcs2', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
+  { id: 'siphonArcs2', techId: 'resonantSiphon', minLevel: 5, assetId: 'machine.siphonArcs2', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
     animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 1, hz: { base: 1, gain: 1.18, min: 2, max: 8 } }, connections: [] },
-  { id: 'siphonArcs3', techId: 'resonantSiphon', minLevel: 20, assetId: 'machine.siphonArcs3', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
+  { id: 'siphonArcs3', techId: 'resonantSiphon', minLevel: 10, assetId: 'machine.siphonArcs3', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
     animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 2, hz: { base: 1, gain: 1.18, min: 2, max: 8 } }, connections: [] },
   { id: 'graviticAnchorL', techId: 'graviticAnchor', minLevel: 1, assetId: 'machine.graviticAnchor', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorL', layer: 'mid', depthBias: 0,
     animation: { kind: 'none' }, connections: [{ id: 'eye', at: { x: 0, y: -121 }, kind: 'cable' }] },
@@ -1466,13 +1467,13 @@ const ERA_FIVE_TABLE: readonly EraFiveRow[] = [
     animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
   { id: 'anchorGlow1R', techId: 'graviticAnchor', minLevel: 1, assetId: 'machine.anchorGlow1', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorR', layer: 'mid', depthBias: 1,
     animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
-  { id: 'anchorGlow2L', techId: 'graviticAnchor', minLevel: 5, assetId: 'machine.anchorGlow2', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorL', layer: 'mid', depthBias: 1,
+  { id: 'anchorGlow2L', techId: 'graviticAnchor', minLevel: 2, assetId: 'machine.anchorGlow2', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorL', layer: 'mid', depthBias: 1,
     animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
-  { id: 'anchorGlow2R', techId: 'graviticAnchor', minLevel: 5, assetId: 'machine.anchorGlow2', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorR', layer: 'mid', depthBias: 1,
+  { id: 'anchorGlow2R', techId: 'graviticAnchor', minLevel: 2, assetId: 'machine.anchorGlow2', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorR', layer: 'mid', depthBias: 1,
     animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
-  { id: 'anchorGlow3L', techId: 'graviticAnchor', minLevel: 10, assetId: 'machine.anchorGlow3', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorL', layer: 'mid', depthBias: 1,
+  { id: 'anchorGlow3L', techId: 'graviticAnchor', minLevel: 3, assetId: 'machine.anchorGlow3', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorL', layer: 'mid', depthBias: 1,
     animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
-  { id: 'anchorGlow3R', techId: 'graviticAnchor', minLevel: 10, assetId: 'machine.anchorGlow3', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorR', layer: 'mid', depthBias: 1,
+  { id: 'anchorGlow3R', techId: 'graviticAnchor', minLevel: 3, assetId: 'machine.anchorGlow3', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorR', layer: 'mid', depthBias: 1,
     animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
   { id: 'inversionGhost', techId: 'inversionCrank', minLevel: 1, assetId: 'machine.inversionGhost', width: 48, height: 48, origin: { x: 0.5, y: 0.5 }, socket: 'crankHub', layer: 'mid', depthBias: 9,
     animation: { kind: 'driven', ratio: 1.75, phaseDeg: 0 }, connections: [] },
@@ -1483,6 +1484,8 @@ const ERA_FIVE_TABLE: readonly EraFiveRow[] = [
     animation: { kind: 'latch', techId: 'skyAperture', minLevel: 1, frames: 6, fps: 5 }, connections: [] },
   { id: 'namePlate', techId: 'handCrank', minLevel: 1, assetId: 'machine.namePlate', width: 40, height: 11, origin: { x: 0.5, y: 1 }, socket: 'plateSeat', layer: 'frame', depthBias: 2,
     animation: { kind: 'stage', frames: 6, gates: [['generatorBlueprint', 1], ['substationBlueprint', 1], ['pressureVesselBlueprint', 1], ['harmonicConvergence', 1]], endingFrame: 5 }, connections: [] },
+  { id: 'ring1Bead2', techId: 'containmentRing', minLevel: 4, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
+    animation: { kind: 'orbit', ring: 1, phi0Deg: 180, dir: 1, speed: BEAD_SPEED, speedScale: 1, frontLayer: 'front', frontBias: 0, alignOffsetDeg: 180, phaseOf: 'ring1Bead' }, connections: [] },
 ];
 
 /** Era-V sockets (contract C3 coordinates). */
@@ -1494,10 +1497,10 @@ const ERA_FIVE_SOCKETS: Readonly<Record<string, Vec2>> = {
 };
 
 describe('era V machine data (WP11)', () => {
-  it('the 38 era-V components follow the contract table (tech, level, asset, size, origin, socket, layer, bias, animation, connections)', () => {
-    expect(ERA_FIVE_TABLE.length).toBe(38);
+  it('the 39 era-V components follow the contract table (tech, level, asset, size, origin, socket, layer, bias, animation, connections)', () => {
+    expect(ERA_FIVE_TABLE.length).toBe(39);
     expect(ERA_FIVE_COMPONENT_IDS).toEqual(ERA_FIVE_TABLE.map((r) => r.id));
-    expect(new Set(ERA_FIVE_COMPONENT_IDS).size).toBe(38);
+    expect(new Set(ERA_FIVE_COMPONENT_IDS).size).toBe(39);
     for (const row of ERA_FIVE_TABLE) {
       const def = MACHINE_COMPONENTS[row.id];
       expect(def.techId, row.id).toBe(row.techId);
@@ -1565,8 +1568,8 @@ describe('era V machine data (WP11)', () => {
     }
   });
 
-  it('anchor glows come in stages at graviticAnchor 1 / 5 / 10 on both sides, with 4 exotic frames at up to 3 Hz', () => {
-    const gates = [1, 5, 10];
+  it('anchor glows come in stages at graviticAnchor 1 / 2 / 3 on both sides, with 4 exotic frames at up to 3 Hz', () => {
+    const gates = [1, 2, 3];
     [1, 2, 3].forEach((k, i) => {
       for (const side of ['L', 'R'] as const) {
         const def = MACHINE_COMPONENTS[anchorGlowId(k, side)];
@@ -1579,7 +1582,7 @@ describe('era V machine data (WP11)', () => {
 
   it('siphon pairs mirror about x 64 (L + R = 128), share tech and stage level, and the arcs take the stage frame offset', () => {
     const pairs: readonly (readonly [SocketId, SocketId])[] = [['siphon1L', 'siphon1R'], ['siphon2L', 'siphon2R'], ['siphon3L', 'siphon3R']];
-    const levels = [1, 10, 20];
+    const levels = [1, 5, 10];
     pairs.forEach(([l, r], i) => {
       expect(MACHINE_SOCKETS[l].x + MACHINE_SOCKETS[r].x, `pair ${i + 1}`).toBe(128);
       expect(MACHINE_SOCKETS[l].y).toBe(MACHINE_SOCKETS[r].y);
@@ -1758,8 +1761,72 @@ describe('era V machine data (WP11)', () => {
     }
   });
 
-  it('siphon tubes and arcs come in at resonantSiphon 1 / 10 / 20, tube 3 implies tube 2 implies tube 1', () => {
-    const gates = [1, 10, 20];
+  it('ring1Bead2 is the second ring-1 bead: same socket, layer, bias and speed curve as ring1Bead, phi0 180 against 0, comes in at containmentRing 4', () => {
+    const first = MACHINE_COMPONENTS.ring1Bead;
+    const second = MACHINE_COMPONENTS.ring1Bead2;
+    expect(second.attach).toEqual(first.attach);
+    expect(second.attach.socket).toBe('coreHub');
+    expect(second.layer).toBe(first.layer);
+    expect(second.depthBias).toBe(first.depthBias);
+    expect(first.animation).toMatchObject({ kind: 'orbit', phi0Deg: 0 });
+    expect(second.animation).toEqual({ ...first.animation, phi0Deg: 180, alignOffsetDeg: 180, phaseOf: 'ring1Bead' });
+    expect(second.techId).toBe('containmentRing');
+    expect(second.minLevel).toBe(4);
+    expect(visibleAt(levelsForEra5([['containmentRing', 3]])).has('ring1Bead2')).toBe(false);
+    expect(visibleAt(levelsForEra5([['containmentRing', 4]])).has('ring1Bead2')).toBe(true);
+  });
+
+  it('ring1Bead2 phaseOf ring1Bead: only ring1Bead2 sets phaseOf; the lead is an orbit part on the same ring with the same dir, speed curve and speedScale, and comes before it in MACHINE_COMPONENT_IDS', () => {
+    const second = MACHINE_COMPONENTS.ring1Bead2.animation;
+    expect(second.kind).toBe('orbit');
+    if (second.kind !== 'orbit') return;
+    expect(second.phaseOf).toBe('ring1Bead');
+    const lead = MACHINE_COMPONENTS.ring1Bead.animation;
+    expect(lead.kind).toBe('orbit');
+    if (lead.kind !== 'orbit') return;
+    expect(lead.ring).toBe(second.ring);
+    expect(lead.dir).toBe(second.dir);
+    expect(lead.speed).toEqual(second.speed);
+    expect(lead.speedScale).toBe(second.speedScale);
+    expect(MACHINE_COMPONENT_IDS.indexOf('ring1Bead')).toBeLessThan(MACHINE_COMPONENT_IDS.indexOf('ring1Bead2'));
+    for (const id of MACHINE_COMPONENT_IDS) {
+      const anim = MACHINE_COMPONENTS[id].animation;
+      if (anim.kind === 'orbit' && id !== 'ring1Bead2') expect(anim.phaseOf, id).toBeUndefined();
+    }
+  });
+
+  it('ring1Bead2 alignOffsetDeg 180: orbit ring 1 at phi0 180 with ring1Bead dir; ring1Bead and every other orbit part leave it unset', () => {
+    const first = MACHINE_COMPONENTS.ring1Bead.animation;
+    const second = MACHINE_COMPONENTS.ring1Bead2.animation;
+    expect(second.kind).toBe('orbit');
+    expect(first.kind).toBe('orbit');
+    if (second.kind !== 'orbit' || first.kind !== 'orbit') return;
+    expect(second.ring).toBe(1);
+    expect(second.phi0Deg).toBe(180);
+    expect(second.dir).toBe(first.dir);
+    expect(second.alignOffsetDeg).toBe(180);
+    expect(first.alignOffsetDeg).toBeUndefined();
+    for (const id of MACHINE_COMPONENT_IDS) {
+      const anim = MACHINE_COMPONENTS[id].animation;
+      if (anim.kind === 'orbit' && id !== 'ring1Bead2') expect(anim.alignOffsetDeg, id).toBeUndefined();
+    }
+  });
+
+  it('finalAlignment hold: beads on one ring align to distinct angles (beadPhiDeg + alignOffsetDeg mod 360), ring 1 at 90 and 270', () => {
+    const aligned: Record<1 | 2 | 3 | 4, number[]> = { 1: [], 2: [], 3: [], 4: [] };
+    for (const id of MACHINE_COMPONENT_IDS) {
+      const anim = MACHINE_COMPONENTS[id].animation;
+      if (anim.kind !== 'orbit') continue;
+      aligned[anim.ring].push((((EXOTIC_MILESTONE_FX.beadPhiDeg + (anim.alignOffsetDeg ?? 0)) % 360) + 360) % 360);
+    }
+    for (const k of [1, 2, 3, 4] as const) {
+      expect(new Set(aligned[k]).size, `ring ${k}`).toBe(aligned[k].length);
+    }
+    expect([...aligned[1]].sort((a, b) => a - b)).toEqual([90, 270]);
+  });
+
+  it('siphon tubes and arcs come in at resonantSiphon 1 / 5 / 10, tube 3 implies tube 2 implies tube 1', () => {
+    const gates = [1, 5, 10];
     for (let level = 0; level <= 20; level++) {
       const visible = visibleAt(levelsForEra5([['resonantSiphon', level]]));
       if (visible.has(siphonTubeId(3, 'L'))) expect(visible.has(siphonTubeId(2, 'L'))).toBe(true);
@@ -1773,8 +1840,8 @@ describe('era V machine data (WP11)', () => {
     }
   });
 
-  it('anchor glows come in at graviticAnchor 1 / 5 / 10, glow 3 implies glow 2 implies glow 1 on each side', () => {
-    const gates = [1, 5, 10];
+  it('anchor glows come in at graviticAnchor 1 / 2 / 3, glow 3 implies glow 2 implies glow 1 on each side', () => {
+    const gates = [1, 2, 3];
     for (let level = 0; level <= 10; level++) {
       const visible = visibleAt(levelsForEra5([['graviticAnchor', level]]));
       for (const side of ['L', 'R'] as const) {

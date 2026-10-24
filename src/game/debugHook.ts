@@ -82,6 +82,9 @@ declare global {
       // WP16b-3: store-shot plate cap (World name plate + HUD plaque, rendering only)
       setPlateCap(maxTech: TechId | null): TechId | null;
       plateCap(): TechId | null;
+      // WP22: part tier probes (World machine)
+      partTiers(): Partial<Record<TechId, number>> | null;
+      tierBeatsActive(): number;
     };
   }
 }
@@ -215,6 +218,11 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     game.scene.getScene<WorldScene>('World')?.setPlateCap(maxTech) ?? null;
   /** The store-shot plate cap in force (WP16b-3); null when none or without a World scene. */
   const plateCap = (): TechId | null => game.scene.getScene<WorldScene>('World')?.getPlateCap() ?? null;
+  /** Displayed part tier per track with a visible host (WP22); null without a World machine. */
+  const partTiers = (): Partial<Record<TechId, number>> | null =>
+    game.scene.getScene<WorldScene>('World')?.getMachine()?.partTiers() ?? null;
+  /** Tier-up beats in flight (WP22, D7 unit); 0 without a World machine. */
+  const tierBeatsActive = (): number => game.scene.getScene<WorldScene>('World')?.getMachine()?.tierBeatsActive() ?? 0;
   window.__wedtmd = {
     session,
     crankClientPoint,
@@ -248,5 +256,7 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     textureKey,
     setPlateCap,
     plateCap,
+    partTiers,
+    tierBeatsActive,
   };
 }

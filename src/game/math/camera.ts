@@ -112,6 +112,22 @@ export function boundsInView(b: Bounds, view: Bounds, margin: number): boolean {
     && b.top - margin >= view.top && b.bottom + margin <= view.bottom;
 }
 
+// HUD top inset at a UI scale (WP22 F11): the DOM HUD grows with the UI scale, so the inset does too.
+// s = uiScale / 100 (non-finite or <= 0 -> 1); round(basePx * s + padPx * max(0, s - 1)).
+export function hudTopInsetAt(basePx: number, uiScale: number, padPx: number): number {
+  const s = Number.isFinite(uiScale) && uiScale > 0 ? uiScale / 100 : 1;
+  return Math.round(basePx * s + padPx * Math.max(0, s - 1));
+}
+
+// Camera centre y for a pan that must keep the machine top at or below the HUD inset (WP22 F11). limit is the largest
+// centre y that keeps the top at insetPx; a pan past it stops there, and never further down than the current centre when
+// the top already sits under the HUD (a user pan is not undone, only not made worse).
+export function hudSafeCenterY(nextY: number, currentY: number, machineTopY: number, zoom: number, viewHeight: number, insetPx: number): number {
+  const limit = machineTopY - (insetPx - viewHeight / 2) / zoom;
+  if (nextY <= limit) return nextY;
+  return Math.min(nextY, Math.max(limit, currentY));
+}
+
 export interface FitViewOptions {
   margin: number;
   pixelScale: number;

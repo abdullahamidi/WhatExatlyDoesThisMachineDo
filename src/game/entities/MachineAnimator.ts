@@ -17,6 +17,8 @@ import { HAMMER_FX } from '../../data/steamFx';
 import { FINALE_BOOST } from '../../data/finale';
 import { RESTORED_ACCENT } from '../../data/showcase';
 import { CRANK_FEEDBACK } from '../../data/world';
+import { PART_TIERS } from '../../data/machineTiers';
+import { ASSET_MANIFEST, ROT_SUFFIX } from '../../assets/manifest';
 import {
   addActivity,
   advancePhase,
@@ -27,6 +29,7 @@ import {
   decayActivity,
   driverValue,
   echoAlpha,
+  followPhase,
   framesIndex,
   gaugeFrame,
   latchFrame,
@@ -49,7 +52,8 @@ import { crankAngle, crankOffsetOnGearUp } from '../math/crankLink';
 import { componentDepth, resolveAttachment } from '../math/machineLayout';
 import { motionPolicy } from '../../simulation/settings';
 import { boostedValue } from '../math/finale';
-import { restoredComponentIds, swapTextureKey, frameIndexOfName } from '../math/restoredTextures';
+import { restoredComponentIds, frameIndexOfName } from '../math/restoredTextures';
+import { heartbeatLow, resolveTextureKey } from '../math/partTiers';
 import { cappedPlateFrame } from '../math/plateCap';
 
 /** Top frame rate of any frame-cycle part in the data: the boost target for `frames` maxHz (frame parts carry no speed curve). */
@@ -63,6 +67,47 @@ const FINALE_HOLD_FRAMES: Partial<Record<MachineComponentId, number>> = FINALE_B
 
 /** Restored accent 'lamps lit' (RESTORED_ACCENT.holdFrames): these frame parts hold their bright frame in the restored state when the finale boost is 0. */
 const RESTORED_HOLD_FRAMES: Partial<Record<MachineComponentId, number>> = RESTORED_ACCENT.holdFrames;
+
+/** Tier of a swap host with no tier set (MK I): every swap host starts here and goes back here on reset. */
+const BASE_TIER = 1;
+
+/** Every swap host of a part track (PART_TIERS): its texture follows the tier. */
+const SWAP_HOSTS: ReadonlySet<MachineComponentId> = new Set(PART_TIERS.flatMap((track) => track.swaps));
+
+/** Hosts with a heartbeat pulse frame, keyed by part: the tier from which the pulse is used (track.pulse.fromTier). Rotation hosts have no pulse frame. */
+const PULSE_FROM: ReadonlyMap<MachineComponentId, number> = pulseHosts();
+
+/** Per-tier vibrate amplitude of the vibrate-kind swap hosts (track.vibrateAmplitude), keyed by part; index = tier - 1. */
+const VIBRATE_AMPS: ReadonlyMap<MachineComponentId, readonly number[]> = vibrateHosts();
+
+/** Components whose asset has a restored variant (restoredComponentIds): restored ids have no tiers. */
+const RESTORED_SET: ReadonlySet<MachineComponentId> = new Set(restoredComponentIds());
+
+/** Swap hosts with a pulse frame in their asset (no rotation sheet) and a pulse track: id -> fromTier. */
+function pulseHosts(): ReadonlyMap<MachineComponentId, number> {
+  const out = new Map<MachineComponentId, number>();
+  for (const track of PART_TIERS) {
+    if (track.pulse === undefined) continue;
+    for (const host of track.swaps) {
+      const asset = ASSET_MANIFEST[MACHINE_COMPONENTS[host].assetId];
+      const hasPulse = (asset.tiers ?? []).some((tier) => tier.pulseFile !== undefined);
+      if (asset.rotation === undefined && hasPulse) out.set(host, track.pulse.fromTier);
+    }
+  }
+  return out;
+}
+
+/** Swap hosts of a vibrate kind with a per-tier amplitude track: id -> amplitude per tier. */
+function vibrateHosts(): ReadonlyMap<MachineComponentId, readonly number[]> {
+  const out = new Map<MachineComponentId, readonly number[]>();
+  for (const track of PART_TIERS) {
+    if (track.vibrateAmplitude === undefined) continue;
+    for (const host of track.swaps) {
+      if (MACHINE_COMPONENTS[host].animation.kind === 'vibrate') out.set(host, track.vibrateAmplitude);
+    }
+  }
+  return out;
+}
 
 /** Caps a degrees-per-second speed at maxDegPerSec (null: uncapped). Reduced motion only. */
 function capSpeed(degPerSec: number, maxDegPerSec: number | null): number {
@@ -130,6 +175,10 @@ function drivenOf(id: MachineComponentId): { ratio: number; phaseDeg: number } {
  * Restored accent (RESTORED_ACCENT): restored with boost 0, the lamp frames stay lit (RESTORED_HOLD_FRAMES).
  * Restored texture swap (WP18b): when restored turns true the parts of restoredComponentIds() move to their `#restored` textures, and back when it turns
  * false or the session resets (applyRestoredTextures); the frame index is kept and the swap is instant. The generator glow (gauge) holds its lamp frame too.
+ * Part tiers (WP22): the only texture owner of a machine sprite is retexture, which calls resolveTextureKey (restored wins, then the highest
+ * tier loaded, then the MK V heartbeat pulse frame while pulseLow). setTiers sets a swap host's tier at once; hostTier reads it. The heartbeat
+ * clock is the World scene time passed as update's nowMs, so every MK V lamp pulses in phase. Vibrate swap hosts use their per-tier amplitude.
+ * A session reset puts every swap host back on MK I.
  */
 export class MachineAnimator {
   private readonly session: MachineSource;
@@ -190,6 +239,10 @@ export class MachineAnimator {
   private finaleRestored = false;
   /** True while the parts of restoredComponentIds() sit on their `#restored` textures (applyRestoredTextures). */
   private texturesRestored = false;
+  /** Tier of each swap host (setTiers); absent = BASE_TIER. Cleared on reset. */
+  private readonly tiers = new Map<MachineComponentId, number>();
+  /** Heartbeat lamp state (update's nowMs): true in the low half of the TIER_HEARTBEAT period; the MK V pulse frames show then. */
+  private pulseLow = false;
   /** WP16b-3 store shots: namePlate frame cap (setPlateCap, debug hook only); null = none. Rendering only. */
   private plateMaxTech: TechId | null = null;
   private readonly unsubscribeClick: () => void;
@@ -252,7 +305,10 @@ export class MachineAnimator {
       }
       this.restoreBeadDepths();
       this.finaleRestored = false;
+      this.tiers.clear();
+      this.pulseLow = false;
       this.applyRestoredTextures(false);
+      for (const id of SWAP_HOSTS) this.retexture(id); // every swap host back to MK I (MachineView.sync re-applies the real tiers)
     });
     this.unsubscribeMilestone = session.on('milestone', ({ id }) => {
       if (id !== RESONANCE_MILESTONE_FX.techId) return;
@@ -269,13 +325,16 @@ export class MachineAnimator {
       for (const bid of MACHINE_COMPONENT_IDS) {
         const a = MACHINE_COMPONENTS[bid].animation;
         if (a.kind !== 'orbit') continue;
-        this.exoticFrom.set(bid, this.orbitAngles.get(bid) ?? a.phi0Deg); // angle at the milestone
+        this.exoticFrom.set(bid, this.startAngle(bid, a)); // angle at the milestone
       }
     });
   }
 
-  /** Advances the master angle and places every active part by one frame. */
-  update(deltaMs: number, isActive: (id: MachineComponentId) => boolean): void {
+  /**
+   * Advances the master angle and places every active part by one frame. nowMs (World scene time) drives the tier heartbeat;
+   * omitted = no pulse pass this frame.
+   */
+  update(deltaMs: number, isActive: (id: MachineComponentId) => boolean, nowMs?: number): void {
     const dt = clampFrameSeconds(deltaMs, MACHINE_MOTION.maxFrameSeconds);
     this.elapsed += dt; // frame-cycle clock
     const policy = motionPolicy(this.session.settings); // read live each frame: reduced motion caps speeds and stops flicker
@@ -294,6 +353,15 @@ export class MachineAnimator {
     const idleDeg = dv < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(DRIVE_TRAIN.masterSpeed, dv); // rest below threshold
     const degPerSec = boostedValue(idleDeg, DRIVE_TRAIN.masterSpeed.max, boost); // finale boost; identity at 0
     this.syncGearing(isActive('gearSmall'));
+    // Heartbeat pulse pass: one shared clock, so every MK V lamp pulses in phase (no per-id phase). It runs here, not in the kind
+    // loop below, because that loop skips 'none' hosts. Reduced motion keeps it.
+    if (nowMs !== undefined) {
+      const low = heartbeatLow(nowMs);
+      if (low !== this.pulseLow) {
+        this.pulseLow = low;
+        for (const [id, from] of PULSE_FROM) if ((this.tiers.get(id) ?? BASE_TIER) >= from) this.retexture(id);
+      }
+    }
     this.master = capTravel(
       this.master,
       stepMaster(this.master, degPerSec, DRIVE_TRAIN.masterDirection, dt, DRIVE_TRAIN.clickTauSeconds),
@@ -356,7 +424,9 @@ export class MachineAnimator {
           }
           const phase = advancePhase(this.phases.get(id) ?? 0, speed, dt);
           this.phases.set(id, phase);
-          const o = vibrateOffset(phase, anim.amplitude);
+          const amps = VIBRATE_AMPS.get(id);
+          const amp = amps?.[this.hostTier(id) - 1] ?? anim.amplitude; // per-tier amplitude of a swap host (WP22)
+          const o = vibrateOffset(phase, amp);
           sprite.setPosition(base.x + o.x, base.y + o.y);
           break;
         }
@@ -452,9 +522,25 @@ export class MachineAnimator {
   }
 
   /**
+   * Angle a bead starts from: its recorded angle; else, on its first placement, the lead's recorded angle plus the phi0 gap
+   * (phaseOf, followPhase); else its phi0Deg. placeBead and the finalAlignment seed both use it.
+   */
+  private startAngle(id: MachineComponentId, anim: Extract<ComponentAnimation, { kind: 'orbit' }>): number {
+    const recorded = this.orbitAngles.get(id);
+    if (recorded !== undefined) return recorded;
+    if (anim.phaseOf !== undefined) {
+      const lead = this.orbitAngles.get(anim.phaseOf);
+      const leadAnim = MACHINE_COMPONENTS[anim.phaseOf].animation;
+      if (lead !== undefined && leadAnim.kind === 'orbit') return followPhase(lead, anim.phi0Deg, leadAnim.phi0Deg);
+    }
+    return anim.phi0Deg;
+  }
+
+  /**
    * Containment bead on its ring. phi advances with the exotic driver (XF/s); during the finalAlignment milestone it aligns
-   * to beadPhiDeg (align, then hold) and the normal orbit resumes from there. In front of the core (sin phi >= 0) the bead
-   * draws on its frontLayer; a depth change is flagged for the parts re-sort.
+   * to beadPhiDeg + its alignOffsetDeg (align, then hold) and the normal orbit resumes from there. ring1Bead2 sits behind the
+   * core at 270, so the hold still shows one front column while the two ring-1 beads stay 180 deg apart. In front of the core
+   * (sin phi >= 0) the bead draws on its frontLayer; a depth change is flagged for the parts re-sort.
    */
   private placeBead(
     id: MachineComponentId,
@@ -466,12 +552,13 @@ export class MachineAnimator {
     maxDegPerSec: number | null,
     boost: number,
   ): void {
-    const from = this.orbitAngles.get(id) ?? anim.phi0Deg;
+    const from = this.startAngle(id, anim);
+    const target = EXOTIC_MILESTONE_FX.beadPhiDeg + (anim.alignOffsetDeg ?? 0);
     let phi: number;
     if (exotic.phase === 'align') {
-      phi = alignStep(this.exoticFrom.get(id) ?? from, EXOTIC_MILESTONE_FX.beadPhiDeg, anim.dir, exotic.t01);
+      phi = alignStep(this.exoticFrom.get(id) ?? from, target, anim.dir, exotic.t01);
     } else if (exotic.phase === 'hold') {
-      phi = EXOTIC_MILESTONE_FX.beadPhiDeg;
+      phi = ((target % 360) + 360) % 360; // wrapped into [0, 360) like orbitStep
     } else {
       const actual = xf < MACHINE_MOTION.restThreshold ? 0 : animationSpeed(anim.speed, xf) * anim.speedScale; // rest below threshold
       const raw = boostedValue(actual, anim.speed.max * anim.speedScale, boost); // finale boost towards the bead's top speed
@@ -595,18 +682,46 @@ export class MachineAnimator {
   }
 
   /**
+   * WP22 part tiers: sets the tier of each listed swap host and re-textures it at once (partial maps allowed; hosts not in the map keep
+   * their tier; ids that are not swap hosts are ignored). No animation and no flag. Restored state still wins (retexture).
+   */
+  setTiers(map: ReadonlyMap<MachineComponentId, number>): void {
+    for (const [id, tier] of map) {
+      if (!SWAP_HOSTS.has(id)) continue;
+      this.tiers.set(id, tier);
+      this.retexture(id);
+    }
+  }
+
+  /** WP22 tier of a swap host (MK I when no tier was set since the last reset). */
+  hostTier(id: MachineComponentId): number {
+    return this.tiers.get(id) ?? BASE_TIER;
+  }
+
+  /**
+   * The only texture change of a machine sprite (D3): the key resolveTextureKey picks for the host's tier, restored state, rotation and
+   * heartbeat pulse. The frame index is kept. No-op when the key is unchanged; a sprite without a scene is skipped.
+   */
+  private retexture(id: MachineComponentId): void {
+    const sprite = this.sprites.get(id);
+    if (sprite === undefined || !sprite.scene) return;
+    const tier = this.tiers.get(id) ?? BASE_TIER;
+    const restored = this.texturesRestored && RESTORED_SET.has(id);
+    const rot = sprite.texture.key.endsWith(ROT_SUFFIX);
+    const pulseLow = this.pulseLow && (PULSE_FROM.get(id) ?? Infinity) <= tier;
+    const key = resolveTextureKey(MACHINE_COMPONENTS[id].assetId, { tier, restored, rot, pulseLow }, (k) => sprite.scene.textures.exists(k));
+    if (key !== sprite.texture.key) sprite.setTexture(key, frameIndexOfName(sprite.frame.name));
+  }
+
+  /**
    * Restored texture swap (WP18b D2/D3): moves every part that has an A17 restored variant onto its `#restored` texture (on) or back to the
-   * original (off), keeping the frame index. A variant texture that does not exist keeps the current key. Idempotent: no-op when the state is unchanged.
+   * original (off), through retexture (resolveTextureKey), keeping the frame index. A variant texture that does not exist keeps the current key.
+   * Idempotent: no-op when the state is unchanged.
    */
   private applyRestoredTextures(on: boolean): void {
     if (on === this.texturesRestored) return;
     this.texturesRestored = on;
-    for (const id of restoredComponentIds()) {
-      const sprite = this.sprites.get(id);
-      if (sprite === undefined || !sprite.scene) continue;
-      const key = swapTextureKey(MACHINE_COMPONENTS[id].assetId, sprite.texture.key, on, (k) => sprite.scene.textures.exists(k));
-      if (key !== sprite.texture.key) sprite.setTexture(key, frameIndexOfName(sprite.frame.name));
-    }
+    for (const id of restoredComponentIds()) this.retexture(id);
   }
 
   /** Angle of a driven part: crank parts follow the crank state and gearing, the rest follow thetaM. */

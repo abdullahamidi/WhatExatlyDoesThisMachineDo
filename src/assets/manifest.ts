@@ -14,6 +14,8 @@ export interface AssetEntry {
   /** Postgame restored-accent variant (A17 art, wired WP18b): same width/height, frame layout and rotation layout as the original.
    *  Loaded as `${id}#restored` (same kind + frame as the entry) and, with rotationFile, `${id}#restored#rot` (frame = entry.width x entry.height, count = rotation.frames). Paths under public/assets/. */
   restored?: { file: string; rotationFile?: string };
+  /** WP22 part evolution tiers: per-tier art variants. `from` = tier number (2..5, strictly ascending, sparse allowed). Loaded as `${id}#t${from}`, `${id}#t${from}#rot` (rotationFile), `${id}#t${from}b` (pulseFile, heartbeat low frame). Paths under public/assets/machine/tiers/. */
+  tiers?: readonly { from: number; file: string; rotationFile?: string; pulseFile?: string }[];
   description: string;
 }
 
@@ -22,6 +24,17 @@ export const RESTORED_SUFFIX = '#restored';
 /** `${id}#restored`, or `${id}#restored#rot` when rotation is true. */
 export function restoredTextureKey(id: AssetId, rotation: boolean): string {
   return id + RESTORED_SUFFIX + (rotation ? ROT_SUFFIX : '');
+}
+
+/** Infix of a WP22 tier texture key: `${id}#t${tier}`, `${id}#t${tier}b` (pulse) or `${id}#t${tier}#rot` (rotation). */
+export const TIER_SUFFIX = '#t';
+/** Texture key of a part tier variant. A rotation sheet has no heartbeat frame, so rot and pulse together throw a RangeError. */
+export function tierTextureKey(id: AssetId, tier: number, opts: { rot?: boolean; pulse?: boolean } = {}): string {
+  const { rot = false, pulse = false } = opts;
+  if (rot && pulse) throw new RangeError(`tier texture ${id}${TIER_SUFFIX}${tier}: rot and pulse are exclusive`);
+  const base = id + TIER_SUFFIX + tier;
+  if (rot) return base + ROT_SUFFIX;
+  return pulse ? base + 'b' : base;
 }
 
 export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
@@ -65,20 +78,37 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   'machine.gearSmall': {
     id: 'machine.gearSmall', file: 'machine/gear-small.png', width: 40, height: 40, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     rotation: { file: 'machine/rot/gear-small-rot.png', frames: 80 },
+    tiers: [
+      { from: 2, file: 'machine/tiers/gear-small-t2.png', rotationFile: 'machine/tiers/rot/gear-small-t2-rot.png' },
+      { from: 3, file: 'machine/tiers/gear-small-t3.png', rotationFile: 'machine/tiers/rot/gear-small-t3-rot.png' },
+    ],
     description: 'Small toothed gear meshed into the drive train.',
   },
   'machine.gearLarge': {
     id: 'machine.gearLarge', file: 'machine/gear-large.png', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     rotation: { file: 'machine/rot/gear-large-rot.png', frames: 140 },
+    tiers: [
+      { from: 2, file: 'machine/tiers/gear-large-t2.png', rotationFile: 'machine/tiers/rot/gear-large-t2-rot.png' },
+      { from: 3, file: 'machine/tiers/gear-large-t3.png', rotationFile: 'machine/tiers/rot/gear-large-t3-rot.png' },
+    ],
     description: 'Large reinforced toothed gear that slows and steadies the drive.',
   },
   'machine.flywheel': {
     id: 'machine.flywheel', file: 'machine/flywheel.png', width: 96, height: 96, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     rotation: { file: 'machine/rot/flywheel-rot.png', frames: 180 },
+    tiers: [
+      { from: 3, file: 'machine/tiers/flywheel-t3.png', rotationFile: 'machine/tiers/rot/flywheel-t3-rot.png' },
+    ],
     description: 'Heavy flywheel that stores momentum for the machine.',
   },
   'machine.motor': {
     id: 'machine.motor', file: 'machine/worn-motor.png', width: 64, height: 48, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    tiers: [
+      { from: 2, file: 'machine/tiers/worn-motor-t2.png' },
+      { from: 3, file: 'machine/tiers/worn-motor-t3.png' },
+      { from: 4, file: 'machine/tiers/worn-motor-t4.png' },
+      { from: 5, file: 'machine/tiers/worn-motor-t5.png', pulseFile: 'machine/tiers/worn-motor-t5b.png' },
+    ],
     description: 'Worn electric motor bolted to the frame, shaking as it runs.',
   },
   'machine.bearingPlate': {
@@ -93,28 +123,54 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   'machine.pulleyMain': {
     id: 'machine.pulleyMain', file: 'machine/pulley-main.png', width: 24, height: 24, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     rotation: { file: 'machine/rot/pulley-main-rot.png', frames: 140 },
+    tiers: [
+      { from: 2, file: 'machine/tiers/pulley-main-t2.png', rotationFile: 'machine/tiers/rot/pulley-main-t2-rot.png' },
+      { from: 3, file: 'machine/tiers/pulley-main-t3.png', rotationFile: 'machine/tiers/rot/pulley-main-t3-rot.png' },
+    ],
     description: 'Cast main pulley face-on with a 4-hole web and a raised crank-pin boss at its right side.',
   },
   'machine.pulleyCrank': {
     id: 'machine.pulleyCrank', file: 'machine/pulley-crank.png', width: 32, height: 32, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     rotation: { file: 'machine/rot/pulley-crank-rot.png', frames: 80 },
+    tiers: [
+      { from: 3, file: 'machine/tiers/pulley-crank-t3.png', rotationFile: 'machine/tiers/rot/pulley-crank-t3-rot.png' },
+    ],
     description: 'Small flat-belt pulley (r8, centred in a 32×32 canvas) with crowned rim and solid three-rib web; belt rides inside the pinion root.',
   },
   'machine.pulleyFlywheel': {
     id: 'machine.pulleyFlywheel', file: 'machine/pulley-flywheel.png', width: 28, height: 28, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     rotation: { file: 'machine/rot/pulley-flywheel-rot.png', frames: 180 },
+    tiers: [
+      { from: 3, file: 'machine/tiers/pulley-flywheel-t3.png', rotationFile: 'machine/tiers/rot/pulley-flywheel-t3-rot.png' },
+    ],
     description: 'Hub pulley bolted to the flywheel, seen face-on with four spokes.',
   },
   'machine.pedestal': {
     id: 'machine.pedestal', file: 'machine/flywheel-pedestal.png', width: 48, height: 64, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    tiers: [
+      { from: 2, file: 'machine/tiers/flywheel-pedestal-t2.png' },
+      { from: 3, file: 'machine/tiers/flywheel-pedestal-t3.png', pulseFile: 'machine/tiers/flywheel-pedestal-t3b.png' },
+    ],
     description: 'Cast-iron A-frame bearing stand in side view with a plummer block cap and bolted foot plates.',
   },
   'machine.motorPlinth': {
     id: 'machine.motorPlinth', file: 'machine/motor-plinth.png', width: 48, height: 10, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    tiers: [
+      { from: 2, file: 'machine/tiers/motor-plinth-t2.png' },
+      { from: 3, file: 'machine/tiers/motor-plinth-t3.png' },
+      { from: 4, file: 'machine/tiers/motor-plinth-t4.png' },
+      { from: 5, file: 'machine/tiers/motor-plinth-t5.png' },
+    ],
     description: 'Low riveted iron skid with four hold-down bolts and sand dust along its top edge.',
   },
   'machine.pistonBlock': {
     id: 'machine.pistonBlock', file: 'machine/piston-block.png', width: 96, height: 58, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    tiers: [
+      { from: 2, file: 'machine/tiers/piston-block-t2.png' },
+      { from: 3, file: 'machine/tiers/piston-block-t3.png' },
+      { from: 4, file: 'machine/tiers/piston-block-t4.png' },
+      { from: 5, file: 'machine/tiers/piston-block-t5.png', pulseFile: 'machine/tiers/piston-block-t5b.png' },
+    ],
     description: 'Static block of three identical vertical cylinders with capped heads on a foot plate.',
   },
   'machine.pistonYoke': {
@@ -145,6 +201,9 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   },
   'machine.coils1': {
     id: 'machine.coils1', file: 'machine/era2/coils-1.png', width: 64, height: 40, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    tiers: [
+      { from: 2, file: 'machine/tiers/coils-1-t2.png' },
+    ],
     description: 'First coil stage: a single winding of copper wire around the generator frame.',
   },
   'machine.coils2': {
@@ -153,10 +212,19 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   },
   'machine.coils3': {
     id: 'machine.coils3', file: 'machine/era2/coils-3.png', width: 64, height: 40, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    tiers: [
+      { from: 5, file: 'machine/tiers/coils-3-t5.png' },
+    ],
     description: 'Third coil stage: a heavy copper winding that covers the lower stages.',
   },
   'machine.motorRetrofit': {
     id: 'machine.motorRetrofit', file: 'machine/era2/motor-retrofit.png', width: 32, height: 16, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    tiers: [
+      { from: 2, file: 'machine/tiers/motor-retrofit-t2.png' },
+      { from: 3, file: 'machine/tiers/motor-retrofit-t3.png' },
+      { from: 4, file: 'machine/tiers/motor-retrofit-t4.png' },
+      { from: 5, file: 'machine/tiers/motor-retrofit-t5.png', pulseFile: 'machine/tiers/motor-retrofit-t5b.png' },
+    ],
     description: 'Retrofit control box with a wired terminal strip, bolted on top of the worn motor.',
   },
   'machine.dynamo': {
@@ -174,6 +242,12 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   },
   'machine.transformer': {
     id: 'machine.transformer', file: 'machine/era2/transformer.png', width: 64, height: 64, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    tiers: [
+      { from: 2, file: 'machine/tiers/transformer-t2.png' },
+      { from: 3, file: 'machine/tiers/transformer-t3.png' },
+      { from: 4, file: 'machine/tiers/transformer-t4.png' },
+      { from: 5, file: 'machine/tiers/transformer-t5.png', pulseFile: 'machine/tiers/transformer-t5b.png' },
+    ],
     description: 'Transformer tank with a primary and a bushing lug on its top.',
   },
   'machine.cableMast': {
@@ -205,6 +279,9 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   'machine.fireGlow1': {
     id: 'machine.fireGlow1', file: 'machine/era3/firebox-1.png', width: 96, height: 24, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     frame: { width: 24, height: 24, count: 4 },
+    tiers: [
+      { from: 2, file: 'machine/tiers/firebox-1-t2.png' },
+    ],
     description: 'Four-frame firebox glow sheet, first stage: a dull ember behind the fire door.',
   },
   'machine.fireGlow2': {
@@ -215,10 +292,19 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   'machine.fireGlow3': {
     id: 'machine.fireGlow3', file: 'machine/era3/firebox-3.png', width: 96, height: 24, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     frame: { width: 24, height: 24, count: 4 },
+    tiers: [
+      { from: 5, file: 'machine/tiers/firebox-3-t5.png' },
+    ],
     description: 'Four-frame firebox glow sheet, third stage: a white-hot fire behind the fire door.',
   },
   'machine.inductionHeater': {
     id: 'machine.inductionHeater', file: 'machine/era3/induction-heater.png', width: 56, height: 40, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    tiers: [
+      { from: 2, file: 'machine/tiers/induction-heater-t2.png' },
+      { from: 3, file: 'machine/tiers/induction-heater-t3.png' },
+      { from: 4, file: 'machine/tiers/induction-heater-t4.png' },
+      { from: 5, file: 'machine/tiers/induction-heater-t5.png', pulseFile: 'machine/tiers/induction-heater-t5b.png' },
+    ],
     description: 'Induction heater coil housing on a small plinth with a cable tie on its side.',
   },
   'machine.superheater': {
@@ -239,6 +325,12 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   },
   'machine.condenser': {
     id: 'machine.condenser', file: 'machine/era3/condenser.png', width: 80, height: 24, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    tiers: [
+      { from: 2, file: 'machine/tiers/condenser-t2.png' },
+      { from: 3, file: 'machine/tiers/condenser-t3.png' },
+      { from: 4, file: 'machine/tiers/condenser-t4.png' },
+      { from: 5, file: 'machine/tiers/condenser-t5.png', pulseFile: 'machine/tiers/condenser-t5b.png' },
+    ],
     description: 'Long condenser tank on feet with a condensate port at its right end.',
   },
   'machine.turbine': {
@@ -272,11 +364,20 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   'machine.spireWave': {
     id: 'machine.spireWave', file: 'machine/era4/spire-wave.png', width: 128, height: 270, origin: { x: 0.5, y: 1 }, tileable: 'none',
     frame: { width: 16, height: 270, count: 8 },
+    tiers: [
+      { from: 2, file: 'machine/tiers/spire-wave-t2.png' },
+      { from: 3, file: 'machine/tiers/spire-wave-t3.png' },
+      { from: 4, file: 'machine/tiers/spire-wave-t4.png' },
+      { from: 5, file: 'machine/tiers/spire-wave-t5.png' },
+    ],
     description: 'Eight-frame standing wave sheet: a thin vibrating rod shown at one phase per frame.',
   },
   'machine.coilRing1': {
     id: 'machine.coilRing1', file: 'machine/era4/coil-ring-1.png', width: 248, height: 8, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     frame: { width: 62, height: 8, count: 4 },
+    tiers: [
+      { from: 2, file: 'machine/tiers/coil-ring-1-t2.png' },
+    ],
     description: 'Four-frame toroidal coil ring, widest of the four stacked windings.',
   },
   'machine.coilRing2': {
@@ -296,15 +397,29 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   },
   'machine.calliope': {
     id: 'machine.calliope', file: 'machine/era4/calliope.png', width: 72, height: 40, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    tiers: [
+      { from: 2, file: 'machine/tiers/calliope-t2.png' },
+      { from: 3, file: 'machine/tiers/calliope-t3.png' },
+      { from: 4, file: 'machine/tiers/calliope-t4.png' },
+      { from: 5, file: 'machine/tiers/calliope-t5.png', pulseFile: 'machine/tiers/calliope-t5b.png' },
+    ],
     description: 'Calliope: a row of three steam whistles on a brass-trimmed manifold box.',
   },
   'machine.servoBase': {
     id: 'machine.servoBase', file: 'machine/era4/servo-base.png', width: 28, height: 20, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    tiers: [
+      { from: 2, file: 'machine/tiers/servo-base-t2.png' },
+      { from: 3, file: 'machine/tiers/servo-base-t3.png', pulseFile: 'machine/tiers/servo-base-t3b.png' },
+    ],
     description: 'Low servo gearbox housing with a bolted foot and an empty hub seat on top.',
   },
   'machine.servoArm': {
     id: 'machine.servoArm', file: 'machine/era4/servo-arm.png', width: 48, height: 48, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
     rotation: { file: 'machine/era4/rot/servo-arm-rot.png', frames: 80 },
+    tiers: [
+      { from: 2, file: 'machine/tiers/servo-arm-t2.png', rotationFile: 'machine/tiers/rot/servo-arm-t2-rot.png' },
+      { from: 3, file: 'machine/tiers/servo-arm-t3.png', rotationFile: 'machine/tiers/rot/servo-arm-t3-rot.png' },
+    ],
     description: 'Servo arm seen face-on: a hub, a toothed arm and a pin boss that the coupling rod hooks onto.',
   },
   'machine.koenigFork': {
@@ -554,24 +669,52 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   'machine.bellows': {
     id: 'machine.bellows', file: 'machine/legacy/bellows.png', width: 240, height: 28, origin: { x: 0.5, y: 1 }, tileable: 'none',
     frame: { width: 60, height: 28, count: 4 },
+    tiers: [
+      { from: 2, file: 'machine/tiers/bellows-t2.png' },
+      { from: 3, file: 'machine/tiers/bellows-t3.png', pulseFile: 'machine/tiers/bellows-t3b.png' },
+    ],
     description: 'Four-frame great forge bellows (open, half, closed, half) on two iron legs; the boards hinge at the iron snout and the nozzle (texture 59, rows 16..17) feeds the hose to the boiler tuyere.',
   },
   'machine.exciterFeed': {
     id: 'machine.exciterFeed', file: 'machine/legacy/exciter-feed.png', width: 16, height: 28, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    tiers: [
+      { from: 2, file: 'machine/tiers/exciter-feed-t2.png' },
+      { from: 3, file: 'machine/tiers/exciter-feed-t3.png', pulseFile: 'machine/tiers/exciter-feed-t3b.png' },
+    ],
     description: 'Cyan glass insulator on a riveted terminal box with a copper strap into the spire exciter; the cable lug is the cap (texture 10,1).',
   },
   'machine.backfeedTerminal': {
     id: 'machine.backfeedTerminal', file: 'machine/legacy/backfeed-terminal.png', width: 16, height: 28, origin: { x: 0.5, y: 0 }, tileable: 'none',
+    tiers: [
+      { from: 2, file: 'machine/tiers/backfeed-terminal-t2.png' },
+      { from: 3, file: 'machine/tiers/backfeed-terminal-t3.png', pulseFile: 'machine/tiers/backfeed-terminal-t3b.png' },
+    ],
     description: 'Suspension string under the null gallery deck: hanger plate with a violet lead-in bushing, four cyan glass discs, conductor clamp and copper jumper; the cable lug is the bottom cap (texture 8,26).',
   },
   'machine.steamLance': {
     id: 'machine.steamLance', file: 'machine/legacy/steam-lance.png', width: 16, height: 32, origin: { x: 0.5, y: 0 }, tileable: 'none',
+    tiers: [
+      { from: 2, file: 'machine/tiers/steam-lance-t2.png' },
+      { from: 3, file: 'machine/tiers/steam-lance-t3.png', pulseFile: 'machine/tiers/steam-lance-t3b.png' },
+    ],
     description: 'Steam lance valve hung under the null gallery deck: mount plate, globe valve with a rust handwheel, flanged inlet at the bottom (texture 8,32).',
+  },
+  'machine.gearRim': {
+    id: 'machine.gearRim', file: 'machine/tiers/decals/gear-rim.png', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Static brass annulus (radius 20-22) laid over the large gear rim at MK III: rotationally symmetric, a glint arc at the upper left; never turns with the gear.',
+  },
+  'machine.flywheelRim2': {
+    id: 'machine.flywheelRim2', file: 'machine/tiers/decals/flywheel-rim-2.png', width: 96, height: 96, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Static clean-iron annulus over the flywheel rim at MK II (re-tyred rim): lit arc upper left, shadow arc lower right; rotationally symmetric.',
+  },
+  'machine.flywheelRim3': {
+    id: 'machine.flywheelRim3', file: 'machine/tiers/decals/flywheel-rim-3.png', width: 96, height: 96, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Flywheel rim 2 plus a one pixel brass inlay ring, drawn over rim 2 at MK III; rotationally symmetric.',
   },
 };
 
 export interface AssetLoad {
-  key: string; // an AssetId, `${AssetId}#rot`, `${AssetId}#restored` or `${AssetId}#restored#rot`
+  key: string; // an AssetId, `${AssetId}#rot`, `${AssetId}#restored`, `${AssetId}#restored#rot`, or a WP22 tier key: `${AssetId}#t${n}`, `${AssetId}#t${n}#rot`, `${AssetId}#t${n}b`
   url: string;
   kind: 'image' | 'spritesheet';
   frame?: AssetEntry['frame'];
@@ -586,6 +729,8 @@ export function resolveAssetUrl(entry: AssetEntry, baseUrl: string = 'assets/'):
  * Lists load descriptors in ASSET_IDS order for every file-backed entry (kind = spritesheet iff frame).
  * Each entry with a rotation sheet also gets a `${id}#rot` spritesheet load right after its own load.
  * A file-backed entry with `restored` adds a `${id}#restored` load (and, with a rotation sheet and restored.rotationFile, `${id}#restored#rot`) right after its own / #rot loads.
+ * A file-backed entry with `tiers` adds, after those, per tier in array order: `${id}#t${from}` (same kind and frame as the entry),
+ * `${id}#t${from}#rot` (rotation sheet frame, only with a rotation sheet and tier.rotationFile) and `${id}#t${from}b` (same kind and frame, only with tier.pulseFile).
  */
 export function planAssetLoads(
   manifest: Record<AssetId, AssetEntry> = ASSET_MANIFEST,
@@ -624,6 +769,32 @@ export function planAssetLoads(
         kind: 'spritesheet',
         frame: { width: entry.width, height: entry.height, count: entry.rotation.frames },
       });
+    }
+    for (const tier of entry.file !== null ? (entry.tiers ?? []) : []) {
+      const tierLoad: AssetLoad = {
+        key: tierTextureKey(id, tier.from),
+        url: baseUrl + tier.file,
+        kind: entry.frame ? 'spritesheet' : 'image',
+      };
+      if (entry.frame !== undefined) tierLoad.frame = entry.frame;
+      loads.push(tierLoad);
+      if (entry.rotation !== undefined && tier.rotationFile !== undefined) {
+        loads.push({
+          key: tierTextureKey(id, tier.from, { rot: true }),
+          url: baseUrl + tier.rotationFile,
+          kind: 'spritesheet',
+          frame: { width: entry.width, height: entry.height, count: entry.rotation.frames },
+        });
+      }
+      if (tier.pulseFile !== undefined) {
+        const pulseLoad: AssetLoad = {
+          key: tierTextureKey(id, tier.from, { pulse: true }),
+          url: baseUrl + tier.pulseFile,
+          kind: entry.frame ? 'spritesheet' : 'image',
+        };
+        if (entry.frame !== undefined) pulseLoad.frame = entry.frame;
+        loads.push(pulseLoad);
+      }
     }
   }
   return loads;

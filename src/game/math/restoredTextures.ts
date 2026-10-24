@@ -2,6 +2,7 @@ import type { AssetId } from '../../assets/assetIds';
 import { ASSET_MANIFEST, RESTORED_SUFFIX, ROT_SUFFIX, restoredTextureKey } from '../../assets/manifest';
 import { MACHINE_COMPONENTS, MACHINE_COMPONENT_IDS } from '../../data/machineComponents';
 import type { MachineComponentId } from '../../data/machineComponents';
+import { resolveTextureKey } from './partTiers';
 
 // WP18b restored textures: pure key maths for the postgame swap of era V parts to their `#restored` variants (A17 art).
 // MachineAnimator picks the texture key with swapTextureKey; the Phaser texture check is passed in as `has`. Pure: no Phaser, no DOM.
@@ -29,8 +30,9 @@ export function isRestoredKey(key: string): boolean {
 export function swapTextureKey(assetId: AssetId, currentKey: string, restored: boolean, has: (key: string) => boolean): string {
   if (ASSET_MANIFEST[assetId].restored === undefined) return currentKey;
   const rot = currentKey.endsWith(ROT_SUFFIX);
-  const target = restored ? restoredTextureKey(assetId, rot) : (rot ? assetId + ROT_SUFFIX : assetId);
-  return has(target) ? target : currentKey;
+  const target = resolveTextureKey(assetId, { tier: 1, restored, rot, pulseLow: false }, has);
+  const requested = restored ? restoredTextureKey(assetId, rot) : target;
+  return has(requested) ? target : currentKey;
 }
 
 /** Number(name) when it is an integer >= 0, else 0 ('__BASE', '', '-1', '1.5' -> 0). */

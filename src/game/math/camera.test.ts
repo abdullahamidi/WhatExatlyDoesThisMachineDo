@@ -10,6 +10,8 @@ import {
   worldToClient,
   zoomStep,
   snapZoom,
+  hudTopInsetAt,
+  hudSafeCenterY,
   wheelToSnappedZoom,
   viewBounds,
   boundsInView,
@@ -413,6 +415,64 @@ describe('fitView HUD top inset', () => {
   it('does not move when the base has no room below', () => {
     const b = { left: 900, right: 1660, top: 380, bottom: 1180 };
     expect(fitView(b, VIEW, { ...FIT, hudTopInsetPx: 240 })).toEqual(fitView(b, VIEW, FIT));
+  });
+});
+
+describe('hudTopInsetAt (WP22 F11, inset follows the UI scale)', () => {
+  it('gives 240 / 304 / 368 at UI 100 / 125 / 150', () => {
+    expect(hudTopInsetAt(240, 100, 16)).toBe(240);
+    expect(hudTopInsetAt(240, 125, 16)).toBe(304);
+    expect(hudTopInsetAt(240, 150, 16)).toBe(368);
+  });
+
+  it('falls back to UI 100 for an invalid scale and never pads below 100', () => {
+    expect(hudTopInsetAt(240, Number.NaN, 16)).toBe(240);
+    expect(hudTopInsetAt(240, 0, 16)).toBe(240);
+    expect(hudTopInsetAt(240, -50, 16)).toBe(240);
+    expect(hudTopInsetAt(240, 50, 16)).toBe(120);
+  });
+
+  it('matches the CAMERA data at UI 100 (store shots and UI 100 framing unchanged)', () => {
+    expect(hudTopInsetAt(CAMERA.hudTopInsetPx, 100, CAMERA.hudTopInsetPadPx)).toBe(CAMERA.hudTopInsetPx);
+  });
+
+  it('keeps a fitted machine top below the UI 150 inset when the base has room', () => {
+    const fit: FitViewOptions = {
+      margin: 72, pixelScale: 2, minZoom: 0.5, maxZoom: 2, defaultZoom: 1,
+      defaultCenter: { ...OLD_FOCUS }, world: OLD_WORLD,
+    };
+    const b: Bounds = { left: 1000, top: 700, right: 2232, bottom: 900 }; // zoom 0.75, unshifted top screen y 285
+    const inset = hudTopInsetAt(CAMERA.hudTopInsetPx, 150, CAMERA.hudTopInsetPadPx);
+    const out = fitView(b, VIEW, { ...fit, hudTopInsetPx: inset });
+    const top = (b.top - out.center.y) * out.zoom + VIEW.height / 2;
+    const base = (b.bottom - out.center.y) * out.zoom + VIEW.height / 2;
+    expect(out.zoom).toBe(0.75);
+    expect(top).toBeCloseTo(inset, 6);
+    expect(base).toBeLessThanOrEqual(VIEW.height - fit.margin + 1e-9);
+  });
+});
+
+describe('hudSafeCenterY (WP22 F11, release nudge vs HUD inset)', () => {
+  // machine top world y 1344, zoom 0.75, view height 720, inset 368 -> limit 1344 - 8 / 0.75 = 1333.33
+  const LIMIT = 1344 - (368 - 360) / 0.75;
+
+  it('passes a pan that keeps the top below the inset', () => {
+    expect(hudSafeCenterY(1300, 1320, 1344, 0.75, 720, 368)).toBe(1300);
+    expect(hudSafeCenterY(LIMIT, 1320, 1344, 0.75, 720, 368)).toBe(LIMIT);
+  });
+
+  it('stops a downward pan at the limit (the Era II UI 150 case: 1333 -> 1438 is held at 1333.33)', () => {
+    expect(hudSafeCenterY(1438, 1333, 1344, 0.75, 720, 368)).toBeCloseTo(LIMIT, 9);
+  });
+
+  it('never pans further down when the top already sits under the HUD, but still allows an upward pan', () => {
+    expect(hudSafeCenterY(1500, 1450, 1344, 0.75, 720, 368)).toBe(1450);
+    expect(hudSafeCenterY(1400, 1450, 1344, 0.75, 720, 368)).toBe(1400);
+  });
+
+  it('is the identity at UI 100 for the framing fitView already chose', () => {
+    const limit100 = 1344 - (240 - 360) / 0.75; // 1504, the UI 100 Era II centre
+    expect(hudSafeCenterY(limit100, limit100, 1344, 0.75, 720, 240)).toBe(1504);
   });
 });
 

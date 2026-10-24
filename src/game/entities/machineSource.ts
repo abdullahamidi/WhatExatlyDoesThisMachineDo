@@ -11,4 +11,5 @@ export interface MachineSource {
   on: GameSession['on'];
 }
 
-export interface MachineViewContext { session: MachineSource; feedback: Pick<GameFeedback, 'partLanded'> }
+/** Feedback signals a machine view emits. WP22: the tier signals are optional so a stand-in view (ShowcaseScene) can pass partLanded only. */
+export interface MachineViewContext { session: MachineSource; feedback: Pick<GameFeedback, 'partLanded'> & Partial<Pick<GameFeedback, 'partEvolved' | 'partTorqued'>> }

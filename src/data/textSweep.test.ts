@@ -3,6 +3,7 @@ import { TECHNOLOGIES } from './technologies';
 import { INSTALL_LINES } from './notifications';
 import { SYSTEM_LOGS } from './systemLogs';
 import { ACHIEVEMENTS } from './achievements';
+import { TIER_SWEEP } from './machineTiers';
 
 // WP20 text sweep over the data tables. Player-facing copy uses the typographic
 // multiplier (×5, not x5), the ellipsis character (…) and US spelling.
@@ -25,6 +26,7 @@ function sweepEntries(): SweepEntry[] {
     entries.push({ where: `${id}.name`, text: def.name });
     entries.push({ where: `${id}.description`, text: def.description });
   }
+  entries.push(...TIER_SWEEP);
   return entries;
 }
 

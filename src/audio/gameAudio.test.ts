@@ -30,6 +30,8 @@ function createFakeSynth() {
     playCrank: vi.fn(),
     playPurchase: vi.fn(),
     playClunk: vi.fn(),
+    playRefit: vi.fn(),
+    playTorqueTick: vi.fn(),
     playDeny: vi.fn(),
     playSting: vi.fn(),
     setHum: vi.fn(),
@@ -142,6 +144,7 @@ interface Rig {
   session: GameSession;
   audio: GameAudio;
   tick(): void;
+  feedback: GameFeedback;
 }
 
 let current: GameAudio | null = null;
@@ -152,10 +155,11 @@ let warnSpy: { readonly mock: { readonly calls: unknown[][] }; mockRestore(): vo
 function buildRig(techLevels: Partial<Record<TechId, number>> = {}, unlock = true): Rig {
   const session = new GameSession({ state: fundedState(techLevels), now: () => 0 });
   const fakeWindow = createFakeWindow();
-  const audio = createGameAudio(session, createFeedback(), fakeWindow.win);
+  const feedback = createFeedback();
+  const audio = createGameAudio(session, feedback, fakeWindow.win);
   current = audio;
   if (unlock) fakeWindow.unlock();
-  return { session, audio, tick: fakeWindow.tick };
+  return { session, audio, tick: fakeWindow.tick, feedback };
 }
 
 /** Structural view of a vi.fn: the calls it recorded. */
@@ -321,5 +325,42 @@ describe('gameAudio readout', () => {
     audio.dispose();
     expect(audio.stats().levels).toBeNull();
     expect(audio.stats().ambient).toBeNull();
+  });
+});
+
+describe('gameAudio tier audio (WP22)', () => {
+  it('a part evolution plays the refit once', () => {
+    const { feedback } = buildRig();
+    clearSynthCalls();
+    feedback.partEvolved.emit({ techId: 'motorTuning', fromTier: 1, toTier: 2, topTier: 5, hosts: ['wornMotor'] });
+    expect(fake.playRefit).toHaveBeenCalledTimes(1);
+  });
+
+  it('a torque step plays one tick at that step', () => {
+    const { feedback } = buildRig();
+    clearSynthCalls();
+    feedback.partTorqued.emit({ techId: 'motorTuning', host: 'wornMotor', step: 4 });
+    expect(fake.playTorqueTick).toHaveBeenCalledTimes(1);
+    expect(fake.playTorqueTick).toHaveBeenCalledWith(4);
+  });
+
+  it('muted: neither the refit nor the torque tick plays', () => {
+    const { session, feedback } = buildRig();
+    session.updateSettings({ muted: true });
+    clearSynthCalls();
+    feedback.partEvolved.emit({ techId: 'motorTuning', fromTier: 1, toTier: 2, topTier: 5, hosts: ['wornMotor'] });
+    feedback.partTorqued.emit({ techId: 'motorTuning', host: 'wornMotor', step: 4 });
+    expect(fake.playRefit).not.toHaveBeenCalled();
+    expect(fake.playTorqueTick).not.toHaveBeenCalled();
+  });
+
+  it('before the first gesture: nothing plays and nothing throws', () => {
+    const { feedback } = buildRig({}, false);
+    expect(() => {
+      feedback.partEvolved.emit({ techId: 'motorTuning', fromTier: 1, toTier: 2, topTier: 5, hosts: ['wornMotor'] });
+      feedback.partTorqued.emit({ techId: 'motorTuning', host: 'wornMotor', step: 4 });
+    }).not.toThrow();
+    expect(fake.playRefit).not.toHaveBeenCalled();
+    expect(fake.playTorqueTick).not.toHaveBeenCalled();
   });
 });

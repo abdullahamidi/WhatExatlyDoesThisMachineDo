@@ -705,3 +705,58 @@ describe('xf label reveal (WP13 D4)', () => {
     expect(purchaseFailureText('insufficient', 5, 'xf')).toBe('NEED 5 MORE ???');
   });
 });
+describe('part tier text in the tree detail panel (WP22 A6)', () => {
+  /** Initial state with one tech level set on top. */
+  function stateAt(id: TechId, level: number): GameState {
+    const base = createInitialState(0);
+    return { ...base, techLevels: { ...base.techLevels, [id]: level } };
+  }
+
+  /** Detail level line of `id` at `level`, built from its era as the tree panel does. */
+  function detailLevelOf(id: TechId, level: number): string | undefined {
+    const era = TECHNOLOGIES[id].era;
+    const views = getAllTechViews(stateAt(id, level)).filter((v) => v.def.era === era);
+    return buildTechTreeView(views, emptyResourceMap(), id, era).detail?.levelText;
+  }
+
+  it('motorTuning at level 7 reads MK II with the MK III threshold', () => {
+    expect(detailLevelOf('motorTuning', 7)).toBe('LV 7/25 · MK II — MK III AT 10');
+  });
+
+  it('motorTuning at level 25 reads the top tier', () => {
+    expect(detailLevelOf('motorTuning', 25)).toBe('LV 25/25 · MK V AS BUILT');
+  });
+
+  it('gearRatio at level 1 reads MK I with the MK II threshold', () => {
+    expect(detailLevelOf('gearRatio', 1)).toBe('LV 1/15 · MK I — MK II AT 6');
+  });
+
+  it('gearRatio at level 15 reads the top of a three-tier track', () => {
+    expect(detailLevelOf('gearRatio', 15)).toBe('LV 15/15 · MK III AS BUILT');
+  });
+
+  it('uncapped mainsBackfeed keeps the infinity cap and reads MK II', () => {
+    expect(detailLevelOf('mainsBackfeed', 4)).toBe('LV 4/∞ · MK II — MK III AT 7');
+  });
+
+  it('a tracked part at level 0 shows no tier mark', () => {
+    expect(detailLevelOf('gearRatio', 0)).toBe('LV 0/15');
+  });
+
+  it('an untracked repeatable keeps the plain level text', () => {
+    expect(detailLevelOf('horizonField', 3)).toBe('LV 3/20');
+  });
+
+  it('unlocks and milestones keep their plain words', () => {
+    expect(detailLevelOf('wornMotor', 1)).toBe('INSTALLED');
+    expect(detailLevelOf('generatorBlueprint', 1)).toBe('ACHIEVED');
+  });
+
+  it('the node card keeps LV n/max on a tracked tech', () => {
+    const view = buildTechTreeView(eraOneViewsOf(stateAt('motorTuning', 7)), emptyResourceMap(), 'motorTuning', 1);
+    const node = view.nodes.find((n) => n.id === 'motorTuning');
+    expect(node?.levelText).toBe('LV 7/25');
+    expect(node?.ariaLabel).not.toContain('MK');
+    expect(view.detail?.levelText).toBe('LV 7/25 · MK II — MK III AT 10');
+  });
+});
