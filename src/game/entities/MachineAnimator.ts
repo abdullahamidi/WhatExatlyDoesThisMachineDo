@@ -12,6 +12,7 @@ import {
   RING_GEOMETRY,
 } from '../../data/machineComponents';
 import type { ComponentAnimation, MachineComponentId, SpeedCurve } from '../../data/machineComponents';
+import type { TechId } from '../../data/types';
 import { HAMMER_FX } from '../../data/steamFx';
 import { FINALE_BOOST } from '../../data/finale';
 import { RESTORED_ACCENT } from '../../data/showcase';
@@ -49,6 +50,7 @@ import { componentDepth, resolveAttachment } from '../math/machineLayout';
 import { motionPolicy } from '../../simulation/settings';
 import { boostedValue } from '../math/finale';
 import { restoredComponentIds, swapTextureKey, frameIndexOfName } from '../math/restoredTextures';
+import { cappedPlateFrame } from '../math/plateCap';
 
 /** Top frame rate of any frame-cycle part in the data: the boost target for `frames` maxHz (frame parts carry no speed curve). */
 const FRAMES_MAX_HZ = MACHINE_COMPONENT_IDS.reduce((top, id) => {
@@ -188,6 +190,8 @@ export class MachineAnimator {
   private finaleRestored = false;
   /** True while the parts of restoredComponentIds() sit on their `#restored` textures (applyRestoredTextures). */
   private texturesRestored = false;
+  /** WP16b-3 store shots: namePlate frame cap (setPlateCap, debug hook only); null = none. Rendering only. */
+  private plateMaxTech: TechId | null = null;
   private readonly unsubscribeClick: () => void;
   private readonly unsubscribeReset: () => void;
   private readonly unsubscribeMilestone: () => void;
@@ -427,7 +431,9 @@ export class MachineAnimator {
         }
         case 'stage': {
           const met = anim.gates.filter(([techId, level]) => levels[techId] >= level).length; // gates met
-          sprite.setFrame(stageFrameOf(met, anim.frames, this.finaleRestored, anim.endingFrame));
+          const frame = stageFrameOf(met, anim.frames, this.finaleRestored, anim.endingFrame);
+          // WP16b-3: the store-shot cap only touches the name plate (null cap = frame unchanged)
+          sprite.setFrame(id === 'namePlate' ? cappedPlateFrame(frame, this.plateMaxTech) : frame);
           break;
         }
       }
@@ -581,6 +587,11 @@ export class MachineAnimator {
     this.finaleBoost = Number.isFinite(f.boost) ? Math.min(1, Math.max(0, f.boost)) : 0;
     this.finaleRestored = f.restored;
     this.applyRestoredTextures(this.finaleRestored);
+  }
+
+  /** WP16b-3 store shots: caps the namePlate frame with cappedPlateFrame (null clears). Rendering only; survives resets. */
+  setPlateCap(maxTech: TechId | null): void {
+    this.plateMaxTech = maxTech;
   }
 
   /**

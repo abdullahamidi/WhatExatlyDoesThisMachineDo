@@ -172,6 +172,9 @@
   color: var(--amber-dim);
 }
 
+/* WP16b-3: no reserved empty row; the SYSTEM tab footer fits at UI 150. */
+#sys-feedback:empty { min-height: 0; }
+
 #sys-footer {
   margin-top: 8px;
   font-size: 12px;

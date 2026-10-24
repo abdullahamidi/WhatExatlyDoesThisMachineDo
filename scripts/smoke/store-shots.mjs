@@ -29,10 +29,12 @@
 //   sequence or choice both pass), <size>_09_postgame, store_top5_complete (only when both variants run: no store or alt file missing).
 // FINALE_TYPED_T = 64.0 s into the film: the last line is fully typed at 63.967 s and the buttons (phase choice) come at 64.467 s (finaleEndS in
 //   src/game/math/finale.ts), so 0.467 s of margin remain; the film clock keeps running during the shot, which is why SKIP and the buttons row are hidden by style.
-// <outdir>/store-top5.json = { sizes, store, alt, pressKitOnly, missing }: store = the five Art Director store picks in order (rank 1-5, files per size),
+// <outdir>/store-top5.json = { sizes, plateCap, store, alt, pressKitOnly, missing }: store = the five Art Director store picks in order (rank 1-5, files per size),
 //   alt = 04-era3-boiler-hud (no-reveal replacement for rank 5), pressKitOnly = shots that are never store screenshots (spoilers, title) with the reason,
 //   missing = '<size>/<name>' for every store or alt file not captured for a requested size. Picks: docs/plan/WP16b-preaudit.md section C.
-// The scripts/smoke/README.md section is refreshed after WP21; this header is authoritative until then.
+// WP16b-3: plate cap (setPlateCap 'substationBlueprint' = RES?OR?) at stems 01, 10, 09; cleared at 08 (08 / 08b uncapped press kit).
+//   checks <size>_<id>_plate_cap and <size>_<id>_<variant>_no_spoiler (stems 01-07, 09, not press kit); store-top5.json gets plateCap. The check also asserts the HUD plaque text (read from #hud-plaque even when the HUD is hidden) has no RESTOR.
+// Documented in scripts/smoke/README.md (### store-shots.mjs).
 import fs from 'fs';
 import path from 'path';
 import {
@@ -51,6 +53,7 @@ const STORE_TOP5 = ['07-era5-ruined-clean', '06-era4-spire-hud', '03-era2-genera
 const STORE_ALT = [{ name: '04-era3-boiler-hud', replaces: '09-postgame-portrait-clean', why: 'no-reveal alternative (09 shows the restored world)' }];
 const PRESS_KIT_ONLY = [
   { name: '08-finale-reveal-hud', why: 'spoiler: PRIMARY FUNCTION: RESTORE' },
+  { name: '08-finale-reveal-clean', why: 'spoiler: finale reveal (restored sky, plate RESTORE)' },
   { name: '08b-finale-typed-hud', why: 'spoiler: full reveal text' },
   { name: '09-postgame-portrait-hud', why: 'spoiler: RESTORATION ENGINE HUD title' },
   { name: '10-title-hud', why: 'title screen, not gameplay (capsule / logo reference)' },
@@ -58,6 +61,12 @@ const PRESS_KIT_ONLY = [
 // FINALE_REVEAL: last line fully typed at 63.967 s, buttons (and phase choice) at 64.467 s (src/game/math/finale.ts finaleEndS).
 const FINALE_TYPED_T = 64.0;
 const FINALE_LAST_LINE = 'Restoration holds while the machine runs.';
+// WP16b-3: store shots cap the World name plate and the HUD plaque at the demo cap (EDITIONS.demo.capTech, src/data/edition.ts),
+// so they read RES?OR? like the demo teaser (window.__wedtmd.setPlateCap, rendering only). The finale (08, 08b) stays uncapped press kit.
+const PLATE_CAP = 'substationBlueprint';
+const PLATE_CAP_FRAME = 2;                                  // namePlate frame of RES?OR? (src/game/math/plateCap.ts plateFrameCap)
+const SPOILER_RE = /RESTOR/i;                               // RESTORE, RESTORATION ENGINE, Restoration Flux, ...
+const SPOILER_STEMS = ['01', '02', '03', '04', '05', '06', '07', '09'];
 
 /** Comma list -> the allowed names in canonical order. Unset or blank = all. null on an unknown or empty entry. */
 function parseList(raw, allowed) {
@@ -95,6 +104,7 @@ function storeManifest(shots, sizes) {
   }
   return {
     sizes,
+    plateCap: PLATE_CAP,
     store: STORE_TOP5.map((name, i) => ({ rank: i + 1, name, files: filesFor(name) })),
     alt: STORE_ALT.map((a) => ({ ...a, files: filesFor(a.name) })),
     pressKitOnly: PRESS_KIT_ONLY.map((p) => ({ ...p, files: filesFor(p.name) })),
@@ -132,13 +142,30 @@ async function main() {
     }
   };
 
+  /** Sets the plate cap (null clears) and records <size>_<id>_plate_cap: the cap in force equals the request. */
+  const setCap = async (page, size, id, cap) => {
+    const got = await page.evaluate((c) => (typeof window.__wedtmd?.setPlateCap === 'function' ? window.__wedtmd.setPlateCap(c) : 'missing'), cap);
+    report.check(`${size}_${id}_plate_cap`, got === cap, got);
+  };
+  /** Spoiler state at shot time: plate frame, HUD plaque text (evidence), visible text lines matching SPOILER_RE. */
+  const spoilerState = (page) => page.evaluate((src) => {
+    const re = new RegExp(src, 'i');
+    const hits = (document.body.innerText || '').split('\n').map((s) => s.trim()).filter((s) => re.test(s));
+    const plate = window.__wedtmd?.componentState?.('namePlate') ?? null;
+    const plaque = document.getElementById('hud-plaque');
+    return { frame: plate === null ? null : plate.frame, plaque: plaque ? (plaque.textContent ?? '').trim() : null, hits };
+  }, SPOILER_RE.source);
+
   /** Screenshot to <outdir>/<size>/<name>-<variant>.png; checks the PNG size (IHDR) against the size's expected pixels. */
   const writeShot = async (page, size, id, name, variant) => {
     const file = `${outRoot}/${size}/${name}-${variant}.png`;
+    const full = `${name}-${variant}`;
+    const spoil = SPOILER_STEMS.includes(id) && !PRESS_KIT_ONLY.some((p) => p.name === full) ? await spoilerState(page) : null;
     await page.screenshot({ path: file });
     const { width, height } = pngSize(file);
     const px = SIZE_CFG[size].png;
     report.check(`${size}_${id}_${variant}_png`, width === px.width && height === px.height, `${width}x${height}`);
+    if (spoil !== null) report.check(`${size}_${id}_${variant}_no_spoiler`, spoil.frame !== null && spoil.frame <= PLATE_CAP_FRAME && spoil.hits.length === 0 && (spoil.plaque === null || !SPOILER_RE.test(spoil.plaque)), spoil);
     shots.push({ file, size, stem: name, variant, width, height });
   };
 
@@ -236,6 +263,7 @@ async function main() {
     await runStem(size, '01', async () => {
       await page.goto(withQuery(base, { debug: '1' }), { waitUntil: 'networkidle' });
       await waitReady(page);
+      await setCap(page, size, '01', PLATE_CAP);
       await crankClicks(page, 12, 120);
       await page.waitForTimeout(2500);
       if (want('clean')) await uiRootHiddenShot(page, size, '01', '01-era1-start');
@@ -299,6 +327,7 @@ async function main() {
       await page.evaluate(() => window.__wedtmd?.saveNow?.());
       await page.goto(withQuery(base, { debug: '1', title: '1' }), { waitUntil: 'networkidle' });
       await waitReady(page);
+      await setCap(page, size, '10', PLATE_CAP);
       await page.waitForTimeout(1500);
       const open = await page.evaluate(() => document.querySelector('#title-screen.is-open') !== null);
       report.check(`${size}_10_title_open`, open, open);
@@ -319,6 +348,7 @@ async function main() {
     });
 
     await runStem(size, '08', async () => {
+      await setCap(page, size, '08', null);
       const failed = await buyList(page, ['primaryFunction']);
       report.check(`${size}_08_buys`, failed.length === 0, failed);
       await page.waitForTimeout(2000);
@@ -358,6 +388,7 @@ async function main() {
     }
 
     await runStem(size, '09', async () => {
+      await setCap(page, size, '09', PLATE_CAP);
       await page.evaluate(() => window.__wedtmd?.skipFinale?.());
       await page.click('#finale-keep', { timeout: 5000 });
       await poll(page, () => window.__wedtmd?.session?.state?.ending?.phase === 'postgame', null, 5000, 100);

@@ -4,7 +4,7 @@ import type { Hud } from '../../ui/hud';
 import type { TechTree } from '../../ui/techTree';
 import type { ModalStack } from '../../ui/modalStack';
 import type { FinaleOverlayHandle } from '../../ui/finale';
-import { buildHudView } from '../../ui/hudView';
+import { buildHudView, plaqueText } from '../../ui/hudView';
 import { APERTURE_BEAM, DUST_RISING, HUD_REFRESH_MS, PYLON_FEEDS } from '../../data/world';
 import { ParallaxBackground } from '../rendering/ParallaxBackground';
 import { PylonLine } from '../rendering/PylonLine';
@@ -28,6 +28,8 @@ import { createPhotoOverlay } from '../../ui/photoMode';
 import { portraitPose } from '../math/showcase';
 import { PHOTO_MODE } from '../../data/photoMode';
 import { motionPolicy } from '../../simulation';
+import { cappedPlaqueLevels, plateFrameCap } from '../math/plateCap';
+import type { TechId } from '../../data/types';
 
 /** Modal id held on the stack while the new-cycle transition runs (input lock). */
 const CYCLE_MODAL_ID = 'cycle';
@@ -91,6 +93,8 @@ export class WorldScene extends Phaser.Scene {
   private hudRenderedAtMs = Number.NEGATIVE_INFINITY;
   private readonly frameTimings = new FrameTimings();
   private firstFrameMarked = false;
+  /** WP16b-3 store shots (debug hook): plate gate the name plate and the HUD plaque are capped at; null = none. Rendering only. */
+  private plateCap: TechId | null = null;
 
   constructor(ctx: GameContext, ui: WorldUi) {
     super('World');
@@ -114,6 +118,7 @@ export class WorldScene extends Phaser.Scene {
     dust.setRising(this.ctx.session.state.techLevels[DUST_RISING.techId] >= DUST_RISING.minLevel, true);
     const machine = new MachineView(this, { session: display, feedback: this.ctx.feedback });
     this.machineView = machine;
+    machine.setPlateCap(this.plateCap);
     const eclipse = new Eclipse(this, display);
     this.eclipse = eclipse;
     const beam = new ApertureBeam(this, display, () => this.machineView?.latchFrame(APERTURE_BEAM.component) ?? null);
@@ -293,6 +298,24 @@ export class WorldScene extends Phaser.Scene {
     return this.photo;
   }
 
+  /**
+   * WP16b-3 store shots: caps the World name plate frame and the HUD plaque line at a plate gate tech ('substationBlueprint' = RES?OR?,
+   * the demo teaser cap). Null, or a tech that is not a plate gate, clears. Rendering only: session, save and display levels are untouched.
+   * Returns the cap in force.
+   */
+  setPlateCap(maxTech: TechId | null): TechId | null {
+    const cap = maxTech !== null && plateFrameCap(maxTech) !== null ? maxTech : null;
+    this.plateCap = cap;
+    this.machineView?.setPlateCap(cap);
+    this.renderHud();
+    return cap;
+  }
+
+  /** WP16b-3: the plate cap in force (null = none). */
+  getPlateCap(): TechId | null {
+    return this.plateCap;
+  }
+
   /** Mean and max frame time (ms) of session update + HUD + tech tree over the last 120 frames (zeros before the first frame). */
   getUiStats(): { meanMs: number; maxMs: number } {
     return this.frameTimings.stats();
@@ -360,6 +383,8 @@ export class WorldScene extends Phaser.Scene {
     const session = this.ctx.session;
     this.lastRevision = session.revision;
     this.hudRenderedAtMs = performance.now();
-    this.ui.hud.render(buildHudView(session.state, session.rates, session.prestige, session.techs));
+    const view = buildHudView(session.state, session.rates, session.prestige, session.techs);
+    // WP16b-3: a store-shot plate cap caps the plaque line too (cappedPlaqueLevels, src/game/math/plateCap.ts).
+    this.ui.hud.render(this.plateCap === null ? view : { ...view, plaque: plaqueText(cappedPlaqueLevels(session.state.techLevels, this.plateCap)) });
   }
 }

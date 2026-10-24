@@ -6,7 +6,7 @@ import type { ModalStack } from '../ui/modalStack';
 import type { SystemMenu } from '../ui/systemMenu';
 import type { SaveController } from '../persistence/saveController';
 import type { GameAudio } from '../audio/gameAudio';
-import type { PrestigeState } from '../data/types';
+import type { PrestigeState, TechId } from '../data/types';
 import type { GameAudioStats } from '../audio/gameAudio';
 import type { CyclePreview } from '../simulation/prestige';
 import type { MachineComponentId } from '../data/machineComponents';
@@ -79,6 +79,9 @@ declare global {
       // WP18b restored accent probes (World machine)
       restoredTextures(): { swapped: MachineComponentId[]; total: number } | null;
       textureKey(id: MachineComponentId): string | null;
+      // WP16b-3: store-shot plate cap (World name plate + HUD plaque, rendering only)
+      setPlateCap(maxTech: TechId | null): TechId | null;
+      plateCap(): TechId | null;
     };
   }
 }
@@ -207,6 +210,11 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
   /** Texture key of one machine part's sprite (WP18b); null without a World machine or sprite. */
   const textureKey = (id: MachineComponentId): string | null =>
     game.scene.getScene<WorldScene>('World')?.getMachine()?.getComponentSprite(id)?.texture.key ?? null;
+  /** Store-shot plate cap (WP16b-3): WorldScene.setPlateCap; returns the cap in force, null without a World scene. Rendering only. */
+  const setPlateCap = (maxTech: TechId | null): TechId | null =>
+    game.scene.getScene<WorldScene>('World')?.setPlateCap(maxTech) ?? null;
+  /** The store-shot plate cap in force (WP16b-3); null when none or without a World scene. */
+  const plateCap = (): TechId | null => game.scene.getScene<WorldScene>('World')?.getPlateCap() ?? null;
   window.__wedtmd = {
     session,
     crankClientPoint,
@@ -238,5 +246,7 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     demoState: () => extras.demo?.() ?? null,
     restoredTextures,
     textureKey,
+    setPlateCap,
+    plateCap,
   };
 }

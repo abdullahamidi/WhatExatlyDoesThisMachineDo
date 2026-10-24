@@ -43,8 +43,8 @@ export const STEAM_EMITTERS: readonly SteamEmitter[] = [
   // Calliope: three whistles on the manifold; one whistle per burst, round robin, while RS/s > 1. Spawn 4 px above each bell cap (art review: puffs at the mouth slid up the bell face and merged with the manifold stud leaks).
   { id: 'calliope', assetId: 'fx.steamPuff', at: [{ x: -72, y: -211 }, { x: -44, y: -216 }, { x: -16, y: -221 }], gate: { techId: 'pressureResonator', minLevel: 1 },
     driver: 'resonance', threshold: 0, mode: { kind: 'burst', count: 2, spacingMs: 150, everyMinS: 5, everyMaxS: 8, minDriver: 1, roundRobin: true } },
-  // WP17 Legacy Feeds: steam lance off the manifold outlet (steamLance); thermal driver, rate follows PR/s.
-  { id: 'lance', assetId: 'fx.steamPuff', at: [{ x: 20, y: -422 }], gate: { techId: 'steamLance', minLevel: 1 },
+  // WP17 Legacy Feeds: steam lance off the manifold outlet (steamLance); thermal driver, rate follows PR/s. WP16b-3 (Art Director): spawn on the right end of the lance flange collar (valve body x 12..28, collar y -390..-388), so the puffs vent beside the valve wheel and stay below siphon capsule 2L (bottom y -418).
+  { id: 'lance', assetId: 'fx.steamPuff', at: [{ x: 28, y: -385 }], gate: { techId: 'steamLance', minLevel: 1 },
     driver: 'thermal', threshold: 0, mode: { kind: 'rate', base: 0.3, perLog: 0.25, min: 0.3, max: 2 } },
 ];
 

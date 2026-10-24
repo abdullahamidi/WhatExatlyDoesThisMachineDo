@@ -3,6 +3,7 @@ import type { TechId } from '../../data/types';
 
 // WP21 demo teaser: the stand-in nameplate reads its era III/IV stage gates, so the demo caps the plate at the cap tech's
 // frame and the teaser never spells the answer. Pure: the gate list comes from the namePlate animation, not from a copy.
+// WP16b-3: store shots reuse the gate list for the World plate (debug hook setPlateCap).
 
 export type PlateLevels = Readonly<Record<TechId, number>>;
 
@@ -42,4 +43,29 @@ export function capPlateLevels(levels: PlateLevels, maxTech: TechId | null): Pla
     byTech.set(maxTech, out);
   }
   return out;
+}
+
+/**
+ * WP16b-3 store shots: highest namePlate frame a cap allows = the cap tech's gate index + 1 (generatorBlueprint 1,
+ * substationBlueprint 2 = RES?OR?, pressureVesselBlueprint 3, harmonicConvergence 4). Null for a null cap or a tech that is not a plate gate.
+ */
+export function plateFrameCap(maxTech: TechId | null): number | null {
+  if (maxTech === null) return null;
+  const index = PLATE_GATES.indexOf(maxTech);
+  return index < 0 ? null : index + 1;
+}
+
+/** WP16b-3: frame limited to plateFrameCap(maxTech) (Math.min); the frame itself without a cap. Also caps the finale ending frame. */
+export function cappedPlateFrame(frame: number, maxTech: TechId | null): number {
+  const cap = plateFrameCap(maxTech);
+  return cap === null ? frame : Math.min(frame, cap);
+}
+
+/**
+ * WP16b-3 store shots: the levels the HUD plaque reads under a plate cap. capPlateLevels zeroes the plate gates past the cap; primaryFunction
+ * (the revealed-plaque milestone, not a plate gate) is zeroed too so the plaque never spells RESTORE. A null cap, or a tech that is not a plate
+ * gate (plateFrameCap null), returns `levels` itself.
+ */
+export function cappedPlaqueLevels(levels: PlateLevels, cap: TechId | null): PlateLevels {
+  return cap === null || plateFrameCap(cap) === null ? levels : { ...capPlateLevels(levels, cap), primaryFunction: 0 };
 }

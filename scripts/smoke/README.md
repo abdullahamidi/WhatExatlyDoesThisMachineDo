@@ -81,7 +81,7 @@ Outputs:
 PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/ux.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/ux
 ```
 
-Fresh context per case, 1280x720 unless noted (`D_100`, `D_150`, `T_1280x720` and `T_1920x1080` each get their own; case T uses its viewport). Prints ONE JSON object `{ results, fail, errors }`;
+Fresh context per case, 1280x720 unless noted (`D_100`, `D_150`, `T_1280x720` and `T_1920x1080` each get their own; case T uses its viewport; case `M` (WP16b-3) runs after the T cases and before `perf`). Prints ONE JSON object `{ results, fail, errors }`;
 expect `fail` and `errors` to be `[]`. Each case waits for `componentState('handCrank')` before it starts.
 
 | case | checks (names in `results` / `fail`) |
@@ -91,11 +91,12 @@ expect `fail` and `errors` to be `[]`. Each case waits for `componentState('hand
 | `C` (fresh) | `C_no_card_in_finale` (full S15 + `primaryFunction`, `#era-card` hidden 500 ms later) |
 | `D_100`, `D_150` (fresh each) | `D_<s>_fit` (`#tech-graph` `scrollWidth <= clientWidth + 1`; value `{ scrollWidth, clientWidth }`), `D_<s>_pf_selected` (selected node is `primaryFunction`), `D_<s>_pf_in_view` (its rect lies inside `#tech-graph`, 1 px), `D_100_graph_centered` (UI 100 only: after `#tech-tab-1` the visible nodes sit centred in `#tech-graph`, left and right gaps equal within 4 px), `D_<s>_buy_visible` / `D_<s>_buy_visible_e2` (WP21: PURCHASE has a size, sits inside the tech panel, the detail pane and the viewport, and is the element hit at its centre; `_e2` after era II and `powerLines`), `D_<s>_toast_clear_tabs` (WP21: after a `copperWinding` buy, the same toast rule as A), `D_<s>_menu_fixed` (`#system-panel` height equal within 1 px on every visible `#sys-tabs` tab; value = the heights), `D_<s>_memory_hidden` (`#sys-tab-memory` hidden in phase none) |
 | `T_1280x720`, `T_1920x1080` (fresh each, at that viewport) | After the S11 buy list (era III) and the era card click-away: `t`, tab 3, one `firebox` buy (an 8 h jump and a retry when rejected), 450 ms, for UI scale 100, 125 and 150 (`uiScale` set before each pass; the tree is closed by Escape after each). Per pass: `T_<w>x<h>_<s>_toast_shown` (exactly one visible `.toast`; detail `{ bought, vis }`), `T_<w>x<h>_<s>_toast_clear` (the toast hits none of `.tech-tab`, `#tech-close`, `#tech-buy`, `#tech-title`, `#tech-me`; the `toastClearTabs` rule). 12 checks in all |
+| `M` (fresh) | WP16b-3, a new cycle with Muscle Memory: S16 buy list, `skipFinale`, click `#finale-cycle`, then `#cycle-confirm-begin`, wait until `prestige().cycle` is 2 with the transition done (`cycleState().busy` false, `transition.active` false), `session.buyPerk('muscleMemory')`, 600 ms. `M_cycle_start` (perk bought ok; cycle 2, `totalClicks` 0, `wornMotor` 1, `gearRatio` 3; value `{ perkOk, cycle, clicks, wornMotor, gearRatio }`), `M_one_prompt_t0` (only the crank prompt is up: `count` 1 and `prompt` true), `M_one_prompt_goal` (after one real crank click only `#hud-goal` is up: `count` 1 and `goal` true) |
 | `perf` | `perf_click` only (report, never in `fail`): `{ ui: uiStats(), machine: machineStats() }` after 30 clicks, 100 ms apart |
 
 Screenshots in the outdir: `ux-A1-prompt.png`, `ux-A2-hint.png`, `ux-A3-tree-buy.png`, `ux-A4-flyin.png`, `ux-A5-goal.png`,
 `ux-B1-card.png`, `ux-B2-card-after-close.png`, `ux-B3-card-reduced.png`, and per uiScale `ux-D-100-tree.png`, `ux-D-100-tree-e2.png`,
-`ux-D-100-menu-system.png`, `ux-D-100-menu-settings.png` (the same set with `150`), and case T's six shots `ux-T-<w>x<h>-<s>.png` (`1280x720` and `1920x1080`, each at `100`, `125`, `150`).
+`ux-D-100-menu-system.png`, `ux-D-100-menu-settings.png` (the same set with `150`), and case T's six shots `ux-T-<w>x<h>-<s>.png` (`1280x720` and `1920x1080`, each at `100`, `125`, `150`). Case M (WP16b-3) adds `ux-M1-cycle-prompt.png` and `ux-M2-cycle-goal.png`.
 
 Failed checks are listed by name in `fail`; a thrown exception becomes `FAILED:<case>:<message>`. `errors` collects console
 errors, page errors and failed requests, each prefixed with the case key.
@@ -336,6 +337,8 @@ Debug hook fields (`window.__wedtmd`, test-only, `src/game/debugHook.ts`). None 
 - `showcaseStop()`: stops the teaser and wakes the World when `showcasePlay` put it to sleep.
 - `restoredTextures()` (WP18b): `{ swapped, total }` of the World machine: `swapped` = ids of the parts (of the 33 that have an A17 restored variant) whose sprite texture key contains `#restored`, `total` = 33. `null` before the world scene exists.
 - `textureKey(id)` (WP18b): the sprite texture key of one machine part, e.g. `machine.nullCore#restored#rot`; `null` without a machine or sprite.
+- `setPlateCap(maxTech)` (WP16b-3): caps the World name plate frame and the HUD plaque line at a plate gate tech. `'substationBlueprint'` gives plate frame 2 (`RES?OR?`) and the plaque `PRIMARY FUNCTION: RES?OR?` (the demo teaser cap, `EDITIONS.demo.capTech`). `null`, or a tech that is not a plate gate, clears the cap. Returns the cap in force; `null` without a World scene. Rendering only: session, save and display levels are unchanged. A page reload clears it. The cap wins over the finale ending frame, so a capped postgame plate reads `RES?OR?`. `store-shots.mjs` uses it.
+- `plateCap()` (WP16b-3): the cap in force, or `null` (no cap, or no World scene).
 - `cameraState()` and `finaleState().frame.completeEra` are the existing readouts used by the WP18 keys.
 
 `showcase.mjs` (WP18 final machine showcase: finale survey, portrait, photo mode, teaser): `PW_PATH=$PW node scripts/smoke/showcase.mjs http://localhost:4173/ <outdir>`. Playwright viewport 1280 x 720 at `deviceScaleFactor` 3, so every PNG is 3840 x 2160. Each PNG size is read from its IHDR bytes; a mismatch goes to `errors`. Prints ONE JSON `{ showcase_*, shots, errors }` on stdout; `errors` must be empty. Writes 14 PNG files. Run order: A, B, C, D, D2, C2, F, E. B, C, D, D2, C2 and F run in one browser context (one game); A and E each open a fresh context. A run that throws adds `showcase_FAILED_<run>` and an entry in `errors`. Console warnings matching `[assets] failed to load`, `[assets] size mismatch` or `has no frame` also go to `errors` (WP18b).
@@ -623,38 +626,52 @@ PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/
 PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright SIZES=2160 VARIANTS=clean node scripts/smoke/store-shots.mjs "<preview>/" C:/Users/<you>/AppData/Local/Temp/smoke/store
 ```
 
+`<preview>/` is the base URL without a query (the script adds `?debug=1`).
+
 Env vars (unset or blank = all; an unknown or empty entry = usage, exit 2):
 - `SIZES` (default `1080,2160`): `1080` = viewport 1920x1080 at deviceScaleFactor 1 (PNG 1920x1080). `2160` = same viewport at deviceScaleFactor 2 (PNG 3840x2160).
-- `VARIANTS` (default `hud,clean`): `hud` = live UI. `clean` = photo mode without the hint, HUD hidden. The finale reveal clean shot (stem 08) hides `#ui-root` instead.
+- `VARIANTS` (default `hud,clean`): `hud` = live UI. `clean` = no HUD: photo mode without the hint (stems 07 and 09) or `#ui-root` hidden (the other stems).
+
+Plate cap (WP16b-3): store and alt shots are taken with the World name plate and the HUD plaque capped at `RES?OR?` through `window.__wedtmd.setPlateCap('substationBlueprint')` (rendering only; the same cap as the demo teaser), so no shot spells the finale answer. The cap is set at stems 01, 10 (the title reload clears it) and 09, and cleared at stem 08; the finale shots (08, 08b) are uncapped press-kit shots.
 
 One fresh context per size; the stems run in one continuous session per size. `VARIANTS` only drops shots; the setup always runs. Shot table in run order (`<stem>` = two-digit id; file = `<outdir>/<size>/<file stem>-<variant>.png`):
 
-| Stem | File stem | Setup | Variants |
-|---|---|---|---|
-| `01` | `01-era1-start` | `?debug=1`, 12 crank clicks (120 ms apart), 1.5 s. hud: 3 more crank clicks | hud, clean |
-| `02` | `02-era1-full` | 33 crank clicks, S7 buy list, 2.5 s | hud, clean |
-| `03` | `03-era2-generator` | S7 to S9 buys, 2.5 s | hud, clean |
-| `04` | `04-era3-boiler` | S9 to S11 buys, 2.5 s | hud, clean |
-| `05` | `05-tree-era3` | `t`, click `#tech-tab-3`, 600 ms; Escape after | hud |
-| `06` | `06-era4-spire` | S11 to S13 buys, 12 s | hud, clean |
-| `07` | `07-era5-ruined` | S13 to S15 buys, 15 s | hud, clean |
-| `10` | `10-title` | Save, reload with `title=1`, title screen open; then CONTINUE | hud |
-| `08` | `08-finale-reveal` | `primaryFunction` buy, 2 s, `finaleSeek(56)`, phase `sequence` | hud, clean (`#ui-root` hidden) |
-| `09` | `09-postgame-portrait` | `skipFinale`, KEEP IT RUNNING, phase `postgame`, 2.5 s | hud, clean |
+| Stem | File stem | Setup | Variants | Plate cap |
+|---|---|---|---|---|
+| `01` | `01-era1-start` | `?debug=1`, 12 crank clicks (120 ms apart), 2.5 s. clean first (`#ui-root` hidden), then hud (3 more crank clicks) | hud, clean | capped |
+| `02` | `02-era1-full` | 33 crank clicks, S7 buy list, 2.5 s | hud, clean | capped |
+| `03` | `03-era2-generator` | S7 to S9 buys, 2.5 s. hud keeps the milestone toast | hud, clean | capped |
+| `04` | `04-era3-boiler` | S9 to S11 buys, 2.5 s | hud, clean | capped |
+| `05` | `05-tree-era3` | `t`, click `#tech-tab-3`, 600 ms; `#hud-panel` and `#hud-buttons` hidden for the shot; Escape after | hud | capped |
+| `06` | `06-era4-spire` | S11 to S13 buys, 12 s | hud, clean | capped |
+| `07` | `07-era5-ruined` | S13 to S15 buys, 15 s. hud first, then clean (photo mode) | hud, clean | capped |
+| `10` | `10-title` | Save, reload with `title=1`, cap set again, 1.5 s, title screen open; `#title-version` hidden for the shot; then CONTINUE | hud | capped |
+| `08` | `08-finale-reveal` | cap cleared, `primaryFunction` buy, 2 s, `finaleSeek(56)`, phase `sequence`. hud, then clean (`#ui-root` hidden) | hud, clean | uncapped |
+| `08b` | `08b-finale-typed` | `finaleSeek(64.0)`, up to 1 s polling for the 5th line; `#finale-skip` and `#finale-overlay .finale-buttons` hidden for the shot. Only when `VARIANTS` has hud | hud | uncapped |
+| `09` | `09-postgame-portrait` | cap set, `skipFinale`, KEEP IT RUNNING, phase `postgame`, 2.5 s. hud first, then clean (photo mode) | hud, clean | capped |
 
-Per size: 18 PNGs (stems 01 to 04, 06, 07 and 09 give 2 each; 05 and 10 give 1; 08 gives 2). Both sizes: 36. Each PNG size is checked from its IHDR.
+Hide rules for hud shots: `#toast-stack` is hidden except at stem 03. The era card is dismissed first and the pointer is parked at (5, 5).
+
+Per size: 19 PNGs (stems 01 to 04, 06, 07, 08 and 09 give 2 each = 16; 05, 08b and 10 give 1 each = 3). Both sizes: 38. Each PNG size is checked from its IHDR.
 
 Check names (`<size>` = `1080` or `2160`; `<stem>` = `01` to `10`; `<variant>` = `hud` or `clean`):
 - `<size>_<stem>_<variant>_png`: one per shot; the PNG is 1920x1080 (`1080`) or 3840x2160 (`2160`).
-- `<size>_<stem>_clean_hud_hidden`: clean photo shots (stems `01`, `02`, `03`, `04`, `06`, `07`, `09`); photo mode active and `#hud-panel` hidden at shot time. Only with the clean variant.
+- `<size>_<stem>_clean_hud_hidden`: clean shots (stems `01`, `02`, `03`, `04`, `06`, `07`, `08`, `09`); `#hud-panel` is hidden at shot time (photo mode active for `07` and `09`, `#ui-root` hidden for the rest). Only with the clean variant.
 - `<size>_02_buys`, `<size>_03_buys`, `<size>_04_buys`, `<size>_06_buys`, `<size>_07_buys`, `<size>_08_buys`: the buy list ran with every buy ok.
-- `<size>_08_sequence`: finale phase `sequence` after `finaleSeek(56)`.
-- `<size>_09_postgame`: ending phase `postgame`.
+- `<size>_<stem>_plate_cap` (x4: `01`, `10`, `09`, `08`): the cap in force equals the request: `substationBlueprint` for `01`, `10`, `09`; `null` for `08`.
+- `<size>_<stem>_<variant>_no_spoiler` (x14: `01` to `04` hud and clean, `05` hud, `06` and `07` hud and clean, `09` clean): for stems 01 to 07 and 09, every shot that is not in `pressKitOnly`: the name plate frame (`componentState('namePlate').frame`) is at most 2 and no visible text line of the page (`document.body.innerText`) matches `/RESTOR/i`, and the HUD plaque text (`#hud-plaque` textContent, read even when the HUD is hidden) does not match `/RESTOR/i`. Value `{ frame, plaque, hits }`.
 - `<size>_10_title_open`: title screen open after the reload.
+- `<size>_10_hud_hidden`: `#hud-panel`, `#hud-buttons` and `#toast-stack` computed visibility are all `hidden` behind the title (read before the shot).
+- `<size>_10_hud_back`: `#hud-panel` visible again 800 ms after CONTINUE.
+- `<size>_08_sequence`: finale phase `sequence` after `finaleSeek(56)`.
+- `<size>_08b_typed`: value `{ count, empty, last, phase, t }`: 5 complete lines, the last is `Restoration holds while the machine runs.`; phase `sequence` or `choice` both pass.
+- `<size>_09_postgame`: ending phase `postgame`.
+- `store_top5_complete` (only when both variants run): no store or alt file is missing.
 
 Failure keys: `FAILED:<size>/<stem>:<first line>` (the run goes on with the next stem), `FAILED:<size>/setup:<first line>`, `FAILED:launch:<first line>`.
 
 Outputs:
-- `<outdir>/<size>/<file stem>-<variant>.png` (18 per size).
-- `<outdir>/store-shots.json` (2-space JSON) and stdout: `{ shots, results, fail, errors }`. Each `shots[]` entry: `{ file, size, stem, variant, width, height }`, where `file` is absolute and `stem` is the file stem.
+- `<outdir>/<size>/<file stem>-<variant>.png` (19 per size).
+- `<outdir>/store-shots.json` (2-space JSON) and stdout: `{ shots, results, fail, errors }`. Each `shots[]` entry: `{ file, size, stem, variant, width, height }`, where `file` is absolute and `stem` is the file stem. Each `results` entry of a check with a detail is `{ ok, value }`.
+- `<outdir>/store-top5.json` = `{ sizes, plateCap, store, alt, pressKitOnly, missing }`. `plateCap` = `substationBlueprint`. `store` = the five store picks in `STORE_TOP5` order (rank 1 to 5, files per size). `alt` = the alternative(s) in `STORE_ALT` (`04-era3-boiler-hud`, replaces the rank 5 shot). `pressKitOnly` = shots that are never store screenshots, with the reason: `08-finale-reveal-hud`, `08-finale-reveal-clean`, `08b-finale-typed-hud`, `09-postgame-portrait-hud`, `10-title-hud`. `missing` = `<size>/<name>` for every store or alt file not captured for a requested size.
 - Exit 0 clean; 1 when `fail` or `errors` is non-empty; 2 on a usage error.

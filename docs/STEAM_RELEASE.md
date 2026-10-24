@@ -253,6 +253,8 @@ Native gamepad support is not implemented (section 13).
 
 Use the 3840 x 2160 files (SIZE 2160 output). The order is written to `<outdir>/store-top5.json`.
 
+Store and alt shots are taken with the in-world name plate and the HUD plaque capped at `RES?OR?` (debug hook `setPlateCap('substationBlueprint')`, rendering only; the same cap as the demo teaser). `scripts/smoke/store-shots.mjs` checks each of them for spoiler text (`<size>_<stem>_<variant>_no_spoiler`). Press-kit shots are not capped.
+
 | Rank | File | Use |
 |---|---|---|
 | 1 | `07-era5-ruined-clean` | Era V, ruined plain, HUD hidden |
@@ -265,6 +267,7 @@ Use the 3840 x 2160 files (SIZE 2160 output). The order is written to `<outdir>/
 Never upload:
 
 - `08-finale-reveal-hud` (spoiler)
+- `08-finale-reveal-clean` (spoiler: finale reveal)
 - `09-postgame-portrait-hud` (spoiler)
 - `08b-finale-typed-hud` (spoiler: full reveal text)
 - `10-title-hud` (title screen is not gameplay; Steam wants gameplay)
@@ -427,14 +430,35 @@ Evidence per program decision D8 (docs/plan/STEAM_DEMO_PROGRAM.md). Upload steps
 | 2 | Save compat matrix (incl. pre-legacy save) | `src/persistence/compat.test.ts` + `src/persistence/fixtures/` (10 rows) | PASS |
 | 3 | Balance sign-off | `src/simulation/signoff.sim.test.ts` (A 22:06 / 60:23 / 110:36 / 166:30 / 249:31; B 264:00; C 428:30; D 289:30 active) | PASS |
 | 4 | Demo cap timings | `src/simulation/demoCap.sim.test.ts` (A 60:23, B 72:52, N 98:29, C 148:28) | PASS |
-| 5 | Browser e2e, full | `scripts/smoke/e2e-full.mjs` | PASS (WP16b-2 validation) |
-| 6 | Browser e2e, demo | `scripts/smoke/demo.mjs` + `demo-cases.mjs` on `dist-demo` | PASS (WP16b-2 validation) |
-| 7 | Accessibility | `scripts/smoke/a11y.mjs` (`fail []`, `deferred []`), `scripts/smoke/ux.mjs` | PASS (WP16b-2 validation) |
-| 8 | Resolutions 1280x720, 1280x800, 1920x1080, 2560x1440, 3440x1440 | `scripts/smoke/resolutions.mjs` | PASS (WP16b-2 validation) |
-| 9 | Soak 30–60 min | `scripts/smoke/soak.mjs` `SOAK_MIN=30..60` (WP16a 5 min run: PASS, heap 92.5 MB) | PENDING WP16b-3 |
-| 10 | Quiet-machine GPU perf (frame p95 ≤ 17 ms) | `PERF_GPU=1 PERF_STRICT=1 scripts/smoke/perf.mjs` | PENDING WP16b-3 |
-| 11 | Final Art Director audit (incl. 1080p, Deck 1280x800) | `docs/plan/ART_AUDIT.md` new phase | PENDING WP16b-3 |
+| 5 | Browser e2e, full | `scripts/smoke/e2e-full.mjs` | PASS (WP16b-3 validation) |
+| 6 | Browser e2e, demo | `scripts/smoke/demo.mjs` + `demo-cases.mjs` on `dist-demo` | PASS (WP16b-3 validation) |
+| 7 | Accessibility | `scripts/smoke/a11y.mjs` (`fail []`, `deferred []`), `scripts/smoke/ux.mjs` (incl. case M) | PASS (WP16b-3 validation) |
+| 8 | Resolutions 1280x720, 1280x800, 1920x1080, 2560x1440, 3440x1440 | `scripts/smoke/resolutions.mjs` | PASS (WP16b-3 validation) |
+| 9 | Soak 30–60 min | `scripts/smoke/soak.mjs` `SOAK_MIN=30..60` (WP16a 5 min run: PASS, heap 92.5 MB) | PENDING WP16b-3 (Director: soak 60 min running) |
+| 10 | Quiet-machine GPU perf (frame p95 ≤ 17 ms) | `PERF_GPU=1 scripts/smoke/perf.mjs`, median of 3 (`scripts/perf/perf-median.mjs`): frame p95 16.8 ms, post-purchase p95 16.7 ms (RTX 3060 Ti, D3D11); see below | PASS (WP16b-3) |
+| 11 | Final Art Director audit (incl. 1080p, Deck 1280x800) | `docs/plan/ART_AUDIT.md` "WP16b-3 — final release audit" (1920x1080, 2560x1440, 3440x1440, 1280x800 UI 100/150, 1280x720 UI 100/150; full + demo) | PASS (WP16b-3) |
 | 12 | ASSET_GUIDE refresh + guard | `src/assets/assetGuide.test.ts`, `docs/ASSET_GUIDE.md` | PASS |
-| 13 | Docs | `README.md`, `CHANGELOG.md`, this file section 10/15, `docs/GAME_SPEC.md` section 18.1 | PASS (WP16b-2) |
-| 14 | Store screenshots (3840x2160, HUD-free) | `scripts/smoke/store-shots.mjs` + `store-top5.json` | PASS (WP16a); recapture WP16b-1 |
-| 15 | Bundle budget, full + demo | `node scripts/perf/bundle-budget.mjs` and `… dist-demo` | PASS (WP16b-2 validation) |
+| 13 | Docs | `README.md`, `CHANGELOG.md`, this file section 10/15, `docs/GAME_SPEC.md` section 18.1, `scripts/smoke/README.md` | PASS (WP16b-3) |
+| 14 | Store screenshots (3840x2160, HUD-free) | `scripts/smoke/store-shots.mjs` + `store-top5.json` (plate cap `RES?OR?`, `no_spoiler` checks) | PASS (WP16b-3 final set) |
+| 15 | Bundle budget, full + demo | `node scripts/perf/bundle-budget.mjs` and `… dist-demo` | PASS (WP16b-3 validation) |
+
+### Row 10 evidence (quiet-machine GPU perf, 2026-10-24)
+- Run: main 3219580, quiet machine, `PERF_GPU=1`, median of 3 per half, 6 runs (`scripts/perf/perf-median.mjs`).
+- renderer ANGLE NVIDIA GeForce RTX 3060 Ti D3D11, gpu true, fail []
+- frameP95Ms 16.8 (budget 17)
+- postFrameP95Ms 16.7 (budget 17)
+- machineMeanMs 0.91 (budget 4)
+- machineMaxMs 1.6 (budget 40)
+- uiMeanMs 0.04
+- uiMaxMs 0.2
+- finaleMeanMs 0.05
+- displayObjects 76 (budget 500)
+- techTreeOpenMs 1.7
+- heapMb 97.4 (budget 150)
+- heapGrowthMb 0
+- bootMs 777.6 (budget 3000)
+- liveVoices 7
+- musicVoices 5
+- peakDbfs -17.18
+- cycleDisplayPct 4.29
+- Every stage frame p50/p95 16.7 / 16.7–16.8 ms (vsync 60 Hz).

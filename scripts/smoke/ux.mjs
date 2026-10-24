@@ -3,6 +3,7 @@
 // D_100 / D_150 (TECH INDEX and SYSTEM menu layout at uiScale 100 / 150), perf (30 clicks, report only).
 // WP21 adds A_toast_clear_tabs and D_<s>_buy_visible / _buy_visible_e2 / _toast_clear_tabs (tree toast clear of tabs, PURCHASE in view).
 // WP16b-2 adds A_one_prompt_t0 / _hint / _goal, A_hint_chip_hidden, A_chip_back, A_feedback_beside_buy, D_100_graph_centered and case T (T_<w>x<h>_<s>_toast_shown / _toast_clear).
+// WP16b-3 adds case M (M_cycle_start, M_one_prompt_t0, M_one_prompt_goal): new cycle with Muscle Memory, one prompt.
 // Usage: PW_PATH=... node scripts/smoke/ux.mjs <url> <outdir>   (url like http://localhost:4175/?debug=1)
 // Prints ONE JSON object { results, fail, errors }; exit code 1 when fail or errors is non-empty.
 import { createRequire } from 'module';
@@ -339,6 +340,37 @@ const caseT = async (page, w, h) => {
   }
 };
 
+// WP16b-3 case M: a new cycle with Muscle Memory (Worn Motor 1 + Gear Ratio 3 at totalClicks 0) shows one prompt: the crank prompt;
+// after one click only the next-goal line.
+const caseM = async page => {
+  await buyList(page, S16);
+  await page.waitForTimeout(500);
+  await page.evaluate(() => window.__wedtmd.skipFinale());
+  await page.waitForTimeout(800);
+  await page.click('#finale-cycle', { timeout: 5000 });
+  await page.waitForTimeout(250);
+  await page.click('#cycle-confirm-begin', { timeout: 5000 });
+  await page.waitForFunction(() => {
+    const w = window.__wedtmd, c = w.cycleState();
+    return w.prestige().cycle === 2 && c.busy === false && c.transition.active === false;
+  }, null, { timeout: 15000 });
+  const perkOk = await page.evaluate(() => window.__wedtmd.session.buyPerk('muscleMemory').ok === true);
+  await page.waitForTimeout(600);
+  const st = await page.evaluate(() => {
+    const s = window.__wedtmd.session;
+    return { cycle: window.__wedtmd.prestige().cycle, clicks: s.state.totalClicks, wornMotor: s.state.techLevels.wornMotor, gearRatio: s.state.techLevels.gearRatio };
+  });
+  ok('M_cycle_start', perkOk && st.cycle === 2 && st.clicks === 0 && st.wornMotor === 1 && st.gearRatio === 3, { perkOk, ...st });
+  const p0 = await promptState(page);
+  ok('M_one_prompt_t0', p0.count === 1 && p0.prompt === true, p0);
+  await shot(page, 'ux-M1-cycle-prompt');
+  await crank(page, 1, 0);
+  await page.waitForTimeout(400);
+  const p1 = await promptState(page);
+  ok('M_one_prompt_goal', p1.count === 1 && p1.goal === true, p1);
+  await shot(page, 'ux-M2-cycle-goal');
+};
+
 // perf: 30 manual clicks 100 ms apart; the frame stats are reported only (no fail).
 const casePerf = async page => {
   await crank(page, 30, 100);
@@ -377,6 +409,7 @@ try {
   await runCase(browser, 'C', caseC);
   for (const s of [100, 150]) await runCase(browser, `D_${s}`, page => caseD(page, s));
   for (const [w, h] of [[1280, 720], [1920, 1080]]) await runCase(browser, `T_${w}x${h}`, page => caseT(page, w, h), { width: w, height: h });
+  await runCase(browser, 'M', caseM);
   await runCase(browser, 'perf', casePerf);
 } catch (e) {
   fail.push(`FAILED:setup:${String(e && e.message ? e.message : e).split('\n')[0]}`);

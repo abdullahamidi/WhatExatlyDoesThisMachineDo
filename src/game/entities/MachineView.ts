@@ -11,6 +11,7 @@ import {
   MACHINE_SHADOW_STYLE,
 } from '../../data/machineComponents';
 import type { MachineComponentId, Vec2 } from '../../data/machineComponents';
+import type { TechId } from '../../data/types';
 import { HAMMER_FX } from '../../data/steamFx';
 import { REDUCED_MOTION } from '../../data/settings';
 import { ASSEMBLY_QUEUE } from '../../data/ux';
@@ -408,6 +409,11 @@ export class MachineView {
   /** Finale render state (boost, restored) forwarded to the animator; see MachineAnimator.setFinale. */
   applyFinale(f: { boost: number; restored: boolean }): void {
     this.animator.setFinale(f);
+  }
+
+  /** WP16b-3 store shots: name plate cap forwarded to the animator (MachineAnimator.setPlateCap). Rendering only. */
+  setPlateCap(maxTech: TechId | null): void {
+    this.animator.setPlateCap(maxTech);
   }
 
   getComponentSprite(id: MachineComponentId): Phaser.GameObjects.Sprite | undefined {

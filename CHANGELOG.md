@@ -24,7 +24,9 @@ Notable changes per release, newest first. Work packages are named WPn; plans ar
 - **WP15R** GPU perf smoke (`PERF_GPU=1`, median of 3 windows, idle and post-purchase windows).
 - **WP16a** Save compatibility tests (`src/persistence/compat.test.ts`, historical-shape fixtures).
 - **WP16a** Smokes `e2e-full`, `a11y`, `soak`, `store-shots`; ASSET_GUIDE guard test (`src/assets/assetGuide.test.ts`).
-- **WP16b** Release docs: `README.md`, `CHANGELOG.md`, `docs/STEAM_RELEASE.md` (release checklist).
+- **WP16b-2** Release docs: `README.md`, `CHANGELOG.md`, `docs/STEAM_RELEASE.md` (release checklist).
+- **WP16b-3** Store-shot plate cap: debug hook `setPlateCap` / `plateCap` (`?debug=1`, rendering only) caps the World name plate and the HUD plaque at `RES?OR?`; `scripts/smoke/store-shots.mjs` uses it for every store and alt shot and checks them for spoiler text.
+- **WP16b-3** ux smoke case M: one guidance prompt at the start of a new cycle with Muscle Memory.
 
 ### Changed
 - **WP15R** Purchase cue follows the energy that pays. Rate-driven music beds refit to at least 3x the post-finale rate. Music themes and bed trims use the simulation `currentEra`.
@@ -33,19 +35,24 @@ Notable changes per release, newest first. Work packages are named WPn; plans ar
 - **WP20** Part fly-in is visible after the tree closes (camera nudge), not behind the open tree. Toasts sit above the tree backdrop. Level toasts coalesce.
 - **WP20** Tree fits at UI 150 %, keyboard-safe, with the selected node kept in view. System menu has fixed height. Text sweep.
 - **WP16a** Active menu tab text contrast raised. Reset pulse stops under in-game reduced motion. Title version text colour fixed.
-- **WP16b** Store art: far-plain ramp under the ridge line replaces the flat grey band. Logo plate redrawn with bolts.
-- **WP16b** TECH INDEX: Tab focus trapped inside the overlay.
-- **WP16b** TECH INDEX: tree text contrast fixed (milestone node ink; purchased node level and cost text).
-- **WP16b** Compact in-tree toast.
-- **WP16b** One guidance prompt at a time.
-- **WP16b** Tree layout: PURCHASE button beside its feedback line; graph centred.
+- **WP16b-1** Store art: far-plain ramp under the ridge line replaces the flat grey band. Logo plate redrawn with bolts.
+- **WP16b-2** TECH INDEX: Tab focus trapped inside the overlay.
+- **WP16b-2** TECH INDEX: tree text contrast fixed (milestone node ink; purchased node level and cost text).
+- **WP16b-2** Compact in-tree toast.
+- **WP16b-2** One guidance prompt at a time.
+- **WP16b-2** Tree layout: PURCHASE beside its feedback line; graph centred; stable panel height (PURCHASE and graph keep their place).
+- **WP16b-3** Lance steam puff spawns at (28,-385), the right end of the flange collar: vents beside the valve, valve wheel fully visible, siphon capsules clear (store shots 07/09 and demo teaser).
+- **WP16b-3** While the era card is up the toast stack goes compact (newest toast, title only, one 13 px line), so at UI 125/150 no toast covers the era card.
+- **WP16b-3** An empty SYSTEM menu feedback line no longer reserves a row, so the version footer fits the SYSTEM tab at UI 150 on 1280x720/1280x800 (web and demo builds).
 
 ### Verification
 - Balance sign-off (`src/simulation/signoff.sim.test.ts`, greedy profile A): era ends 22:06 / 60:23 / 110:36 / 166:30 / 249:31.
 - Demo cap timings (`src/simulation/demoCap.sim.test.ts`): profile A 60:23, B 72:52, new player 98:29, C 148:28.
 - a11y smoke (`scripts/smoke/a11y.mjs`): `fail []`, `deferred []`.
 - Bundle budgets (`scripts/smoke/perf-budget.json`, checked by `scripts/perf/bundle-budget.mjs`): app raw <= 460 KB, css <= 44 KB.
-- Open before the final release pass (`docs/STEAM_RELEASE.md` section 15): soak 30–60 min, quiet-machine GPU perf, final art audit.
+- GPU perf (`PERF_GPU=1`, median of 3, RTX 3060 Ti D3D11): frame p95 16.8 ms, post-purchase p95 16.7 ms (budget 17), boot 777.6 ms, heap 97.4 MB.
+- Final Art Director audit: RELEASE-READY (`docs/plan/ART_AUDIT.md`, WP16b-3).
+- Soak 60 min: `docs/STEAM_RELEASE.md` section 15 row 9.
 
 ## 0.1.0 — development builds — 2026-10-18
 - WP1: Tooling and pure simulation core.

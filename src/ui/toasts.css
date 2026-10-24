@@ -133,12 +133,12 @@
    UI 100/125/150 % (the heading top stays >= 38 CSS px below the root top when the panel is at its 94 % max height). */
 body:has(#tech-overlay.is-open) #toast-stack { z-index: 200; top: 4px; left: 16px; right: auto; align-items: flex-start; }
 body:has(#tech-overlay.is-open) .toast { text-align: left; max-width: min(400px, calc(46vw / var(--ui-zoom, 1))); }
-/* WP21: only the newest toast shows, title only. */
-body:has(#tech-overlay.is-open) #toast-stack > .toast:not(:last-child) { display: none; }
-body:has(#tech-overlay.is-open) .toast-body { display: none; }
-body:has(#tech-overlay.is-open) .toast, body:has(#tech-overlay.is-open) .toast--milestone { padding: 3px 10px; }
+/* WP21: only the newest toast shows, title only. WP16b-3: also while the era card is up. */
+body:has(#tech-overlay.is-open, #era-card.is-shown) #toast-stack > .toast:not(:last-child) { display: none; }
+body:has(#tech-overlay.is-open, #era-card.is-shown) .toast-body { display: none; }
+body:has(#tech-overlay.is-open, #era-card.is-shown) .toast, body:has(#tech-overlay.is-open, #era-card.is-shown) .toast--milestone { padding: 3px 10px; }
 /* WP16b-2: one 13 px line with an ellipsis, whatever the tone or the title length. */
-body:has(#tech-overlay.is-open) .toast-title,
-body:has(#tech-overlay.is-open) .toast--milestone .toast-title {
+body:has(#tech-overlay.is-open, #era-card.is-shown) .toast-title,
+body:has(#tech-overlay.is-open, #era-card.is-shown) .toast--milestone .toast-title {
   font-size: 13px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
