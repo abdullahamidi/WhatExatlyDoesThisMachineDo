@@ -32,6 +32,9 @@ Left for the user: Steam app/depot ids, capsule art, trailer, SteamPipe upload (
 | WP20 | First-impression UX polish (onboarding, fly-in visible, tree fit, era cards, text sweep) | ✅ done |
 | WP21 | Demo edition (cap at Substation Blueprint, end card + final-machine teaser, wishlist) | ✅ done |
 | WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | ✅ done (WP16a · WP16b-1 store polish · WP16b-2 docs + a11y/UX · WP16b-3 soak/GPU perf/final AD audit) |
+| WP22 | Part evolution tiers (3/5 visual MK tiers per repeatable part, tier-up beat; user directive 2026-10-24) | running (worktree wedtmd-art, branch claude/tiers-wp22, preview 4175/4176) |
+| WP23a | Living world: denizens, environment arc, world voice bubbles, eras I–II + demo cut | running (worktree wedtmd-shell, branch claude/world-wp23a, preview 4174/4177) |
+| WP23b | Living world eras III–V, finale, postgame, cycle 2+; then §R release refresh | planned (after WP22 + WP23a merge) |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -145,6 +148,13 @@ Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era 
   EM `claude-sonnet-5-5`, workers `claude-haiku-5-5`.
 
 ## Next recommended task
+User directive 2026-10-24 (after v0.9.0 demo release-ready): parts must visibly evolve as they level (3/5 phases), and the lonely scene gets a
+living world whose denizens change per era and break the fourth wall (docs/plan/STORY_BIBLE.md, PART_TIERS.md, DENIZEN_ART.md, WP22.md, WP23.md;
+GAME_SPEC §18.2). Seed commit 0fab65c on main. WP22 ∥ WP23a run as wp-exec workflows in the two worktrees; merge WP22 first, rebase WP23a,
+X1 tier-port wiring, validate merged tree, then WP23b, then §R (store shots, STEAM_RELEASE §15, soak, packaged smokes, CHANGELOG).
+Still user-owned for the Steam upload: real app/depot ids, capsule art, trailer, SteamPipe upload (STEAM_RELEASE sections 4, 10, 12).
+
+### Previous (v0.9.0 demo)
 Roadmap complete. v0.9.0 demo is release-ready. Remaining steps need the user (Steamworks account):
 1. Real Steam ids for placeholders full app `0000000` / depot `0000001`, demo app `0000002` / depot `0000003`: wishlist target
    in `src/data/edition.ts` `STEAM_STORE`; create `steam/*.vdf` from the docs/STEAM_RELEASE.md section 4 templates (not in repo yet).
