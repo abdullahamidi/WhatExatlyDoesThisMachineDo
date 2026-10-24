@@ -15,6 +15,7 @@ import { PRESTIGE_TEXT } from '../data/prestige';
 import { RESOURCE_IDS } from '../data/types';
 import type { OfflineReport, TechId } from '../data/types';
 import { TOAST_BURST } from '../data/ux';
+import { tierToastSuffix } from '../game/math/partTiers';
 import { cycleLabel, echoMultiplier } from '../simulation/prestige';
 import type { SessionEvents } from '../simulation/events';
 import { formatDuration, formatNumber } from '../utils/format';
@@ -177,13 +178,14 @@ export function nextPurchaseBurst(
 
 // Burst toast: `GEAR RATIO — LV 4` for one step, `GEAR RATIO — LV 1 → 4` for a merged burst.
 // One key per tech, so a growing burst refreshes the same toast in place.
+// A part tier crossed by the burst adds the " · MK n" suffix (tierToastSuffix, WP22 A6).
 export function purchaseBurstMessage(b: PurchaseBurst): ToastMessage {
   const span = b.toLevel - b.fromLevel <= 1
     ? `LV ${b.toLevel}`
     : `LV ${b.fromLevel} ${TOAST_BURST.arrow} ${b.toLevel}`;
   return {
     key: 'purchase:' + b.id,
-    title: `${nameOf(b.id)} — ${span}`,
+    title: `${nameOf(b.id)} — ${span}${tierToastSuffix(b.id, b.fromLevel, b.toLevel) ?? ''}`,
     body: null,
     tone: 'info',
     durationMs: TOAST_CONFIG.durationMs,

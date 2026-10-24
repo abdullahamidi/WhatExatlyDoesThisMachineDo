@@ -11,9 +11,9 @@ const ERAS: TeaserEra[] = [2, 3, 4, 5];
 const PAIRS: [TeaserEra, boolean][] = ERAS.flatMap((era): [TeaserEra, boolean][] => [[era, false], [era, true]]);
 
 describe('teaserLevels', () => {
-  it('era V with the aperture open shows all 104 machine parts', () => {
+  it('era V with the aperture open shows all 105 machine parts', () => {
     expect(visibleComponentIds(teaserLevels(5, true)).size).toBe(MACHINE_COMPONENT_IDS.length);
-    expect(MACHINE_COMPONENT_IDS.length).toBe(104);
+    expect(MACHINE_COMPONENT_IDS.length).toBe(105);
   });
 
   it('era II with the aperture closed shows no part gated by era III or later', () => {

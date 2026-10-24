@@ -5,6 +5,7 @@ import { INSTALL_LINES } from '../data/notifications';
 import { RESOURCES } from '../data/resources';
 import { RESOURCE_IDS } from '../data/types';
 import type { PurchaseFailure, ResourceId, ResourceMap, TechId, TechStatus, TechView } from '../data/types';
+import { tierLevelSuffix } from '../game/math/partTiers';
 import { resourceShort } from './revealRules';
 
 // Pure view model for the TECH INDEX overlay. No DOM, no Phaser.
@@ -263,7 +264,7 @@ function buyLabelOf(state: BuyState, view: TechView, costText: string | null): s
   }
 }
 
-/** Builds the detail panel for one selected tech. */
+/** Builds the detail panel for one selected tech. The level line adds the part tier (WP22 A6); node cards keep LV n/max. */
 function detailOf(view: TechView, res: Readonly<ResourceMap>): TechDetailView {
   const costText = costTextOf(view);
   const buyState = buyStateOf(view);
@@ -281,7 +282,7 @@ function detailOf(view: TechView, res: Readonly<ResourceMap>): TechDetailView {
     description: view.def.description,
     flavor: view.def.flavor ?? null,
     requirements: view.requirements.map((r) => ({ label: r.label, met: r.met })),
-    levelText: levelTextOf(view),
+    levelText: levelTextOf(view) + (tierLevelSuffix(view.id, view.level) ?? ''),
     currentEffect: view.currentEffectText,
     nextEffect: view.nextEffectText,
     costText,

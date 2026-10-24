@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { MACHINE_COMPONENT_IDS } from '../../data/machineComponents';
 import type { MachineComponentId } from '../../data/machineComponents';
+import { PART_TIERS } from '../../data/machineTiers';
+import type { PartTierTrack } from '../../data/machineTiers';
 import { TECH_IDS } from '../../data/types';
 import type { TechId } from '../../data/types';
 import { TECHNOLOGIES } from '../../data/technologies';
@@ -14,17 +16,27 @@ import {
 } from './showcase';
 import type { LevelFloor } from './showcase';
 
-/** Snapshot of visualMaxLevels(): 45 techs. The five techs with no part gate (motorTuning, improvedPistons, horizonField, finalAlignment, primaryFunction) are absent. */
+/**
+ * Snapshot of visualMaxLevels(): 47 techs. Every part track sits at its top tier (PART_TIERS); horizonField (no track),
+ * finalAlignment and primaryFunction (no part gate) are absent.
+ */
 const VISUAL_MAX_SNAPSHOT: Partial<Record<TechId, number>> = {
-  handCrank: 1, gearRatio: 1, wornMotor: 1, flywheel: 1, reinforcedCrank: 1, pistonArray: 1, generator: 1, copperWinding: 20,
-  motorRetrofit: 1, dynamoCrank: 1, capacitorBank: 1, sparkGap: 1, transformer: 1, powerLines: 1, boiler: 1, firebox: 20,
-  inductionHeater: 1, superheater: 1, reliefValves: 1, steamHammer: 1, condenser: 1, turbine: 1, resonatorSpire: 1, standingWave: 1,
-  harmonicCoil: 25, pressureResonator: 1, crankServo: 1, echoCrank: 1, phaseLock: 1, crystalLattice: 1, containmentRing: 25,
-  nullChamber: 1, resonantSiphon: 20, graviticAnchor: 10, inversionCrank: 1, lensArray: 1, skyAperture: 1,
+  handCrank: 1, gearRatio: 15, wornMotor: 1, flywheel: 10, reinforcedCrank: 1, pistonArray: 1, generator: 1, copperWinding: 25,
+  motorRetrofit: 18, dynamoCrank: 1, capacitorBank: 1, sparkGap: 1, transformer: 20, powerLines: 1, boiler: 1, firebox: 25,
+  inductionHeater: 20, superheater: 1, reliefValves: 1, steamHammer: 1, condenser: 20, turbine: 1, resonatorSpire: 1, standingWave: 20,
+  harmonicCoil: 25, pressureResonator: 18, crankServo: 7, echoCrank: 1, phaseLock: 1, crystalLattice: 1, containmentRing: 25,
+  nullChamber: 1, resonantSiphon: 10, graviticAnchor: 3, inversionCrank: 1, lensArray: 1, skyAperture: 1,
   generatorBlueprint: 1, substationBlueprint: 1, pressureVesselBlueprint: 1, harmonicConvergence: 1,
-  bellowsDrive: 1, gridExciter: 1, mainsBackfeed: 1, steamLance: 1,
+  motorTuning: 25, improvedPistons: 25, bellowsDrive: 3, gridExciter: 14, mainsBackfeed: 7, steamLance: 12,
 };
-const ABSENT_FROM_VISUAL_MAX: TechId[] = ['motorTuning', 'improvedPistons', 'horizonField', 'finalAlignment', 'primaryFunction'];
+const ABSENT_FROM_VISUAL_MAX: TechId[] = ['horizonField', 'finalAlignment', 'primaryFunction'];
+
+/** The top level of a track (its last tier threshold). */
+function topOf(track: PartTierTrack): number {
+  const top = track.levels[track.levels.length - 1];
+  if (top === undefined) throw new Error(`${track.techId} has no tiers`);
+  return top;
+}
 /** Parts the greedy-end fixture must show after the merge (WP17 legacy feeds, siphon / anchor top stages, steam lance). */
 const GREEDY_END_VISIBLE: MachineComponentId[] = [
   'generatorGlow', 'bellows', 'exciterFeed', 'backfeedTerminal', 'steamLance', 'siphonTube3L', 'siphonTube3R', 'siphonArcs3',
@@ -39,10 +51,16 @@ function keysOf(levels: LevelFloor): TechId[] {
 describe('visualMaxLevels', () => {
   const levels = visualMaxLevels();
 
-  it('matches the snapshot: 45 techs, exact values, five absent', () => {
-    expect(Object.keys(levels)).toHaveLength(45);
+  it('matches the snapshot: 47 techs, exact values, three absent', () => {
+    expect(Object.keys(levels)).toHaveLength(47);
     expect(levels).toEqual(VISUAL_MAX_SNAPSHOT);
     for (const id of ABSENT_FROM_VISUAL_MAX) expect(levels[id]).toBeUndefined();
+  });
+
+  it('every part track is raised to its top level', () => {
+    for (const track of PART_TIERS) {
+      expect(levels[track.techId], track.techId).toBeGreaterThanOrEqual(topOf(track));
+    }
   });
 
   it('keys are in TECH_IDS order', () => {
@@ -71,21 +89,48 @@ describe('visualMaxForEra', () => {
     expect(Object.isFrozen(visualMaxForEra(0))).toBe(true);
   });
 
-  it('era 3: copper 20, firebox 20, bellows drive 1, no era IV or V tech', () => {
+  it('era 3: copper 25, firebox 25, bellows drive 3, no era IV or V tech', () => {
     const e3 = visualMaxForEra(3);
-    expect(e3.copperWinding).toBe(20);
-    expect(e3.firebox).toBe(20);
-    expect(e3.bellowsDrive).toBe(1);
+    expect(e3.copperWinding).toBe(25);
+    expect(e3.firebox).toBe(25);
+    expect(e3.bellowsDrive).toBe(3);
     expect(e3.harmonicCoil).toBeUndefined();
     expect(e3.gridExciter).toBeUndefined();
   });
 
-  it('era 4 adds harmonic coil 25 and grid exciter 1, no era V tech', () => {
+  it('era 4 adds harmonic coil 25 and grid exciter 14, no era V tech', () => {
     const e4 = visualMaxForEra(4);
     expect(e4.harmonicCoil).toBe(25);
-    expect(e4.gridExciter).toBe(1);
+    expect(e4.gridExciter).toBe(14);
     expect(e4.nullChamber).toBeUndefined();
     expect(e4.skyAperture).toBeUndefined();
+  });
+
+  it('era 2 raises only era I-II tracks: motor tuning 25, gear ratio 15, copper 25, transformer 20', () => {
+    const e2 = visualMaxForEra(2);
+    expect(e2.motorTuning).toBe(25);
+    expect(e2.gearRatio).toBe(15);
+    expect(e2.copperWinding).toBe(25);
+    expect(e2.transformer).toBe(20);
+    expect(e2.firebox).toBeUndefined();
+    expect(e2.harmonicCoil).toBeUndefined();
+    expect(e2.bellowsDrive).toBeUndefined();
+  });
+
+  it('era 1 has no copper winding (an era II track)', () => {
+    expect(visualMaxForEra(1).copperWinding).toBeUndefined();
+    expect(visualMaxForEra(1).motorTuning).toBe(25);
+  });
+
+  it('a track of era III or later has no floor at era 2; every era I-II track is at its top', () => {
+    const e2 = visualMaxForEra(2);
+    for (const track of PART_TIERS) {
+      if (TECHNOLOGIES[track.techId].era > 2) {
+        expect(e2[track.techId], track.techId).toBeUndefined();
+      } else {
+        expect(e2[track.techId], track.techId).toBeGreaterThanOrEqual(topOf(track));
+      }
+    }
   });
 
   it('era 5 is the whole visual max', () => {
@@ -141,7 +186,7 @@ describe('mergeDisplayLevels', () => {
     const merged = mergeDisplayLevels(real, visualMaxForEra(5));
     for (const id of TECH_IDS) expect(merged[id]).toBeGreaterThanOrEqual(real[id]);
     expect(merged.firebox).toBe(30);
-    expect(merged.copperWinding).toBe(20);
+    expect(merged.copperWinding).toBe(25);
   });
 
   it('null floor returns the same reference', () => {
@@ -177,8 +222,12 @@ describe('greedy-end fixture', () => {
 
   it('some parts are hidden before the merge', () => {
     const visible = visibleComponentIds(L);
-    expect(visible.has('siphonTube3L')).toBe(false);
+    expect(visible.has('backfeedTerminal')).toBe(false);
     expect(visible.has('steamLance')).toBe(false);
+  });
+
+  it('the top siphon stage is visible before the merge (resonant siphon 11 >= 10)', () => {
+    expect(visibleComponentIds(L).has('siphonTube3L')).toBe(true);
   });
 
   it('after the merge every machine part is visible and the listed parts are among them', () => {

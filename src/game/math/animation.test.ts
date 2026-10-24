@@ -19,6 +19,7 @@ import {
   orbitPoint,
   orbitFront,
   orbitStep,
+  followPhase,
   alignStep,
   latchFrame,
   stageFrameOf,
@@ -413,6 +414,36 @@ describe('orbitStep', () => {
         expect(x).toBeLessThan(360);
       }
     }
+  });
+});
+
+describe('followPhase', () => {
+  it('starts a half-turn partner 180 deg ahead of its lead', () => {
+    expect(followPhase(141, 180, 0)).toBeCloseTo(321, 9);
+    expect(followPhase(300, 180, 0)).toBeCloseTo(120, 9);
+  });
+
+  it('adds the phi0 gap to the lead angle', () => {
+    expect(followPhase(0, 0, 0)).toBe(0);
+    expect(followPhase(-30, 180, 0)).toBeCloseTo(150, 9);
+    expect(followPhase(90, 270, 90)).toBeCloseTo(270, 9);
+  });
+
+  it('stays in [0, 360) over a sweep', () => {
+    for (let lead = -720; lead <= 720; lead += 37) {
+      for (const phi0 of [0, 90, 180, 270, 359.5, -45]) {
+        for (const leadPhi0 of [0, 180, -90]) {
+          const x = followPhase(lead, phi0, leadPhi0);
+          expect(x).toBeGreaterThanOrEqual(0);
+          expect(x).toBeLessThan(360);
+        }
+      }
+    }
+  });
+
+  it('gives 0 for a non-finite lead angle', () => {
+    expect(followPhase(Number.NaN, 180, 0)).toBe(0);
+    expect(followPhase(Number.POSITIVE_INFINITY, 180, 0)).toBe(0);
   });
 });
 

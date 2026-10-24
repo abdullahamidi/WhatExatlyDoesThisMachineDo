@@ -420,6 +420,15 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
       session.on('cycle', clearBeats),
       session.on('reset', clearBeats),
       feedback.partLanded.on(oneShot('partLanded', (s) => s.playClunk())),
+      feedback.partEvolved.on(oneShot('partEvolved', (s) => s.playRefit())),
+      feedback.partTorqued.on((event) => {
+        try {
+          const s = synth;
+          if (s && !session.settings.muted) s.playTorqueTick(event.step);
+        } catch (error) {
+          warnOnce('partTorqued', error);
+        }
+      }),
       feedback.purchaseDenied.on(oneShot('purchaseDenied', (s) => s.playDeny())),
       feedback.finaleBeat.on((beat) => {
         try {

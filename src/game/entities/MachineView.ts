@@ -15,12 +15,17 @@ import type { TechId } from '../../data/types';
 import { HAMMER_FX } from '../../data/steamFx';
 import { REDUCED_MOTION } from '../../data/settings';
 import { ASSEMBLY_QUEUE } from '../../data/ux';
+import { PART_TIERS, PART_TIER_FX } from '../../data/machineTiers';
 import { motionPolicy } from '../../simulation/settings';
 import { componentDepth, machineLocalToWorld, resolveAttachment } from '../math/machineLayout';
 import { connectionOffset } from '../math/machineLinks';
 import { newlyVisible, visibleComponentIds } from '../math/machineVisibility';
+import { hostTiers, resolveTextureKey, tierOf, trackOf } from '../math/partTiers';
+import type { TierChange } from '../math/partTiers';
+import { planTierRelease } from '../math/tierRelease';
 import type { MachineViewContext } from './machineSource';
 import { MachineAnimator } from './MachineAnimator';
+import { TierBeatFx } from './TierBeatFx';
 import { MachineLinks } from '../rendering/MachineLinks';
 
 /** Uniform random number in [lo, hi). Visual only. */
@@ -49,6 +54,11 @@ const NO_RELEASED: MachineComponentId[] = [];
  *  - `direct`: `parts` sits under `container` and Phaser draws the sprites itself.
  * Newly unlocked parts fly in (assembly tween) and puff dust on landing; motion, links and shadows are driven per frame by `update`.
  * Each hammer strike (animator) puffs dust at the hammer foot; `getHammerStrikes` counts them since the last session reset.
+ *
+ * Part tiers (WP22): the animator is the only texture owner (this view never re-textures a sprite itself); tiers come from the tech levels
+ * through hostTiers. A tech purchase with a track diffs its tier against the last baseline (planTierRelease) and plays the tier-up beat
+ * (TierBeatFx); while the TECH INDEX is held the purchases merge and play on release. Silent paths (sync, reset, prestige, refreshDisplay,
+ * load) set tiers at once and emit no signal and no beat.
  */
 export class MachineView {
   readonly container: Phaser.GameObjects.Container;
@@ -76,6 +86,14 @@ export class MachineView {
   private assemblyHold = false;
   /** WP20: ids whose paused fly-in waits for the hold to end, in creation order. */
   private readonly held: MachineComponentId[] = [];
+  /** WP22: the tier-up beat FX (pools inside `parts`); created in the constructor. */
+  private readonly fx: TierBeatFx;
+  /** WP22: levels at the last tier baseline (the diff base of the next release). */
+  private tierBase: Partial<Record<TechId, number>> = {};
+  /** WP22: track techs bought while the TECH INDEX hold is on; released (merged) by setAssemblyHold(false). */
+  private readonly heldTechs = new Set<TechId>();
+  /** WP22: decal sprites (static overlays on a host), created once in the constructor and followed by syncDecals. */
+  private readonly decals: Array<{ image: Phaser.GameObjects.Image; host: MachineComponentId; fromTier: number }> = [];
 
   /** Animator gate: a part moves only while visible and not assembling. */
   private readonly isActive = (id: MachineComponentId): boolean => this.visibleIds.has(id) && !this.assembling.has(id);
@@ -119,13 +137,20 @@ export class MachineView {
     this.parts = parts;
     this.rt = rt;
 
+    // WP22: the first texture of each part is the resolver's pick for its current tier (MK I when no track is bought).
+    const has = (key: string): boolean => scene.textures.exists(key);
+    const startTiers = hostTiers(ctx.session.state.techLevels);
     for (const id of MACHINE_COMPONENT_IDS) {
       const def = MACHINE_COMPONENTS[id];
       const att = resolveAttachment(def);
       // Driven and spin parts start on their RotSprite rotation sheet when it is loaded; the animator picks frames from it.
       const rotKey = def.assetId + '#rot';
       const rotates = def.animation.kind === 'driven' || def.animation.kind === 'spin';
-      const textureKey = rotates && scene.textures.exists(rotKey) ? rotKey : def.assetId;
+      const textureKey = resolveTextureKey(
+        def.assetId,
+        { tier: startTiers.get(id) ?? 1, restored: false, rot: rotates && has(rotKey), pulseLow: false },
+        has,
+      );
       const sprite = scene.add
         .sprite(att.x, att.y, textureKey, 0)
         .setOrigin(def.origin.x, def.origin.y)
@@ -134,11 +159,30 @@ export class MachineView {
       this.sprites.set(id, sprite);
       this.parts.add(sprite);
     }
+    // WP22: decals sit at their host's attachment (host depth + bias); hidden until the first syncDecals.
+    for (const track of PART_TIERS) for (const decal of track.decals ?? []) {
+      const hostDef = MACHINE_COMPONENTS[decal.host];
+      const att = resolveAttachment(hostDef);
+      const image = scene.add
+        .image(att.x, att.y, decal.assetId)
+        .setOrigin(hostDef.origin.x, hostDef.origin.y)
+        .setDepth(componentDepth(hostDef) + decal.depthBias)
+        .setVisible(false);
+      this.parts.add(image);
+      this.decals.push({ image, host: decal.host, fromTier: decal.fromTier });
+    }
     // Links are added before the depth sort so the container orders them with the sprites.
     this.links = new MachineLinks(scene, this.parts);
     // Contact shadows sit at the bottom of the parts stack (depth -1).
     this.shadows = scene.make.graphics({}, false).setDepth(MACHINE_SHADOW_STYLE.depth);
     this.parts.add(this.shadows);
+    // WP22: the beat FX pools join `parts` before the depth sort; the owner hooks run later, when `animator` exists.
+    this.fx = new TierBeatFx(scene, this.parts, {
+      sprite: (id) => this.sprites.get(id),
+      swap: (change) => this.applyTier(change.techId, Math.max(change.to, this.trackTier(change.techId))),
+      started: (change) => this.emitEvolved(change),
+      settle: () => this.shake(PART_TIER_FX.shakeScale),
+    });
     // Container renders children in list order; sort by depth so layers stack correctly.
     this.parts.sort('depth');
     this.animator = new MachineAnimator(ctx.session, this.sprites);
@@ -147,20 +191,22 @@ export class MachineView {
 
     this.unsubscribes.push(
       ctx.session.on('unlock', () => this.refresh(true)),
-      ctx.session.on('purchase', () => this.refresh(true)),
+      ctx.session.on('purchase', ({ id }) => this.onPurchase(id)),
+      ctx.session.on('prestige', () => this.applyAllTiers()),
       ctx.session.on('reset', () => this.reset()),
     );
   }
 
-  /** Non-animated: recompute visibility from the tech levels and place every component at rest. */
+  /** Non-animated: recompute visibility from the tech levels and place every component at rest. Tiers are applied silently (WP22). */
   sync(): void {
     this.stopAssemblies();
     this.visibleIds = visibleComponentIds(this.ctx.session.state.techLevels);
     this.lastShadowKey = '';
     for (const id of MACHINE_COMPONENT_IDS) this.settle(id, this.visibleIds.has(id));
+    this.applyAllTiers();
   }
 
-  /** Diffs visibility against the tech levels: hides lost parts, then assembles (or instantly settles) new ones. */
+  /** Diffs visibility against the tech levels: hides lost parts, then assembles (or instantly settles) new ones. A new part lands already evolved. */
   private refresh(animate: boolean): void {
     const next = visibleComponentIds(this.ctx.session.state.techLevels);
     const added = newlyVisible(this.visibleIds, next);
@@ -170,10 +216,84 @@ export class MachineView {
       this.sprites.get(id)?.setVisible(false);
     }
     this.visibleIds = next;
+    const tiersNow = added.length > 0 ? hostTiers(this.ctx.session.state.techLevels) : null;
     for (const id of added) {
+      const tier = tiersNow?.get(id);
+      if (tier !== undefined) this.animator.setTiers(new Map<MachineComponentId, number>([[id, tier]]));
       if (animate) this.startAssembly(id);
       else this.settle(id, true);
     }
+  }
+
+  /** WP22: sets every swap host of a track to `tier` (the animator re-textures it). Stage hosts and tracks without swap hosts are no-ops. */
+  private applyTier(techId: TechId, tier: number): void {
+    const track = trackOf(techId);
+    if (track === undefined) return;
+    this.animator.setTiers(new Map(track.swaps.map((host): [MachineComponentId, number] => [host, tier])));
+  }
+
+  /** WP22: highest tier a swap host of the track shows now. */
+  private trackTier(techId: TechId): number {
+    const track = trackOf(techId);
+    if (track === undefined) return 0;
+    return Math.max(0, ...track.swaps.map((host) => this.animator.hostTier(host)));
+  }
+
+  /** WP22 silent tier pass: every track at its current level, held merges dropped, in-flight beats dropped, baseline reset. No signal. */
+  private applyAllTiers(): void {
+    const levels = this.ctx.session.state.techLevels;
+    this.fx.reset();
+    this.heldTechs.clear();
+    this.animator.setTiers(hostTiers(levels));
+    this.tierBase = { ...levels };
+  }
+
+  /** WP22 `partEvolved` signal: one per played beat at its start (t 0) and one per staged change. */
+  private emitEvolved(change: TierChange): void {
+    this.ctx.feedback.partEvolved?.emit({ techId: change.techId, fromTier: change.from, toTier: change.to, topTier: change.top, hosts: change.hosts });
+  }
+
+  /** WP22: a purchase of a track tech plays its tier beat now, or merges into the held set while the TECH INDEX is open. */
+  private onPurchase(id: TechId): void {
+    this.refresh(true);
+    if (trackOf(id) === undefined) return;
+    if (this.assemblyHold) {
+      this.heldTechs.add(id);
+      return;
+    }
+    this.releaseTiers([id]);
+  }
+
+  /**
+   * WP22 release of tier changes for `techs` (planTierRelease against the tier baseline): beats on settled primaries (staggered, capped),
+   * instant swaps, staged changes (fly-in only, signal), torque ticks (signal). Returns the primaries of the played beats.
+   */
+  private releaseTiers(techs: readonly TechId[]): MachineComponentId[] {
+    const levels = this.ctx.session.state.techLevels;
+    const plan = planTierRelease({
+      prevLevels: this.tierBase,
+      nextLevels: levels,
+      techs,
+      visible: (h) => this.visibleIds.has(h),
+      settled: (h) => this.visibleIds.has(h) && !this.assembling.has(h),
+    });
+    for (const tech of techs) this.tierBase[tech] = levels[tech];
+    const reduced = this.ctx.session.settings.reducedMotion;
+    const hosts: MachineComponentId[] = [];
+    plan.beats.forEach((beat, i) => {
+      this.fx.play(beat.change, beat.primary, reduced, Math.min(i, ASSEMBLY_QUEUE.maxStaggerSteps) * ASSEMBLY_QUEUE.staggerMs);
+      hosts.push(beat.primary);
+    });
+    for (const entry of plan.instant) this.fx.instant(entry.change, entry.primary, reduced);
+    for (const change of plan.staged) {
+      this.applyTier(change.techId, change.to);
+      this.emitEvolved(change);
+    }
+    for (const t of plan.torques) {
+      this.fx.torque(t.host, t.step, reduced);
+      this.ctx.feedback.partTorqued?.emit({ techId: t.techId, host: t.host, step: t.step });
+    }
+    return hosts;
   }
 
   /**
@@ -269,13 +389,19 @@ export class MachineView {
     this.held.length = 0;
   }
 
-  /** WP20: on = new fly-ins start paused; off = the held ones play now (in queue order). Returns the ids that were released (a shared empty array when none). */
+  /**
+   * WP20: on = new fly-ins start paused; off = the held ones play now (in queue order). WP22: off also releases the held track purchases
+   * (one merged tier release). Returns the released fly-in ids and the primaries of the played tier beats (a shared empty array when none).
+   */
   setAssemblyHold(on: boolean): MachineComponentId[] {
     this.assemblyHold = on;
-    if (on || this.held.length === 0) return NO_RELEASED;
+    if (on) return NO_RELEASED;
     const ids = this.held.splice(0, this.held.length);
     for (const id of ids) this.assembling.get(id)?.play();
-    return ids;
+    const techs = [...this.heldTechs];
+    this.heldTechs.clear();
+    const beatHosts = techs.length > 0 ? this.releaseTiers(techs) : [];
+    return ids.length === 0 && beatHosts.length === 0 ? NO_RELEASED : [...ids, ...beatHosts];
   }
 
   /** Mean world position of the given parts (MACHINE_ANCHOR when the list is empty). */
@@ -337,7 +463,10 @@ export class MachineView {
    */
   update(deltaMs: number): void {
     const t0 = performance.now();
-    this.animator.update(deltaMs, this.isActive);
+    // WP22: the World scene clock is the shared heartbeat clock (MK V lamps pulse on it).
+    this.animator.update(deltaMs, this.isActive, this.scene.time.now);
+    this.fx.update(deltaMs);
+    this.syncDecals();
     // A bead crossed between front and back depth: re-sort so the parts stack follows.
     if (this.animator.consumeDepthChanged()) this.parts.sort('depth');
     const strikes = this.animator.consumeStrikes();
@@ -366,6 +495,22 @@ export class MachineView {
     this.recordUpdate(performance.now() - t0);
   }
 
+  /**
+   * WP22: each decal copies its host's position, alpha and scale (never the angle: a decal is symmetric and stays put while the host turns).
+   * It shows iff the host is visible and its displayed tier reaches fromTier, so fly-ins carry the decal with the host.
+   */
+  private syncDecals(): void {
+    for (const d of this.decals) {
+      const host = this.sprites.get(d.host);
+      if (host === undefined) continue;
+      d.image
+        .setPosition(host.x, host.y)
+        .setAlpha(host.alpha)
+        .setScale(host.scaleX, host.scaleY)
+        .setVisible(host.visible && this.animator.hostTier(d.host) >= d.fromTier);
+    }
+  }
+
   /** Keeps the last UPDATE_SAMPLE_COUNT update() durations; the oldest is overwritten once the buffer is full. */
   private recordUpdate(ms: number): void {
     if (this.updateSamplesMs.length < UPDATE_SAMPLE_COUNT) this.updateSamplesMs.push(ms);
@@ -377,9 +522,13 @@ export class MachineView {
     return this.assembling.has(id);
   }
 
-  /** Re-diffs visibility against the (display) tech levels the source reports: hides lost parts, assembles (animate) or settles new ones. Used by the finale completion beat. */
+  /**
+   * Re-diffs visibility against the (display) tech levels the source reports: hides lost parts, assembles (animate) or settles new ones.
+   * Used by the finale completion beat and the teaser. Tiers are applied silently (WP22).
+   */
   refreshDisplay(animate: boolean): void {
     this.refresh(animate);
+    this.applyAllTiers();
   }
 
   /** Visibility probe (debug / smoke): sprite.visible per MACHINE_COMPONENT_IDS order. */
@@ -392,6 +541,29 @@ export class MachineView {
   /** Hammer strikes since the last session reset (monotonic between resets). */
   getHammerStrikes(): number {
     return this.hammerStrikes;
+  }
+
+  /** WP22 probe: tier-up beats in flight (delayed ones included; the D7 unit, one per track change). */
+  tierBeatsActive(): number {
+    return this.fx.active();
+  }
+
+  /** displayed tier of each track with a visible host (debug / smoke probe) */
+  partTiers(): Partial<Record<TechId, number>> {
+    const out: Partial<Record<TechId, number>> = {};
+    for (const track of PART_TIERS) {
+      const swap = track.swaps.find((host) => this.sprites.get(host)?.visible === true);
+      if (swap !== undefined) {
+        out[track.techId] = this.animator.hostTier(swap);
+        continue;
+      }
+      let level = 0;
+      for (const host of track.stages ?? []) {
+        if (this.sprites.get(host)?.visible === true) level = Math.max(level, MACHINE_COMPONENTS[host].minLevel);
+      }
+      if (level > 0) out[track.techId] = tierOf(level, track.levels);
+    }
+    return out;
   }
 
   getComponentState(id: MachineComponentId): { visible: boolean; assembling: boolean; alpha: number; scale: number; frame: number } {
@@ -449,11 +621,12 @@ export class MachineView {
    * Short horizontal jolt of the machine parts: -a, then +a, then back to rest (x = 0).
    * A running shake is stopped first; the rest position is only reached by the final step.
    * Single source of truth for the shake: a no-op while the motion policy has shake off (click and landing both come here).
+   * `factor` scales the amplitude (WP22 tier settle uses PART_TIER_FX.shakeScale); the default keeps the crank and landing shake.
    */
-  shake(): void {
+  shake(factor = 1): void {
     if (!motionPolicy(this.ctx.session.settings).shake) return;
     this.shakeTween?.stop();
-    const a = CRANK_FEEDBACK.shakePx; // art px; parts live inside the scaled container, so no PIXEL_SCALE here
+    const a = CRANK_FEEDBACK.shakePx * factor; // art px; parts live inside the scaled container, so no PIXEL_SCALE here
     const quarter = CRANK_FEEDBACK.shakeMs / 4;
     this.shakeTween = this.scene.tweens.chain({
       targets: this.parts,
@@ -475,12 +648,14 @@ export class MachineView {
     // Tweens and puffs go before the container: they reference its children.
     this.stopAssemblies();
     this.destroyPuffs();
+    this.fx.destroy();
     this.animator.destroy();
     this.links.destroy();
     this.shakeTween?.stop();
     this.shakeTween = null;
     this.container.setPosition(MACHINE_ANCHOR.x, MACHINE_ANCHOR.y);
     this.sprites.clear();
+    this.decals.length = 0; // the decal images die with `parts`
     // Guard: Phaser clears `scene` once an object is destroyed; skip what is already gone.
     if (this.shadows.scene) this.shadows.destroy();
     // parts is not a child of container in renderTexture mode, so it is destroyed explicitly.

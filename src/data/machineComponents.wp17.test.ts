@@ -252,10 +252,10 @@ describe('WP17 hz curves and flash-part safety', () => {
 });
 
 describe('WP17 driver saturation', () => {
-  it('the saturation check covers exactly the nineteen visual driver curves and the master drive', () => {
+  it('the saturation check covers exactly the twenty visual driver curves and the master drive', () => {
     expect(saturations().map((e) => e.name).sort()).toEqual([
       'bellows', 'dishWavesL', 'dishWavesR', 'gaugeNeedle', 'generatorGlow', 'masterSpeed', 'motorRetrofitKit', 'nullCore',
-      'ring1Bead', 'ring2Bead', 'ring3Bead', 'ring4Bead', 'siphonArcs1', 'siphonArcs2', 'siphonArcs3', 'spireWave',
+      'ring1Bead', 'ring1Bead2', 'ring2Bead', 'ring3Bead', 'ring4Bead', 'siphonArcs1', 'siphonArcs2', 'siphonArcs3', 'spireWave',
       'transformer', 'turbineRotor', 'wornMotor',
     ]);
   });
