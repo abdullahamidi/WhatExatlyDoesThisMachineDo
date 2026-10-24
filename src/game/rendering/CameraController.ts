@@ -327,10 +327,11 @@ export class CameraController {
     const next = nudgeCenter(this.center, this.zoom, target, VIEW, CAMERA_NUDGE);
     if (next === null) return;
     if (this.zoom > this.minZoom + 1e-9) {
-      // fitted framing keeps the machine top below the HUD; the nudge must not pan it back under (WP22 F11).
+      // the nudge must not pan the machine top back under the HUD when the machine fits below it (WP22 F11).
       // At the min zoom the fullView framing ignores the inset, so the nudge does too.
-      const top = boundsToWorld(visibleMachineBounds(this.session.state.techLevels)).top;
-      next.y = hudSafeCenterY(next.y, this.center.y, top, this.zoom, VIEW.height, this.hudInset());
+      const machine = boundsToWorld(visibleMachineBounds(this.session.state.techLevels));
+      next.y = hudSafeCenterY(next.y, this.center.y, machine, this.zoom,
+        { height: VIEW.height, insetPx: this.hudInset(), marginPx: CAMERA.fitMarginPx });
     }
     this.animateTo({ center: clampCenter(next, this.zoom, VIEW, WORLD), zoom: this.zoom });
   }

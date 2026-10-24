@@ -453,26 +453,36 @@ describe('hudTopInsetAt (WP22 F11, inset follows the UI scale)', () => {
 });
 
 describe('hudSafeCenterY (WP22 F11, release nudge vs HUD inset)', () => {
-  // machine top world y 1344, zoom 0.75, view height 720, inset 368 -> limit 1344 - 8 / 0.75 = 1333.33
+  // Era II machine: world y 1344..1680 (336 px). Zoom 0.75, view height 720, inset 368, margin 72:
+  // 252 <= 280 fits below the inset; limit 1344 - 8 / 0.75 = 1333.33
+  const M = { top: 1344, bottom: 1680 };
+  const UI150 = { height: 720, insetPx: 368, marginPx: 72 };
   const LIMIT = 1344 - (368 - 360) / 0.75;
 
   it('passes a pan that keeps the top below the inset', () => {
-    expect(hudSafeCenterY(1300, 1320, 1344, 0.75, 720, 368)).toBe(1300);
-    expect(hudSafeCenterY(LIMIT, 1320, 1344, 0.75, 720, 368)).toBe(LIMIT);
+    expect(hudSafeCenterY(1300, 1320, M, 0.75, UI150)).toBe(1300);
+    expect(hudSafeCenterY(LIMIT, 1320, M, 0.75, UI150)).toBe(LIMIT);
   });
 
   it('stops a downward pan at the limit (the Era II UI 150 case: 1333 -> 1438 is held at 1333.33)', () => {
-    expect(hudSafeCenterY(1438, 1333, 1344, 0.75, 720, 368)).toBeCloseTo(LIMIT, 9);
+    expect(hudSafeCenterY(1438, 1333, M, 0.75, UI150)).toBeCloseTo(LIMIT, 9);
   });
 
   it('never pans further down when the top already sits under the HUD, but still allows an upward pan', () => {
-    expect(hudSafeCenterY(1500, 1450, 1344, 0.75, 720, 368)).toBe(1450);
-    expect(hudSafeCenterY(1400, 1450, 1344, 0.75, 720, 368)).toBe(1400);
+    expect(hudSafeCenterY(1500, 1450, M, 0.75, UI150)).toBe(1450);
+    expect(hudSafeCenterY(1400, 1450, M, 0.75, UI150)).toBe(1400);
+  });
+
+  it('does not clamp when the machine is too tall for the room under the HUD (player zoomed in)', () => {
+    // zoom 1.5: 336 * 1.5 = 504 > 280, so a release nudge keeps its full downward step
+    expect(hudSafeCenterY(1600, 1550, M, 1.5, UI150)).toBe(1600);
+    // the exact fit edge still clamps: 280 / 0.75 = 373.33 px tall
+    expect(hudSafeCenterY(1500, 1333, { top: 1344, bottom: 1344 + 280 / 0.75 }, 0.75, UI150)).toBeCloseTo(LIMIT, 9);
   });
 
   it('is the identity at UI 100 for the framing fitView already chose', () => {
     const limit100 = 1344 - (240 - 360) / 0.75; // 1504, the UI 100 Era II centre
-    expect(hudSafeCenterY(limit100, limit100, 1344, 0.75, 720, 240)).toBe(1504);
+    expect(hudSafeCenterY(limit100, limit100, M, 0.75, { height: 720, insetPx: 240, marginPx: 72 })).toBe(1504);
   });
 });
 

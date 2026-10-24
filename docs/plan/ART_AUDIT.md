@@ -1060,4 +1060,8 @@ Round 4 verdict: **FIXES REQUIRED** (F11). F12 done.
 - Evidence: `<scratchpad>/WP22/f11/eras2/1280x720-ui150-full/e2c-1mid256.png` (after) vs
   `<A4>eras-ui150b/1280x720-ui150-full/e2c-1mid256.png` (before).
 
+- Opus review of the fix: one blocker (the clamp also fired when the player had zoomed in, so a release nudge could not reach a part).
+  Fixed: the clamp applies only when the whole machine fits between the inset and the bottom margin at the current zoom; test added.
+  Re-verified: UI 150 centre 1333 holds, UI 100 1504 unchanged, tiers.mjs clean.
+
 Round 5 verdict: **RELEASE-READY** (WP22).

@@ -119,11 +119,16 @@ export function hudTopInsetAt(basePx: number, uiScale: number, padPx: number): n
   return Math.round(basePx * s + padPx * Math.max(0, s - 1));
 }
 
-// Camera centre y for a pan that must keep the machine top at or below the HUD inset (WP22 F11). limit is the largest
-// centre y that keeps the top at insetPx; a pan past it stops there, and never further down than the current centre when
-// the top already sits under the HUD (a user pan is not undone, only not made worse).
-export function hudSafeCenterY(nextY: number, currentY: number, machineTopY: number, zoom: number, viewHeight: number, insetPx: number): number {
-  const limit = machineTopY - (insetPx - viewHeight / 2) / zoom;
+// Camera centre y for a pan that must keep the machine top at or below the HUD inset (WP22 F11). Applies only when the
+// whole machine fits between the inset and the bottom margin at this zoom; otherwise (zoomed in) the pan is returned as is,
+// so a release nudge can still reach a part. limit is the largest centre y that keeps the top at insetPx; a pan past it
+// stops there, and never further down than the current centre when the top already sits under the HUD.
+export function hudSafeCenterY(
+  nextY: number, currentY: number, machine: { top: number; bottom: number }, zoom: number,
+  view: { height: number; insetPx: number; marginPx: number },
+): number {
+  if ((machine.bottom - machine.top) * zoom > view.height - view.insetPx - view.marginPx) return nextY;
+  const limit = machine.top - (view.insetPx - view.height / 2) / zoom;
   if (nextY <= limit) return nextY;
   return Math.min(nextY, Math.max(limit, currentY));
 }
