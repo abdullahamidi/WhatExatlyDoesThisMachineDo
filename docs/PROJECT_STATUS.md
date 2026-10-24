@@ -2,6 +2,8 @@
 
 ## Current milestone
 **Steam demo program (2026-10-23)** — see docs/plan/STEAM_DEMO_PROGRAM.md (decisions D1–D8, two tracks).
+**v0.9.0 demo release-ready (2026-10-24)**: every roadmap WP done; docs/STEAM_RELEASE.md section 15 rows 1–15 PASS.
+Left for the user: Steam app/depot ids, capsule art, trailer, SteamPipe upload (section 12).
 
 **Vertical slice — release-quality.** WP1–WP6 done. GAME_SPEC §16/§17 PASS; Art Director verdict RELEASE-READY (docs/plan/ART_AUDIT.md phases 1–5).
 
@@ -29,7 +31,7 @@
 | WP19 | Steam desktop shell (Electron, file saves, crash overlay, splash, title, quit/credits, fullscreen, UI anchoring) | ✅ done |
 | WP20 | First-impression UX polish (onboarding, fly-in visible, tree fit, era cards, text sweep) | ✅ done |
 | WP21 | Demo edition (cap at Substation Blueprint, end card + final-machine teaser, wishlist) | ✅ done |
-| WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | WP16a ✅ · WP16b-1 store polish ✅ · WP16b-2 docs + a11y/UX ✅ · WP16b-3 soak/GPU perf/final AD audit (running) |
+| WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | ✅ done (WP16a · WP16b-1 store polish · WP16b-2 docs + a11y/UX · WP16b-3 soak/GPU perf/final AD audit) |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -94,11 +96,16 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   palette contrast for purchased (sand) and milestone (amber→amber-dim) nodes, a11y DEFERRED_SCOPES empty (tree/toast/era card
   gate); compact one-line in-tree toast clear of heading/tabs at UI 100/125/150; one guidance prompt at a time (activePrompt);
   stable tree panel (fixed height, PURCHASE + feedback one row, graph centred). AD RELEASE-READY (round 2).
+- **WP16b-3** final release pass: store shots capped at RES?OR? (debug hook setPlateCap, rendering only) + no_spoiler checks;
+  ux case M; Opus AD final audit (1080p, 1440p, 3440×1440, Deck 1280×800 and 1280×720 at UI 100/150, full + demo) RELEASE-READY
+  after 3 fixes: lance steam vents beside the valve, toasts compact while the era card is up, SYSTEM footer fits at UI 150.
+  Quiet GPU perf frame p95 16.8 / post 16.7 ms (≤ 17); 60 min soak heap 91.5 → 92.7 MB, display 74 flat, DOM +0;
+  packaged demo + full exes pass desktop.mjs. STEAM_RELEASE section 15 all PASS.
 - **Art**: every sprite and background layer is PixelLab Pro in one locked palette from one style
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 3409 pass (119 files) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 3428 pass, 16 skipped (119 files) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
@@ -138,9 +145,12 @@ Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era 
   EM `claude-sonnet-5-5`, workers `claude-haiku-5-5`.
 
 ## Next recommended task
-Steam demo program (docs/plan/STEAM_DEMO_PROGRAM.md), WP16 release verification:
-1. WP16b-3 (running in the main tree, nothing in parallel): 30–60 min soak, quiet-machine GPU perf (frame p95 ≤ 17 ms),
-   final Art Director audit incl. 1080p and Steam Deck 1280×800 (UI 100/150), era V store-shot plate spoiler decision, final store
-   shots 1080/2160, STEAM_RELEASE PENDING rows, PROJECT_STATUS final.
-Budgets: app raw 460 KB (full 401.8, demo 403.7), css 44 KB (full 39.9, demo 42.6 incl. lazy END card css; WP21 D10 sign-off).
+Roadmap complete. v0.9.0 demo is release-ready. Remaining steps need the user (Steamworks account):
+1. Real Steam ids for placeholders full app `0000000` / depot `0000001`, demo app `0000002` / depot `0000003`: wishlist target
+   in `src/data/edition.ts` `STEAM_STORE`; create `steam/*.vdf` from the docs/STEAM_RELEASE.md section 4 templates (not in repo yet).
+2. Capsule art (section 10 sizes; recipe: logo.png ×4/×5 nearest-neighbour on a clean store shot) and a 1080p60 trailer (OBS).
+3. SteamPipe upload to a beta branch, test from the Steam client (Auto-Cloud, Deck), set live (section 12).
+Optional post-demo: SAVE feedback briefly clips the SYSTEM footer at UI 150 on web (AD R2-N1, S3):
+`#sys-feedback:not(:empty) + #sys-footer { margin-top: 0; }`.
+Budgets: app raw 460 KB (full 402.8, demo 404.8), css 44 KB (full 40.0, demo 42.8 incl. lazy END card css; WP21 D10 sign-off).
 Final machine shots (3840×2160, AD RELEASE-READY) and demo teaser/END card shots sent to the user on 2026-10-23.

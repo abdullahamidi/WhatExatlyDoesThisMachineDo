@@ -434,7 +434,7 @@ Evidence per program decision D8 (docs/plan/STEAM_DEMO_PROGRAM.md). Upload steps
 | 6 | Browser e2e, demo | `scripts/smoke/demo.mjs` + `demo-cases.mjs` on `dist-demo` | PASS (WP16b-3 validation) |
 | 7 | Accessibility | `scripts/smoke/a11y.mjs` (`fail []`, `deferred []`), `scripts/smoke/ux.mjs` (incl. case M) | PASS (WP16b-3 validation) |
 | 8 | Resolutions 1280x720, 1280x800, 1920x1080, 2560x1440, 3440x1440 | `scripts/smoke/resolutions.mjs` | PASS (WP16b-3 validation) |
-| 9 | Soak 30–60 min | `scripts/smoke/soak.mjs` `SOAK_MIN=30..60` (WP16a 5 min run: PASS, heap 92.5 MB) | PENDING WP16b-3 (Director: soak 60 min running) |
+| 9 | Soak 30–60 min | `SOAK_MIN=60 SOAK_GPU=1 scripts/smoke/soak.mjs` on main ad129ce: 60 min, 121 samples, heap 91.5 → 92.7 MB (slope 0.01 MB/min), display objects 74 flat, DOM growth 0; see below | PASS (WP16b-3) |
 | 10 | Quiet-machine GPU perf (frame p95 ≤ 17 ms) | `PERF_GPU=1 scripts/smoke/perf.mjs`, median of 3 (`scripts/perf/perf-median.mjs`): frame p95 16.8 ms, post-purchase p95 16.7 ms (RTX 3060 Ti, D3D11); see below | PASS (WP16b-3) |
 | 11 | Final Art Director audit (incl. 1080p, Deck 1280x800) | `docs/plan/ART_AUDIT.md` "WP16b-3 — final release audit" (1920x1080, 2560x1440, 3440x1440, 1280x800 UI 100/150, 1280x720 UI 100/150; full + demo) | PASS (WP16b-3) |
 | 12 | ASSET_GUIDE refresh + guard | `src/assets/assetGuide.test.ts`, `docs/ASSET_GUIDE.md` | PASS |
@@ -462,3 +462,18 @@ Evidence per program decision D8 (docs/plan/STEAM_DEMO_PROGRAM.md). Upload steps
 - peakDbfs -17.18
 - cycleDisplayPct 4.29
 - Every stage frame p50/p95 16.7 / 16.7–16.8 ms (vsync 60 Hz).
+### Row 9 evidence (60 min soak, 2026-10-24)
+- Run: main ad129ce (final build), quiet machine, `SOAK_MIN=60 SOAK_GPU=1`, 121 samples every 30 s, `fail []`, `errors []`.
+- heapMb baseline 91.5 (t=60 s), last 92.74, max 92.75 (cap 150); growth 1.24 (limit 16); slope 0.01 MB/min (limit 1.0)
+- displayObjects 74 → 74 (cap 500, growth limit 81.4)
+- domNodes 670 → 670 (growth limit 200)
+- toasts max 1 (cap 4)
+- liveVoices max 7 (cap 48), growth -1 (limit 8)
+- machineMeanMs 0.84–1.0 for all 60 min
+- purchases 75 ok of 120 tried (legacy feed cycle; not a gated limit)
+- An earlier 60 min run on 3219580 also passed. It ran while other heavy work was running on the same machine, and its machineMeanMs went from 0.92 to about 1.6. This quiet run stays flat, so that rise came from the machine being busy, not from the game.
+
+### Packaged builds (2026-10-24)
+- Main ad129ce: `npm run build:steam-demo` and `npm run build:steam` pass (`out/steam/demo/win-x64/`, `out/steam/full/win-x64/`, 371 MB each).
+- `scripts/smoke/desktop.mjs` on both exes: `fail []`, `errors []`. Title `v0.9.0 · DEMO · SAVE v2` / `v0.9.0 · SAVE v2`, debug hook undefined, crank, quit writes the save, relaunch keeps progress (.bak present), SETTINGS fullscreen on/off, no CSP lines, 0 page errors. Demo tabs: ERA I open, SIGNAL ? and FULL GAME locked.
+- `f11Routed false`: CDP key events skip the main-process input hook (known since WP19). Real F11 and Alt+Enter were checked with OS key events (SendKeys) in WP19; the hook in `desktop/main.cjs` is unchanged since.
