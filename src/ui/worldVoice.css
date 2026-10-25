@@ -1,0 +1,23 @@
+/* Speech bubble (WP23a, DENIZEN_ART 4.1): paper DOM bubble over the living world, one pooled element per slot in #ui-root.
+   Pointer events are inherited none from #ui-root. The max width and the box come from inline styles (worldVoice.ts). Photo mode
+   hides it through photoMode.css; the finale and reduced motion are below. */
+
+/* paper #ddc9a3 / ink #14110f (11.6:1). Font: the HUD monospace stack (DENIZEN_ART 4.1). z 70: above the HUD panel, below the era card (80) and the TECH INDEX (100).
+   The 2 px notched border is four offset shadows in currentColor (ink). Tail: ::before is the ink rim, ::after the paper
+   core painted over it (later in the tree, so no z-index). */
+.wv{position:absolute;left:0;top:0;z-index:70;padding:5px 8px;background:#ddc9a3;color:#14110f;
+ font:14px/18px ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;opacity:0;box-shadow:0 -2px,0 2px,-2px 0,2px 0;transition:opacity .15s steps(3)}
+.wv.on{opacity:1}
+.wv::after,.wv::before{content:"";position:absolute;top:100%}
+.wv::before{left:calc(var(--tx) - 6px);width:12px;height:8px;background:#14110f;
+ clip-path:polygon(0 0,100% 0,100% 4px,10px 4px,10px 6px,8px 6px,8px 8px,4px 8px,4px 6px,2px 6px,2px 4px,0 4px)}
+.wv::after{left:calc(var(--tx) - 4px);width:8px;height:4px;background:#ddc9a3;
+ clip-path:polygon(0 0,100% 0,100% 2px,6px 2px,6px 4px,2px 4px,2px 2px,0 2px)}
+.wv.up::after,.wv.up::before{top:auto;bottom:100%;transform:scaleY(-1)}
+/* transition:0s is no transition (zero duration, nothing starts). */
+#ui-root[data-reduced-motion="on"] .wv{transition:0s}
+@media (prefers-reduced-motion:reduce){.wv{transition:0s}}
+#ui-root.finale-active .wv{display:none}
+
+/* Polite live region: read by screen readers, invisible on screen (clip-path keeps the 1 px box empty). */
+.wv-live{position:absolute;width:1px;height:1px;overflow:clip;clip-path:inset(50%)}

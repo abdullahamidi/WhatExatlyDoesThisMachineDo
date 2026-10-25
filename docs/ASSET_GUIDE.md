@@ -9,7 +9,7 @@ How art is named, sized, rendered, replaced and falls back. Source of truth: `sr
 - Every asset has an id `<category>.<name>` (camelCase name), listed in `ASSET_IDS`.
 - Default file path: `public/assets/<category>/<kebab-name>.png`, so `machine.gearSmall` maps to
   `public/assets/machine/gear-small.png`.
-- Categories in use: `bg`, `terrain`, `fx`, `machine`, `ui`.
+- Categories in use: `bg`, `terrain`, `fx`, `machine`, `ui`, `world` (`world.*` = the living world: denizens, street and props, WP23a).
 - The manifest `file` field (relative to `public/assets/`) and the generated table below are authoritative. Many ids
   do not follow the default path (for example `machine.crank` -> `machine/hand-crank.png`), so read the file from the
   table or the manifest, never from the id.
@@ -50,6 +50,36 @@ Machine-local depths are relative to the machine container, which sits at world 
 | `bg.regrowth2` | `finale/regrowth-2.png` | 512 x 32 | 0, 1 | x | none | finale regrowth (FINALE wipe), world depth 2 | Regrowth strip, stage 2 of 3 (succession order, ART_ERA5 §1); tiles horizontally, period = width. |
 | `bg.regrowth3` | `finale/regrowth-3.png` | 512 x 32 | 0, 1 | x | none | finale regrowth (FINALE wipe), world depth 2 | Regrowth strip, stage 3 of 3 (succession order, ART_ERA5 §1); tiles horizontally, period = width. |
 | `terrain.groundGreen` | `terrain/ground-green.png` | 256 x 128 | 0, 0 | xy | none | restored ground (RESTORED_GROUND), world depth 0.5 | Green recolour of terrain.ground with the same seams; tiles in both directions. |
+| `bg.windowLit` | `bg/window-lit.png` | 8 x 6 | 0, 0 | none | 2 (4 x 6) | living world, far window plane (6 skyline windows) | Lit skyline window in rust-amber, 2 frames (lit, breathe), six placements on the skyline windows; planned file bg/window-lit.png. |
+| `bg.virga` | none (procedural) | 512 x 128 | 0, 1 | x | 2 (512 x 64) | living world, sf 0.15 strip at depth -89.5 (sky ramp) | Rain streak strip tiling on x above the mountain ridge, 2 frames (falling, frozen), sky ramp only; WP23b art, procedural fallback until then. |
+
+### World — Living world
+
+| id | file (under `public/assets/`) | width x height | origin (pivot) | tileable | frames | layer + depth | description |
+|---|---|---|---|---|---|---|---|
+| `world.inspector` | `world/inspector.png` | 380 x 240 | 0.5, 1 | none | 114 (20 x 40); 6 era rows | living world, back row; era rows I-V and whole | Inspector sheet, 19 frames per era row (dome hat, long coat, clipboard at the chest, umbrella) in rows I, II, III, IV, V, whole; planned file world/inspector.png. |
+| `world.clipboardPages` | none (procedural) | 18 x 3 | 0.5, 1 | none | 3 (6 x 3) | living world, back row +0.1 (on the Inspector) | Cycle trace on the Inspector clipboard, 3 frames of 6x3; WP23b art, procedural fallback until then. |
+| `world.dog` | `world/dog.png` | 560 x 120 | 0.5, 1 | none | 120 (28 x 20); 6 era rows | living world, front row | Dog sheet, 20 frames per era row (low wedge, one upright ear, curled tail) in rows I, II, III, IV, V, whole; planned file world/dog.png. |
+| `world.stakeChain` | `world/stake-chain.png` | 20 x 6 | 0.5, 1 | none | 2 (10 x 6) | living world, front row | Stake with its chain on the ground, 2 frames; planned file world/stake-chain.png. |
+| `world.hole` | `world/hole.png` | 64 x 6 | 0.5, 1 | none | 4 (16 x 6) | living world, front row -0.1 | Dig hole in the ground, 4 frames (dig stages); planned file world/hole.png. |
+| `world.redBall` | none (procedural) | 3 x 3 | 0.5, 1 | none | none | living world, front row (postgame) | Red ball prop, one 3x3 frame: mutedOrange ball with a glint and a shadow (postgame); WP23b art, procedural fallback until then. |
+| `world.crow` | `world/crow.png` | 240 x 108 | 0.5, 1 | none | 60 (24 x 18); 6 era rows | living world, back row +0.2 | Crow sheet, 10 frames per era row (wedge body, two wing fans, hooked beak) in rows I, II, III, IV, V, whole; planned file world/crow.png. |
+| `world.girl` | `world/girl.png` | 160 x 168 | 0.5, 1 | none | 60 (16 x 28); 6 era rows | living world, back / front row (the girl) | Girl with the lantern, 10 frames per era row (hood, raincoat, lantern, stand, talk, shield, back-run) in rows I, II, III, IV, V, whole; planned file world/girl.png. |
+| `world.girlMini` | `world/girl-mini.png` | 16 x 12 | 0.5, 1 | none | 2 (8 x 12) | living world, pylon plane | Girl seen from the pylon plane, 2 frames (lantern warm, lantern cold white); planned file world/girl-mini.png. |
+| `world.girlWindow` | `world/girl-window.png` | 16 x 6 | 0, 0 | none | 4 (4 x 6) | living world, far window plane | Girl in the far window, 4 frames (flicker a, flicker b, dark, restored figure at the curtain); planned file world/girl-window.png. |
+| `world.lantern` | none (procedural) | 12 x 4 | 0.5, 1 | none | 2 (6 x 4) | living world, back row | Lantern prop, 2 frames; WP23b art, procedural fallback until then. |
+| `world.payphone` | `world/payphone.png` | 168 x 312 | 0.5, 1 | none | 36 (28 x 52); 6 era rows | living world, back row (booth) | Payphone booth, 6 frames per era row (dark, lit hood, ring-shake x2, fog overlay, cracked restored whole) in rows I, II, III, IV, V, whole; tally marks are procedural; planned file world/payphone.png. |
+| `world.receiver` | `world/receiver.png` | 48 x 72 | 0.5, 0 | none | 36 (8 x 12); 6 era rows | living world, back row +0.1 | Booth receiver, 6 frames per era row (hang, swing x3, level, on hook) in rows I, II, III, IV, V, whole; planned file world/receiver.png. |
+| `world.lamp` | `world/street-lamp.png` | 48 x 60 | 0.5, 1 | none | 4 (12 x 60) | living world, back row (street lamp) | Street lamp, 4 frames (dead, lit, warm, restored); planned file world/street-lamp.png. |
+| `world.lampGlow` | `world/lamp-glow.png` | 64 x 16 | 0.5, 0.5 | none | 2 (32 x 16) | living world, back row +0.05 | Lamp glow overlay, 2 frames (cold, warm); planned file world/lamp-glow.png. |
+| `world.clock` | `world/street-clock.png` | 32 x 44 | 0.5, 1 | none | 2 (16 x 44) | living world, back row (street clock) | Street clock, 2 frames (ruin, restored); the hands are a procedural overlay; planned file world/street-clock.png. |
+| `world.sensor7` | `world/sensor7.png` | 160 x 240 | 0.5, 1 | none | 48 (20 x 40); 6 era rows | living world, back row (Sensor 7) | Sensor 7, 8 frames per era row (tripod, four head poses, lens fog, two readout glyphs) in rows I, II, III, IV, V, whole; the LED is a separate 1 px sprite; planned file world/sensor7.png. |
+| `world.puddle` | none (procedural) | 320 x 5 | 0.5, 1 | none | 10 (32 x 5) | living world, back row -0.2 | Puddle strip, 10 frames (3 sizes x grey, ring, black, plus whole); WP23b art, procedural fallback until then. |
+| `world.sprout` | none (procedural) | 40 x 24 | 0.5, 1 | none | 5 (8 x 24) | living world, back row | Sprout, 5 frames (4 white stages, 1 green bloom); WP23b art, procedural fallback until then. |
+| `world.scraps` | `world/scraps.png` | 24 x 4 | 0.5, 1 | none | 3 (8 x 4) | living world, back row -0.2 | Scrap pile on the ground, 3 frames (burned away by the firebox tiers); planned file world/scraps.png. |
+| `world.mote` | `world/mote.png` | 4 x 2 | 0.5, 0.5 | none | 2 (2 x 2) | living world, dust depth (1 emitter, pool 5) | Ash mote and white moth speck, 2 frames (ash, moth); one emitter with a pool of 5; planned file world/mote.png. |
+| `world.page` | none (procedural) | 6 x 4 | 0.5, 0.5 | none | 2 (3 x 4) | living world, dust depth | Paper page that lifts from the ground about every 40 s in era IV, 2 frames; WP23b art, procedural fallback until then. |
+| `world.shadow` | none (procedural) | 26 x 3 | 0.5, 0.5 | none | none | living world, row -0.01 (procedural Graphics, baked once) | Procedural shadow ellipse baked once in game; this 26x3 texture is a fallback only and never gets a file. |
 
 ### Machine — Era I
 
@@ -229,6 +259,13 @@ Parallax art below its ground line must match the layer `underfill` in `PARALLAX
 - Frame counts are load-bearing: a machine component with `ComponentAnimation` kind `frames` in
   `src/data/machineComponents.ts` must use `frames` equal to the manifest `frame.count` of its `assetId`.
 
+**Era-row sheets (`eraRows`, WP23a).** The living-world sheets (`world.*`) stack one row per era variant: row order
+I, II, III, IV, V, whole. The manifest sets `eraRows: 6` next to `frame`; `height = frame.height * eraRows`,
+`frame.count = (width / frame.width) * eraRows`, and the frame index is `row * columns + column` with
+`columns = width / frame.width`. Frame names belong in data (`src/data/livingWorld.ts`), never in render code by
+magic index. `src/assets/manifest.test.ts` (WP23a) checks the arithmetic and `src/assets/worldSheets.test.ts` is the
+PNG gate (8-bit RGBA, size, alpha 0 or 255, palette only).
+
 ### RotSprite sheets
 
 - Manifest `rotation: { file, frames }` (file under `public/assets/`): a pre-rendered RotSprite rotation sheet of
@@ -245,7 +282,7 @@ Parallax art below its ground line must match the layer `underfill` in `PARALLAX
 - If a file fails to load, Phaser raises the load error and `BootScene` logs
   `[assets] failed to load <key> <url>` (console warning). The procedural texture for that id is generated
   instead and the game keeps running.
-- `PAINTERS` in `src/assets/fallbackTextures.ts` (plus `ERA2_PAINTERS` and `LEGACY_PAINTERS`); every other id uses `paintGenericPlate`.
+- `PAINTERS` in `src/assets/fallbackTextures.ts` (plus `ERA2_PAINTERS`, `LEGACY_PAINTERS` and `WORLD_PAINTERS`); every other id uses `paintGenericPlate`.
 - WP17 legacy feed parts (`machine.generatorGlow`, `machine.bellows`, `machine.exciterFeed`, `machine.backfeedTerminal`,
   `machine.steamLance`) use `LEGACY_PAINTERS` in `src/assets/painters/legacy.ts`.
   Since A17 these ids have PNGs (`machine/legacy/`); the painters are only the load-failure fallback and approximate the art

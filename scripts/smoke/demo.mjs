@@ -1,6 +1,8 @@
 // WP21 Steam demo smoke (demo build, real browser). Cases A and B are here; C to F live in demo-cases.mjs.
 // A: fresh start (title, tech tree with the era cap, SYSTEM menu). B: reach the Substation Blueprint cap (waiting,
 // teaser, END OF DEMO card, wishlist, keep, tree, SYSTEM row). C continues the page of B.
+// WP23a living world: B_bubble_hidden_teaser (no bubble during the teaser), B_no_spoiler_bubble (the RESTOR scan with a
+// bubble on screen, end of B), G = POST-CAP on a fresh page (KEEP TINKERING, one tape freeze, PAY-05 / INS-07 / GRL-06 / DOG-12, reload).
 // Usage: PW_PATH=... node scripts/smoke/demo.mjs "<demo preview base URL, no query>" <outdir>
 // Prints ONE JSON object { results, fail, errors }; exit code 1 when fail or errors is non-empty.
 import { createRequire } from 'module';
@@ -37,6 +39,21 @@ const TEASER_START_TIMEOUT_MS = 8000;
 const TEASER_MIN_DELAY_MS = 3800;
 const TEASER_RUN_TIMEOUT_MS = 60000;
 const TEASER_SAMPLE_MS = 100;
+// WP23a living world. Canon lines verbatim from STORY_BIBLE §5.2 (plain Node smokes cannot import src/data/livingWorld.ts).
+const GRL05 = { id: 'GRL-05', text: 'It gets bigger. Then it gets strange.' };
+// POST-CAP (bible §8.2): PAY-05 20 s after KEEP TINKERING, then each line at least 2 min after the one before (125 s
+// clears the 120 s gap). The tape freeze is 1.2 s (tapeFreezeMs).
+const POST_CAP_FIRST_MS = 21000;
+const POST_CAP_GAP_MS = 125000;
+// Minimum hold the G_freeze watch accepts. tapeFreezeMs is 1200 of scene time; 1000 leaves slack for the frame the
+// freeze starts on (scene time never runs faster than wall time).
+const TAPE_FREEZE_MIN_HOLD_MS = 1000;
+const POST_CAP = [
+  { id: 'PAY-05', text: "We're sorry. This call cannot be completed.", check: 'G_pay05' },
+  { id: 'INS-07', text: "Rusting doesn't fit anymore.", check: 'G_ins07' },
+  { id: 'GRL-06', text: 'The rest of it is further up. I saw it too.', check: 'G_grl06' },
+  { id: 'DOG-12', text: 'Stay. Wait for it. Good boy.', check: 'G_dog12' },
+];
 
 const results = {}, fail = [], errors = [];
 let currentKey = 'setup';
@@ -279,6 +296,43 @@ async function checkTeaserFrame(page) {
   kit.ok('B_no_spoiler', !bodyText.includes('RESTOR'));
 }
 
+// WP23a: re-evaluates fn(arg) in the page every 100 ms until it is truthy or capMs passed. Resolves the last value.
+async function pollPage(page, fn, arg, capMs) {
+  const t0 = Date.now();
+  for (;;) {
+    const v = await page.evaluate(fn, arg);
+    if (v || Date.now() - t0 >= capMs) return v;
+    await sleep(100);
+  }
+}
+
+// Page-side predicates (self-contained: page.evaluate sends the source). A shown bubble is `.wv.on`; the probe never gets `on`.
+const bubbleSays = (text) => {
+  const b = window.__wedtmd.worldBubble();
+  return b !== null && b.visible === true && b.text === text && document.querySelectorAll('.wv.on').length > 0;
+};
+const seenHas = (id) => (window.__wedtmd.worldState()?.seen ?? []).includes(id);
+
+// WP23a: no bubble during the teaser. GRL-05 is forced and must be refused (teaser silence). The hook has to answer,
+// or a missing director would pass the check vacuously.
+async function checkTeaserBubble(page) {
+  const said = await page.evaluate((id) => window.__wedtmd.worldSay(id), GRL05.id);
+  await sleep(300);
+  const probe = await page.evaluate(() => {
+    const hook = window.__wedtmd;
+    const bubble = hook.worldBubble();
+    return {
+      hook: hook.worldState() !== null,
+      phase: hook.demoState()?.phase ?? null,
+      shown: document.querySelectorAll('.wv.on').length,
+      bubble: bubble === null ? null : bubble.visible,
+    };
+  });
+  // said is the worldSay answer: the World sleeps during the teaser, so the forced line must be refused (false).
+  const ok = probe.hook && probe.phase === 'teaser' && probe.shown === 0 && probe.bubble !== true && said === false;
+  kit.ok('B_bubble_hidden_teaser', ok, { said, ...probe });
+}
+
 // Takes one shot per teaser stage, at the first sample that shows the stage.
 async function snapTeaser(page, sc, seen) {
   if (!seen.era3 && sc.era >= 3) {
@@ -439,6 +493,22 @@ async function systemRow(page) {
   kit.ok('B_esc_keeps', !(await cardOpen(page)) && d?.phase === 'idle');
 }
 
+// WP23a: B_no_spoiler again with a world bubble on screen. Runs after the card and the SYSTEM row, when the world is awake:
+// the first moment (a crank click, a purchase, 120 s of play) passes and GRL-05 is shown by force (worldSay). The same
+// innerText scan as B_no_spoiler must find no RESTOR. Its own check name, so B_no_spoiler keeps its teaser value.
+async function checkBubbleSpoiler(page) {
+  await page.evaluate(() => window.__wedtmd.worldQuiet(false));
+  await page.evaluate(() => { const c = document.getElementById('era-card'); if (c && !c.hidden) c.click(); });
+  await kit.crankClicks(page, 1);
+  const bought = await page.evaluate(() => window.__wedtmd.session.purchase('copperWinding').ok);
+  await page.evaluate(() => window.__wedtmd.worldAdvance(120000));
+  const said = await page.evaluate((id) => window.__wedtmd.worldSay(id), GRL05.id);
+  const shown = await pollPage(page, bubbleSays, GRL05.text, 8000);
+  const bodyText = await page.evaluate(() => document.body.innerText);
+  const ok = shown === true && !bodyText.includes('RESTOR');
+  kit.ok('B_no_spoiler_bubble', ok, failDetail(ok, { said, shown, bought, restor: bodyText.includes('RESTOR') }));
+}
+
 // Case B, fresh game (no title). Buy the era II list and the Substation Blueprint, the cap. The teaser runs, then
 // the END OF DEMO card takes focus. The page stays open for case C.
 async function caseB(page) {
@@ -460,6 +530,7 @@ async function caseB(page) {
   const sinceCap = Date.now() - capAt;
   kit.ok('B_teaser_started', waited !== null && sinceCap >= TEASER_MIN_DELAY_MS, sinceCap);
   await checkTeaserFrame(page);
+  await checkTeaserBubble(page);
   const plates = await followTeaser(page);
   await checkTeaserEnd(page);
   // the end sample at the card joins the followed samples
@@ -472,6 +543,67 @@ async function caseB(page) {
   await keepAndCrank(page);
   await treeAfter(page);
   await systemRow(page);
+  await checkBubbleSpoiler(page);
+}
+
+// WP23a case G, POST-CAP (bible §8.2), fresh page. Reach the cap, KEEP TINKERING (one tape freeze), then PAY-05, INS-07,
+// GRL-06 and DOG-12 in order (worldAdvance moves the scheduler clock; each bubble and its seen mark are polled), then a
+// reload: the dog holds the lie-down image and nothing repeats (no second freeze, no line).
+async function caseG(page) {
+  const advance = (ms) => page.evaluate((m) => window.__wedtmd.worldAdvance(m), ms);
+  // the cap, as in case B: the teaser runs, then the END OF DEMO card takes focus
+  await kit.buys(page, [...kit.S9, '@substationBlueprint']);
+  if ((await kit.waitPhase(page, 'teaser', TEASER_START_TIMEOUT_MS)) === null) throw new Error('teaser did not start');
+  if ((await kit.waitPhase(page, 'card', TEASER_RUN_TIMEOUT_MS)) === null) throw new Error('card did not open');
+  // KEEP TINKERING starts POST-CAP: every living-world variant holds for the tape freeze right after the click. The click
+  // and the watch run in ONE evaluate on animation frames: the first sample is frame 2 (frame 1 may still be pre-freeze),
+  // and the freeze ends at the first frame whose variant string differs from it (within 4 s).
+  const freeze = await page.evaluate(() => new Promise((resolve) => {
+    const variants = () => (window.__wedtmd.livingWorld() ?? []).map((e) => `${e.id}:${e.variant}`).join('|');
+    const t0 = performance.now();
+    let frames = 0, first = null, movedAtMs = null;
+    document.getElementById('demo-keep').click();
+    const tick = (t) => {
+      frames += 1;
+      const v = variants();
+      if (frames === 2) first = v;           // frame 1 may still be the pre-freeze frame
+      else if (first !== null && v !== first && movedAtMs === null) movedAtMs = t - t0;
+      if (t - t0 < 4000) requestAnimationFrame(tick); else resolve({ first, movedAtMs });
+    };
+    requestAnimationFrame(tick);
+  }));
+  const held = freeze.first !== null && freeze.first !== '' && freeze.movedAtMs !== null && freeze.movedAtMs >= TAPE_FREEZE_MIN_HOLD_MS;
+  const freezes = (await page.evaluate(() => window.__wedtmd.worldState()?.seenEver ?? [])).filter((id) => id === 'beat.tapeFreeze').length;
+  const freezeOk = held && freezes === 1;
+  kit.ok('G_freeze', freezeOk, failDetail(freezeOk, { first: freeze.first, movedAtMs: freeze.movedAtMs, freezes }));
+  // PAY-05 at +20 s, then each line at least 2 min after the one before
+  await advance(POST_CAP_FIRST_MS);
+  for (let i = 0; i < POST_CAP.length; i++) {
+    if (i > 0) await advance(POST_CAP_GAP_MS);
+    const line = POST_CAP[i];
+    const shown = await pollPage(page, bubbleSays, line.text, 8000);
+    const seen = await pollPage(page, seenHas, line.id, 10000);
+    const ok = shown === true && seen === true;
+    kit.ok(line.check, ok, failDetail(ok, { shown, seen }));
+  }
+  // reload: the seen state comes back from the save and the dog holds the lie-down image
+  await page.evaluate(() => window.__wedtmd.saveNow());
+  await kit.reload(page);
+  const lies = await pollPage(page, () => (window.__wedtmd.livingWorld() ?? []).some((e) => e.id === 'dog' && e.variant === 'lie'), null, 5000);
+  const dogVariant = await page.evaluate(() => (window.__wedtmd.livingWorld() ?? []).find((e) => e.id === 'dog')?.variant ?? null);
+  kit.ok('G_hold', lies === true, failDetail(lies === true, { dogVariant }));
+  // nothing repeats: no second freeze and no line, so seen / seenEver hold through 5 more minutes of play
+  const snap = () => page.evaluate(() => {
+    const s = window.__wedtmd.worldState();
+    return s === null ? null : { seen: s.seen, seenEver: s.seenEver };
+  });
+  const before = await snap();
+  await advance(300000);
+  await sleep(600);
+  const after = await snap();
+  const repeatFreezes = after === null ? 0 : after.seenEver.filter((id) => id === 'beat.tapeFreeze').length;
+  const same = before !== null && after !== null && JSON.stringify(before) === JSON.stringify(after) && repeatFreezes === 1;
+  kit.ok('G_no_refreeze', same, failDetail(same, { before, after, repeatFreezes }));
 }
 
 let setupError = null;
@@ -487,6 +619,7 @@ try {
   await run('D', (page) => caseD(kit, page));
   await run('E', (page) => caseE(kit, page));
   await run('F', (page) => caseF(kit, page));
+  await run('G', (page) => caseG(page));
 } catch (e) {
   setupError = e;
 } finally {

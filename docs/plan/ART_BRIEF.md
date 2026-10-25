@@ -51,9 +51,20 @@ by tiling 3× side by side.
 Size method: if PixelLab returns a different canvas, crop to the content bbox and pad (transparent) to
 the exact size honouring the pivot rule — never resample/scale.
 
-## Approved anchor
-machine.flywheel = job 344ab19d-a156-4ed0-8aab-fc27fedf71b5 index 0 (workbench score 97.2).
-Style URL for `style_image_url`: https://api.pixellab.ai/mcp/images/344ab19d-a156-4ed0-8aab-fc27fedf71b5/download?index=0
+## Approved anchor (re-anchored WP23a, 2026-10-24)
+The old anchor URL (flywheel job 344ab19d, index 0) has expired ("Result not found"). The anchor is now the shipped file
+itself, `public/assets/machine/flywheel.png` (96×96, workbench 97.2). Procedure for every PixelLab generation call:
+1. Style: `style_image_base64` = the base64 of `public/assets/machine/flywheel.png`, read from disk at call time, with
+   `style_copy: ["outline", "shading"]` (outline and shading only, never its colours or detail).
+2. Palette: `palette` = the 25 hex values above and `palette_name` "Rust Wasteland", on every call.
+3. Transport: inline base64 can be altered in transit (seen 2026-10-24: "Could not decode image ... a character was
+   altered"). The safe route sends the same bytes by reference: `get_upload_url`, then
+   `curl -sS -F "file=@public/assets/machine/flywheel.png" <upload url>`, then pass the returned `upload:<id>` as
+   `style_image_url` (uploads live 3 days, so upload once per session).
+4. Tools with no style parameter (`create_character_pro_flash`, `animate_character`): palette lock only.
+5. Never paste the base64 into this doc or any repo file: the PNG on disk is the anchor.
+6. Living world sprites ≤ 24 px wide: PixelLab output is concept and proportion reference only; finals are hand-pixelled
+   (DENIZEN_ART D9, toolchain `scripts/art/world/`).
 
 ## Background REDO prompts (Opus review round 1 — all rejected)
 - bg.mountains: "transparent background, no sky. One low-contrast distant ridge silhouette in #9c9182/#b8a98f, faint ruin silhouettes in #7d8286 only. Ridge peaks between y=90 and y=140 and meets the left and right edges at the same height (y≈135). Solid #5a5f63 from y=156 down. No creatures, no objects, no black, no outlines, no foreground." max_colors 6. (Superseded by WP16b for the rows below the ground line: see the asset table.)

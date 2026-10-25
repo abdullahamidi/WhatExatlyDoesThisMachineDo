@@ -29,7 +29,11 @@ import { portraitPose } from '../math/showcase';
 import { PHOTO_MODE } from '../../data/photoMode';
 import { motionPolicy } from '../../simulation';
 import { cappedPlaqueLevels, plateFrameCap } from '../math/plateCap';
-import type { TechId } from '../../data/types';
+import type { OfflineReport, TechId } from '../../data/types';
+import type { Edition } from '../../data/edition';
+import type { EraCards } from '../../ui/eraCard';
+import type { WorldVoiceView } from '../../ui/worldVoice';
+import type { LivingWorldDirector, WorldDirectorPorts } from '../rendering/LivingWorldDirector';
 
 /** Modal id held on the stack while the new-cycle transition runs (input lock). */
 const CYCLE_MODAL_ID = 'cycle';
@@ -62,6 +66,17 @@ class FrameTimings {
   }
 }
 
+/**
+ * WP23a living world hooks. bootstrap creates the object and hands the SYS LOG and KEEP TINKERING calls through it; WorldScene
+ * points the members at its director while it lives and resets them to no-ops on teardown.
+ */
+export interface WorldLink {
+  onLogShown(id: string): void;
+  onLogCleared(id: string): void;
+  defer(): boolean;
+  onKeep(): void;
+}
+
 /** UI handles WorldScene needs: the HUD / dialogs, the finale overlay, and the late-bound finale skip target and cycle port. */
 export interface WorldUi {
   hud: Hud;
@@ -71,6 +86,17 @@ export interface WorldUi {
   finaleLink: { skip: () => void };
   /** New-cycle transition port: WorldScene points `play` at its CycleTransition; before that (or after teardown) it runs both callbacks at once. */
   cycleLink: { play(onPeak: () => void, onDone: () => void): void };
+  /** WP23a: the late-bound SYS LOG / KEEP hooks (see WorldLink). */
+  worldLink: WorldLink;
+  /** WP23a: the speech bubble DOM view, created at boot (page-lifetime). */
+  worldView: WorldVoiceView;
+  /** WP23a: the era card handle (its isShown() is a director port). */
+  eraCards: EraCards;
+  edition: Edition;
+  /** WP23a: the boot offline report (startup.offline); the director reads it once at start. */
+  bootOffline: OfflineReport | null;
+  /** WP23a: true when the boot WELCOME BACK toast is queued (its gate starts with the director). */
+  welcomeShown: boolean;
 }
 
 // Builds the wasteland, machine and camera; reads session state each frame and pushes it to the HUD.
@@ -89,6 +115,8 @@ export class WorldScene extends Phaser.Scene {
   private finale: FinaleDirector | null = null;
   private cycleTransition: CycleTransition | null = null;
   private photo: PhotoModeController | null = null;
+  /** WP23a living world director; null before `create`, until its lazy chunk resolves, after its teardown, or when #ui-root is missing. */
+  private worldDirector: LivingWorldDirector | null = null;
   /** performance.now() of the last HUD rebuild (poll or event); the poll waits HUD_REFRESH_MS after it. */
   private hudRenderedAtMs = Number.NEGATIVE_INFINITY;
   private readonly frameTimings = new FrameTimings();
@@ -129,6 +157,75 @@ export class WorldScene extends Phaser.Scene {
     const crank = new HandCrank(this, this.ctx, machine, floatingText);
     const camera = new CameraController(this, this.ctx.session);
     const unsubscribeRefocus = this.ctx.commands.refocus.on(() => camera.refocus());
+    // WP23a living world: after SteamFx, before the finale. Its ports read scene and UI state lazily, so the photo mode and the
+    // cycle transition (created below) may still be null here. Needs #ui-root for the bubble DOM; without it there is no director.
+    // The director is a lazy chunk (the app chunk is budgeted): it is built a moment after create, and update() and the links
+    // stay no-ops until then. bootstrap warms the chunk during the asset load, so the import is normally already resolved.
+    const worldRoot = document.getElementById('ui-root');
+    const worldDisposables: Array<() => void> = [];
+    if (worldRoot !== null) {
+      const ports: WorldDirectorPorts = {
+        techTreeOpen: () => this.ui.techTree.isOpen(),
+        onTechTreeOpenChange: (fn) => this.ui.techTree.onOpenChange(fn),
+        eraCardShown: () => this.ui.eraCards.isShown(),
+        modalOpen: () => this.ui.modals.isOpen() && this.ui.modals.topId() !== PHOTO_MODE.modalId && !this.ui.techTree.isOpen(),
+        photoActive: () => this.photo?.isActive() === true,
+        cycleBusy: () => this.cycleTransition?.isActive() === true || this.ui.modals.has('cycleConfirm'),
+        teaserOn: () => worldRoot.classList.contains('demo-teaser-on'),
+        demoCardOpen: () => this.ui.modals.has('demo-end'),
+        tabHidden: () => document.hidden,
+      };
+      // Set by the disposable below: a chunk that resolves after teardown builds nothing.
+      let worldTornDown = false;
+      // Detaches the director's SLEEP / WAKE listeners once they are attached; a no-op before that.
+      let detachSleepWake: () => void = () => undefined;
+      worldDisposables.push(() => {
+        worldTornDown = true;
+        detachSleepWake();
+        // The links go quiet before the director dies, so a late SYS LOG poll or KEEP cannot reach a destroyed director.
+        const link = this.ui.worldLink;
+        link.onLogShown = () => undefined;
+        link.onLogCleared = () => undefined;
+        link.defer = () => false;
+        link.onKeep = () => undefined;
+        const director = this.worldDirector;
+        this.worldDirector = null;
+        director?.destroy();
+      });
+      import('../rendering/LivingWorldDirector')
+        .then(({ LivingWorldDirector: Director }) => {
+          if (worldTornDown) return;
+          const director = new Director({
+            scene: this,
+            session: this.ctx.session,
+            feedback: this.ctx.feedback,
+            edition: this.ui.edition,
+            root: worldRoot,
+            view: this.ui.worldView,
+            ports,
+            bootOffline: this.ui.bootOffline,
+            welcomeShown: this.ui.welcomeShown,
+          });
+          this.worldDirector = director;
+          const link = this.ui.worldLink;
+          link.onLogShown = (id) => director.onLogShown(id);
+          link.onLogCleared = (id) => director.onLogCleared(id);
+          link.defer = () => director.sysLogDefer();
+          link.onKeep = () => director.onKeep();
+          const onSleep = (): void => director.onSleep();
+          const onWake = (): void => director.onWake();
+          this.events.on(Phaser.Scenes.Events.SLEEP, onSleep);
+          this.events.on(Phaser.Scenes.Events.WAKE, onWake);
+          detachSleepWake = () => {
+            this.events.off(Phaser.Scenes.Events.SLEEP, onSleep);
+            this.events.off(Phaser.Scenes.Events.WAKE, onWake);
+          };
+          // A World put to sleep before the chunk arrived (the teaser) must reach the director asleep as well.
+          if (this.scene.isSleeping()) director.onSleep();
+        })
+        .catch((err: unknown) => console.error('[world] living world failed to load', err));
+    }
+
     // Finale (WP13): the restored ground and the screen-fixed FX sit above the ruined world; the director
     // drives every finale renderer, so it is created last and disposed first.
     const restoredGround = new RestoredGround(this);
@@ -205,6 +302,8 @@ export class WorldScene extends Phaser.Scene {
       () => camera.destroy(),
       () => crank.destroy(),
       () => floatingText.destroy(),
+      // WP23a: the living world goes before SteamFx and the dust (and so before the display source, which is disposed last).
+      ...worldDisposables,
       () => {
         this.steamFx = null;
         steamFx.destroy();
@@ -298,6 +397,11 @@ export class WorldScene extends Phaser.Scene {
     return this.photo;
   }
 
+  /** The WP23a living-world director, or null before `create`, until its lazy chunk resolves, after its teardown, or when #ui-root is missing. */
+  getWorldDirector(): LivingWorldDirector | null {
+    return this.worldDirector;
+  }
+
   /**
    * WP16b-3 store shots: caps the World name plate frame and the HUD plaque line at a plate gate tech ('substationBlueprint' = RES?OR?,
    * the demo teaser cap). Null, or a tech that is not a plate gate, clears. Rendering only: session, save and display levels are untouched.
@@ -336,6 +440,8 @@ export class WorldScene extends Phaser.Scene {
     this.eclipse?.update(delta);
     this.beam?.update(delta);
     this.steamFx?.update(delta);
+    // WP23a: the living world (figures, props, bubble, scheduler) before the finale, which may override the frame.
+    this.worldDirector?.update(delta);
     // Cheap flag compare each frame: the streams only switch when the spire's level crosses its gate (or a reset).
     this.dust?.setRising(this.ctx.session.state.techLevels[DUST_RISING.techId] >= DUST_RISING.minLevel);
     // Finale last: it overrides what the renderers above just drew (phase 'none' only pushes the neutral frame once).

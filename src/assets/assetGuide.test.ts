@@ -58,6 +58,31 @@ const PLACEMENT_NOTES: Partial<Record<AssetId, string>> = {
   'ui.panel': 'DOM UI (CSS background image)',
   'ui.button': 'DOM UI (CSS background image)',
   'ui.icons16': 'DOM UI (CSS background image)',
+  'world.inspector': 'living world, back row; era rows I-V and whole',
+  'world.clipboardPages': 'living world, back row +0.1 (on the Inspector)',
+  'world.dog': 'living world, front row',
+  'world.stakeChain': 'living world, front row',
+  'world.hole': 'living world, front row -0.1',
+  'world.redBall': 'living world, front row (postgame)',
+  'world.crow': 'living world, back row +0.2',
+  'world.girl': 'living world, back / front row (the girl)',
+  'world.girlMini': 'living world, pylon plane',
+  'world.girlWindow': 'living world, far window plane',
+  'world.lantern': 'living world, back row',
+  'world.payphone': 'living world, back row (booth)',
+  'world.receiver': 'living world, back row +0.1',
+  'world.lamp': 'living world, back row (street lamp)',
+  'world.lampGlow': 'living world, back row +0.05',
+  'world.clock': 'living world, back row (street clock)',
+  'world.sensor7': 'living world, back row (Sensor 7)',
+  'world.puddle': 'living world, back row -0.2',
+  'world.sprout': 'living world, back row',
+  'world.scraps': 'living world, back row -0.2',
+  'world.mote': 'living world, dust depth (1 emitter, pool 5)',
+  'world.page': 'living world, dust depth',
+  'world.shadow': 'living world, row -0.01 (procedural Graphics, baked once)',
+  'bg.windowLit': 'living world, far window plane (6 skyline windows)',
+  'bg.virga': 'living world, sf 0.15 strip at depth -89.5 (sky ramp)',
 };
 
 function readGuideOrNull(): string | null {
@@ -136,6 +161,7 @@ function framesCell(entry: AssetEntry): string {
   const parts: string[] = [];
   if (entry.frame) parts.push(`${entry.frame.count} (${entry.frame.width} x ${entry.frame.height})`);
   if (entry.rotation) parts.push(`rot ${entry.rotation.frames} (\`${entry.rotation.file}\`)`);
+  if (entry.eraRows !== undefined) parts.push(`${entry.eraRows} era rows`);
   return parts.length > 0 ? parts.join('; ') : 'none';
 }
 
@@ -174,14 +200,18 @@ function guideGroup(label: string, ids: readonly AssetId[]): string {
 
 /** Whole generated block (the content between the asset-table markers). */
 function guideTables(): string {
-  const world = ASSET_IDS.filter((id) => id.startsWith('bg.') || id.startsWith('terrain.'));
+  const background = ASSET_IDS.filter((id) => id.startsWith('bg.') || id.startsWith('terrain.'));
+  const living = ASSET_IDS.filter((id) => id.startsWith('world.'));
   const machine = ASSET_IDS.filter((id) => id.startsWith('machine.'));
   const fx = ASSET_IDS.filter((id) => id.startsWith('fx.'));
   const ui = ASSET_IDS.filter((id) => id.startsWith('ui.'));
-  if (world.length + machine.length + fx.length + ui.length !== ASSET_IDS.length) {
-    throw new Error('ASSET_IDS has an id outside the bg/terrain/machine/fx/ui groups');
+  if (background.length + living.length + machine.length + fx.length + ui.length !== ASSET_IDS.length) {
+    throw new Error('ASSET_IDS has an id outside the bg/terrain/world/machine/fx/ui groups');
   }
-  const groups: { label: string; ids: AssetId[] }[] = [{ label: 'World', ids: world }];
+  const groups: { label: string; ids: AssetId[] }[] = [
+    { label: 'World', ids: background },
+    { label: 'World — Living world', ids: living },
+  ];
   for (const group of ERA_GROUPS) {
     groups.push({ label: group.label, ids: machine.filter((id) => machineEra(id) === group.era) });
   }

@@ -43,6 +43,8 @@ export interface DemoEndDeps {
   desktop: boolean;
   quit?: () => void;
   timers?: DemoTimers;
+  /** Fired on every KEEP TINKERING (WP23a: starts the living-world post-cap arc). */
+  onKeep?: () => void;
 }
 
 export interface DemoEnd {
@@ -268,6 +270,7 @@ export function createDemoEnd(root: HTMLElement, deps: DemoEndDeps): DemoEnd {
     teaser.stop();
     stopTick();
     dispatch('keep');
+    deps.onKeep?.();
     const target = returnFocus;
     returnFocus = null;
     if (target !== null && target.isConnected) target.focus();

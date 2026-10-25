@@ -15,8 +15,10 @@ import type {
 import { DESIGN_MAX_VALUE, SAVE_BACKUP_KEY, SAVE_KEY } from '../data/balance';
 import { TECHNOLOGIES } from '../data/technologies';
 import { DEFAULT_SETTINGS_VALUES } from '../data/settings';
+import { DEFAULT_WORLD_SAVE } from '../data/livingWorld';
+import type { WorldSaveState } from '../data/livingWorld';
 import type { HostStorageBridge, WedtmdHost } from '../platform/host';
-import { echoesForCycle, ENDING_PHASES, normalizePrestige, normalizeSettings } from '../simulation';
+import { echoesForCycle, ENDING_PHASES, normalizePrestige, normalizeSettings, normalizeWorld } from '../simulation';
 import { deserialize, serialize } from './codec';
 import { parseImport } from './exchange';
 import { pickStorage } from './hostStorage';
@@ -34,6 +36,7 @@ import wp13Raw from './fixtures/v2-wp13-postgame.json?raw';
 import cycle2Raw from './fixtures/v2-cycle2.json?raw';
 import preLegacyRaw from './fixtures/v2-pre-legacy.json?raw';
 import currentRaw from './fixtures/v2-current-full.json?raw';
+import worldRaw from './fixtures/v2-world.json?raw';
 import outOfRangeRaw from './fixtures/v2-out-of-range.json?raw';
 import v3Raw from './fixtures/v3-future.json?raw';
 import corruptRaw from './fixtures/corrupt-save.txt?raw';
@@ -54,6 +57,8 @@ interface CompatRow {
   res?: Partial<ResourceMap>;
   lifetime?: Partial<ResourceMap>;
   totalClicks?: number;
+  /** Living-world block after load (WP23a). Rows without it load with DEFAULT_WORLD_SAVE. */
+  world?: WorldSaveState;
   /** Re-serialising with the original savedAt must reproduce the file exactly (as JSON). */
   lossless?: true;
   /** Has a finished finale, so a new cycle can begin. */
@@ -148,6 +153,18 @@ const ROWS: readonly CompatRow[] = [
     prestige: { cycle: 3, echoesEarned: 6, perks: ['muscleMemory', 'residualCharge', 'longSilence'] },
     settings: { musicVolume: 40, uiScale: 150, notation: 'engineering', screenShake: false, confirmNewCycle: false },
     levels: { bellowsDrive: 37, gridExciter: 12, mainsBackfeed: 5, steamLance: 6 },
+    lossless: true,
+    newCycle: true,
+  },
+  {
+    file: 'v2-world.json',
+    raw: worldRaw,
+    status: 'loaded',
+    phase: 'postgame',
+    prestige: { cycle: 3, echoesEarned: 6, perks: ['muscleMemory', 'residualCharge', 'longSilence'] },
+    settings: { musicVolume: 40, uiScale: 150, notation: 'engineering', screenShake: false, confirmNewCycle: false, worldVoices: 'rare' },
+    levels: { bellowsDrive: 37, gridExciter: 12, mainsBackfeed: 5, steamLance: 6 },
+    world: { seen: ['INS-01', 'CRW-01'], seenEver: ['INS-01', 'CRW-01', 'beat.tapeFreeze'], eraMoments: [2, 0, 0, 0, 0], youEras: 1 },
     lossless: true,
     newCycle: true,
   },
@@ -274,6 +291,7 @@ function expectStateInvariants(r: LoadResult): void {
 
   expect(r.settings).toEqual(normalizeSettings(r.settings));
   expect(r.prestige).toEqual(normalizePrestige(r.prestige));
+  expect(r.world).toEqual(normalizeWorld(r.world));
   expect(ENDING_PHASES).toContain(state.ending.phase);
   if (state.ending.phase !== 'none') expect(state.techLevels.primaryFunction).toBe(1);
   expect(r.stats.cycles).toBeGreaterThanOrEqual(1);
@@ -290,6 +308,7 @@ describe.each(ROWS)('$file', (row) => {
     }
     expect(r.state.ending.phase).toBe(row.phase);
     expect(r.prestige).toEqual(row.prestige);
+    expect(r.world).toEqual(row.world ?? DEFAULT_WORLD_SAVE);
 
     if (row.settings !== undefined) {
       if (row.status === 'recovered') expect(r.settings).toEqual(row.settings);
@@ -324,7 +343,15 @@ describe.each(ROWS)('$file', (row) => {
 
     if (row.lossless === true) {
       const original = JSON.parse(row.raw) as { savedAt: number };
-      expect(JSON.parse(serialize(r.state, r.settings, original.savedAt, meta))).toEqual(JSON.parse(row.raw));
+      const out = JSON.parse(serialize(r.state, r.settings, original.savedAt, { ...meta, world: r.world })) as {
+        settings: Record<string, unknown>;
+        world?: WorldSaveState;
+      };
+      // WP23a: old fixtures have no settings.worldVoices; its default 'on' is not written back for them.
+      if (out.settings['worldVoices'] === 'on') delete out.settings['worldVoices'];
+      // WP23a: old fixtures have no world block; the default block is not written back for them.
+      if (JSON.stringify(out.world) === JSON.stringify(DEFAULT_WORLD_SAVE)) delete out.world;
+      expect(out).toEqual(JSON.parse(row.raw));
     }
   });
 
@@ -332,6 +359,7 @@ describe.each(ROWS)('$file', (row) => {
     const { storage, boot } = bootRow(row);
     const { session } = boot;
     expect(boot.load.status).toBe(row.status);
+    expect(session.world).toEqual(row.world ?? DEFAULT_WORLD_SAVE);
 
     for (const id of RESOURCE_IDS) {
       expectDesignRange(session.rates.perSecond[id]);
@@ -368,6 +396,7 @@ describe.each(ROWS)('$file', (row) => {
     expect(res.envelope.state).toEqual(JSON.parse(JSON.stringify(session.state)));
     expect(res.envelope.settings).toEqual(session.settings);
     expect(res.envelope.prestige).toEqual(session.prestige);
+    expect(res.envelope.world).toEqual(session.world);
   });
 
   it('host: boots through pickStorage, flush persists', () => {

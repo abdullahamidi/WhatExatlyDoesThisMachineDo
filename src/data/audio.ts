@@ -140,4 +140,24 @@ export const AUDIO = {
 
   // Master limiter (WP15 mix): catches peaks after the master gain. Attack and release in seconds.
   limiter: { threshold: -10, knee: 6, ratio: 4, attack: 0.005, release: 0.25 },
+
+  // World voices (WP23a): one blip voice per speaker on the sfx bus. `count` blips sit gapMs apart; each is ms long.
+  // dog: tape-wobble LFO (wobbleHz, wobbleCents on pitch). crow: FM rasp (fmHz, fmDepth). payphone: bandpass at bandpassHz.
+  // maxConcurrent blip sequences may sound at once; the rest are refused (gameAudio).
+  world: {
+    maxConcurrent: 2,
+    // Most blips one line plays (DENIZEN_ART §4.3: min(words, 8)). The synth clamps a blip sequence to it; blipCount in worldTurn.ts caps a line by it.
+    maxBlips: 8,
+    blip: {
+      inspector: { wave: 'square', hz: 150, ms: 55, gapMs: 70, gain: 0.07 },
+      dog: { wave: 'square', hz: 150, ms: 60, gapMs: 70, gain: 0.07, wobbleHz: 6, wobbleCents: 40 },
+      crow: { wave: 'sawtooth', hz: 420, ms: 50, gapMs: 65, gain: 0.05, fmHz: 90, fmDepth: 120 },
+      girl: { wave: 'sine', hz: 760, ms: 70, gapMs: 80, gain: 0.07 },
+      payphone: { wave: 'square', hz: 520, ms: 45, gapMs: 60, gain: 0.05, bandpassHz: 1400 },
+    },
+    // Payphone ring: two sines (hzA, hzB) in `bursts` bursts of burstMs, gapMs apart.
+    ring: { hzA: 440, hzB: 480, bursts: 2, burstMs: 400, gapMs: 200, gain: 0.08 },
+    // Dial tone: two sines (hzA, hzB), faded in and out over fadeMs; stops by itself after maxMs.
+    dialTone: { hzA: 350, hzB: 440, maxMs: 2000, gain: 0.04, fadeMs: 80 },
+  },
 } as const;

@@ -1,0 +1,33 @@
+# Girl window overlay colour master (WP23a AD-c, Art Director). Four 4x6 frames on the far window plane (sf 0.3),
+# placed once over the skyline window at art (306, 106) (its #6e3a22 core is exactly 4x6). No outline (distant layer
+# rule, ART_BRIEF). Rust only (sheets.py `only`): never warm yellow before the finale (DENIZEN_ART 1.5).
+# flickerA = bright: #ad6236 pane, #c98552 2x3 core held low (her lantern; bg.windowLit centres a 2x4 core);
+# flickerB = the dip: #8c4a2a pane, #ad6236 2x2 core; dark = #6e3a22 = the skyline's own dim window (era II on);
+# restored = copy of dark until WP23b draws the 2x4 figure at the curtain (PLACEHOLDER CELL).
+# Build: python -I scripts/art/world/build_sheet.py girlWindow   Gate: python -I scripts/art/world/check_sheet.py girlWindow
+
+@frame flickerA
+eeee
+eeee
+effe
+effe
+effe
+eeee
+
+@frame flickerB
+dddd
+dddd
+dddd
+deed
+deed
+dddd
+
+@frame dark
+cccc
+cccc
+cccc
+cccc
+cccc
+cccc
+
+@copy restored dark

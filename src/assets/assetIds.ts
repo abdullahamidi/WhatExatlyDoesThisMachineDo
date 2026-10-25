@@ -20,5 +20,12 @@ export const ASSET_IDS = ['bg.sky','bg.mountains','bg.skyline','bg.pylons','terr
   'bg.skyRestored','bg.mountainsRestored','bg.skylineRestored','bg.regrowth1','bg.regrowth2','bg.regrowth3','terrain.groundGreen',
   'fx.beamWhite','fx.seed','fx.bird','ui.nameplate','ui.panel','ui.button','ui.icons16',
   'machine.generatorGlow','machine.bellows','machine.exciterFeed','machine.backfeedTerminal','machine.steamLance',
-  'machine.gearRim','machine.flywheelRim2','machine.flywheelRim3'] as const;
+  'machine.gearRim','machine.flywheelRim2','machine.flywheelRim3',
+// WP23a living world (DENIZEN_ART 5.1): ids 120..144
+  'world.inspector','world.clipboardPages','world.dog','world.stakeChain','world.hole',
+  'world.redBall','world.crow','world.girl','world.girlMini','world.girlWindow',
+  'world.lantern','world.payphone','world.receiver','world.lamp','world.lampGlow',
+  'world.clock','world.sensor7','world.puddle','world.sprout','world.scraps',
+  'world.mote','world.page','world.shadow','bg.windowLit','bg.virga'
+] as const;
 export type AssetId = typeof ASSET_IDS[number];

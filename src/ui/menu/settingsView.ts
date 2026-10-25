@@ -1,11 +1,11 @@
 // SETTINGS tab model (WP12 T7). Pure: maps SettingsState to control descriptors and to patches. No DOM.
 import { DISPLAY_TEXT } from '../../data/display';
-import { NOTATIONS, SETTINGS_LABELS, UI_SCALES, VOLUME_RANGE } from '../../data/settings';
-import type { NumberNotation, SettingsState, UiScale } from '../../data/types';
+import { NOTATIONS, SETTINGS_LABELS, UI_SCALES, VOLUME_RANGE, WORLD_VOICES } from '../../data/settings';
+import type { NumberNotation, SettingsState, UiScale, WorldVoices } from '../../data/types';
 
 export type SettingsSection = 'audio' | 'display' | 'access';
 export type VolumeId = 'masterVolume' | 'sfxVolume' | 'ambientVolume' | 'musicVolume';
-export type RadioId = 'notation' | 'uiScale';
+export type RadioId = 'notation' | 'uiScale' | 'worldVoices';
 export type ToggleId = 'reducedMotion' | 'statusMarkers' | 'screenShake' | 'confirmNewCycle';
 
 export const VOLUME_IDS: readonly VolumeId[] = ['masterVolume', 'sfxVolume', 'ambientVolume', 'musicVolume'];
@@ -74,6 +74,10 @@ export function uiScaleOf(value: string): UiScale | null {
   return UI_SCALES.find((u) => u === n) ?? null;
 }
 
+export function worldVoicesOf(value: string): WorldVoices | null {
+  return WORLD_VOICES.find((w) => w === value) ?? null;
+}
+
 function toggleControl(id: ToggleId, s: Readonly<SettingsState>, section: SettingsSection): ToggleControl {
   const label = SETTINGS_LABELS[id];
   if (id === 'screenShake' && s.reducedMotion) {
@@ -114,10 +118,18 @@ export function settingsViewModel(s: Readonly<SettingsState>, opts?: { cycleRele
     label: SETTINGS_LABELS.uiScale,
     options: UI_SCALES.map((u) => ({ value: String(u), label: SETTINGS_LABELS.uiScales[u], checked: u === s.uiScale })),
   };
+  const worldVoices: RadioControl = {
+    kind: 'radio',
+    section: 'display',
+    id: 'worldVoices',
+    label: SETTINGS_LABELS.worldVoices,
+    options: WORLD_VOICES.map((w) => ({ value: w, label: SETTINGS_LABELS.worldVoicesOptions[w], checked: w === s.worldVoices })),
+  };
   return [
     ...volumes,
     notation,
     uiScale,
+    worldVoices,
     toggleControl('statusMarkers', s, 'display'),
     { ...toggleControl('confirmNewCycle', s, 'display'), hidden: !(opts?.cycleRelevant ?? true) },
     toggleControl('reducedMotion', s, 'access'),
@@ -153,6 +165,10 @@ export function radioPatch(id: RadioId, value: string): Partial<SettingsState> |
   if (id === 'notation') {
     const notation = notationOf(value);
     return notation === null ? null : { notation };
+  }
+  if (id === 'worldVoices') {
+    const worldVoices = worldVoicesOf(value);
+    return worldVoices === null ? null : { worldVoices };
   }
   const uiScale = uiScaleOf(value);
   return uiScale === null ? null : { uiScale };

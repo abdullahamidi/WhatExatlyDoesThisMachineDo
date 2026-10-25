@@ -13,6 +13,7 @@ import {
   uiScaleOf,
   volumePatch,
   volumeText,
+  worldVoicesOf,
 } from './settingsView';
 import type { RadioControl, ToggleControl, VolumeControl, VolumeId } from './settingsView';
 
@@ -26,7 +27,7 @@ function volume(s: SettingsState, id: VolumeId): VolumeControl {
   return found as VolumeControl;
 }
 
-function radio(s: SettingsState, id: 'notation' | 'uiScale'): RadioControl {
+function radio(s: SettingsState, id: 'notation' | 'uiScale' | 'worldVoices'): RadioControl {
   const found = settingsViewModel(s).find((c) => c.id === id);
   expect(found?.kind).toBe('radio');
   return found as RadioControl;
@@ -49,10 +50,10 @@ describe('settingsViewModel (default settings)', () => {
 
   it('lists controls in AUDIO, DISPLAY, ACCESS order', () => {
     expect(model.map((c) => c.id)).toEqual([
-      'masterVolume', 'sfxVolume', 'ambientVolume', 'musicVolume', 'notation', 'uiScale', 'statusMarkers', 'confirmNewCycle', 'reducedMotion', 'screenShake',
+      'masterVolume', 'sfxVolume', 'ambientVolume', 'musicVolume', 'notation', 'uiScale', 'worldVoices', 'statusMarkers', 'confirmNewCycle', 'reducedMotion', 'screenShake',
     ]);
     expect(model.map((c) => c.section)).toEqual([
-      'audio', 'audio', 'audio', 'audio', 'display', 'display', 'display', 'display', 'access', 'access',
+      'audio', 'audio', 'audio', 'audio', 'display', 'display', 'display', 'display', 'display', 'access', 'access',
     ]);
   });
 
@@ -98,6 +99,15 @@ describe('settingsViewModel (default settings)', () => {
     expect(row.options.map((o) => o.checked)).toEqual([true, false, false]);
   });
 
+  it('WORLD VOICES radio sits right after UI SCALE, defaults to ON, options ON / RARE / OFF', () => {
+    const row = radio(DEFAULT_SETTINGS_VALUES, 'worldVoices');
+    expect(row).toMatchObject({ kind: 'radio', section: 'display', id: 'worldVoices', label: 'WORLD VOICES' });
+    expect(row.options.map((o) => o.value)).toEqual(['on', 'rare', 'off']);
+    expect(row.options.map((o) => o.label)).toEqual(['ON', 'RARE', 'OFF']);
+    expect(row.options.map((o) => o.checked)).toEqual([true, false, false]);
+    expect(DEFAULT_SETTINGS_VALUES.worldVoices).toBe('on');
+  });
+
   it('toggles: status markers off, confirm new cycle on, reduced motion off, screen shake on', () => {
     const confirm = toggle(DEFAULT_SETTINGS_VALUES, 'confirmNewCycle');
     expect(confirm).toMatchObject({ section: 'display', pressed: true, stateText: 'ON', disabled: false });
@@ -124,6 +134,8 @@ describe('settingsViewModel (changed settings)', () => {
     expect(n.options.map((o) => o.checked)).toEqual([false, false, true]);
     const u = radio(withSettings({ uiScale: 150 }), 'uiScale');
     expect(u.options.map((o) => o.checked)).toEqual([false, false, true]);
+    const w = radio(withSettings({ worldVoices: 'rare' }), 'worldVoices');
+    expect(w.options.map((o) => o.checked)).toEqual([false, true, false]);
   });
 
   it('status markers ON when set', () => {
@@ -242,6 +254,15 @@ describe('option lookups', () => {
     expect(uiScaleOf('110')).toBeNull();
     expect(uiScaleOf('abc')).toBeNull();
   });
+
+  it('worldVoicesOf accepts only ON / RARE / OFF values', () => {
+    expect(worldVoicesOf('on')).toBe('on');
+    expect(worldVoicesOf('rare')).toBe('rare');
+    expect(worldVoicesOf('off')).toBe('off');
+    expect(worldVoicesOf('RARE')).toBeNull();
+    expect(worldVoicesOf('loud')).toBeNull();
+    expect(worldVoicesOf('')).toBeNull();
+  });
 });
 
 describe('patches', () => {
@@ -263,6 +284,9 @@ describe('patches', () => {
     expect(radioPatch('notation', 'bogus')).toBeNull();
     expect(radioPatch('uiScale', '150')).toEqual({ uiScale: 150 });
     expect(radioPatch('uiScale', '99')).toBeNull();
+    expect(radioPatch('worldVoices', 'rare')).toEqual({ worldVoices: 'rare' });
+    expect(radioPatch('worldVoices', 'off')).toEqual({ worldVoices: 'off' });
+    expect(radioPatch('worldVoices', 'loud')).toBeNull();
   });
 
   it('toggleAction flips only its own field', () => {

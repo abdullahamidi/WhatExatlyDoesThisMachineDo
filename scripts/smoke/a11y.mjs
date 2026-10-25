@@ -1,6 +1,7 @@
 // WP16a T6b a11y smoke: keyboard reach, focus traps, focus rings, accessible names, 12 px floor, WCAG contrast,
 // reduced motion and UI scale 150 across title, credits, HUD, tech tree, SYSTEM menu, finale, photo mode, cycle confirm.
 // WP16b-2: the tech tree, purchase toast and era card gate too (case H: era card, tree tabs 2 and 1, toast).
+// WP23a T13b: case W (living world bubble): W_live_region, W_bubble_aria_hidden, W_tab_walk_unchanged.
 // Usage: PW_PATH=... node scripts/smoke/a11y.mjs <base-url-without-query> <outdir>
 // base = preview URL with a trailing slash and NO query (e.g. http://localhost:4174/); each case adds its own query.
 // Prints ONE JSON object { results, fail, deferred, inactive, indeterminate, errors } to stdout and to <outdir>/a11y.json.
@@ -496,6 +497,96 @@ const runH = async browser => {
   }
 };
 
+// W (WP23a T13b): the living-world bubble in one fresh context with the hook. The polite live region speaks one line, the
+// bubble nodes stay out of the accessibility tree and the focus order, and a bubble on screen leaves the Tab walk unchanged.
+const bubbleOn = page => page.evaluate(() => window.__wedtmd.worldBubble()?.visible === true);
+
+// Polls bubbleOn until it equals want or capMs passes. Returns whether it equals want.
+const bubbleIs = async (page, want, capMs = 3000) => {
+  const deadline = Date.now() + capMs;
+  let v = await bubbleOn(page);
+  while (v !== want && Date.now() < deadline) {
+    await wait(page, 100);
+    v = await bubbleOn(page);
+  }
+  return v === want;
+};
+
+// Waits (cap 8 s) until no toast is shown, so both walks start from the same screen. Returns whether none is shown.
+const toastsGone = async page => {
+  const deadline = Date.now() + 8000;
+  for (;;) {
+    const n = await page.evaluate(() => [...document.querySelectorAll('#toast-stack .toast')].filter(t => t.getClientRects().length > 0).length);
+    if (n === 0 || Date.now() >= deadline) return n === 0;
+    await wait(page, 100);
+  }
+};
+
+// Runs in the page: live region politeness and text, the bubble hook state, and the ARIA state of every .wv node.
+const liveState = () => {
+  const live = document.getElementById('world-voice-live');
+  const b = window.__wedtmd.worldBubble();
+  return {
+    polite: live !== null && live.getAttribute('aria-live') === 'polite',
+    text: live !== null ? live.textContent : null,
+    visible: b !== null && b.visible === true,
+    bubbleText: b !== null ? b.text : null,
+    wv: Array.from(document.querySelectorAll('.wv')).map(el => ({
+      aria: el.getAttribute('aria-hidden'),
+      tabindex: el.hasAttribute('tabindex'),
+      focusable: el.tabIndex >= 0,
+      open: el.classList.contains('is-open'),
+    })),
+  };
+};
+
+const runW = async browser => {
+  cur = 'W_world';
+  const { ctx, page } = await openContext(browser);
+  try {
+    await guard('W_world', async () => {
+      await gotoGame(page, { debug: '1' });
+      await page.evaluate(() => window.__wedtmd.worldQuiet(false));
+      // First moment: one click, Gear Ratio. worldSay forces INS-02 past gaps and play-time gates, so no play-time advance is
+      // needed: an advance would let the idle DOG-02 line start a frame before the force and take the one live region.
+      await crankClicks(page, 16, 0);
+      const failed = await buyList(page, ['gearRatio']);
+      await poll(page, () => window.__wedtmd.worldState()?.silence === null, null, 3000, 100);
+      const say = await page.evaluate(() => window.__wedtmd.worldSay('INS-02'));
+      const shown = await bubbleIs(page, true);
+      await wait(page, 400);
+      const st = await page.evaluate(liveState);
+      const text = st.text ?? '';
+      const oneLine = /^Inspector: .+/.test(text) && text.indexOf('Inspector:', 1) < 0;
+      const sameLine = st.bubbleText !== null && st.bubbleText !== '' && text === `Inspector: ${st.bubbleText}`;
+      check('W_live_region', say === true && shown && st.polite && oneLine && sameLine, { failed, say, shown, polite: st.polite, live: st.text, bubble: st.bubbleText });
+      const aria = st.visible && st.wv.length > 0 && st.wv.every(x => x.aria === 'true' && !x.tabindex && !x.focusable && !x.open);
+      check('W_bubble_aria_hidden', aria, { visible: st.visible, wv: st.wv });
+
+      // Tab walk from #hud-tech over the HUD: first with no bubble on screen, then with INS-01 on screen. Same start, same records.
+      await page.evaluate(() => window.__wedtmd.worldQuiet(true));
+      const offBefore = await bubbleIs(page, false, 6000);
+      await toastsGone(page);
+      await focusId(page, 'hud-tech');
+      const walkOff = await tabWalk(page, 8, '#ui-root');
+      await page.evaluate(() => window.__wedtmd.worldQuiet(false));
+      await poll(page, () => window.__wedtmd.worldState()?.silence === null, null, 3000, 100);
+      const say2 = await page.evaluate(() => window.__wedtmd.worldSay('INS-01'));
+      const onScreen = await bubbleIs(page, true);
+      await focusId(page, 'hud-tech');
+      const walkOn = await tabWalk(page, 8, '#ui-root');
+      const stillOn = await bubbleOn(page);
+      const strip = walk => walk.map(({ i, ...rest }) => rest);
+      const same = JSON.stringify(strip(walkOn)) === JSON.stringify(strip(walkOff));
+      check('W_tab_walk_unchanged', offBefore && say2 && onScreen && stillOn && walkOff.length === 8 && same, {
+        offBefore, say2, onScreen, stillOn, same, off: strip(walkOff), on: strip(walkOn),
+      });
+    });
+  } finally {
+    await ctx.close();
+  }
+};
+
 // ---- Run ----
 
 const browser = await chromium.launch();
@@ -506,6 +597,7 @@ try {
   await runF(browser);
   await runG(browser);
   await runH(browser);
+  await runW(browser);
 } catch (e) {
   fail.push(`FAILED:run:${firstLine(e)}`);
 } finally {

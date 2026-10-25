@@ -1,0 +1,26 @@
+# Lamp glow colour master (WP23a AD-d, Art Director). Cell 32x16 art px, origin (0.5, 0.5) = the lamp glass centre
+# (lamp origin - WORLD_ENV.lampHeadArtPx 49 art px). Two hard-stepped ellipses, no outline (light, not an object):
+# outer 32x16 #ad6236, inner 18x8 #c98552 (rust-amber only, check_sheet `only`). The PNG is opaque (alpha 0/255 gate);
+# the renderer applies the glow alpha at runtime (.22 / .12, mains flicker +-.08). warm = copy of cold until WP23b.
+# Build: python -I scripts/art/world/build_sheet.py lampGlow   Gate: python -I scripts/art/world/check_sheet.py lampGlow
+
+@frame cold
+..........eeeeeeeeeeee..........
+.......eeeeeeeeeeeeeeeeee.......
+....eeeeeeeeeeeeeeeeeeeeeeee....
+...eeeeeeeeeeeeeeeeeeeeeeeeee...
+..eeeeeeeeffffffffffffeeeeeeee..
+.eeeeeeeeffffffffffffffeeeeeeee.
+eeeeeeeeffffffffffffffffeeeeeeee
+eeeeeeeffffffffffffffffffeeeeeee
+eeeeeeeffffffffffffffffffeeeeeee
+eeeeeeeeffffffffffffffffeeeeeeee
+.eeeeeeeeffffffffffffffeeeeeeee.
+..eeeeeeeeffffffffffffeeeeeeee..
+...eeeeeeeeeeeeeeeeeeeeeeeeee...
+....eeeeeeeeeeeeeeeeeeeeeeee....
+.......eeeeeeeeeeeeeeeeee.......
+..........eeeeeeeeeeee..........
+
+# PLACEHOLDER CELL (copy of cold until WP23b): warm (era III warm lamp, finale, postgame).
+@copy warm cold

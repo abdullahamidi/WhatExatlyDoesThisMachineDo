@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { GameContext, PartEvolvedEvent, PartTorquedEvent } from './context';
+import type { GameContext, PartEvolvedEvent, PartTorquedEvent, WorldSound } from './context';
 import type { PurchaseFailure } from '../data/types';
 import type { FinaleBeat } from '../data/finale';
 import type { MachineComponentId } from '../data/machineComponents';
@@ -25,6 +25,7 @@ import { achievementMessage, recoveredMessage, welcomeBackMessage } from '../ui/
 import { createTechTree } from '../ui/techTree';
 import { createGuidance } from '../ui/guidance';
 import { createEraCards } from '../ui/eraCard';
+import { createWorldVoiceView } from '../ui/worldVoice';
 import { prestigeUiVisible } from '../ui/systemMenuModel';
 import { createSystemMenu } from '../ui/systemMenu';
 import type { SystemMenuPanel } from '../ui/systemMenu';
@@ -57,6 +58,7 @@ import type { Edition } from '../data/edition';
 import { SHOWCASE_TEASER } from '../data/showcase';
 import { BootScene } from './scenes/BootScene';
 import { WorldScene } from './scenes/WorldScene';
+import type { WorldLink } from './scenes/WorldScene';
 import { ShowcaseScene } from './scenes/ShowcaseScene';
 import { installDebugHook } from './debugHook';
 
@@ -84,6 +86,9 @@ export interface BootOptions {
 }
 
 export function bootstrap(opts: BootOptions = {}): Phaser.Game {
+  // WP23a: the living world director is a lazy chunk (the app chunk is budgeted). Warming it here lets it arrive during the asset
+  // load, so it exists by the first World frame; WorldScene's own import then gets the cached module. A failed load is reported there.
+  void import('./rendering/LivingWorldDirector').catch(() => undefined);
   const search = opts.search ?? window.location.search;
   const edition = opts.edition ?? EDITIONS.full;
   const host = getHost(window);
@@ -146,6 +151,7 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
     feedback: {
       purchaseDenied: createSignal<PurchaseFailure>(), partLanded: createSignal<MachineComponentId>(), finaleBeat: createSignal<FinaleBeat>(),
       partEvolved: createSignal<PartEvolvedEvent>(), partTorqued: createSignal<PartTorquedEvent>(),
+      worldSound: createSignal<WorldSound>(),
     },
     modals,
     newCycle,
@@ -162,7 +168,16 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
   const techTree = createTechTree(root, ctx);
   // WP20: HUD guidance (next goal, TECH INDEX hint, affordable badge) and era cards. Page-lifetime, like the HUD and toasts.
   createGuidance(root, { session, techTree });
-  createEraCards(root, { session, techTree });
+  const eraCards = createEraCards(root, { session, techTree });
+  // WP23a living world: the speech bubble DOM (page-lifetime, like the era cards). The SYS LOG and KEEP links are late-bound:
+  // WorldScene points the members at its director once the World scene is up; until then they are the no-ops below.
+  const worldView = createWorldVoiceView(root);
+  const worldLink: WorldLink = {
+    onLogShown: (id: string) => undefined,
+    onLogCleared: (id: string) => undefined,
+    defer: () => false,
+    onKeep: () => undefined,
+  };
 
   const saveController = createSaveController({ session, saveManager });
   saveController.start();
@@ -353,7 +368,11 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
   connectAchievements(session, toasts);
   connectCycleNotices(session, toasts);
   connectOfflineNotices(session, toasts);
-  connectSystemLog(session, toasts);
+  connectSystemLog(session, toasts, undefined, {
+    defer: () => worldLink.defer(),
+    onShown: (id) => worldLink.onLogShown(id),
+    onCleared: (id) => worldLink.onLogCleared(id),
+  });
 
   // WP21: the demo end is decided once the World is up and no title blocks: cap owned -> card (or the teaser when the boot catch-up crossed the cap).
   const runDemoBoot = (): void => {
@@ -421,7 +440,10 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
     audio: { noAudio: true },
     fps: { target: FRAME_RATE.target, limit: FRAME_RATE.limit },
     disableContextMenu: true,
-    scene: [new BootScene(), new WorldScene(ctx, { hud, techTree, modals, finaleOverlay, finaleLink, cycleLink })],
+    scene: [new BootScene(), new WorldScene(ctx, {
+      hud, techTree, modals, finaleOverlay, finaleLink, cycleLink,
+      worldLink, worldView, eraCards, edition, bootOffline: startup.offline, welcomeShown: welcome !== null,
+    })],
   });
   // The UI root re-fits when the game resizes and once the game is ready (the first sync may run before the canvas).
   game.scale.on(Phaser.Scale.Events.RESIZE, () => viewport.sync());
@@ -441,6 +463,7 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
         blocked: () => shellHoldsKeys() || newCycleHoldsKeys(),
         openUrl: (url) => { if (host !== null) host.openExternal(url); else window.open(url, '_blank', 'noopener,noreferrer'); },
         desktop: host !== null,
+        onKeep: () => worldLink.onKeep(),
         quit: quitToDesktop,
       });
       runDemoBoot();

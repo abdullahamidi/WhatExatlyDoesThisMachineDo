@@ -1,0 +1,8 @@
+# Ash mote (WP23a AD-b, Art Director). Cell 2x2 art px, pivot centre; 4-5 orbit the lamp in era II.
+# moth = PLACEHOLDER (copy of ash) until WP23b draws the white postgame moth.
+
+@frame ash
+ss
+bb
+
+@copy moth ash

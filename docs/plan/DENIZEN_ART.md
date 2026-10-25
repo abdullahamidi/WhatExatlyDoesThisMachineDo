@@ -198,17 +198,18 @@ Frame sizes are art px. The pivot is (0.5, 1): feet on the bottom row, body cent
   | 4-7 | walk ×4 |
   | 8-9 | dig ×2 |
   | 10-11 | shake ×2 |
-  | 12 | head to camera (glance and stare) |
-  | 13 | talk (head to camera, jaw 1 px) |
+  | 12 | head to camera (glance and stare); front-head dog cues (AD2c F6): flat skull top, the torn ear folded down as a 1 px flap on the skull side (never a second point), 3 px light muzzle (`u`) one row below the eye line with a 1 px ink nose at its bottom centre, `t` bridge between the eyes, jaw 1 px wider |
+  | 13 | talk (head to camera, jaw 1 px: the light chin drops over the collar) |
   | 14 | flat (beam) |
-  | 15 | lie facing camera (demo hold image) |
+  | 15 | lie facing camera (demo hold image; same front-head cues as 12) |
   | 16 | sleep |
   | 17-18 | chase ×2 (whole row) |
   | 19 | wag (tail up) |
 
 - **Props:**
   - `world.stakeChain`: 10×6, 2 frames (chained / chain fallen).
-  - `world.hole`: 16×6, 4 stages, front row, dog x + 20. It never refills.
+  - `world.hole`: 16×6, 4 stages, front row, dog x + 30 (AD2 F7: the pit spans x + 14 .. x + 46, so the dig nose at
+    x + 20 stays in it and the whole stage 1 pit shows beside the paws). It never refills.
   - `world.redBall`: 3×3, cycle 2+ and postgame.
 - **Per era:** I sepia ghost, II flicker, III red collar (rust) back, IV still (the wag snaps to the downbeat),
   V backwards walk, whole without the chain.
@@ -243,7 +244,9 @@ Frame sizes are art px. The pivot is (0.5, 1): feet on the bottom row, body cent
   - ground: frame 16×28, body 12×24. A pointed hood triangle, yellow raincoat `#d9822b`/`#f0a848` (accent is
     allowed: she is the one saturated figure), boots `a`, and a lantern 3×4 with a 1 px glow dot. The face is always
     a 2-tone smudge.
-  - `world.girlMini`: 8×12 frame, 5×10 body, 2 frames (lantern warm / cold white `#ddc9a3`).
+  - `world.girlMini`: 8×12 frame, 5×10 body, 2 frames (lantern warm / cold white `#ddc9a3`). Pylon plane foot at
+    `WORLD_FAR_PLANES.girlMini` footArtX 146, footArtY 157 (AD2 F1: 12 art px left of the pylon's left leg), i.e. the
+    feet strip point (868, 1160); game x ≈ 164 / 85 / 171 at e1 / s8 / s9, clear of the motor and the Inspector.
   - `world.girlWindow`: 4×6, 4 frames: flicker a, flicker b, dark, restored with a 2×4 figure at the curtain.
 - **Frames (10):** stand facing ×2 (sway), palm out 1, talk 1, shield (lantern raised) 1, back-run ×4 (finale),
   lantern-dropped 1. The lantern on the ground is `world.lantern` (6×4, 2 frames: lit / fallen).
@@ -267,12 +270,16 @@ Frame sizes are art px. The pivot is (0.5, 1): feet on the bottom row, body cent
 - **Booth:**
   - frame 28×52, body 24×48. Peaked hood, 16×24 glass pane, iron `2 3 4` with rust patches.
   - Frames: dark, lit (hood light), ring-shake ×2, fog overlay, cracked restored-whole.
-  - The tally marks are procedural, drawn into the pane at load: 1 art px strokes in groups of five, 3 rows,
-    color `#a8957a`, `#ddc9a3` in the fog frame. Count 40 + cycle, 41 + cycle from the postgame on.
+  - The tally marks are procedural, drawn into the pane at load (`WORLD_MARKS`, AD2 F3): pane (6, 13) 16×24 art px;
+    a group = 4 vertical strokes 1×4 at pitch 2 plus the fifth as a 3 px slash in the gaps ((1, 3), (3, 2), (5, 1)),
+    so it reads as a tally, not a window grid; groups in 2 columns (pitch 9) × 5 rows (row gap 1), capacity 50.
+    Color `#a8957a`, `#ddc9a3` in the fog frame. Count 40 + cycle, 41 + cycle from the postgame on.
 - **Receiver `world.receiver`:** 8×12, 6 frames: hang, swing ×3, level (era V, pointed at the camera), on hook. It
   is a separate sprite on the cord pivot. The bubble anchors here.
 - **Lamp `world.lamp`:** frame 12×60, body 8×56, 4 frames: dead, lit, warm, restored. Plus `world.lampGlow` 32×16
-  with 2 hard-stepped ellipses, `#f0a848` at alpha .22 / .12, shown in II-IV and the postgame.
+  with 2 hard-stepped ellipses (outer `#ad6236`, inner `#c98552`, opaque in the PNG), shown in II-IV and the
+  postgame. Runtime alpha `WORLD_ENV.lampGlow` .4, + .2 (`bumpAlpha`) for `rippleMs` on a lamp ripple or flicker,
+  times the mains flicker (AD2 F4: the old .8 read as a solid orange plate).
 - **Clock `world.clock`:** frame 16×44, 2 frames (ruin, restored). The hands are a 1 px Graphics overlay.
 
 ### 2.6 Sensor 7 `world.sensor7`
@@ -286,7 +293,10 @@ Frame sizes are art px. The pivot is (0.5, 1): feet on the bottom row, body cent
   - LED 1×1. It is a separate 1-px sprite so the color can swap without new frames: `#ad6236`, `#f0a848`, then
     `PALETTE.green2` in the whole state only.
 - **Head tracking:** the head picks L/C/R from the camera center x relative to the sensor (±200 world). It is
-  "looking at you" by pointing at the frame center.
+  "looking at you" by pointing at the frame center. headL / headR are 3/4 heads (AD2c): the side panel shows and the
+  lens glass still faces the viewer, flush with the turn-side edge, no barrel past the box. A flank lens with a barrel
+  read as aiming at the machine, which sits right of the sensor in e1 / s9 (bible §3.6: it watches the camera, so it
+  reports nothing about the machine).
 
 ---
 
@@ -299,8 +309,8 @@ is open or off-screen.
 | framing | view x | machine x | Sensor 7 | Inspector (rest / route) | girl | dog (front) | clock | booth | lamp + crow |
 |---|---|---|---|---|---|---|---|---|---|
 | s0-s7 (era I; cycle 2+) | 1280-2560 | 1720 / 1576 → 2120 / 2316 | 1384 | 1472 / 1448-1496 | window (sf .3) | 2364 | 2516 | 2420 | 2476 |
-| s8 (era II, generator: CROSSED LINES) | 1424-2704 | 1576-2552 | off | 1472 / none | pylon foot (sf .55) | 2604 | off | 2604 | 2656 |
-| s9 (era II full) | 1339-3045 | 1576-2808 | 1384 | 1472 / ± 24 | pylon foot | 2856 | 2900 | 2944 | 2996 |
+| s8 (era II, generator: CROSSED LINES) | 1424-2704 | 1576-2552 | off | 1472 / none | pylon foot (sf .55; feet strip 868, 1160 = game x ≈ 85) | 2604 | off | 2604 | 2656 |
+| s9 (era II full) | 1339-3045 | 1576-2808 | 1384 | 1472 / ± 24 | pylon foot (game x ≈ 171) | 2856 | 2900 | 2944 | 2996 |
 | s10 (era III entry: PAY-06) | 1202-2908 | 1302-2808 | off | 1252 / none | pylon (nearer) | 2858 | off | 2858 | off |
 | s11-s14 (III-IV, V start) | 642-3202 | 1036-2808 | 712 | 784 / 760-808 | III pylon; IV back row 880 | 2856 | 2890 | 3050 | 3104 |
 | s15 (era V full) | 640-3200 | 848-2992 (anchors 848-912, 2928-2992) | 712 | 784 / 760-808 | inner left gap 976, front row, y + 8 per step | 2856 | 2890 | 3050 | 3104 |
@@ -313,7 +323,7 @@ is open or off-screen.
 | prop | era | x (world) |
 |---|---|---|
 | stake + chain | all | dog x − 16 |
-| hole (front row) | II on | dog x + 20 |
+| hole (front row) | II on | dog x + 30 (e1 2394, s8 2634, s9 2886) |
 | scraps ×3 | I-II | 1330 / 1420 / 1530 |
 | scraps ×3 | III | 690 / 830 / 960 |
 | puddles | III on | 930-990 (3 sizes) |
@@ -363,7 +373,7 @@ Fixes against the bible's §3.0 table (all re-checked with the rule above):
 | hidden | photo mode by the existing rule (never `is-open`); `#ui-root.finale-active .wv{display:none}`; World SLEEP/WAKE; tab hidden |
 | a11y | one visually hidden polite live region elsewhere gets `Inspector: <line>`; the bubble itself is aria-hidden, so it is never read twice and never focusable |
 
-CSS, about 0.8 KB minified (the bible's ≤ 0.9 KB holds; the cssKb 44 → 45 insurance is still recommended):
+CSS as shipped (src/ui/worldVoice.css, with the live region and the HUD font stack) is about 1.0 KB minified (1000 B limit; the bible's 0.9 KB is relaxed to 1.0 KB; demo css about 43.8 of 45 KB):
 ```css
 .wv{position:absolute;left:0;top:0;z-index:70;max-width:200px;padding:5px 8px;background:#ddc9a3;color:#14110f;
  font:14px/18px ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;pointer-events:none;opacity:0;
@@ -385,7 +395,9 @@ CSS, about 0.8 KB minified (the bible's ≤ 0.9 KB holds; the cssKb 44 → 45 in
   - Client point = `worldToClient`, then `(client − cachedCanvasRect.left) / uiZoom`.
   - The canvas rect is cached on resize. The bubble is written with `transform: translate(...)` only.
 - **Ladder** (bible §7.5) on the safe rect = viewport inset 8 px, minus the HUD panel, toast stack, button row,
-  `#hud-hint`, era card, finale column, SKIP and the crank prompt rects:
+  `#hud-hint`, era card, finale column, SKIP and the crank prompt rects, the other chain bubble, and the head of every
+  other visible ground denizen (`WORLD_LAYOUT.headReserve`: pad 36 world px for the Inspector, 12 for the rest, a 24
+  game px box from 4 above the head; AD2b F16 / F2, so a bubble never hides another face):
   1. Above the head, tail down, gap 6 px. The box is clamped horizontally and the tail slides.
   2. If that hits a reserved rect: below the feet in the foreground band, class `up`, tail up.
   3. If the clamp leaves the head outside [x0 + 10, x1 − 10]: to the side, outward wing first.
@@ -447,13 +459,15 @@ CSS, about 0.8 KB minified (the bible's ≤ 0.9 KB holds; the cssKb 44 → 45 in
 ## 5. Environment arc: layer changes and assets
 
 The canon layers stay (pylonsLit, steam and smoke, rising dust, violet sky, eclipse, glow, beam, restoration). Every
-addition below is small, local and on the wings. No new full-screen background is needed. The finale wipe stays the
-only large change.
+addition below is small, local and on the wings (the far-plane windows sit behind the machine top, on the skyline).
+No new full-screen background is needed. The finale wipe stays the only large change. Q6 gate (WP23.md): every era
+entry adds one background-scale change a player notices at the default camera at 1920×1080; for I → II that is the
+six windows coming up at `generator` (AD2c proof pairs).
 
 | era | sky / far planes | ground and props | light | weather / life |
 |---|---|---|---|---|
 | I | `world.girlWindow` flicker on the far window plane (1.5-4 s irregular; one frame per crank click before `wornMotor`) | booth dark (41 marks faint), lamp dead, clock stopped, stake + cut chain, 3 scraps, Sensor 7 | none | canon dust; the crow frozen; the dog sitting |
-| II | at `generator` the girl's window goes dark (frame 2); at `powerLines` **6 × `bg.windowLit`** fade in | booth lit hood, receiver swing; hole stage 1 at `load-beneath` | `world.lampGlow` on at `powerLines`; mains flicker ±.08 alpha (code) | 4-5 `world.mote` ash motes orbit the lamp (1 emitter) |
+| II | at `generator` the girl's window goes dark (frame 2) and **6 × `bg.windowLit`** come up dim (`WORLD_ENV.windowDimLevel` .85, fade `windowGlow.fadeMs`; the Q6 era II entry change, AD2c); at `powerLines` they go full (1, + mains flicker) | booth lit hood, receiver swing; hole stage 1 at `load-beneath` | `world.lampGlow` on at `powerLines`; mains flicker ±.08 alpha (code) | 4-5 `world.mote` ash motes orbit the lamp (1 emitter) |
 | III | **`bg.virga`** on an sf 0.15 strip above the mountain ridge at lifetime PR ≥ 1M: rain streaks that stop 6 art px above the ridge | `world.puddle` 1-3 at `condenser` MK I/III/V (reflect `#b8a98f`/`#d2bf9c` cloud, never blue); `world.sprout` white stages 1-2; booth fog overlay at vents (marks sharp); scraps burn away with firebox tiers | lamp warm frame | Inspector umbrella, girl hood and palm at vents; damp crow perched |
 | IV | windows breathe on the downbeat (alpha .85 ↔ 1; static under reduced motion); `bg.virga` frame 2 (frozen) | Chladni rings (procedural Graphics around the machine base, `#c9b28a` 1 px dashes, intensity 1/2 from `standingWave` MK III/V); puddles ring on downbeats (1-px ring frames 2); `world.page` lifts every ≈ 40 s | lamp pulses on the downbeat | motes freeze mid-orbit; the crow hovers 2 px |
 | V | windows off by stage 6 → 4 → 2 → 1 → 0 (nullChamber, lensArray, horizonField ≥ 5, skyAperture); virga fades out | puddles black frame (reflect nothing); sprout stages 3-4 (tall, white, bent toward the beam); Chladni lines tinted `violetLight`; hole stays | lamp dead at the skyAperture diamond; no shadows from horizonField ≥ 5; violet rim rows | motes fall into the dead lamp; double exposure (code: one frame, violet tint, 15 % alpha) |
@@ -487,7 +501,7 @@ only large change.
 | `world.mote` | `world/mote.png` | 2×2 | 2 (ash, moth) | dust depth | 1 emitter, pool 5 |
 | `world.page` | `world/page.png` | 3×4 | 2 | dust depth | |
 | `world.shadow` | procedural | 14×3 / 18×3 / 26×3 | — | row −0.01 | Graphics ellipse, baked once |
-| `bg.windowLit` | `bg/window-lit.png` | 4×6 | 2 (lit, breathe) | far window plane | 6 placements on skyline windows (158, 208), (167, 207), (306, 120), (306, 132), (318, 146), (404, 216) |
+| `bg.windowLit` | `bg/window-lit.png` | 4×6 | 2 (lit, breathe) | far window plane | 6 placements on real skyline cut-outs (`WORLD_FAR_PLANES.windows`, AD2c): (306, 120) 4×6, (306, 132) 4×6, (318, 146) 4×6 on the tall tower right of centre; (143, 71) 2×4, (131, 99) 4×4, (134, 109) 1×3 in the upper floors of the big central tower. All six show in the generator pose (s8) and in s9, above the machine top, clear of the HUD and of the pylon plane; the frame is cropped from its top-left to each cut-out. Halo `windowGlow` pad 3 art px, alpha .65, `#d9822b`: halos touch, never overlap |
 | `bg.virga` | `bg/virga.png` | 512×64 | 2 (falling, frozen) | sf 0.15, depth −89.5 | tileable on x, sky ramp only |
 | — | procedural | — | — | DEPTH.ground + 3 | Chladni rings (Graphics), tally marks (canvas into the pane), tracking line (row shift at load) |
 
@@ -657,7 +671,7 @@ Folder: `C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-s
 1. **Small sizes at zoom .5.** The dog (16 px) and the crow (14 px) sit at the floor on a 720p window. If Wave A
    playtests say "can't see the dog", the fallback is the front row plus a 2 px rim of `#ddc9a3` on the dog only.
    There is no scale change.
-2. **CSS headroom.** The demo is at 42.8 / 44 KB and this adds ≈ 0.8 KB. Raise `cssKb` to 45 at the start of WP
+2. **CSS headroom.** The demo is at 42.8 / 44 KB and this adds ≈ 1.0 KB. Raise `cssKb` to 45 at the start of WP
    (bible Appendix D).
 3. **Changes to the finale film.** Adding denizens means new finale frame baselines and store-shot re-approval.
    - The baseR hold must show the booth whole. Today it fits at x 3026-3074 inside 1880-3160.

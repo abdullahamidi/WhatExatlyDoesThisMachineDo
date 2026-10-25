@@ -23,3 +23,4 @@ export { eraAllowed, resourceAllowed, clampStateToEra, clampLoadToEra } from './
 export type { EraCap } from './progression/edition';
 export { DEFAULT_PRESTIGE, echoesForCycle, spentEchoes, unspentEchoes, echoMultiplier, perkStatus, buyPerk, cycleTechs, applyStartLevels, newCycleState, cycleLabel, normalizePrestige, cyclePreview } from './prestige';
 export type { EchoRules, PerkStatus, BuyPerkResult, CyclePreview } from './prestige';
+export { normalizeWorld } from './worldSave';

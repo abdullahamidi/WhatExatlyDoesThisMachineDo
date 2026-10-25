@@ -6,6 +6,7 @@ import { paintSky, paintMountains, paintSkyline, paintPylons, paintPylonsLit, pa
 import { ERA2_PAINTERS } from './painters/era2';
 import { LEGACY_PAINTERS } from './painters/legacy';
 import { TIER_PAINTERS } from './painters/tiers';
+import { WORLD_PAINTERS } from './painters/world';
 import { paintFrame, paintCrank, paintGear } from './painters/machine';
 import { paintGenericPlate } from './painters/generic';
 
@@ -13,6 +14,7 @@ const PAINTERS: Partial<Record<AssetId, Painter>> = {
   ...ERA2_PAINTERS,
   ...LEGACY_PAINTERS,
   ...TIER_PAINTERS,
+  ...WORLD_PAINTERS,
   'bg.sky': paintSky,
   'bg.mountains': paintMountains,
   'bg.skyline': paintSkyline,

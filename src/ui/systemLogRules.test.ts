@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { nextSystemLog, seedTracker, systemLogMessage } from './systemLogRules';
 import type { SystemLogTracker } from './systemLogRules';
 import { INSTALL_LINES, FIRST_CLICK_MESSAGE } from '../data/notifications';
@@ -6,6 +6,10 @@ import { SYSTEM_LOGS, SYSTEM_LOG_CONFIG } from '../data/systemLogs';
 import type { SystemLogEntry } from '../data/systemLogs';
 import { TECH_IDS } from '../data/types';
 import type { ResourceMap } from '../data/types';
+import { GameSession, createInitialState } from '../simulation';
+import { connectSystemLog } from './systemLog';
+import type { SystemLogHooks } from './systemLog';
+import type { Toasts } from './toasts';
 
 const T0 = 1_000_000_000;
 
@@ -183,5 +187,129 @@ describe('systemLogMessage', () => {
 
   it('defaults to cycle 1 when called with one argument', () => {
     expect(systemLogMessage(synthetic('Cycle {cycle}.')).body).toBe('Cycle 0042.');
+  });
+});
+
+// connectSystemLog hooks (WP23a). Fake timers drive the poll, the onCleared timer and the window stub; Date is faked too.
+describe('connectSystemLog hooks', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  // Session at T0 with zero lifetime: only playSeconds logs can fire. observer-count (120 s) is the first eligible entry,
+  // and its first poll at minGapMs also clears the gap since the seed at T0.
+  const FIRST_KEY = 'log:observer-count';
+  const FIRST_ID = 'observer-count';
+  const FIRST_SHOW_MS = SYSTEM_LOG_CONFIG.minGapMs;
+  const POLL_MS = SYSTEM_LOG_CONFIG.checkIntervalMs;
+  const LIFE_MS = SYSTEM_LOG_CONFIG.durationMs;
+
+  interface Rig {
+    events: string[];
+    gate: { deferred: boolean };
+    session: GameSession;
+    dispose: () => void;
+  }
+
+  // Window timers resolve the global at call time, so the fake timers installed by useFakeTimers apply.
+  function startRig(withHooks: boolean): Rig {
+    vi.useFakeTimers({ now: T0 });
+    vi.stubGlobal('window', {
+      setInterval: (fn: () => void, ms: number) => setInterval(fn, ms),
+      clearInterval: (handle: ReturnType<typeof setInterval>) => clearInterval(handle),
+      setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
+      clearTimeout: (handle: ReturnType<typeof setTimeout>) => clearTimeout(handle),
+    });
+    const events: string[] = [];
+    const gate = { deferred: false };
+    const toasts: Toasts = {
+      show: (msg) => {
+        events.push(`show:${msg.key}`);
+      },
+      clear: () => {},
+      destroy: () => {},
+    };
+    const hooks: SystemLogHooks = withHooks
+      ? {
+          defer: () => gate.deferred,
+          onShown: (id) => {
+            events.push(`shown:${id}`);
+          },
+          onCleared: (id) => {
+            events.push(`cleared:${id}`);
+          },
+        }
+      : {};
+    const session = new GameSession({ state: createInitialState(T0), now: () => Date.now() });
+    const dispose = connectSystemLog(session, toasts, () => Date.now(), hooks);
+    return { events, gate, session, dispose };
+  }
+
+  const clearedEvents = (rig: Rig): string[] => rig.events.filter((e) => e.startsWith('cleared:'));
+
+  it('calls onShown with the id right after toasts.show', () => {
+    const rig = startRig(true);
+    vi.advanceTimersByTime(FIRST_SHOW_MS - POLL_MS);
+    expect(rig.events).toEqual([]);
+    vi.advanceTimersByTime(POLL_MS);
+    expect(rig.events).toEqual([`show:${FIRST_KEY}`, `shown:${FIRST_ID}`]);
+    rig.dispose();
+  });
+
+  it('calls onCleared exactly durationMs after the show, once', () => {
+    const rig = startRig(true);
+    vi.advanceTimersByTime(FIRST_SHOW_MS);
+    expect(rig.events).toEqual([`show:${FIRST_KEY}`, `shown:${FIRST_ID}`]);
+    vi.advanceTimersByTime(LIFE_MS - 1);
+    expect(clearedEvents(rig)).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(clearedEvents(rig)).toEqual([`cleared:${FIRST_ID}`]);
+    vi.advanceTimersByTime(LIFE_MS * 2);
+    expect(clearedEvents(rig)).toEqual([`cleared:${FIRST_ID}`]);
+    rig.dispose();
+  });
+
+  it('defer true postpones the log until defer returns false, then shows the same log', () => {
+    const rig = startRig(true);
+    rig.gate.deferred = true;
+    // Polls at 120 s, 125 s and 130 s are all deferred; the tracker stays untouched.
+    vi.advanceTimersByTime(FIRST_SHOW_MS + 2 * POLL_MS);
+    expect(rig.events).toEqual([]);
+    rig.gate.deferred = false;
+    vi.advanceTimersByTime(POLL_MS);
+    expect(rig.events).toEqual([`show:${FIRST_KEY}`, `shown:${FIRST_ID}`]);
+    rig.dispose();
+  });
+
+  it('dispose cancels a pending onCleared and the poll', () => {
+    const rig = startRig(true);
+    vi.advanceTimersByTime(FIRST_SHOW_MS);
+    expect(vi.getTimerCount()).toBe(2);
+    rig.dispose();
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(LIFE_MS * 2);
+    expect(clearedEvents(rig)).toEqual([]);
+    expect(rig.events).toEqual([`show:${FIRST_KEY}`, `shown:${FIRST_ID}`]);
+  });
+
+  it('a session reset cancels a pending onCleared', () => {
+    const rig = startRig(true);
+    vi.advanceTimersByTime(FIRST_SHOW_MS);
+    rig.session.reset(Date.now());
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(LIFE_MS * 2);
+    expect(clearedEvents(rig)).toEqual([]);
+    rig.dispose();
+  });
+
+  it('without hooks it shows the same log and schedules no onCleared timer', () => {
+    const rig = startRig(false);
+    vi.advanceTimersByTime(FIRST_SHOW_MS);
+    expect(rig.events).toEqual([`show:${FIRST_KEY}`]);
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(LIFE_MS * 2);
+    expect(rig.events).toEqual([`show:${FIRST_KEY}`]);
+    rig.dispose();
   });
 });

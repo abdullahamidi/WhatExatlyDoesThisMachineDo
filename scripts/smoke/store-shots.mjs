@@ -34,7 +34,9 @@
 //   missing = '<size>/<name>' for every store or alt file not captured for a requested size. Picks: docs/plan/WP16b-preaudit.md section C.
 // WP16b-3: plate cap (setPlateCap 'substationBlueprint' = RES?OR?) at stems 01, 10, 09; cleared at 08 (08 / 08b uncapped press kit).
 //   checks <size>_<id>_plate_cap and <size>_<id>_<variant>_no_spoiler (stems 01-07, 09, not press kit); store-top5.json gets plateCap. The check also asserts the HUD plaque text (read from #hud-plaque even when the HUD is hidden) has no RESTOR.
-// Documented in scripts/smoke/README.md (### store-shots.mjs).
+// WP23a: the living world is quiet for every stem (worldQuiet(true) before each stem, again after each navigation): no bubble,
+//   blip or glance reaches a shot. No check changed or added.
+// Documented in scripts/smoke/README.md (### store-shots.mjs; ### Existing smokes touched by WP23a).
 import fs from 'fs';
 import path from 'path';
 import {
@@ -147,6 +149,8 @@ async function main() {
     const got = await page.evaluate((c) => (typeof window.__wedtmd?.setPlateCap === 'function' ? window.__wedtmd.setPlateCap(c) : 'missing'), cap);
     report.check(`${size}_${id}_plate_cap`, got === cap, got);
   };
+  /** WP23a: the living world stays quiet for the store set (no bubble, blip or glance). Optional calls: a build without the hook skips it. */
+  const quietWorld = (page) => page.evaluate(() => { window.__wedtmd?.worldQuiet?.(true); });
   /** Spoiler state at shot time: plate frame, HUD plaque text (evidence), visible text lines matching SPOILER_RE. */
   const spoilerState = (page) => page.evaluate((src) => {
     const re = new RegExp(src, 'i');
@@ -263,6 +267,7 @@ async function main() {
     await runStem(size, '01', async () => {
       await page.goto(withQuery(base, { debug: '1' }), { waitUntil: 'networkidle' });
       await waitReady(page);
+      await quietWorld(page);
       await setCap(page, size, '01', PLATE_CAP);
       await crankClicks(page, 12, 120);
       await page.waitForTimeout(2500);
@@ -271,6 +276,7 @@ async function main() {
     });
 
     await runStem(size, '02', async () => {
+      await quietWorld(page);
       await crankClicks(page, 33);
       const failed = await buyList(page, S7);
       report.check(`${size}_02_buys`, failed.length === 0, failed);
@@ -280,6 +286,7 @@ async function main() {
     });
 
     await runStem(size, '03', async () => {
+      await quietWorld(page);
       const failed = await buyList(page, delta(S7, S9));
       report.check(`${size}_03_buys`, failed.length === 0, failed);
       await page.waitForTimeout(2500);
@@ -288,6 +295,7 @@ async function main() {
     });
 
     await runStem(size, '04', async () => {
+      await quietWorld(page);
       const failed = await buyList(page, delta(S9, S11));
       report.check(`${size}_04_buys`, failed.length === 0, failed);
       await page.waitForTimeout(2500);
@@ -296,6 +304,7 @@ async function main() {
     });
 
     await runStem(size, '05', async () => {
+      await quietWorld(page);
       await page.keyboard.press('t');
       try {
         await page.click('#tech-tab-3', { timeout: 5000 });
@@ -308,6 +317,7 @@ async function main() {
     });
 
     await runStem(size, '06', async () => {
+      await quietWorld(page);
       const failed = await buyList(page, delta(S11, S13));
       report.check(`${size}_06_buys`, failed.length === 0, failed);
       await page.waitForTimeout(12000);
@@ -316,6 +326,7 @@ async function main() {
     });
 
     await runStem(size, '07', async () => {
+      await quietWorld(page);
       const failed = await buyList(page, delta(S13, S15));
       report.check(`${size}_07_buys`, failed.length === 0, failed);
       await page.waitForTimeout(15000);
@@ -327,6 +338,7 @@ async function main() {
       await page.evaluate(() => window.__wedtmd?.saveNow?.());
       await page.goto(withQuery(base, { debug: '1', title: '1' }), { waitUntil: 'networkidle' });
       await waitReady(page);
+      await quietWorld(page);
       await setCap(page, size, '10', PLATE_CAP);
       await page.waitForTimeout(1500);
       const open = await page.evaluate(() => document.querySelector('#title-screen.is-open') !== null);
@@ -348,6 +360,7 @@ async function main() {
     });
 
     await runStem(size, '08', async () => {
+      await quietWorld(page);
       await setCap(page, size, '08', null);
       const failed = await buyList(page, ['primaryFunction']);
       report.check(`${size}_08_buys`, failed.length === 0, failed);
@@ -388,6 +401,7 @@ async function main() {
     }
 
     await runStem(size, '09', async () => {
+      await quietWorld(page);
       await setCap(page, size, '09', PLATE_CAP);
       await page.evaluate(() => window.__wedtmd?.skipFinale?.());
       await page.click('#finale-keep', { timeout: 5000 });

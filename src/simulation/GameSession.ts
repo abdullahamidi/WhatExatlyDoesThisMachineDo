@@ -42,6 +42,8 @@ import {
   normalizePrestige,
 } from './prestige';
 import type { BuyPerkResult } from './prestige';
+import type { WorldSaveState } from '../data/livingWorld';
+import { normalizeWorld } from './worldSave';
 
 const SETTINGS_KEYS = Object.keys(DEFAULT_SETTINGS_VALUES) as (keyof SettingsState)[];
 
@@ -62,6 +64,8 @@ export interface GameSessionOptions {
   achievements?: AchievementsState;
   /** New-cycle prestige (WP14). Normalized leniently. Defaults to DEFAULT_PRESTIGE. */
   prestige?: PrestigeState;
+  /** Living-world save block (WP23a), normalized leniently. Defaults to the fresh default block. */
+  world?: WorldSaveState;
   /** Epoch-ms clock used when a method is called without an explicit time. Defaults to Date.now. */
   now?: () => number;
   /** WP21: era cap of the demo edition. Absent/null = full game. */
@@ -87,8 +91,9 @@ export interface GameSessionOptions {
  * when the 'reset' event fires.
  *
  * reset() starts a fresh game but does NOT clear storage: the host must call SaveManager.reset()
- * or save afterwards. Settings survive reset(); stats, achievements and prestige do not.
+ * or save afterwards. Settings survive reset(); stats, achievements, prestige and the living-world block do not.
  * beginNewCycle() (WP14) is the in-game replay: it keeps settings, stats, achievements and prestige.
+ * Its living-world block keeps only seenEver (WP23a).
  *
  * `state`, `rates`, `settings`, `stats` and `achievements` are immutable snapshots: never mutate
  * them. Each change replaces the object. Compare `revision` between frames to skip re-rendering
@@ -105,6 +110,8 @@ export class GameSession {
   private currentStats: StatsState;
   private currentAchievements: AchievementsState;
   private currentPrestige: PrestigeState;
+  private currentWorld: WorldSaveState;
+  private currentWorldRevision = 0;
   private cachedTechs: Record<TechId, TechDefinition>;
   private currentRevision = 0;
   private offlineApplied = false;
@@ -125,6 +132,7 @@ export class GameSession {
       cycles: this.currentPrestige.cycle,
     };
     this.currentAchievements = options.achievements ?? { unlocked: {} };
+    this.currentWorld = normalizeWorld(options.world);
   }
 
   /** Current state snapshot. Never mutated in place; each change replaces the object. */
@@ -155,6 +163,16 @@ export class GameSession {
   /** New-cycle prestige (WP14). Never mutated in place; each change replaces the object. */
   get prestige(): Readonly<PrestigeState> {
     return this.currentPrestige;
+  }
+
+  /** Living-world save block (WP23a). Never mutated in place; recordWorld and the cycle / reset paths replace it. */
+  get world(): Readonly<WorldSaveState> {
+    return this.currentWorld;
+  }
+
+  /** Counter bumped whenever the living-world block is replaced (recordWorld, new cycle, reset). Never decreases. */
+  get worldRevision(): number {
+    return this.currentWorldRevision;
   }
 
   /** Tech table for the current prestige (cycleTechs of TECHNOLOGIES; cached, replaced on prestige change only). */
@@ -289,6 +307,8 @@ export class GameSession {
     this.applyPrestige(DEFAULT_PRESTIGE);
     this.offlineApplied = true; // a fresh state has no offline progress to award
     this.setState(createInitialState(t), true);
+    this.currentWorld = normalizeWorld(undefined);
+    this.currentWorldRevision += 1;
     this.currentStats = bumpMaxRates(emptyStats(t), this.cachedRates.perSecond);
     this.currentAchievements = { unlocked: {} };
     this.emitter.emit('reset', {});
@@ -317,6 +337,9 @@ export class GameSession {
     this.applyPrestige(next);
     this.offlineApplied = true; // the fresh run has no offline progress to award
     this.setState(clampStateToEra(newCycleState(t, next), this.capEra).state, true);
+    // Living world (WP23a): a new cycle keeps only seenEver; seen, eraMoments and youEras restart.
+    this.currentWorld = { ...normalizeWorld(undefined), seenEver: [...this.currentWorld.seenEver] };
+    this.currentWorldRevision += 1;
     this.patchStats({ cycles: next.cycle, bestCycleSeconds });
     this.emitter.emit('reset', {});
     this.emitter.emit('cycle', { cycle: next.cycle, echoesGained: gained, echoesEarned: next.echoesEarned });
@@ -380,6 +403,15 @@ export class GameSession {
     this.currentSettings = next;
     this.currentRevision += 1;
     this.emitter.emit('settings', this.currentSettings);
+  }
+
+  /**
+   * Stores the living-world block (WP23a) as a normalized copy. Emits nothing, does not bump `revision` and
+   * triggers no save: the director persists on its own schedule and the next save writes it.
+   */
+  recordWorld(next: WorldSaveState): void {
+    this.currentWorld = normalizeWorld(next);
+    this.currentWorldRevision += 1;
   }
 
   /** Subscribes to a session event. Returns an unsubscribe function. */

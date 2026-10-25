@@ -1113,7 +1113,7 @@ All sprites are side view plus one camera-facing frame.
 | Display objects | about 40: 6 base + 6 color twins + 6 shadows + about 15 props + a pool of 5 motes, in 2 row containers. Current peak is 76 of 500. Objects are hidden, never destroyed, on a new cycle. |
 | Renderer cost | `livingWorld.meanMs` ≤ 0.3 ms |
 | App bundle | about +15 KB of data and code: 402.8 / 404.8 → about 420 of 460 KB |
-| CSS | bubble plus the WORLD VOICES row ≤ 0.9 KB against about 1.2 KB of demo headroom. **Recommendation: the Director raises `cssKb` 44 → 45 at WP start as insurance (precedent 40 → 44).** |
+| CSS | bubble plus the WORLD VOICES row ≤ 1.0 KB (1000 B; relaxed from 0.9 KB for the HUD font stack, WP23a, see DENIZEN_ART 4.1) against about 1.2 KB of demo headroom. **Recommendation: the Director raises `cssKb` 44 → 45 at WP start as insurance (precedent 40 → 44).** |
 
 **Code map** (for the Engineering Manager):
 
@@ -1231,7 +1231,7 @@ All sprites are side view plus one camera-facing frame.
 11. Clock override and quiet hooks; the smoke list includes finale baselines, perf and §15. → §7.10, §11
 12. Dog 24×16, crow 20×14; hand-pixel below 24 px. → §3.2, §3.3, §11
 13. Loop independent of flocks and seeds. → §4.1
-14. CSS decision up front (≤ 0.9 KB, raise `cssKb` to 45 as insurance). → §11
+14. CSS decision up front (≤ 1.0 KB (1000 B; relaxed from 0.9 KB for the HUD font stack, WP23a), raise `cssKb` to 45 as insurance). → §11
 
 ## Appendix D. Open decisions for the Director
 

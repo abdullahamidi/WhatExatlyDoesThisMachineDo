@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { GameState, SettingsState } from '../data/types';
+import type { WorldSaveState } from '../data/livingWorld';
 import { AUTOSAVE_INTERVAL_MS, SAVE_KEY, SAVE_PREIMPORT_KEY } from '../data/balance';
 import { TECHNOLOGIES } from '../data/technologies';
 import { GameSession } from '../simulation';
@@ -121,6 +122,31 @@ describe('stats, achievements and export / import (WP12)', () => {
     expect(saved?.stats).toEqual(source.session.stats);
     expect(saved?.achievements).toEqual(source.session.achievements);
     expect(saved?.settings.muted).toBe(false);
+  });
+
+  it('saveNow writes the session living-world block (WP23a); recordWorld alone writes nothing', () => {
+    const { session, controller, storage } = setup();
+    const block: WorldSaveState = { seen: ['INS-01'], seenEver: ['INS-01'], eraMoments: [1, 0, 0, 0, 0], youEras: 0 };
+    const before = writesOf(storage);
+    session.recordWorld(block);
+    expect(writesOf(storage)).toBe(before);
+    expect(controller.saveNow()).toBe(true);
+    expect(storedSave(storage)?.world).toEqual(block);
+  });
+
+  it('exportString then importString keeps the living-world block (WP23a)', () => {
+    const source = setup(new MemoryStorage(), 5000);
+    source.session.recordWorld({
+      seen: ['INS-01', 'CRW-01'],
+      seenEver: ['INS-01', 'CRW-01', 'beat.tapeFreeze'],
+      eraMoments: [2, 0, 0, 0, 0],
+      youEras: 1,
+    });
+    const text = source.controller.exportString();
+
+    const target = setup(new MemoryStorage(), 10);
+    expect(target.controller.importString(text)).toEqual({ ok: true });
+    expect(storedSave(target.storage)?.world).toEqual(source.session.world);
   });
 
   it('an invalid import returns an error and leaves storage byte-identical', () => {

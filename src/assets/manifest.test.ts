@@ -551,7 +551,7 @@ const WP13_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; he
 
 describe('WP13 restored world, finale fx and UI assets', () => {
   it('appends the 14 WP13 ids after the era V ids, in contract order (ids 98..111; WP17 ids follow)', () => {
-    expect(ASSET_IDS.length).toBe(120);
+    expect(ASSET_IDS.length).toBe(145);
     expect(ASSET_IDS.slice(98, 112)).toEqual(WP13_ENTRIES.map((e) => e.id));
     expect(ASSET_IDS.slice(112, 117)).toEqual(WP17_ENTRIES.map((e) => e.id));
   });
@@ -721,8 +721,8 @@ const WP17_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; he
 ];
 
 describe('WP17 legacy feed assets', () => {
-  it('appends the 5 WP17 ids after the WP13 ids, in contract order (ids 112..116; the WP22 decal ids follow)', () => {
-    expect(ASSET_IDS.length).toBe(120);
+  it('appends the 5 WP17 ids after the WP13 ids, in contract order (ids 112..116; the WP22 decal ids and the WP23a ids follow)', () => {
+    expect(ASSET_IDS.length).toBe(145);
     expect(ASSET_IDS.slice(112, 117)).toEqual(WP17_ENTRIES.map((e) => e.id));
   });
 
@@ -935,7 +935,7 @@ describe('WP22 decal ids', () => {
   ];
 
   it('appends the 3 decal ids at the tail of ASSET_IDS, in contract order (117 -> 120)', () => {
-    expect(ASSET_IDS.slice(117)).toEqual(['machine.gearRim', 'machine.flywheelRim2', 'machine.flywheelRim3']);
+    expect(ASSET_IDS.slice(117, 120)).toEqual(['machine.gearRim', 'machine.flywheelRim2', 'machine.flywheelRim3']);
   });
 
   it('gives each decal its contract size, origin 0.5 / 0.5, tileable none and a description', () => {
@@ -1088,6 +1088,93 @@ describe('part evolution tiers (WP22)', () => {
         if (tier.rotationFile !== undefined && entry.rotation !== undefined) {
           expect(await pngSize(tier.rotationFile), id).toEqual(await pngSize(entry.rotation.file));
         }
+      }
+    }
+  });
+});
+
+/** WP23a living-world assets (DENIZEN_ART 5.1): id, size, origin, tileable, frame and era rows. file is null until the Art Director delivers the PNGs. */
+const WP23A_ENTRIES: ReadonlyArray<{ id: AssetId; width: number; height: number; origin: { x: number; y: number };
+  tileable: 'none' | 'x' | 'xy'; frame?: { width: number; height: number; count: number }; eraRows?: number }> = [
+  { id: 'world.inspector', width: 380, height: 240, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 20, height: 40, count: 114 }, eraRows: 6 },
+  { id: 'world.clipboardPages', width: 18, height: 3, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 6, height: 3, count: 3 } },
+  { id: 'world.dog', width: 560, height: 120, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 28, height: 20, count: 120 }, eraRows: 6 },
+  { id: 'world.stakeChain', width: 20, height: 6, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 10, height: 6, count: 2 } },
+  { id: 'world.hole', width: 64, height: 6, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 16, height: 6, count: 4 } },
+  { id: 'world.redBall', width: 3, height: 3, origin: { x: 0.5, y: 1 }, tileable: 'none' },
+  { id: 'world.crow', width: 240, height: 108, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 24, height: 18, count: 60 }, eraRows: 6 },
+  { id: 'world.girl', width: 160, height: 168, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 16, height: 28, count: 60 }, eraRows: 6 },
+  { id: 'world.girlMini', width: 16, height: 12, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 8, height: 12, count: 2 } },
+  { id: 'world.girlWindow', width: 16, height: 6, origin: { x: 0, y: 0 }, tileable: 'none', frame: { width: 4, height: 6, count: 4 } },
+  { id: 'world.lantern', width: 12, height: 4, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 6, height: 4, count: 2 } },
+  { id: 'world.payphone', width: 168, height: 312, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 28, height: 52, count: 36 }, eraRows: 6 },
+  { id: 'world.receiver', width: 48, height: 72, origin: { x: 0.5, y: 0 }, tileable: 'none', frame: { width: 8, height: 12, count: 36 }, eraRows: 6 },
+  { id: 'world.lamp', width: 48, height: 60, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 12, height: 60, count: 4 } },
+  { id: 'world.lampGlow', width: 64, height: 16, origin: { x: 0.5, y: 0.5 }, tileable: 'none', frame: { width: 32, height: 16, count: 2 } },
+  { id: 'world.clock', width: 32, height: 44, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 16, height: 44, count: 2 } },
+  { id: 'world.sensor7', width: 160, height: 240, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 20, height: 40, count: 48 }, eraRows: 6 },
+  { id: 'world.puddle', width: 320, height: 5, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 32, height: 5, count: 10 } },
+  { id: 'world.sprout', width: 40, height: 24, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 8, height: 24, count: 5 } },
+  { id: 'world.scraps', width: 24, height: 4, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 8, height: 4, count: 3 } },
+  { id: 'world.mote', width: 4, height: 2, origin: { x: 0.5, y: 0.5 }, tileable: 'none', frame: { width: 2, height: 2, count: 2 } },
+  { id: 'world.page', width: 6, height: 4, origin: { x: 0.5, y: 0.5 }, tileable: 'none', frame: { width: 3, height: 4, count: 2 } },
+  { id: 'world.shadow', width: 26, height: 3, origin: { x: 0.5, y: 0.5 }, tileable: 'none' },
+  { id: 'bg.windowLit', width: 8, height: 6, origin: { x: 0, y: 0 }, tileable: 'none', frame: { width: 4, height: 6, count: 2 } },
+  { id: 'bg.virga', width: 512, height: 128, origin: { x: 0, y: 1 }, tileable: 'x', frame: { width: 512, height: 64, count: 2 } },
+];
+
+describe('WP23a world assets', () => {
+  it('appends the 25 WP23a ids after the WP22 decal ids, in contract order (ids 120..144; 145 total)', () => {
+    expect(ASSET_IDS.length).toBe(145);
+    expect(ASSET_IDS.slice(120)).toEqual(WP23A_ENTRIES.map((e) => e.id));
+  });
+
+  it('has the contract size, origin, tileable, frame and era rows for each id', () => {
+    for (const want of WP23A_ENTRIES) {
+      const entry = ASSET_MANIFEST[want.id];
+      expect(entry.width, want.id).toBe(want.width);
+      expect(entry.height, want.id).toBe(want.height);
+      expect(entry.origin, want.id).toEqual(want.origin);
+      expect(entry.tileable, want.id).toBe(want.tileable);
+      expect(entry.frame, want.id).toEqual(want.frame);
+      expect(entry.eraRows, want.id).toBe(want.eraRows);
+      expect(entry.description.trim().length, want.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('file is null only for the 8 later-wave ids and the procedural shadow', () => {
+    // Seven of these wait for a later art wave; world.shadow stays procedural forever.
+    const FILE_NULL = new Set<AssetId>([
+      'world.clipboardPages', 'world.redBall', 'world.lantern', 'world.puddle', 'world.sprout', 'world.page', 'world.shadow', 'bg.virga',
+    ]);
+    for (const want of WP23A_ENTRIES) {
+      const file = ASSET_MANIFEST[want.id].file;
+      if (FILE_NULL.has(want.id)) expect(file, want.id).toBeNull();
+      else expect(file, want.id).toMatch(/^(world|bg)\/[a-z0-9-]+\.png$/);
+    }
+    expect(WP23A_ENTRIES.filter((w) => ASSET_MANIFEST[w.id].file !== null).length).toBe(17);
+  });
+
+  it('keeps the era-row arithmetic: height = frame.height * eraRows and frame.count = columns * eraRows', () => {
+    for (const want of WP23A_ENTRIES) {
+      if (want.eraRows === undefined) continue;
+      const entry = ASSET_MANIFEST[want.id];
+      const frame = entry.frame;
+      expect(frame, want.id).toBeDefined();
+      if (frame === undefined) continue;
+      expect(entry.height, want.id).toBe(frame.height * want.eraRows);
+      expect(frame.count, want.id).toBe((entry.width / frame.width) * want.eraRows);
+    }
+  });
+
+  it('cuts every WP23a sheet into frame.count cells, all inside the sheet', () => {
+    for (const want of WP23A_ENTRIES) {
+      const entry = ASSET_MANIFEST[want.id];
+      const cells = sheetFrameRects(entry);
+      expect(cells.length, want.id).toBe(entry.frame?.count ?? 0);
+      for (const cell of cells) {
+        expect(cell.x + cell.width, want.id).toBeLessThanOrEqual(entry.width);
+        expect(cell.y + cell.height, want.id).toBeLessThanOrEqual(entry.height);
       }
     }
   });

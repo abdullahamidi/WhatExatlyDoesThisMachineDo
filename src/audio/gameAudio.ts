@@ -8,7 +8,7 @@ import { AUDIO } from '../data/audio';
 import { MUSIC } from '../data/music';
 import type { AudioStats, MusicThemeId } from '../data/music';
 import type { SettingsState } from '../data/types';
-import type { GameFeedback } from '../game/context';
+import type { GameFeedback, WorldSound } from '../game/context';
 import type { GameSession } from '../simulation';
 import { ambientMix, busGain, levelsChanged, masterTarget, purchaseCue, windAllowed } from './audioMath';
 import type { AmbientMix, LevelSnapshot } from './audioMath';
@@ -22,6 +22,8 @@ export interface GameAudioStats extends AudioStats {
   readonly levels: LevelSnapshot | null;
   /** Last ambient mix pushed by tick; null before the first tick (and after dispose). */
   readonly ambient: AmbientMix | null;
+  /** Blip sequences started since unlock (world voices, WP23a). Refused ones are not counted. 0 before unlock. */
+  readonly worldBlips: number;
 }
 
 export interface GameAudio {
@@ -54,6 +56,9 @@ interface BeatClock {
 }
 
 const SLOT_INDEXES: readonly [0, 1] = [0, 1];
+
+/** Speaker of a world blip (WorldSound blip kind). */
+type WorldBlipSpeaker = Extract<WorldSound, { kind: 'blip' }>['speaker'];
 
 function newMusicSlot(): MusicSlot {
   return { theme: null, clockStartS: 0, scheduledUntilS: 0, gain: 0 };
@@ -105,6 +110,8 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
   let musicOn = false; // musicAllowed held at the last music tick; false -> true re-anchors the bar grids
   let duckNow = 1; // last duck level pushed to the synth
   let beats: BeatClock = { swellS: null, chordS: null, milestoneS: null };
+  let blipEndsS: number[] = []; // wall-clock end of each world blip sequence still sounding (pruned on every blip)
+  let worldBlips = 0; // blip sequences started since unlock (readout)
   const warned = new Set<string>();
   const doc: Document | undefined = target.document;
 
@@ -139,6 +146,21 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
         warnOnce(where, error);
       }
     };
+  }
+
+  /**
+   * World blip (WP23a): refused while AUDIO.world.maxConcurrent sequences still sound (wall clock). A started sequence
+   * is counted in worldBlips and its end is kept as now + count * gapMs + ms.
+   */
+  function playWorldBlip(s: Synth, speaker: WorldBlipSpeaker, count: number, reversed: boolean): void {
+    const nowS = wallS();
+    blipEndsS = blipEndsS.filter((endS) => endS > nowS);
+    if (blipEndsS.length >= AUDIO.world.maxConcurrent) return;
+    const b = AUDIO.world.blip[speaker];
+    const n = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
+    blipEndsS.push(nowS + (n * b.gapMs) / 1000 + b.ms / 1000);
+    s.playBlip(speaker, count, reversed);
+    worldBlips += 1;
   }
 
   /**
@@ -448,6 +470,25 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
           warnOnce('finaleBeat', error);
         }
       }),
+      feedback.worldSound.on((sound) => {
+        try {
+          const s = synth;
+          if (!s || session.settings.muted) return;
+          switch (sound.kind) {
+            case 'blip':
+              playWorldBlip(s, sound.speaker, sound.count, sound.reversed);
+              break;
+            case 'ring':
+              s.playRing();
+              break;
+            case 'dialTone':
+              s.setDialTone(sound.on);
+              break;
+          }
+        } catch (error) {
+          warnOnce('worldSound', error);
+        }
+      }),
       session.on('settings', (settings) => {
         try {
           applyLevels(settings, true);
@@ -518,6 +559,8 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     fade = null;
     musicOn = false;
     duckNow = 1;
+    blipEndsS = [];
+    worldBlips = 0;
     clearBeats();
     if (s) {
       try {
@@ -531,7 +574,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
 
   /** Idle readout: nothing has been created yet (or the controller is disposed). */
   function idleStats(): GameAudioStats {
-    return { unlocked: false, running: false, theme: null, slotGains: [0, 0], duck: 0, liveVoices: 0, musicVoices: 0, dropped: 0, peakDb: null, levels: null, ambient: null };
+    return { unlocked: false, running: false, theme: null, slotGains: [0, 0], duck: 0, liveVoices: 0, musicVoices: 0, dropped: 0, peakDb: null, levels: null, ambient: null, worldBlips: 0 };
   }
 
   /** Live readout for the debug hook. Never throws; reads the synth counters, the controller state, the last levels and mix. */
@@ -552,6 +595,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
         peakDb: counters.peakDb,
         levels: appliedLevels,
         ambient: lastMix,
+        worldBlips,
       };
     } catch (error) {
       warnOnce('stats', error);

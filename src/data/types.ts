@@ -1,5 +1,6 @@
 import type { AchievementId } from './achievements';
 import type { PerkId } from './prestige';
+import type { WorldSaveState } from './livingWorld';
 export const TECH_IDS = ['handCrank','gearRatio','reinforcedCrank','flywheel','wornMotor',
   'motorTuning','pistonArray','improvedPistons','generatorBlueprint',
   'generator','copperWinding','motorRetrofit','dynamoCrank','capacitorBank','sparkGap','transformer','powerLines','substationBlueprint',
@@ -53,6 +54,7 @@ export interface GameState {
 }
 export type NumberNotation = 'suffix' | 'scientific' | 'engineering';
 export type UiScale = 100 | 125 | 150;
+export type WorldVoices = 'on' | 'rare' | 'off';
 export interface SettingsState {
   muted: boolean;
   masterVolume: number; sfxVolume: number; ambientVolume: number;   // int 0..100, default 100
@@ -63,6 +65,7 @@ export interface SettingsState {
   statusMarkers: boolean;               // default false
   uiScale: UiScale;                     // default 100
   confirmNewCycle: boolean;             // default true (WP14): BEGIN A NEW CYCLE asks for confirmation first
+  worldVoices: WorldVoices;             // default on (WP23a): ON / RARE / OFF for the living-world speech bubbles
 }
 export interface StatsState {
   activeSeconds: number; offlineSeconds: number; longestOfflineSeconds: number;
@@ -89,6 +92,6 @@ export type PurchaseResult =
   | { ok: true; state: GameState; cost: number; newLevel: number }
   | { ok: false; reason: PurchaseFailure };
 export interface OfflineReport { elapsedSeconds: number; cappedSeconds: number; gained: ResourceMap }
-export interface SaveEnvelope { version: number; savedAt: number; state: GameState; settings: SettingsState; stats: StatsState; achievements: AchievementsState; prestige: PrestigeState }
+export interface SaveEnvelope { version: number; savedAt: number; state: GameState; settings: SettingsState; stats: StatsState; achievements: AchievementsState; prestige: PrestigeState; world: WorldSaveState }
 export type LoadStatus = 'new' | 'loaded' | 'migrated' | 'recovered';
-export interface LoadResult { state: GameState; settings: SettingsState; stats: StatsState; achievements: AchievementsState; prestige: PrestigeState; status: LoadStatus; error?: string }
+export interface LoadResult { state: GameState; settings: SettingsState; stats: StatsState; achievements: AchievementsState; prestige: PrestigeState; world: WorldSaveState; status: LoadStatus; error?: string }

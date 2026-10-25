@@ -67,7 +67,12 @@ export function createSaveController(o: {
     return RESOURCE_IDS.some((id) => !Number.isFinite(s.res[id]) || !Number.isFinite(s.lifetime[id]));
   };
 
-  const meta = () => ({ stats: session.stats, achievements: session.achievements, prestige: session.prestige });
+  const meta = () => ({
+    stats: session.stats,
+    achievements: session.achievements,
+    prestige: session.prestige,
+    world: session.world,
+  });
 
   const saveNow = (): boolean => {
     if (suspended) return false;
@@ -152,6 +157,7 @@ export function createSaveController(o: {
         stats: envelope.stats,
         achievements: envelope.achievements,
         prestige: envelope.prestige,
+        world: envelope.world,
       });
       lastSaveOk = written;
       if (!written) return { ok: false, error: 'Could not write the imported save.' };

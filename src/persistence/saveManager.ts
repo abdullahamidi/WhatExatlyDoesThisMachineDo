@@ -3,6 +3,7 @@ import { SAVE_BACKUP_KEY, SAVE_KEY } from '../data/balance';
 import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
 import { emptyStats } from '../simulation/stats';
 import { DEFAULT_PRESTIGE } from '../simulation/prestige';
+import { normalizeWorld } from '../simulation/worldSave';
 import { deserialize, serialize } from './codec';
 import type { SaveMeta } from './codec';
 
@@ -54,6 +55,7 @@ export class SaveManager {
         stats: emptyStats(nowMs),
         achievements: { unlocked: {} },
         prestige: { ...DEFAULT_PRESTIGE, perks: [] },
+        world: normalizeWorld(undefined),
         status: 'new',
         error: `Could not read save: ${errorMessage(e)}`,
       };

@@ -1,4 +1,4 @@
-import type { NumberNotation, SettingsState, UiScale } from './types';
+import type { NumberNotation, SettingsState, UiScale, WorldVoices } from './types';
 
 // Settings defaults, ranges, hotkeys and player-facing labels (WP12). Pure data: no logic lives in this file.
 
@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS_VALUES: SettingsState = {
   statusMarkers: false,
   uiScale: 100,
   confirmNewCycle: true,
+  worldVoices: 'on',
 };
 
 // Volume sliders: integer percent. `step` must divide `max - min`.
@@ -22,6 +23,9 @@ export const VOLUME_RANGE = { min: 0, max: 100, step: 5 } as const;
 export const NOTATIONS: readonly NumberNotation[] = ['suffix', 'scientific', 'engineering'];
 
 export const UI_SCALES: readonly UiScale[] = [100, 125, 150];
+
+// WORLD VOICES (WP23a): the living-world speech bubbles. ON = full cadence, RARE = a thinner schedule, OFF = none.
+export const WORLD_VOICES: readonly WorldVoices[] = ['on', 'rare', 'off'];
 
 // Reduced motion: caps the crank wobble speed (deg/s) and turns off tweens and drops.
 export const REDUCED_MOTION = { maxDegPerSec: 180, cameraTweenMs: 0, assemblyDropPx: 0 } as const;
@@ -46,6 +50,8 @@ export const SETTINGS_LABELS = {
   notations: { suffix: 'SUFFIX', scientific: 'SCIENTIFIC', engineering: 'ENGINEERING' },
   uiScale: 'UI SCALE',
   uiScales: { 100: '100 %', 125: '125 %', 150: '150 %' },
+  worldVoices: 'WORLD VOICES',
+  worldVoicesOptions: { on: 'ON', rare: 'RARE', off: 'OFF' },
   reducedMotion: 'REDUCED MOTION',
   screenShake: 'SCREEN SHAKE',
   screenShakeLocked: 'OFF (REDUCED MOTION)',

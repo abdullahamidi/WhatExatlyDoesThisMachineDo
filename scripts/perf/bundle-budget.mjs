@@ -2,6 +2,7 @@
 // Reads the built app (index-*.js, phaser-*.js, *.css under <distDir>/assets) and public/assets.
 // Limits for the raw rows come from scripts/smoke/perf-budget.json ("bundle" block, decimal KB / MB).
 // App js gzip is report-only since WP15R (program D7: raw sizes only): printed with status 'report', never a breach.
+// The lazy living-world chunk (LivingWorldDirector-*.js) is gated by bundle.lazyWorldKb (WP23a: the app chunk stays under appRawKb because the director loads lazily).
 // Prints a table; exit 1 on any breach.
 import { readdirSync, readFileSync, statSync, existsSync } from 'fs';
 import { gzipSync } from 'zlib';
@@ -37,6 +38,7 @@ const files = readdirSync(assetsDir).filter((f) => statSync(join(assetsDir, f)).
 const appJs = files.filter((f) => /^index-.*\.js$/.test(f));
 const phaserJs = files.filter((f) => /^phaser-.*\.js$/.test(f));
 const css = files.filter((f) => f.endsWith('.css'));
+const lazyWorld = files.filter((f) => /^LivingWorldDirector-.*.js$/.test(f));
 
 if (appJs.length === 0) {
   console.error('bundle-budget: no index-*.js app chunk in ' + assetsDir);
@@ -56,6 +58,7 @@ const row = (name, value, limit, unit, reportOnly = false) => {
 row('app js raw (index-*.js)', sum(appJs, rawOf) / KB, budget.appRawKb, 'KB');
 row('app js gzip (index-*.js)', sum(appJs, gzOf) / KB, undefined, 'KB', true);
 row('phaser js raw (phaser-*.js)', sum(phaserJs, rawOf) / KB, budget.phaserKb, 'KB');
+if (budget.lazyWorldKb !== undefined) row('lazy world js raw (Director-*.js)', sum(lazyWorld, rawOf) / KB, budget.lazyWorldKb, 'KB');
 row('css raw (*.css)', sum(css, rawOf) / KB, budget.cssKb, 'KB');
 const publicDir = join(root, 'public', 'assets');
 const publicKb = existsSync(publicDir) ? dirBytes(publicDir) / KB : 0;

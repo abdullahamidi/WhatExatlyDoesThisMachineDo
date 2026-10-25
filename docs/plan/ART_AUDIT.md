@@ -1065,3 +1065,458 @@ Round 4 verdict: **FIXES REQUIRED** (F11). F12 done.
   Re-verified: UI 150 centre 1333 holds, UI 100 1504 unchanged, tiers.mjs clean.
 
 Round 5 verdict: **RELEASE-READY** (WP22).
+
+## WP23a — living world audit (Art Director AD2, 2026-10-24)
+
+Verdict: **FIX LIST** (not RELEASE-READY). 15 F items: 1 S1 (girl mini hidden, her lines point at the motor), 7 S2, 7 S3.
+**Q6 gate: PASS** after data tuning (six lit windows + glow read at 1920x1080, default camera, on the powerLines entry).
+Text: 15 / 15 captured bubble texts verbatim to the bible bank (`<S>/bible/final/lines.mjs`). Live region `<Speaker>: <line>` OK.
+
+Evidence root `<O>/ad2/` (`<O>` = `C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP23a`):
+`cap/` full frames + probe JSON per frame, `crops/` 2x-10x nearest crops and boards, `turn/<tag>/` CDP screencast frames + rAF sampler
+`log.json`, `walk75/`, `tools/` (capture scripts: `lib.mjs`, `states.mjs`, `bubbles.mjs`, `chain.mjs`, `q6.mjs`, `turn.mjs`, `glances.mjs`,
+`sensor.mjs`, `flicker.mjs`, `cycle2.mjs`, `demo.mjs`, `notree.mjs`, `walk75.mjs`; `crop.py`, `strip.py`). Original data file before
+tuning: `<O>/ad2/livingWorld.before-ad2.ts`.
+
+Build under audit: at AD2 start `dist/` was the pre-WP23a build (12:47, no world code; `<O>/val/` empty: the T14 gate had not run).
+AD2 ran `npm run typecheck` (clean) and `npm run build` (dist, served by :4174) and `npm run build:demo` (dist-demo, :4177 started
+once, killed after, port free). Final dist / dist-demo carry the tuned values below. `bundle-budget.mjs`: **FAIL**, app js 499.3 KB > 460
+(F14). Staging: buys run with the TECH INDEX open (`t` ... Escape), as in real play; REFOCUS before every default-camera frame.
+
+### Capture index (`<O>/ad2/cap/`)
+| set | files |
+|---|---|
+| states, default camera, quiet | `state-{s0,s2,s7,s8,s9}-{720,1080}.png`; `state-{s7,s9}-{720u125,720u150,deck}.png` (deck = 1280x800 UI 150) |
+| cycle 2 era I (fixture `v2-cycle2.json` seeded under `wedtmd.save`) | `cycle2-e1-720.png`, `cycle2-e1-1080.png` (cycle 2, framing e1, booth 42 marks) |
+| bubble ladder | `bub-{s7,s9}-{720u100,720u125,720u150,1080,deck}-<LINE>.png` (s7: INS-02 DOG-02 CRW-01 GRL-01; s9: INS-06 PAY-03 DOG-05 GRL-03), 40 frames |
+| CROSSED LINES (real generator buy) | `chain-{720u100,720u150,1080}-NN.png` (PAY-01, PAY-01 + CRW-04, INS-05 + CRW-04) |
+| demo (:4177) | `demo-{720,1080}-teaser.png` (no bubble), `-card`, `-keep-freeze`, `-PAY-05`, `-INS-07`, `-GRL-06`, `-DOG-12`, `-hold.png` (after reload) |
+| Q6 pairs 1920x1080 | `q6-t4-gen-before.png` / `q6-t4-gen-after.png`, `q6-t4-pl-before.png` / `q6-t4-pl-after.png` (+ `-plate` without DOM); shipped values `q6-r0-*`; ladder `q6-t1-*`, `q6-t2-*`, `q6-t3-*` |
+| turn / glance | `<O>/ad2/turn/talk-ins02-thr3/` (tracking frame), `turn/talk-ins02-rm/` (reduced), `turn/talk-ins02-nothr/` (fade), `turn/glance-s7b/`; `cap/glance-{s7,s9}-*.png` |
+| other | `sensor-cx*.png` (head L/C/R), `flicker-s9-{normal,rm}.png`, `notree-s9-720u150.png` (relocation hold) |
+
+Boards (`<O>/ad2/crops/`): `q6-t4-pl-pair-band.png`, `q6-t4-gen-pair-band.png`, `q6-tuning-ladder-x2.png`, `q6-tower-r0-vs-t1-x3.png`,
+`story-talk-ins02.png`, `story-talk-ins02-thr.png`, `story-track-x8.png`, `story-talk-rm.png`, `story-glance-booth.png`, `glances-x4.png`,
+`sensor7-heads-x4.png`, `walk-zoom075-x5.png`, `marks-cycle1-vs-cycle2-x8.png`, `marks-mock-v1-x8.png`, `marks-mock-v1-gamescale-x3.png`,
+`lampglow-alpha-mock-x3.png`, `girlmini-mock-x2.png`, `girlmini-mock150-x2.png`, `dog-art-frames-x8.png`, `demo-720-hold-dog-x6.png`,
+`chain-720u150-stack-x2.png`, `tail-dog02-720u150-x8.png`, `tail-grl01-720u150-x8.png`, `corner-grl01-720u150-x10.png`, `corner-dog02-720u100-x10.png`.
+
+### Q6 proof (era I -> II entry, 1920x1080, UI 100, default camera, quiet world)
+| moment | change a player sees | result |
+|---|---|---|
+| buy `generator` (era card, framing e1 -> s8) | girl window flicker -> dark (one 4x6 art px window, sf .3); girl mini appears **behind the motor** (F1); corner repack is unseen (TECH INDEX open) | no background-scale change (`q6-t4-gen-pair-band.png`) |
+| buy `powerLines` (s9), shipped values | canon pylons relit; 3 of the 6 lit windows sit behind the machine ((158,208), (167,207), (404,216) land at screen x 624 / 637 / 993, under the frame and transformer); halo pad 6 at alpha .2 is lost on the .4 skyline | lit windows **do not read** (`q6-r0-pl-before/after.png`, `q6-tower-r0-vs-t1-x3.png`) |
+| buy `powerLines`, tuned (t4) | six warm window tiles on two skyline towers (right tower screen ~1270, left tower ~120 at 1080p), plus lamp + glow, booth hood light, motes | **reads without looking for it: PASS** (`q6-t4-pl-pair-band.png`, `q6-t4-pl-before.png` / `q6-t4-pl-after.png`) |
+
+Ladder tried (`q6-tuning-ladder-x2.png`): t1 pad 8 / alpha .3 (big blotchy rect stacks), t2 pad 3 / .5, t3 pad 5 / .4 (overlap stripe between
+stacked windows), **t4 pad 3 / .65** = crisp lit tiles, no overlap (vertical window gap is 6 art px, pad 3 + 3 touch). At UI 150 the
+left-tower windows at y 334-363 game px sit under the HUD panel; the right tower and the slit stay visible (`state-s9-deck.png`).
+A dedicated overlay strip is not needed for WP23a; if a playtest still misses it, the next step is a skyline window-band overlay (AD + EM).
+
+### Tuned values (`src/data/livingWorld.ts`, allowed keys only; `npx vitest run src/data/livingWorld.test.ts` 60 pass, + worldPlacement /
+worldState / textSweep 130 pass; typecheck clean; CRLF kept)
+| key | was | now | why |
+|---|---|---|---|
+| `WORLD_ENV.windowAlpha` | 0.85 | 1 | lit core must beat the art's own rust window at .4 layer alpha |
+| `WORLD_ENV.windowGlow.padArtPx` | 6 | 3 | no overlap between the stacked tower windows (6 art px gap): crisp tiles, no stripe |
+| `WORLD_ENV.windowGlow.alpha` | 0.2 | 0.65 | the halo was invisible on the grey tower at 1080p |
+| `WORLD_ENV.windowGlow.color` | 0xad6236 | 0xd9822b | saturated palette orange separates from the grey tower by chroma (same luminance band); windows stay rust-amber |
+| `WORLD_FAR_PLANES.windows` | (158,208) 3x6, (167,207) 4x6, (306,120), (306,132), (318,146) 4x6, (404,216) 2x4 | (306,120), (306,132), (318,146) 4x6; (-206,132), (-194,146) 4x6, (-206,155) 1x6 | the three dropped windows are covered by the machine at s9; the new three are real skyline cut-outs on the same tower one tile left (artX - 512), a different subset so the repeat does not show |
+Untouched: windowGlow.fadeMs, lampHeadArtPx 49, crowLiftArtPx 58, receiverArt, sensor7.ledArt, clock.faceCenterArt, motes, ring, mainsFlicker
+(all land where they should in the crops). Doc follow-up (AD, S3): DENIZEN_ART §5.1 `bg.windowLit` placements row and the
+`scripts/art/world/README.md` crop list still name the old six.
+
+### Gates
+| gate | result | evidence |
+|---|---|---|
+| one pixel grid | PASS: every denizen and prop at PIXEL_SCALE 2 like the machine (2 screen px per art px at zoom 1) | `crops/s7-720-right-x3.png`, `crops/story-track-x8.png` |
+| palette-only rows | PASS: sepia row I, faded row II on screen; halo `#d9822b`, glow `#ad6236/#c98552`, marks `#a8957a` all palette | `crops/s7-720-left-x3.png`, `crops/s9-720-corner-x4.png` |
+| no denizen faces the machine | PASS with one S3: rest poses face away (Inspector left, dog / crow / booth unit right); Sensor 7 points at the frame centre by spec; the Inspector's write frames at the route end face the machine (head bowed) -> F8 | `crops/story-talk-ins02.png` (f003-f005) |
+| tail points at the head | FAIL: girl mini hidden behind the motor (F1); CROSSED LINES at UI 150 the PAY-01 box covers the crow its CRW-04 tail points at (F2). All other 36 bubbles: tail on the head / receiver / window | `cap/bub-s9-720u150-GRL-03.png`, `cap/demo-720-GRL-06.png`, `crops/chain-720u150-stack-x2.png` |
+| bubble never covers crank / prompt / gain text | PASS: crank hub at game (640, 408), circle + 24 and the gain block (game 656-856 x 160-280 at e1) reserved; GRL-01 at UI 150 drops below the window because above would hit the gain block; no bubble under the crank prompt (onboarding silence) | `cap/bub-s7-720u150-GRL-01.png` |
+| nothing un-happens | PASS in I-II: girl window dark stays dark, lamp / windows / booth light stay on, hole only grows (stage rule), dog lie persists after reload | `cap/demo-720-hold.png` |
+| ladder (DENIZEN_ART 4.2) | PASS: era I above head at every scale (INS-02 UI 150 device 24-348 x 354-423, panel bottom 298); s9 Inspector INS-06 below the feet at UI 150 and Deck (513-582, buttons start x 712); right wing PAY-03 / DOG-05 at UI 150 top 369 / 399 (toasts end <= 260, buttons >= 639); GRL-01 anchored to the window (tail up at window x 998); chain = 2 bubbles, never overlapping (slot 2 reserves slot 1) | `cap/bub-*` |
+| readability floors | PASS: Inspector 66 / 50 px (zoom 1 / .75), dog 32 / 24, crow 28 / 21, booth 96 / 72, Sensor 7 72 / 54, lamp 112 / 84, clock 88 / 66 (logical px). Far-plane girl window / mini are distance figures by design (5x10 body, 20 / 15 px) | crops above |
+| roundPixels at zoom .75 | PASS with S3: static sprites hold; walking Inspector steps 6 world px = 4.5 screen px, so the 1 / 2 px art-column pattern flips between steps (mild shimmer at 8 fps) -> F12 | `crops/walk-zoom075-x5.png` |
+| DOM tail join | PASS: paper core runs through the border band, down and up tails; notched 2x2 corners. S3: at non-integer root zoom (UI 125 / 150, all 1080p) edges carry a 1 px AA fringe -> F11 | `crops/tail-dog02-720u150-x8.png`, `crops/tail-grl01-720u150-x8.png`, `crops/corner-grl01-720u150-x10.png` vs `crops/corner-dog02-720u100-x10.png` |
+| machine stays the focus | PASS except the era II lamp glow: a solid orange plate at the right edge pulls the eye (F4) | `crops/s9-720-corner-x4.png` |
+| Sensor 7 head tracking | PASS: camera centre 1620 -> headR, 1320 -> headC, 1170 / 1020 / 870 -> headL (sensor 1384, range 200) | `crops/sensor7-heads-x4.png` |
+| girl tone (DENIZEN_ART 2.4) | PASS: window 4x6 and mini 5x10 (<= 12x24), never moves, face a smudge, never in the centre third (screen x 996 window, 177 / 240 mini) | `crops/girlmini-mock-x2.png` |
+| bubble text = bible | PASS 15 / 15 verbatim (CRW-01 DOG-02 GRL-01 INS-02 DOG-05 PAY-01 GRL-03 INS-06 PAY-03 INS-05 CRW-04 DOG-12 GRL-06 INS-07 PAY-05) | probe JSON `.bubble.text`, `.live` |
+| placeholders never visible in I-II | PASS: frames seen in every probe = inspector idle/walk/write/glance/front/talk, dog sit/sniff/dig/head/talk/lie, crow frozen/head/talk, sensor headL/C/R, lamp dead/lit, clock ruin, booth dark/lit, receiver hang/swing/level, girl window-flicker/window-dark/mini; no ink-silhouette fallback on screen | all `cap/*.json` `.living` |
+| turn storyboard | PASS: walk -> front with the tracking band (rows shifted 2 art px, one frame, 226 ms sample under 12x CPU throttle) -> talk / front alternation -> front hold -> snap back to the profile loop (walk, facing away). Deviations: the band is drawn on the front frame, not on the held loop frame (accepted); the head bob never stops (F9) | `crops/story-talk-ins02-thr.png`, `crops/story-track-x8.png`, `crops/story-talk-ins02.png` |
+| glance | PASS: Inspector glance = profile body + front head; dog / crow head frame; booth = receiver swings to `level` 1.5 s and back; WORLD VOICES OFF keeps glances. S3: a glance and a line can start on the same frame (F10) | `crops/glances-x4.png`, `crops/story-glance-booth.png` |
+| reduced motion (`updateSettings({ reducedMotion: true })`) | PASS: no tracking band on the snap; bubble opacity 1 on its first frame (normal: 0 -> .33 -> .67 -> 1 in 150 ms); mains flicker off (window clip 16 / 16 frames identical vs 11 distinct normal); motes static | `crops/story-talk-rm.png`, `turn/talk-ins02-rm/log.json`, `turn/talk-ins02-nothr/log.json` |
+| demo | PASS with F6: teaser shows no denizen and no bubble; POST-CAP PAY-05 / INS-07 / GRL-06 / DOG-12 play in order; after reload the dog lies facing the camera (`variant lie`, x 2856) at 720p and 1080p | `cap/demo-*-teaser.png`, `cap/demo-*-hold.png` |
+| cycle 2 era I | PASS: same staging as cycle 1, marks 40 + 2 = 42 drawn (8 groups + 2) | `crops/marks-cycle1-vs-cycle2-x8.png` |
+
+### F-list
+| F | sev | what / where | evidence | owner | exact change |
+|---|---|---|---|---|---|
+| F1 | S1 | Girl mini (era II, pylon plane) stands **behind the motor** at s8 (screen x 177, motor 168-262) and s9 (x 240, motor 191-262). GRL-03/04/05 and the demo's GRL-06 tails point at the motor: the machine seems to speak; her era II arrival is never seen | `cap/bub-s9-720u150-GRL-03.png`, `cap/demo-720-GRL-06.png`, `crops/girlmini-mock-x2.png`, `crops/girlmini-mock150-x2.png` | T15 | `src/data/livingWorld.ts` `WORLD_FAR_PLANES.girlMini.footArtX` 192 -> **146** (12 art px left of the pylon's left leg, art x 158; tile origin stays 576: `farPlaneLiterals` nearest rule picks screen 164 vs the 256 target). Feet strip (868, 1160) -> game x e1 164, s8 84.8 (Inspector body 32-64 clear), s9 170.8 (sprite right edge 175 < machine edge 178). `src/game/math/worldPlacement.test.ts` 'places the girl mini foot': foot {x: 868, y: 1160}, e1 x 164, `Math.round(atS8.x)` 85, `Math.round(atS9.x)` 171; add: s8 x + 8 < 152 and s9 x + 6 < 178 (half sprite width vs the machine left edge per framing) and s8 x - 8 > 64 (Inspector body) |
+| F2 | S2 | CROSSED LINES at UI 150 (s8): PAY-01 bubble (device 942-1270 x 440-513) covers the crow; CRW-04's tail points at the PAY-01 box. Two speakers share the right wing, the ladder only reserves the other bubble | `crops/chain-720u150-stack-x2.png`, `cap/chain-720u150-02.png` | EM | `src/ui/worldBubbleController.ts` `reservedFor(slot, g)`: also reserve the figure of every other speaker of an active line or chain on screen: `{ x: head.x - 12, y: head.y - 4, w: 24, h: feet.y - head.y + 4 }` (root CSS px, from the director's anchor). PAY-01 then falls to `side` (left of the receiver, over the generator) and the crow stays visible. Recheck `chain-720u150` and world.mjs B |
+| F3 | S2 | Booth tally marks read as a lit 3x3 window grid: 4 strokes at pitch 1 merge into solid 4x4 blocks, the 5th (diagonal) is drawn on top and vanishes. Open question 1 ("what do the 41 marks count?") is lost | `crops/s7-720-booth-x8.png`, `crops/marks-cycle1-vs-cycle2-x8.png`, mock `crops/marks-mock-v1-x8.png`, `crops/marks-mock-v1-gamescale-x3.png` | EM (code + test) + T15 (data) | `WORLD_MARKS` = `{ base: 40, groupSize: 5, groupCols: 2, rows: 5, strokeH: 4, strokePitch: 2, groupPitch: 9, rowGap: 1, slash: [[1, 3], [3, 2], [5, 1]], pane: { x: 6, y: 13, w: 16, h: 24 }, color: 0xa8957a }` (capacity 50). `src/game/math/worldPlayback.ts` `tallyRects`: `x0 = (g % groupCols) * groupPitch`, `y0 = floor(g / groupCols) * (strokeH + rowGap)`; mark j < 4 -> `{ x: x0 + j * strokePitch, y: y0, w: 1, h: strokeH }`; j = 4 -> one 1x1 rect per `slash` entry at `(x0 + dx, y0 + dy)` (the slash sits in the gaps, so it shows). Update `worldPlayback.test.ts` tallyRects cases (41 -> 8 groups + 1 stroke; 45 -> 9 groups; rects inside 16x24) |
+| F4 | S2 | Era II lamp glow renders at alpha 0.8: a solid orange plate (mushroom cap) on the lamp, the brightest object at the frame edge; spec is a faint two-step halo (.22 / .12) | `crops/s9-720-corner-x4.png`, mock `crops/lampglow-alpha-mock-x3.png` | EM | `src/game/rendering/WorldProps.ts` `LAMP_GLOW_ALPHA` 0.8 -> **0.4**, moved to data as `WORLD_ENV.lampGlow: { alpha: 0.4, brightAlpha: 0.2 }` so the AD can tune it (ripple bump `LAMP_BRIGHT_ALPHA` 0.2 -> `brightAlpha`) |
+| F5 | S2 | Buys made outside the TECH INDEX keep the e1 placements at s8 / s9 (relocation hold): dog under the generator, crow on top of it. Real play buys inside the tree (correct there), but `world.mjs` case D buys with `buyList` alone, so `D_s8_placed` / `D_s9_placed` will fail at the gate | `cap/notree-s9-720u150.png` + `.json` (framing s9, placements dog 2364, crow 2476) | EM (T12) | `scripts/smoke/world.mjs` `caseD` (and caseG before `G_display`): `await page.keyboard.press('t'); await sleep(400);` before each `buyList`, `await page.keyboard.press('Escape'); await sleep(600);` after. Guard (director, optional): a held placement whose x lies inside the new framing's machine box (A1 rule) hides until the next unseen moment instead of drawing over the machine |
+| F6 | S2 | Dog front-head frames (`head`, `talk`, `lie` = the demo hold image) read as a cat: two pointed ears, round face, no muzzle | `crops/dog-art-frames-x8.png`, `crops/demo-720-hold-dog-x6.png`, `crops/demo-1080-hold-corner-x2.png`, `crops/glances-x4.png` | AD | masters `scripts/art/world/masters/dog/`: on head / talk / lie add a 3 px light muzzle (`t`) one row below the eye line with a 1 px ink nose at its bottom centre; torn ear = 1 px folded stub at the skull side (not a triangle); head 1 px wider at the jaw. Rebake 6 rows, gates (score >= 90, lint 0/0, silhouette 1, check_sheet), `worldSheets.test.ts` |
+| F7 | S2 | Dog hole (era II, `load-beneath`) sits under the dog's head (dog x + 20, depth row -0.1): only a 1-row sliver shows in dig frames; "what is under the ground?" has no picture | `crops/s9-1080-dog-hole-x5.png` | T15 (+ EM for world.mjs) | `WORLD_PLACEMENTS` hole x = dog x + 30: e1 2384 -> **2394**, s8 2624 -> **2634**, s9 2876 -> **2886** (pit spans x+14..x+46, nose at x+20 stays in it). `livingWorld.test.ts` placement rows; `scripts/smoke/world.mjs` `PLACED.*.hole` same numbers; DENIZEN_ART §3 props row (AD doc) |
+| F8 | S3 | Inspector write frames at the route end (dx +24, no flip) face the machine | `crops/story-talk-ins02.png` f003-f005 | T15 | `WORLD_LOOPS.inspector` entries 10-13 (`write0`, `write1`, `write0`, `write1` at dx 24): add `flip: true` (he turns, writes facing away, walks back) |
+| F9 | S3 | Talk bob runs for the whole bubble (`OPEN_TALK_BLIPS = Infinity`); spec: min(words, 8) blips at 8 fps, then hold front. Audio blips stop, the head keeps nodding 4-6 s | `turn/talk-ins02-thr3/log.json` (talk/front to the end) | EM | `src/game/rendering/LivingWorld.ts`: `setTalking(id, on, blips?)` stores `blipCount(text)` on the turn (director passes it at bubble show); `turnPose` -> `talkPose(t, turn.tl, turn.blips ?? 8)` |
+| F10 | S3 | A glance and a line can start on the same frame: front -> glance -> front flash inside a talk turn, and a crow `head` glance during INS-04 (glance within 10 s of a bubble) | `turn/talk-ins02-thr/log.json` (659 front, 764 glance, 867 front), `tools/dbg-glance.mjs` output | EM | `LivingWorldDirector.update()`: run `scheduler.tick()` / `startCue()` before `stepGlances()`, and in `stepGlances` return when `this.active.length > 0` after the cue (already checked) or when a cue started this frame |
+| F11 | S3 | Bubble edges blur by 1 px at non-integer `#ui-root` zoom (UI 125 / 150, every 1080p frame): translate in fractional CSS px | `crops/corner-grl01-720u150-x10.png` vs `crops/corner-dog02-720u100-x10.png` | EM | `src/ui/worldVoice.ts` move(): `x = Math.round(x * zoom) / zoom`, `y = Math.round(y * zoom) / zoom` before `transform: translate(...)`; same for `--tx` |
+| F12 | S3 | Walk shimmer at zoom .75: route steps of 6 world px = 4.5 screen px flip the 1 / 2 px art-column pattern every step | `crops/walk-zoom075-x5.png` | T15 | `WORLD_LOOPS.inspector` dx values on multiples of 8 (-24, -16, -8, 0, 8, 16, 24; frames walk0-3 cycling, write at 24): 8 world px = 6 screen px = 4 art px at .75, so the column pattern holds; zoom 1 / .5 unaffected |
+| F13 | S3 | Debug: `worldSay` is accepted while the World sleeps (demo teaser / card): `silence` stays `null` (refreshSilence runs only in update), GRL-05 sits in `activeLines` through teaser and card, no bubble | `tools/dbg-teaser.mjs` output (phase teaser, `sil: null`, `say=true`) | EM | `LivingWorldDirector`: `onSleep()` sets `this.silence = 'asleep'`; `debugSay()` calls `refreshSilence()` first. `scripts/smoke/demo.mjs` `B_bubble_hidden_teaser` also requires `said === false` |
+| F14 | S2 | Bundle budget: app js 499.3 KB > 460 (A12 expects about +15 KB; actual +96.5 KB over 402.8) | `node scripts/perf/bundle-budget.mjs` -> `bundle budget: FAIL (1 breach)` | EM | find the growth (likely data / sheet tables or a duplicated import in the living-world chunk); split the world layer into a lazy chunk or trim, then re-run the budget |
+| F15 | S3 | Docs: DENIZEN_ART §5.1 `bg.windowLit` placements and `scripts/art/world/README.md` crop list still name the old six windows | this section, Tuned values | AD | update both to the tuned list |
+
+Accepted notes (no fix): tracking band drawn on the front frame instead of the held loop frame (reads as the same glitch); lamp / clock
+props are full-colour iron next to the sepia booth in era I (they are not era-row sheets; matches the machine); at UI 150 the left-tower
+lit windows sit under the HUD panel (right tower carries Q6); GRL-01 goes below the window at UI 150 (gain block above); CROSSED LINES
+waits for the 120 s min gap after INS-04 (scheduler rule, not art); booth hood light in `lit` is 2 px (fine at s9).
+
+Round 2 (AD2b) re-checks: F1 (`bub-s9-*-GRL-03`, `demo-*-GRL-06`, `q6-*-gen-after` mini visible), F2 (`chain-720u150`), F3 / F7 (booth and
+dog crops at e1 / s9), F4 (`s9` corner), F6 (hold image 720 / 1080), F5 (world.mjs D green), F14 (budget PASS), then the S3 items.
+
+### WP23a round 2 (Art Director AD2b, 2026-10-24)
+
+Verdict: **FIX LIST** (not RELEASE-READY). Fixed 4 / 15 (F1, F7, F8, F12, all data). Open 11 (F3 now **S1**: T15 half-applied,
+typecheck red) + new F16 (S2, from the F1 move) + sub-items F1b, F7b. **Q6: PASS** (re-run, same as AD2 t4). Placeholders: none on screen.
+
+Build under audit: T15 changed only `src/data/livingWorld.ts` + `src/data/livingWorld.test.ts` (17:48; F1 `footArtX` 146, F3 new
+`WORLD_MARKS` shape, F7 hole + 30, F8 write flip, F12 dx on 8). No EM code fix landed (`WorldProps.ts`, `LivingWorld.ts`,
+`LivingWorldDirector.ts`, `worldBubbleController.ts`, `worldVoice.ts`, `worldPlayback.ts`, `world.mjs`, `demo.mjs` untouched since AD2).
+No EM rebuild (`dist/` = AD2 build 17:25). `npm run typecheck`: **FAIL** `src/game/math/worldPlayback.ts(165,48): TS2339 Property 'gapX'
+does not exist` -> `npm run build` blocked. `npx vitest run src/data/livingWorld.test.ts src/game/math/ src/ui/worldVoiceModel.test.ts`:
+7 fail / 1040 pass (all 7 = `worldPlayback.test.ts > tallyRects`). AD2b captured a vite-only scratch build of the working tree
+(`npx vite build --outDir <O>/ad2b/dist-t15`; `--mode demo` -> `dist-demo-t15`) served to Playwright by route interception (no port;
+4174 / 4177 untouched). Evidence root `<O>/ad2b/`: `cap/`, `crops/`, `frames/` (CDP screencast frames named by the rAF variant at the
+frame time), `turn/`, `tools/` (AD2 tools + `lib.mjs` route base, `sync.mjs` / `dogsync.mjs`, `maskset*.py`).
+
+| F | round 2 | evidence (`<O>/ad2b/`) | note / owner |
+|---|---|---|---|
+| F1 | **FIXED** | `crops/f1-s8-720-girl-x4.png`, `crops/f1-s9-720-girl-x4.png`, `crops/q6-r2-gen-after-left-x3.png`, `crops/f1-grl03-720u150-tail-x6.png`, `crops/f1-grl03-1080-tail-x6.png`, `cap/demo-720-GRL-06.png` | girl mini clear of motor and Inspector: game x ~85 at s8, ~171 at s9 (motor base 192); she stands on the pylon foot line. GRL-03 tail on her head at 720u100 / 720u150 / 1080 / Deck, demo GRL-06 too. **F1b open (S3, T15 / EM):** `worldPlacement.test.ts` 'places the girl mini foot' still hard-codes foot (960, 1160) and 177 / 240 and never reads `WORLD_FAR_PLANES.girlMini`: green, but it no longer guards the shipped value. Apply the AD2 F1 test spec |
+| F2 | STILL OPEN | `cap/chain-720u150-02.png` | PAY-01 box over the crow, CRW-04 tail on the PAY-01 box (code unchanged). EM: fold into F16 |
+| F3 | STILL OPEN, **S1** | `crops/f3-s7-720-booth-x6.png`, `crops/f4-s9-720-corner-x4.png` (empty pane) | data in, code not: `tallyRects` reads `gapX` -> typecheck red, build blocked; in a vite-only build every rect x = NaN and the booth pane shows **no marks**. EM first: `tallyRects` + `worldPlayback.test.ts` per the AD2 F3 spec (data already matches) |
+| F4 | STILL OPEN | `crops/f4-s9-720-corner-x4.png` | orange plate on the lamp (code unchanged). EM per AD2 |
+| F5 | STILL OPEN | `scripts/smoke/world.mjs` caseD lines 287-299 | still `buyList` outside the TECH INDEX. EM per AD2 |
+| F6 | STILL OPEN | `crops/f6-demo-720-hold-dog-x8.png`, `crops/dog-sheet-keyframes-x8.png` | `dog.png` / `masters/dog/dog.txt` unchanged (14:43): head / talk / lie (= demo hold image) still a cat face. AD art task per AD2 |
+| F7 | **FIXED** | `crops/f7-s9-1080-dog-hole-x5.png`, `crops/f7-dogsync-s9-1080-x3.png`, `crops/f7-hole-sit-vs-dig-x8.png`, `crops/f6-demo-720-hold-dog-x8.png` | stage-1 pit now shows whole: right of the paws in sit / sniff, at the nose in dig, and in the demo hold image. **F7b open (S2, gate):** `world.mjs` `PLACED.{e1,s8,s9}.hole` still 2384 / 2624 / 2876 -> `D_*_placed` fails against data 2394 / 2634 / 2886 (EM). DENIZEN_ART §2 (line 211) and §3 (line 316) hole rows `dog x + 20` -> `+ 30` (AD doc, with F15) |
+| F8 | **FIXED** | `frames/ins-s9-720b/`, `crops/f8-f12-ins-s9-075-x4.png` (cells 008-010) | write0 / write1 at dx 24 drawn flipped: he turns, writes facing away, walks back |
+| F9 | STILL OPEN | `turn/talk-ins02/log.json` | talk / front toggles from 992 ms to the end of the 7 s window (code unchanged). EM per AD2 |
+| F10 | STILL OPEN | `LivingWorldDirector.ts` 310-313 | `stepGlances` still runs before `scheduler.tick` / `startCue`. EM per AD2 |
+| F11 | STILL OPEN | `crops/f11-corner-chain-720u150-x10.png` | border row at UI 150: (162,147,120) fringe, ink, ink, (121,109,89) fringe. EM per AD2 |
+| F12 | **FIXED** | `crops/f12-walk-pattern-x8.png`, `frames/ins-s9-720b/` | route x 1448..1496 on 8 px steps; the same pose at x 1488 and 1456 is pixel-identical after the 24 screen px shift: no column flip at zoom .75 |
+| F13 | STILL OPEN | `cap/demo-720-teaser.png` + run log (`teaserSay: true`, no bubble) | `worldSay` still accepted while asleep. EM per AD2 |
+| F14 | STILL OPEN | `node scripts/perf/bundle-budget.mjs <O>/ad2b/dist-t15` | app js 499.4 KB > 460: FAIL. EM per AD2 |
+| F15 | STILL OPEN | DENIZEN_ART.md line 490, `scripts/art/world/README.md` line 150 | still the old six windows. AD doc task |
+| **F16** | **NEW, S2** | `crops/grl03-720u100-wide-x3.png`, `crops/grl03-1080-wide-x2.png`, `crops/f1-grl03-720u150-wide-x4.png`, `crops/grl03-deck-wide-x3.png`, `crops/f16-grl06-720-x3.png` | with the girl at x ~171 her bubbles (GRL-03..06, demo GRL-06) take `above` over the left wing and sit on the **Inspector's head** (720u100, 1080); at 720u150 / Deck also on **Sensor 7's head**. Tail is right, but a primary face is hidden and the box reads as his. Owner EM, exact change below (also closes F2) |
+
+F16 + F2 exact change (EM; `src/ui/worldBubbleController.ts`, director feeds it):
+- `BubbleControllerDeps.figures(): readonly { id: SpeakerId | 'sensor7'; head: Vec2; padX: number }[]`: world-px head of every visible
+  ground denizen (inspector, dog, crow, sensor7) at its **placement** x (not the animated x, so the box does not chase the walk);
+  `padX` world px: inspector 36 (route +-24 + 12), dog / crow / sensor7 12.
+- `reservedFor(slot, g)`: besides the other slot's box, reserve for every figure whose id != the slot's speaker the game-px box
+  `{ x: s.x - padX * zoom, y: s.y - 4, w: 2 * padX * zoom, h: 24 }` (`s` = `screenOfWorld(head, 1, camera)`, as the anchor path does),
+  converted with the geo (kx, ky, ox, oy). Ladder order unchanged.
+- Expected: GRL-03 / GRL-06 drop to `below` (ground band, tail up, as AD2 saw at UI 150), PAY-01 moves off the crow, Inspector and
+  Sensor 7 stay visible. Gate: no era I-II line ends `blocked` in `bubbles.mjs` s7 / s9 x 5 viewports, `chain.mjs`, `demo.mjs`.
+
+Checks this round:
+| check | result | evidence |
+|---|---|---|
+| Q6 pair, 1920x1080, UI 100, default camera, quiet | **PASS**: `powerLines` adds six lit window tiles on the two skyline towers (left ~x 120-150, right ~x 1270-1300) + lamp glow + booth light + relit insulators; `generator` adds the dark girl window and the now visible girl mini (game x 84), not background scale: `powerLines` carries Q6. Cams e1 (1, 1920, 1520), s8 (1, 2064, 1464), s9 pre (.75, 2176, 1504), s9 (.75, 2192, 1504) | `cap/q6-r2-{gen,pl}-{before,after}[-plate].png`, `crops/q6-r2-pl-pair-band.png`, `crops/q6-r2-gen-after-left-x3.png` |
+| DENIZEN_ART 8.2 on the changed frames | one grid PASS (F12 identical patterns); palette PASS (no art changed); no denizen faces the machine PASS (F8 flip); tail on head PASS for the girl at all 4 viewports, F2 still FAIL; crank / prompt / gain PASS (ladder unchanged); nothing un-happens PASS (hole at the new x, stage 1, kept after the demo reload) | crops above |
+| placeholders never visible in I-II | **PASS**: 36 probes, visible frames = clock ruin; crow frozen / head; dog sit0 / sit1 / sniff0 / dig0 / dig1 / head / talk / lie; girl window-flicker / mini; inspector idleA / idleB / walk0-3 / write0 / write1 / front / talk; lamp dead / lit; payphone dark / lit / ring1; receiver hang / swing0-2 / level; sensor7 headR. No ink fallback on screen. The empty booth pane is F3 (missing marks), not a placeholder | `cap/*.json .living` |
+| text | verbatim to the bible bank: INS-06 PAY-03 DOG-05 GRL-03 PAY-01 CRW-04 INS-05 PAY-05 INS-07 GRL-06 DOG-12 | probe `.bubble.text`, run logs |
+| dog frame vs debug variant | match within one frame (CDP screencast + rAF log on one clock); the AD2-era screenshot mismatch was capture latency | `crops/f7-dogsync-s9-1080-x3.png` |
+
+Accepted notes (no fix): the new inspector loop has three in-place walk frames per lap (walk0 at -24 after the idles, walk3 at +24,
+flipped walk0 at +24 after writing): 125 ms start / stop steps, they read as settling. The girl mini (5x10) reads as a small far figure
+at the pylon foot (design, DENIZEN_ART 2.4). No allowed-key tuning this round: no open item is a WORLD_ENV / windows number (F4 needs
+the AD2 code move to data first).
+
+Order for the Director: EM F3 first (unblocks typecheck and build), then F16 + F2, F7b + F5 (world.mjs), F4, F9, F10, F11, F13, F14,
+F1b; AD art / doc task F6 + F15 + the hole row. Round 3 (AD2c) after a real `npm run build` / `build:demo`: F3 (booth s7 + cycle 2),
+F16 / F2 (`bub-s9-*-GRL-03`, `chain-720u150`, demo GRL-06), F4, F6 hold image, F9-F11, F13, F14 budget, world.mjs D green.
+
+### WP23a round 3 (Art Director AD2c, 2026-10-24)
+
+Verdict: **FIX LIST** (not RELEASE-READY). Closed this round: F1b F2(geometry) F3 F4 F5 F6 F7b F9 F10 F11 F13 F14 F15 F16 + the S3
+Sensor 7 head. **New S1: F17, F18, F19** (all one cause family: the F16 head reserve leaves the payphone no ladder step on the
+right corner, and two schedulers do not survive a waiting / blocked member) and **F20** (test pin of my Q6 tuning, trivial).
+**Q6 era I -> II entry (generator): PASS** after the AD2c data change below. Placeholders on screen: none (88 probes).
+
+Build under audit: waves 1-2 landed (typecheck clean, vitest 134 files 3978 pass / 17 skipped before AD2c). AD2c ran
+`npm run typecheck` (clean), `npm run build` (dist on :4174), `npm run build:demo` (dist-demo, served to Playwright by route
+interception, no port; 4177 never started). `node scripts/perf/bundle-budget.mjs`: **PASS** app js 438.3 KB (limit 460; the
+living world is a lazy chunk `LivingWorldDirector-*.js` 67.7 KB), css 41.0 / demo 43.7 KB (45). After AD2c tuning:
+`npx vitest run` 1 fail / 3977 pass / 17 skipped (the fail is F20), typecheck clean. Evidence root `<O>/ad2c/`: `cap/` frames +
+probe JSON, `crops/`, `turn/`, `tools/` (AD2b tools on :4174 + `bub3.mjs` ladder with head-overlap test and a blocked check,
+`holdforce.mjs`, `dogprev.py`, `doghead.py`, `s7draft.py`, `s7prev.py`, `setwin.py`, `bandmock.py`), `vt/ladder.test.ts` (scratch
+vitest probe of the real `placeBubble`), `work/` (masters and data before AD2c: `dog.before.*`, `sensor7.before.*`,
+`livingWorld.before-ad2c.ts`).
+
+**Art (AD, done).**
+| item | change | gates | evidence |
+|---|---|---|---|
+| F6 dog front head (head, talk, lie) | flat skull top; torn ear = 1 px flap folded down on the right skull side (no second point); `t` bridge between the eyes; 3 px `u` muzzle one row below the eye line with the ink nose `K` at its bottom centre; jaw 1 px wider; `u` chin; talk drops the chin over the collar. `u`, not `t`: `t` bakes to the lit-coat sepia in rows I-II | check_sheet CLEAN; workbench halves 99.3 / 99.6, lint 0 / 0; silhouette 1 per cell (18 on the 3 columns x 6 rows); `worldSheets.test.ts` 20 / 20; only columns 12 / 13 / 15 changed | `crops/dog-heads-before-after-x12.png`, `crops/dog-contact-ad2c.png`, in game `crops/f6-dog-ingame-z1-z075.png` (zoom 1 and .75, 720p / 1080p), hold image after reload `crops/f6-hold-reload-720-1080.png` |
+| S3 Sensor 7 headR (and the mirror headL) | redrawn as 3/4 heads: side panel shows, lens ring 5 wide flush with the turn-side box edge, glass 3x4 still facing the viewer, no barrel past the box. The old flank lens + barrel pointed at the machine at e1 / s9 (bible 3.6: it watches the camera). Frame order and sheet size unchanged | check_sheet CLEAN; workbench 95.6, lint 0 / 0, 48 components = 1 per cell; `worldSheets.test.ts` 20 / 20; only columns 1 / 3 changed | `crops/s7-heads-before-after-x10.png`, `crops/sensor7-contact-ad2c.png`, in game `crops/s3-sensor7-headR-ingame.png` |
+
+Note for the Director: Task 2 needed `public/assets/world/sensor7.png` (rebuilt from `scripts/art/world/masters/sensor7/`), which
+was not in the AD2c file list; nothing else in `public/` changed besides `world/dog.png`.
+
+**Q6 era I -> II entry (generator, s8), 1920x1080, UI 100, default camera, quiet, buys inside the TECH INDEX.**
+Shipped W1-C (dim .5, AD2 six windows): the generator pose shows only the 3 right-tower windows (the 3 left-tower ones sit at
+game x -66, off screen), muted at .5; the tower already had the girl's warm flicker, so the net change reads as "one warm tile
+became three dim ones": **does not read without looking** (`cap/q6-c0-gen-*`, `crops/q6-c0-gen-pair-right.png`). Ladder:
+dim .9 alone (`crops/q6-c0-vs-c1-gen-after.png`, still one tower); a light-spill ellipse mock behind the group (no gain,
+`crops/q6-bandmock-s8-a25-a40.png`, rejected); all six on the big central tower (c2: the s9 pylon plane crosses three of them,
+rejected, `crops/q6-c2-pl-tower-x3.png`); **hybrid h** = three right-tower windows (AD2) + three real cut-outs in the upper floors
+of the big central tower, chosen clear of the s8 / s9 machine top, the HUD at UI 150 and the s9 pylon, halos touching without
+overlap. Dim ladder on h: .5 muted, .7 reads, .9 crisp (`crops/q6-h-dim-ladder.png`) -> .85.
+Result: the generator now lights six warm tiles on two towers right above the machine, where the eye already is, while the girl
+window goes dark. **Reads without looking for it: PASS.** powerLines keeps its own step (windows full, lamp + glow, booth light,
+motes, canon pylons). Final pairs: `<O>/ad2c/q6-gen-before.png`, `q6-gen-after.png`, `q6-pl-before.png`, `q6-pl-after.png`,
+band board `<O>/ad2c/q6-band-pairs.png` (half size `crops/q6-band-pairs-half.png`). Dim windows sit on the far plane (depth
+background + 21.5) behind the machine: never over it (all `state-*` frames, UI 100 / 150, deck).
+
+Tuned values (`src/data/livingWorld.ts`, allowed keys only, CRLF kept):
+| key | was | now | why |
+|---|---|---|---|
+| `WORLD_ENV.windowDimLevel` | 0.5 | 0.85 | Q6: .5 was muted on the grey towers at 1080p |
+| `WORLD_FAR_PLANES.windows` | (306,120) (306,132) (318,146) 4x6; (-206,132) (-194,146) 4x6; (-206,155) 1x6 | (306,120) (306,132) (318,146) 4x6; (143,71) 2x4; (131,99) 4x4; (134,109) 1x3 | the left-tower three were off screen in the generator pose and under the HUD at UI 150; the new three are real `#2b2e31` cut-outs of `bg/skyline.png`, visible in s8 and s9 |
+Untouched: windowGlow (pad 3, .65, `#d9822b`, 1500 ms), windowAlpha 1, lampGlow (.4 / bump .2: W1-C numbers confirmed in
+`WorldProps.ts` `(alpha + bump) * mains`), motes. Six windows stay six (bible era V countdown).
+
+**Round 3 checks.**
+| F | result | evidence (`<O>/ad2c/`) |
+|---|---|---|
+| F16 | **FIXED**: GRL-03 / 04 / 05 at s9 and demo GRL-06 go `below` (tail up to the girl mini) at 720u100 / 720u150 / 1080 / deck; Inspector and Sensor 7 stay visible; head-overlap test 0 hits on 30 shown bubbles | `crops/f16-grl-below-4vp-x2.png`, `cap/bub-s9-*-GRL-0{3,4,5}.png` + JSON `.covers` |
+| F2 | geometry FIXED (PAY-01 never lands on the crow) but see F17 / F18: PAY-01 now shows last (720u100, 1080) or never (720u150, deck) | `cap/chain-*-0N.png`, `chain-run.txt` |
+| F3 | **FIXED**: 41 = 8 groups + 1, cycle 2 = 8 + 2, read as tally marks, no window grid | `crops/f3-booth-s7-vs-cycle2-x6.png` |
+| F4 | **FIXED**: faint two-step halo at .4, no plate | `crops/f4-s9-720-corner-x5.png`, `crops/f4-s9-1080-corner-x4.png` |
+| F5 / F7b / F1b | **FIXED** (code read): world.mjs case D buys inside the TECH INDEX, `PLACED.*.hole` 2394 / 2634 / 2886, the girl-mini test reads `WORLD_FAR_PLANES` | `scripts/smoke/world.mjs` 51-53, 254-260; `worldPlacement.test.ts` 145-151 |
+| F6 | art **FIXED**; hold image after reload = `lie` at 720p and 1080p **only with DOG-12 forced**: the natural POST-CAP arc never reaches DOG-12 (F18 + F19), reload shows `dig1` | `crops/f6-hold-reload-720-1080.png`, `holdforce` vs `demo-run.json` |
+| F9 | **FIXED**: INS-02 = 6 talk / front pulses 636-1901 ms (6 words), then front hold to the bubble end | `turn/talk-ins02b/log.json` |
+| F10 | **FIXED**: with a line and a glance due on one frame, the line starts and no random glance shows; WORLD VOICES OFF keeps glances (receiver `level`). One of three runs showed inspector `glance` + crow `head` at the start of INS-04: that is the `beat.failedSync` (dog, inspector, crow 250 ms apart; in `seen`), held by debug quiet until the frame the line was due (accepted note) | `glance-run.txt`, `glance-run2.txt` |
+| F11 | **FIXED**: bubble corners at UI 150, 1080 and deck = ink + paper only (3 colours in a 14 px corner box, no fringe) | `crops/f11-corner-720u150-vs-u100-x12.png`, `crops/f11-corner-1080-x12.png` |
+| F13 | **FIXED**: demo teaser `worldSay('GRL-05')` = false, no bubble | `demo-run.json` (`teaserSay: false`) |
+| F14 | **FIXED**: budget PASS, app 438.3 KB | `bundle-budget.mjs` |
+| F15 | **FIXED** (AD doc): DENIZEN_ART 2.2 / 2.4 / 2.5 / 2.6 / 3 / 4.2 / 5 / 5.1 and the README match the data (hole x + 30, girl mini foot 146 / strip (868, 1160) / game x 164 / 85 / 171, the new six windows, WORLD_MARKS, lamp glow .4 / .2, windows dim at generator, head reserve, 3/4 Sensor 7 heads) | docs |
+| 8.2 house rules on changed frames | one grid PASS; palette PASS (check_sheet); no denizen faces the machine PASS (dog front head to camera, Sensor 7 3/4 to the viewer); tail on head PASS for every shown bubble; crank / prompt / gain PASS (ladder unchanged); nothing un-happens PASS (lie persists after reload, hole stays) | crops above |
+| placeholders | none on screen in 88 probes (inspector idle / walk / write / front / talk, dog sit / sniff / dig / head / talk / lie, crow frozen / head, sensor7 headR, lamp dead / lit, clock ruin, booth dark / lit / ring, receiver hang / swing / level, girl window-flicker / mini) | `cap/*.json .living` |
+| text | every shown bubble verbatim to the bank (INS-02 DOG-02 CRW-01 GRL-01 INS-06 DOG-05 GRL-03 GRL-04 GRL-05 PAY-01 CRW-04 INS-05 INS-07 GRL-06 DOG-12) | probe `.bubble.text` |
+
+**F-list (open).**
+| F | sev | what / where | evidence | owner | exact change |
+|---|---|---|---|---|---|
+| F18 | S1 | Every payphone line is **blocked** on the right corner since the F16 head reserve: PAY-03 at s9 BLOCKED at 720u100 / 720u150 / 1080 / deck (11.6-11.8 s wait, never shown); demo PAY-05 blocked; PAY-02 (core, `buy powerLines`) and PAY-04 share the geometry. Real `placeBubble` on the measured s9 UI 100 geometry (receiver head (1224, 459), feet 492, box 216x46, crow reserve (1234, 380, 18, 24), dog reserve (1129, 485, 18, 24)) returns null: above hits the crow over the lamp, below hits the dog, the centred side-left box hits the dog; without the reserves it is `above` (1056, 399) as in AD2b | `cap/bub-s9-*-PAY-03.json` (`shown: BLOCKED`), `vt/ladder.test.ts` | EM | `src/game/math/worldBubble.ts` `sidePlacement`: per wing (outward first) try two y values, the current centred `mid - h / 2`, then head-aligned `head.y - h - tailH` (body + tail end at the head line), both clamped as now; first box clear of every reserved rect wins. Prototype in `vt/ladder.test.ts`: s9 UI 100 -> side-left (994, 405); s9 UI 150 (root px) -> (586, 252); s8 PAY-01 UI 150 -> (574, 301). Add these three as `worldBubble.test.ts` cases (crow + dog reserves) and re-run `bub3.mjs` (PAY-03) and `chain.mjs` |
+| F17 | S1 | CROSSED LINES plays **out of order**: CRW-04 ("Operator. Operator.") shows first, then INS-05, and PAY-01 ("Hello? Operator?") last at 720u100 / 1080 and never at 720u150 / deck. `chainTick` treats "no bubble visible" as the step wait being over, so step 2 starts during PAY-01's 2.2 s dial + ring prelude (and during any placement wait) | `chain-run.txt`, `cap/chain-720u100-0{1,2,3}.png` | EM | `src/game/math/worldVoice.ts` `chainTick`: return null while a member of the run is in flight and has not shown yet (new ctx flag, e.g. `chainMemberWaiting`, set by the director from `this.active` lines with `phase === 'wait'` and a chain id); the run goes on after that member shows for `chainStepAfterMs` or ends blocked (placeWait). Unit test: step 2 is not offered while step 1 waits in its prelude. Recheck `chain.mjs` x 4 viewports: PAY-01, CRW-04, INS-05 in order |
+| F19 | S1 | The demo POST-CAP arc **stalls on a blocked member**: a POST-CAP line under 60 % (PAY-05 blocked) puts the cursor back to it with `nextAtMs = now`, so it retries every placeWait and DOG-12 never comes: no `lie` hold image after reload (dog `dig1`; `seen` lacks DOG-12) | `demo-run.json`, `cap/demo-720-DOG-12.json` (`activeLines: ['PAY-05']`) | EM | `worldVoice.ts` result handler, `rec.kind === 'postCap'`: when the line never showed (fraction 0 from a placeWait expiry, not a cut), count it; after 2 blocked attempts move the cursor past it (it stays unseen) so the arc reaches DOG-12. F18 removes today's trigger; this keeps the hold image safe from any future layout block. Test: a POST-CAP member blocked twice is skipped and the next step plays |
+| F20 | S1 (gate, trivial) | `src/data/livingWorld.test.ts` 439 pins `WORLD_ENV.windowDimLevel` to 0.5; AD2c tuned it to 0.85 (Q6) | vitest 1 fail | EM | `expect(WORLD_ENV.windowDimLevel).toBe(0.85);` (keep the > 0 / < 1 checks). No test pins the window list |
+
+Accepted notes (no fix): at 6x zoom a tally group can read as "UH" (slash pixels in the gaps); at game scale the groups read as
+marks and the count difference shows (slash mocks `crops/f3b-slash-mock.png`: no variant better). The 2x4 / 1x3 window crops take
+the top-left of the 4x6 lit frame, so the small ones show a darker L of pane inside the halo; at 1080p it reads as a lit tile.
+The side bubble of F18 may cover the street clock (a prop, not a face). A wordless beat and a line can start on one frame (seen only with
+debug quiet holding `beat.failedSync`; in play the wornMotor beat and INS-04 are minutes apart); optional EM guard: no line starts
+while a beat runs.
+
+Order for the Director: EM F18 + F17 + F19 + F20 (one package: `worldBubble.ts`, `worldVoice.ts`, `LivingWorldDirector.ts`
+ctx flag, tests), rebuild, then AD2d short recheck: `bub3.mjs` (PAY-03 shown at 4 viewports, no head covered), `chain.mjs`
+(order PAY-01, CRW-04, INS-05 at 4 viewports), `demo.mjs` natural arc (PAY-05 ... DOG-12, then `lie` after reload), world.mjs D.
+Gates proved green this round (keep): Q6 era II entry, F3 F4 F6-art F9 F10 F11 F13 F14 F16, budget, placeholders, palette.
+
+### WP23a round 4 (Art Director AD2d, 2026-10-25)
+
+Verdict: **FIX LIST** (not RELEASE-READY)
+
+Closed this round: **F17, F18, F19, F20** (all proved on the final build), Q6 era I -> II entry **PASS**, bubble font = HUD
+face **PASS**. Open: two new **S2**, both small code fixes with a proven prototype: **F21** (a side bubble in `centred` y mode
+hangs its tail at the ground beside a short speaker: DOG-02 at 720p UI 150 and Deck) and **F22** (the demo tape freeze shows no
+tracking line: the cast arms it from a clock that stopped while the World slept under the END OF DEMO card). A13 stays open
+until both land and AD2e rechecks them.
+
+Build under audit (wave 1 landed 02:32-02:33: `worldVoice.css` HUD font stack, smoke README, lazy-chunk budget row). AD2d step 0
+(`<O>/ad2d/step0-*.txt`): `npm run typecheck` clean; `npm run build` + `npm run build:demo` OK; `bundle-budget.mjs` **PASS** on
+dist (app 438.3 KB / 460, lazy world 68.7 / 80, css 41.0 / 45) and dist-demo (438.9, 68.7, css 43.8); `npx vitest run` (no browser
+open) 134 files, **3992 pass / 17 skipped / 0 failed**; `worldVoice.css` minified **980 B** (<= 1000); freshness: `find src public
+docs scripts -newer dist/index.html` and `-newer dist-demo/index.html` print nothing. dist served by :4174; dist-demo served to
+Playwright by route interception (`http://ad2b.test/`, no port; 4177 never started). Evidence root `<O>/ad2d/`: `cap/` frames +
+probe JSON (every bubble judged by `tools/checks.mjs`: faces incl. the payphone receiver, tail tip vs head x, HUD panel / buttons /
+hint / visible toasts, crank circle + 24, gain block), `crops/`, `turn/` (CDP screencast frames + rAF variant log), `tools/`
+(`bub4.mjs`, `chain4.mjs`, `demo4.mjs`, `check5.mjs`, `mock.mjs`, `patchf22.py`, `regdiff.py`, AD2c tools), `vt/ladder.test.ts`
+(scratch probe of the real `placeBubble`), run logs `bub4-run.txt`, `bub4-u125-run.txt`, `chain4-run.txt`, `demo-run.json`,
+`check4-run.txt`, `check5-run.txt`.
+
+| # | check | result | evidence (`<O>/ad2d/`) |
+|---|---|---|---|
+| 1 | F18 ladder, s7 (INS-02 DOG-02 CRW-01 GRL-01) + s9 (INS-06 PAY-02 PAY-03 PAY-04 DOG-05 GRL-03 GRL-04 GRL-05) at 720u100 / 720u150 / 1080 / deck (+ 720u125) | **F18 FIXED; check FAIL on one line (F21)**. 60 / 60 forced lines shown in 308-417 ms, none BLOCKED; 0 faces covered (Inspector, Sensor 7, crow, dog, payphone receiver); 0 hits on HUD panel, buttons, hint, toasts, crank circle + 24, gain block; 60 / 60 verbatim. PAY-02 / 03 / 04 go `side` head-aligned at every viewport: box left of the booth, tail ends on the booth hood 23 px (UI 100) / 35 px (UI 150, 1080) left of the receiver; crow and dog clear; the box covers the booth's own hood top and machine art (allowed). Tail on head everywhere **except DOG-02 at 720u150 and deck**: `side` + `centred`, box left of the dog, tail tip 45 px left and ~50 px below the head, on bare ground (F21). UI 125: DOG-02 `below`, fine | `bub4-run.txt`, `bub4-u125-run.txt`, `cap/bub-*.png/.json` (`.judge`), `crops/f18-pay03-4vp.png`, `crops/c1-pay03-s9-720u150-x2.png`, `crops/c1-dog02-s7-720u150-x2.png` |
+| 2 | F17 CROSSED LINES, real `generator` buy in the TECH INDEX, 4 viewports | **PASS**. Oscillator log on the page clock (t from chain step 1): dial tone 350 Hz at 0, ring 480 Hz bursts at +1.07..1.12 s and +1.67..1.72 s with booth `ring0` frames, PAY-01 shown +2.45..2.57 s, CRW-04 joins +4.49..4.57 s, INS-05 after PAY-01 ends (+7.95..8.02 s). Order PAY-01, CRW-04, INS-05 at all 4; max 2 bubbles up; `seen` = failedSync, PAY-01, CRW-04, INS-05. PAY-01 never covers the crow (`above`, tail on the receiver at UI 100 / 1080; `side` head-aligned onto the booth at UI 150 / deck); CRW-04 above the crow, tail on its head | `chain4-run.txt`, `cap/chain-{720u100,720u150,1080,deck}-0N.png` + `.json`, `crops/c2-chain-720u150-02-x2.png`, `crops/c2-chain-720u100-03-x3.png` |
+| 3 | F19 natural POST-CAP on dist-demo, no forcing (time skips only), 720 + 1080 | **F19 FIXED; check FAIL on the tracking line (F22)**. Teaser: `worldSay` false, no bubble, silence `asleep`. KEEP TINKERING: one freeze, every denizen still for about 1.2 s after the card leaves (screencast), `beat.tapeFreeze` in `seenEver` once; **no tracking line on any frame** (F22). Then PAY-05 (`side`), INS-07 (`above`), GRL-06 (`below`, tail up to the girl mini), DOG-12 (`below`) in order, verbatim, live region `<Speaker>: <line>`, 0 faces / HUD / crank / gain hits; postCap step 4. Reload: END OF DEMO card, KEEP: no second freeze (longest still 559 / 565 ms vs 2274 / 2365 the first time), dog `lie` facing the camera, 3 x 130 s skips: no bubble, no repeated line | `demo-run.json`, `cap/demo-{720,1080}-{teaser,card,PAY-05,INS-07,GRL-06,DOG-12,hold}.png`, `turn/demo-{720,1080}-keep/` (+ `log.json`), `turn/demo-*-reload/`, `crops/c3-keep-720-left-x4.png`, `crops/c3-hold-720-dog-x8.png`, `crops/c3-hold-1080-dog-x6.png` |
+| 4 | Q6 + placeholders, 1920x1080 UI 100, default camera, quiet, buys in the TECH INDEX; states s0 s2 s7 s8 s9 + cycle 2 era I at 720p / 1080p | **PASS**. `generator`: six warm tiles light on two towers right above the machine (3 on the big central tower, 3 on the right tower) while the girl window goes dark: reads without looking for it (Q6 gate). `powerLines`: windows to full, lamp + glow, relit insulators, the lattice tower. Cams e1 (1, 1920, 1520) -> s8 (1, 2064, 1464); s9 pre (.75, 2176, 1504) -> s9 (.75, 2192, 1504). States and cycle 2 (cycle 2, e1, booth 42 marks) match AD2c. Visible variants in 74 probes: clock ruin; crow frozen / head / talk; dog sit0 sit1 sniff0 sniff1 dig0 dig1 head talk lie; girl window-flicker / mini; inspector idleA idleB walk0-3 write0 write1 front talk; lamp dead / lit; payphone dark / lit / ring0; receiver hang swing0-2 level; sensor7 headR. No ink-fallback placeholder on screen (the 9 boot fallbacks are era III+ / cycle / postgame ids, never drawn in I-II; denizen shadows are their own generated `world.shadow#w` keys) | `cap/q6-d4-{gen,pl}-{before,after}[-plate].png`, `crops/q6-d4-gen-pair-band.png`, `crops/q6-d4-pl-pair-band.png`, `cap/state-*-{720,1080}.png`, `cap/cycle2-e1-{720,1080}.png`, `crops/c4-states-720-board.png`, `check4-run.txt` |
+| 5 | Bubble font, A13 gates, house rules, reduced motion, WORLD VOICES | **PASS**. Computed `font-family` of `.wv` = the HUD stack, 14 / 18 px, letter-spacing normal; the font actually used (CDP `getPlatformFontsForNode`) = **Consolas for the bubble and the HUD** at UI 100 and 150. All 36 bubble boxes that AD2c also captured have the same size (wrap and width unchanged). Border band pure ink and edge rows pure paper on all 60 bubbles at UI 100 / 125 / 150 / 1080 / deck (the only non-ink band pixels are the tail's paper core: 8x2 at zoom 1, 12x3 at 1.5): F11 holds. Reduced motion: bubble opacity 1 on its first frame (normal 0 -> .33 -> .67 -> 1), clean snap to front, no tracking band (normal shows it). RARE: non-core INS-02 refused by force and by its trigger (`chamber-seal`), core INS-01 plays. OFF: force refused, no bubble after a trigger + 10 min skip, `seen` unchanged (4 -> 4), loops and receiver glances go on | `cap/check5.json`, `cap/font-u{100,150}-DOG-02.png`, `crops/c5-font-bubble-u100-u150-hud.png`, `crops/c5-turn-snap-normal-vs-rm-x4.png`, `turn/talk-ins02{,-rm}/log.json` |
+
+**A13 gates.**
+| gate | result | evidence |
+|---|---|---|
+| workbench score >= 90 | PASS (cited, no PNG changed since AD2c): inspector 95.7, windowLit 100, dog 99.5 (AD2c heads 99.3 / 99.6), stakeChain 97.7, hole 95.6, scraps 99.1, mote 100, crow 100, girl 98.7, girlMini 100, girlWindow 100, payphone 98.9, receiver 95.2, lamp 96.7, lampGlow 96.0, clock 100, sensor7 96.1 (AD2c 3/4 heads 95.6); min 95.2 | `scripts/art/world/README.md` gate table; `ls -l --time-style=full-iso public/assets/world/*.png public/assets/bg/window-lit.png`: newest `sensor7.png` 2026-10-24 19:42:41, `dog.png` 19:39:15 (`<O>/ad2d/png-mtimes.txt`) |
+| lint 0 errors / 0 warnings | PASS on all 17 sheets (pillow info accepted; dog linted as two 280 px halves) | same table |
+| silhouette 1 component | PASS: 1 per cell on every sheet (dog 120, inspector 114, crow 60, girl 60, payphone 36, sensor7 48 ...) | same table |
+| palette-only + alpha 0 / 255 + dims | PASS: `npx vitest run src/assets` 8 files / 151 pass (`worldSheets.test.ts` included) | `<O>/ad2d/assets-vitest.txt` |
+| DENIZEN_ART 1.2 minimum sizes | PASS: Inspector 66 / 50, dog 32 / 24, crow 28 / 21, booth 96 / 72, Sensor 7 72 / 54, lamp 112 / 84 logical px at zoom 1 / .75 (floors 24 / 14 / 36) | art unchanged since AD2 measure |
+| AD in-game verdict RELEASE-READY | **NOT YET**: F21, F22 open (S2) | this section |
+
+**DENIZEN_ART 8.2 on every AD2d frame.** One pixel grid PASS (art and PIXEL_SCALE unchanged). Palette-only era rows PASS.
+No denizen faces the machine PASS (rest poses face away, the write flip holds, turns snap to the camera). Tail points at the head:
+PASS on 59 of 60 ladder bubbles, all chain and demo bubbles; **FAIL DOG-02 at 720u150 / deck (F21)**. Bubble never covers crank,
+prompt or gain text PASS (0 hits in 60 ladder + 24 chain + 8 demo judgments). Nothing un-happens PASS (girl window stays dark,
+lamp / windows stay lit, hole stays, the dog `lie` hold survives reload).
+
+Accepted notes (no fix): payphone side bubbles cover the top of the booth's own hood and the machine's battery / transformer
+art; the receiver, the crow and the dog stay clear. In the turn runs a natural line came up after INS-02 (`wv on up`): the scheduler
+had a due line, not a defect. The F21 proposal moves PAY-02 / 03 / 04 at UI 100 / 1080 from `side` to `above` with the tail on
+the receiver; its box edge meets the crow's wing tip but leaves the crow's head clear (mock
+`crops/f21-pay03-720u100-now-vs-mock-x3.png`): accepted in advance.
+
+**F-list (open).**
+| F | sev | what / where | evidence (`<O>/ad2d/`) | owner | exact change |
+|---|---|---|---|---|---|
+| F21 | S2 | DOG-02 (era I) at 720p UI 150 and Deck goes `side` with `centred` y: the body is centred on the dog, the tail hangs from the bottom near corner onto bare ground 45 px left and ~50 px below the dog's head. A `centred` side bubble can never put its bottom tail on a short speaker's head. Cause: since the payphone head reserve, `above` (box 615-831 x 284-338 root px) hits the receiver reserve (769, 312, 16, 16) and `below` hits the buttons; the side step is the only one left. Real `placeBubble` on the measured geometry reproduces the shipped box exactly (493, 333) | `crops/c1-dog02-s7-720u150-x2.png`, `cap/bub-s7-{720u150,deck}-DOG-02.png/.json`, prototype `vt/ladder.test.ts`, mocks `crops/f21-dog02-720u150-now-vs-mock-x2.png`, `crops/f21-dog02-deck-now-vs-mock-x2.png` | EM | `src/game/math/worldBubble.ts` `placeBubble`: after step 2 (below, centred x) and before the side step, try the box **slid** so the tail sits at its far end on the head x: `L = clampedX(Math.ceil(head.x - (w - tailMargin)), w, viewport)`, `R = clampedX(Math.floor(head.x - tailMargin), w, viewport)`, inward first (`head.x >= viewport.w / 2 ? [L, R] : [R, L]`); for each x with `tailX = head.x - x` in [tailMargin, w - tailMargin]: first every candidate `above` (same y and tests as step 1), then every candidate `below` (same as step 2). Return side `above` / `below` with a new optional `slide: 'L' \| 'R'` (absent = centred). Then the side step with `SIDE_Y_MODES = ['head', 'centred']` (head first: its tail ends on the head line). `src/ui/worldBubbleController.ts`: keep `slide` in the slot (like `sideY`, set at show and at the recheck, lines 227 / 273) and make `placementOf` compute the above / below x with the same L / R formula when `slide` is set, else today's centred clamp (without this the per-frame follow snaps the box back and the recheck flips it). Tests in `worldBubble.test.ts`: (a) DOG-02 s7 UI 150, root px: head (723.33, 344), feet (723.33, 368.67), size 216x46, viewport 853.33x480, reserved panel (16, 16, 270, 182.67), buttons (474.67, 426, 362.67, 38), crank (362.67, 208, 128, 128), gain (437.33, 106.67, 133.33, 80), receiver (769.33, 312, 16, 16), crow (789.33, 245.33, 16, 16), Inspector (88, 298.67, 48, 16), Sensor 7 (61.33, 297.33, 16, 16) -> `above`, x 518, y 284, slide `L`; (b) s9 payphone UI 100 (AD2c F18 case: head (1224, 459), feet 492, crow (1234, 380, 18, 24), dog (1129, 485, 18, 24)) -> `above`, x 1018, y 399; (c) s9 payphone UI 150 (head (816, 306), feet 328, crow (823, 253, 12, 16), dog (753, 323, 12, 16)) -> unchanged `side` `head` (586, 252); (d) invariant: every `above` / `below` result has `x + tailX` within 1 px of `head.x`. AD2e recheck: `bub4.mjs` s7 + s9 at 720u150 / deck / 720u100 / 1080 (DOG-02 tail on the head, PAY tails on the receiver or booth, 0 faces covered), `chain4.mjs` |
+| F22 | S2 | The demo POST-CAP tape freeze (STORY_BIBLE 8.2: "every loop freezes for 1.2 s with a tracking line") shows **no tracking line**: freeze PASS, band never drawn (720 and 1080). Cause: the beat starts on the World's wake frame (KEEP TINKERING), before `cast.update`; `LivingWorld.tapeFreeze` sets `trackUntilMs = this.nowMs + trackingFrameMs` with `nowMs` from the last update **before** the World slept under the card, so the window has already passed when the next update sets the fresh time. Proven on a scratch copy of dist-demo (never the repo): arming the band on the next update draws it on the first two frames after the card leaves | shipped `turn/demo-{720,1080}-keep/` (`regdiff`: 0.00 change on every denizen 874-1149 ms); fixed `turn/demo-720-keep-f22/`; board `crops/f22-freeze-track-shipped-vs-fix-x5.png`; patch `tools/patchf22.py` | EM | `src/game/rendering/LivingWorldDirector.ts` `update()`: read `const sceneNow = this.scene.time.now;` at the top (before `runDue`) and call a new `this.cast.syncNow(sceneNow)` (`src/game/rendering/LivingWorld.ts`: `syncNow(nowMs: number): void { this.nowMs = nowMs; }`), so every beat or turn started this frame (tape freeze, a turn on a wake frame) uses the current time; keep passing `sceneNow` to `cast.update` / `props.update` below. Equivalent minimal form (the one proven): `tapeFreeze` sets `this.trackPending = !this.reduced`, and `update()` right after `this.nowMs = nowMs` does `if (this.trackPending) { this.trackUntilMs = nowMs + WORLD_ENV.trackingFrameMs; this.trackPending = false; }`. AD2e recheck: `demo4.mjs` keep run at 720 / 1080 (band on a frame within 150 ms after the card leaves, freeze still 1.2 s), reduced motion: no band |
+
+No tuning this round: no open item is a `WORLD_ENV` / `WORLD_FAR_PLANES.windows` number; no art defect found (no PNG touched).
+
+Order for the Director: EM F21 + F22 (one small package: `worldBubble.ts` + test, `worldBubbleController.ts`, `LivingWorld.ts`,
+`LivingWorldDirector.ts`), rebuild both editions, then AD2e short recheck: `bub4.mjs` (DOG-02 at 720u150 / deck, PAY at 4
+viewports), `chain4.mjs` (4 viewports), `demo4.mjs` (keep frames: band; arc + hold unchanged). Keep green (proved this round):
+F17 F18 F19 F20, Q6, font, F11 corners, reduced motion, RARE / OFF, budgets, placeholders, palette, A13 art gates.
+
+### WP23a round 5 (Art Director AD2e, 2026-10-25)
+
+Verdict: **FIX LIST** (not RELEASE-READY)
+
+Closed this round: **F21** (DOG-02 tail on the dog's head at 720u150 and Deck) and **F22** (tape-freeze tracking line drawn),
+both proved on the final build. Open: one new **S2**, **F23**: the slid `above` payphone box (new with F21) sits within the
+crow's era II stutter of the crow's head reserve, so at UI 150 (s8: 720u150, Deck) and UI 125 (s9) a payphone bubble can fade
+in `above` and jump about 36 px left / 9 px down to `side` at the first 250 ms recheck. One-line fix, proven on a scratch
+build. A13 stays open until F23 lands and AD2f rechecks it.
+
+Build under audit (F21 + F22 landed 03:53-03:58: `worldBubble.ts` + test, `worldBubbleController.ts`, `LivingWorld.ts`,
+`LivingWorldDirector.ts`). At 04:16 dist was still the 03:16 build and nothing else was running, so AD2e step 0 rebuilt both
+editions itself, as in AD2c / AD2d (`<O>/ad2e/step0-*.txt`): `npm run typecheck` clean; `npm run build` (dist 04:16:50) + `npm run
+build:demo` (04:17:00) OK; `bundle-budget.mjs` **PASS** on dist (app 438.3 KB / 460, lazy world 69.8 / 80, css 41.0 / 45) and
+dist-demo (438.9, 69.8, css 43.8); `npx vitest run` 134 files, **4000 pass / 17 skipped / 0 failed**; freshness: `find src public
+docs scripts -newer dist/index.html` and `-newer dist-demo/index.html` print nothing. dist is served on :4174. dist-demo goes to
+Playwright through route interception (no port; 4177 never started). Evidence root `<O>/ad2e/`. It holds `cap/` (frames + probe
+JSON, each bubble judged by `tools/checks.mjs`), `crops/`, `turn/` (CDP screencast frames + rAF logs) and `tools/` (AD2d tools
+re-pointed to `ad2e`; `bub4.mjs` now samples every shown box on rAF for 1.6 s; `demo4.mjs` adds `RM=1`, the card-off time and
+denizen body boxes; new `bandbody.py`, `flip.mjs`, `refit.mjs`, `flipshot.mjs`, `board.py`, `patchlog.py`, `patchf23.py`). Scratch
+builds `dist-dbg/` (logs reserved rects) and `dist-f23/` (F23 proof) are copies, never the repo.
+
+| # | check | result | evidence (`<O>/ad2e/`) |
+|---|---|---|---|
+| 1 | F21 ladder, s7 (INS-02 DOG-02 CRW-01 GRL-01) + s9 (INS-06 PAY-02/03/04 DOG-05 GRL-03/04/05) at 720u150 / deck / 720u100 / 1080 + 720u125 | **F21 FIXED; stability FAIL at UI 125 (F23)**. 60 / 60 forced lines shown in 312-419 ms, none BLOCKED, 60 / 60 verbatim, 0 hits on HUD panel / buttons / hint / toasts / crank circle + 24 / gain block. **DOG-02 at 720u150 and deck: `above`, slide `L`, box (776, 426) / (776, 466) client, tail tip 1084 = the director's head anchor x 1085 (723.33 root) within 1 px**, on the dog's left ear, 0 faces covered (was `side` + `centred`, tail on bare ground 45 px off). Only DOG-02 and the PAY lines at UI 100 changed vs AD2d. PAY-02/03/04 at 720u100 / 1080: `above` slid, box (1018, 399) / (1527, 599), tail on the receiver (dx 0-1). Its top-right corner meets the crow's lower-left tail edge, so the judge's broad crow box (32 world px) reads `crow` on 4 of 6. The head and beak stay clear: the accepted-in-advance AD2d note. PAY at UI 150 / 125: `side` head-aligned onto the booth hood, as in AD2d. Box stable over 1.6 s (6 rechecks) on 59 / 60. **The 60th, PAY-02 at 720u125, showed `above` at (966, 384) and moved to `side` (936, 391) at the first recheck: F23** | `bub4-a-run.txt`, `bub4-b-run.txt` (`stab`, `stabKeys`), `cap/bub-*.png/.json`, `crops/f21-dog02-720u150-ad2d-vs-ad2e-x2.png`, `crops/f21-dog02-deck-ad2d-vs-ad2e-x2.png`, `crops/f21-dog02-tail-720u150-deck-x5.png`, `crops/f21-pay03-720u100-ad2d-vs-ad2e-x4.png`, `crops/f21-pay03-1080-ad2d-vs-ad2e-x3.png`, `crops/f21-pay-above-crow-wing-x6.png` |
+| 2 | CROSSED LINES, real `generator` buy in the TECH INDEX, 4 viewports | **PASS (order) / see F23**. Times from chain step 1: PAY-01 +2.48..2.55 s (after dial + ring, booth `ring0`), CRW-04 +4.45..4.51 s, INS-05 +7.87..8.04 s at all 4. At most 2 bubbles; `seen` = failedSync, PAY-01, CRW-04, INS-05; 0 errors. CRW-04 is above the crow with its tail on the head. PAY-01 never covers the crow's head. At 720u150 the judge (+0.2 s) saw PAY-01 `above` slid (897-1221, tail dx 0, touching the broad crow box at 1 px). The screenshot a moment later already shows it `side` (861, 452): the F23 jump inside the core chain | `chain4-run.txt`, `cap/chain-{720u100,720u150,1080,deck}-0N.png` + `.json`, `cap/chain-720u150.json` (`judged[0]` vs `judged[1]`) |
+| 3 | F22 + POST-CAP arc on dist-demo, no forcing (time skips only), 720 + 1080; reduced-motion keep run | **F22 FIXED; arc PASS**. The tracking line shows on the **first two screencast frames after the card leaves** (+77 / +145 ms at 720, +88 / +158 ms at 1080). Shifted row bands: Inspector and Sensor 7 rows 459-467 (720) / 688-700 (1080), dog 513-516 / 769-774. Then every denizen is still (0 thresholded change vs mid-freeze) until +1253 / +1216 ms, and they move again at +1325 / +1284 ms: about 1.2 s at the about 70 ms screencast step. The pre-fix build at the same frame was a control: no band. **Reduced motion: no band**, 0.00 change on every denizen to +1178 ms, motion at +1245. Teaser: `worldSay` false, no bubble, silence `asleep`. `beat.tapeFreeze` in `seenEver` once. The arc runs in order: PAY-05 (now `above`, tail on the receiver, the F21 UI 100 change), INS-07 `above`, GRL-06 `below` (tail up to the girl mini), DOG-12 `below`. All verbatim, live region `<Speaker>: <line>`, 0 face / HUD / crank / gain hits (PAY-05 720 `crow` = the accepted wing-edge contact), `postCap` step 4. Reload: card, KEEP, **no second freeze** (longest still 560 / 572 ms vs 2284 / 2255), dog `lie` facing the camera, 3 x 130 s skips: no bubble | `demo-run.json`, `demo4-run.txt`, `turn/demo-{720,1080}-keep/` (+ `log.json` `cardOff`), `turn/demo-*-reload/`, `crops/f22-band-720-inspector-x5.png`, `crops/f22-band-1080-inspector-x4.png`, `tools/bandbody.py`; RM `demo-keep-rm.json`, `turn/demo-720-keep-rm/`; pre-fix control `demo-keep-calib-pre.json`, `turn/demo-720-keep-calib-pre/`; `cap/demo-{720,1080}-{teaser,card,PAY-05,INS-07,GRL-06,DOG-12,hold}.png` |
+| 4 | Regression: Q6, font, reduced motion, RARE / OFF, states s0 s7 s9 at 720 / 1080 vs AD2d | **PASS, no new defect**. Q6 (1920x1080, UI 100, default camera, quiet, buys in the TECH INDEX): the cameras match AD2d: e1 (1, 1920, 1520) -> s8 (1, 2064, 1464); s9 pre (.75, 2176, 1504) -> s9 (.75, 2192, 1504). The `-plate` frames match AD2d above the machine (diff bbox starts at y 468 in `gen-after`, the animated machine and cast). The six warm tiles on two towers still light while the girl window goes dark. Font: `.wv` = the HUD stack, 14 / 18 px; used font Consolas for the bubble and the HUD at UI 100 and 150. RARE: non-core INS-02 is refused by force and by its trigger; core INS-01 plays. OFF: force refused, no bubble, `seen` 4 -> 4, loops and receiver glances go on (the same 23 variants as AD2d). Boot fallbacks are the same 9 era III+ ids. Reduced-motion INS-02: bubble opacity 1 on its first frame, clean snap to front. States: same cameras, display objects 53 / 56 / 56, the same visible ids; variants differ only in loop phase; no placeholder | `q6-run.txt`, `cap/q6-e5-{gen,pl}-{before,after}[-plate].png`, `crops/q6-e5-gen-pair-band-half.png`, `cap/check5.json`, `check5-run.txt`, `turn/talk-inspector-rm/log.json`, `cap/state-{s0,s7,s9}-{720,1080}.png/.json`, `crops/c4-state-{s0,s7,s9}-720-ad2d-vs-ad2e.png` |
+
+**F23 cause (measured, scratch `dist-dbg/` logging the reserved rects at show and at every failed recheck).** Era II plays
+`WORLD_LOOPS.crowStutter` (dx 0, 0, 4, 0), so `LivingWorld.anchor('crow')` (from `feetX = placement.x + dx`) moves the crow's
+head reserve (`LivingWorldDirector.reservedHeads`) by 4 world px every loop. The F21 slid box sits right inside that band. At
+s9 UI 125 the box (773-989 root) clears the reserve only while it is at 989.6 (dx 4) and overlaps it at 987.2 (dx 0). At s8 UI
+150 the same holds within 2.7 root px. A line shown in the dx 4 phase gets `above` / `L`. The next recheck runs in the dx 0
+phase, `fits()` fails and `placeBubble` returns `side`. Counts: s8 720u150 3 / 9 and Deck 4 / 9 forced payphone lines (each
+one shown `above` jumped); s9 720u125 1 / 9 in the logged run and 3 / 12 in the traces + ladder. UI 100 / 1080 never jump: the
+box right edge (1234) only touches the dx 0 reserve. Deck, rAF trace: PAY-03 fades in at (897, 483) (opacity 0 / .33 / .67 at
++260 / 383 / 443 ms) and is at (861, 492), opacity 1, from +504 ms. The screencast frames show it nearly opaque at the `above`
+spot at +498..567 ms and moved by +748 ms.
+
+**A13 gates.**
+| gate | result | evidence |
+|---|---|---|
+| workbench >= 90, lint 0 / 0, silhouette 1 component, palette-only + alpha 0 / 255 + dims, DENIZEN_ART 1.2 sizes | PASS: **cited from AD2d** (no PNG changed). `public/assets/world/*.png` and `bg/window-lit.png` mtimes match `<O>/ad2d/png-mtimes.txt`; `find public/assets -newer <O>/ad2d/png-mtimes.txt` prints nothing; `npx vitest run` (incl. `worldSheets.test.ts`) green | `<O>/ad2e/png-mtimes.txt`, `step0-vitest.txt` |
+| AD in-game verdict RELEASE-READY | **NOT YET**: F23 open (S2) | this section |
+
+**DENIZEN_ART 8.2 on every AD2e frame.** One pixel grid PASS. Palette-only era rows PASS (art unchanged). No denizen faces
+the machine PASS. **Tail points at the head: PASS on all 60 ladder, 20 chain and 8 demo judgments (DOG-02 fixed)**. Bubble
+never covers crank, prompt or gain text PASS (0 hits). Nothing un-happens PASS (hole, lit lamp and windows, dark girl window,
+the dog `lie` hold after reload). Extra 4.2 rule ("re-evaluated at most every 250 ms, with hysteresis, so a pan does not flip
+it"): **FAIL F23** (a jump with no camera move).
+
+Accepted notes (no fix). The `above` payphone box at UI 100 / 1080 touches the crow's lower-left tail edge by 3-5 client px;
+the head and beak stay clear (`crops/f21-pay-above-crow-wing-x6.png`, accepted in advance in AD2d). The dog tail tips sit
+7-11 client px left of the judge's dog-box centre: that box is wider than the head, and the tip is on the director's head
+anchor within 1 px, inside the head span (as at UI 100 in AD2d). On the first payphone line after a long time skip the side
+box follows a settling camera by 1-3 px: it tracks the world, not a placement change.
+
+**F-list (open).**
+| F | sev | what / where | evidence (`<O>/ad2e/`) | owner | exact change |
+|---|---|---|---|---|---|
+| F23 | S2 | A payphone bubble shown `above` slid (F21) jumps about 36 px left / 9 px down to `side` at the first 250 ms recheck, with no camera move. It happens at s8 UI 150 (720u150 and Deck: CROSSED LINES PAY-01, core) and at s9 UI 125, on about 1 in 3 payphone lines. Cause: the crow's era II stutter (`crowStutter` dx 4) moves its head anchor and so its head reserve, and the slid box lies inside that 4 world px band. Fails the AD2e "no flip" acceptance and DENIZEN_ART 4.2 | `flip-720u125-s9.json`, `flip-720u125-s9-b.json` (per-frame box / opacity / crow x), `refit-720u125.json` + `.txt`, `refit-720u150-s8.txt`, `refit-deck-s8.txt` (show vs refit reserved rects: crow reserve x 989.6 vs 987.2), `flipshot-deck-s8.json`, `turn/f23-flip-deck-s8/`, board `crops/f23-flip-deck-s8-frames-x1.png`, `cap/chain-720u150.json`; proof `tools/patchf23.py`, `dist-f23/`, `refit-f23-{720u150-s8,deck-s8,720u125-s9,720u100-s9}.json` | EM | `src/game/rendering/LivingWorld.ts` `anchor(id, cam)`, walker branch: anchor the crow on its loop base, `const x = id === 'crow' && w.placement !== null ? w.placement.x : w.feetX; return speakerAnchor(x, w.feetY, frameOf(id).height * PIXEL_SCALE, cam);`. Comment: era II `crowStutter` dx and the one-frame ripple nudge must not move the crow's head reserve or its own tail (AD2e F23); the crow has no travelling loop in eras I-II. Nothing else changes: `feetX`, drawing, `livingWorld()` x and the other walkers stay as they are. Proven on the scratch build: **36 / 36 forced payphone lines, 0 refits**. s8 720u150 and Deck plus s9 720u125 go `side` every time; s9 720u100 goes `above` / `L` every time (tail on the receiver, unchanged). Side effect: CRW-04's tail stops sliding 3 px with the stutter. Do not use a tolerance in `fits()` instead: it would let a box overlap a face. Optional repo guard (EM): `scripts/smoke/world.mjs` forces PAY-03 six times at s8 Deck and asserts the box left / top stay within 4 px over 700 ms after `.wv.on`. AD2f recheck: `flip.mjs` / `refit.mjs` / `flipshot.mjs` at s8 720u150 + Deck and s9 720u125 (0 jumps); `bub4.mjs` s9 720u100 / 1080 (PAY `above`, tail on the receiver) + DOG-02 720u150 / Deck; `chain4.mjs` 720u150 / Deck (PAY-01 `side` for the whole line) |
+
+No tuning this round. F23 is not a `WORLD_ENV` / `WORLD_FAR_PLANES.windows` number, and widening `headReserve.padWorldPx.other`
+would move every payphone and dog placement. No art defect found (no PNG touched).
+
+Order for the Director: EM F23 (one line in `LivingWorld.ts`, optional `world.mjs` guard), rebuild both editions, then AD2f
+short recheck (above). Keep green (proved this round): F21 DOG-02, F22 band + freeze + reduced motion, POST-CAP arc + hold, F17
+F18 F19 F20, Q6, font, RARE / OFF, budgets, placeholders, palette, A13 art gates.
+
+### WP23a round 6 (Art Director AD2f, 2026-10-25)
+
+Verdict: **RELEASE-READY** (A13 in-game gate closed for WP23a)
+
+Closed this round: **F23** (payphone bubble jump), proved on the shipped build at all three configs where it showed. No new
+defect. No S1 / S2 / S3 open. The scene reads as inhabited at every viewport: the Inspector walks, writes and turns to the camera,
+Sensor 7 watches, the dog sits / sniffs / digs, the crow stutters on the wire, the booth rings and its receiver swings, and the girl
+window flickers in era I. The lines land: verbatim, one or two bubbles at a time, each tail on its speaker, and the CROSSED LINES
+chain runs dial -> ring -> PAY-01 -> CRW-04 -> INS-05.
+
+Build under audit: dist and dist-demo of 05:07:11 / 05:07:24 (after the F23 edit at 05:06:39). Step 0 (`<O>/ad2f/`): `find src public
+docs scripts -newer dist/index.html` and `find src public scripts -newer dist-demo/index.html` print nothing (`step0-fresh.txt`). The only
+source file newer than the AD2e build is `src/game/rendering/LivingWorld.ts` (`changed-since-ad2e.txt`). Both bundles carry the fix:
+`LivingWorldDirector-*.js` has `const n=e==="crow"&&s.placement!==null?s.placement.x:s.feetX`. No rebuild was needed: AD2f changed no
+source or asset file. dist was served by :4174. dist-demo was served by `vite preview --outDir dist-demo --port 4177 --strictPort`,
+started for this round and killed after it (port free again). One Playwright browser at a time. Evidence root `<O>/ad2f/`. It holds
+`cap/` (frames + probe JSON, every bubble judged by `tools/checks.mjs`), `crops/` and `turn/` (CDP screencast frames + rAF logs). The
+AD2e tools are in `tools/`, re-pointed to `ad2f`, with these changes: `flip.mjs` takes `CASE=s8`; `flipshot.mjs` counts jumps and keeps
+the frames of a stable line (`SAVE=1`); `chain4.mjs` adds a rAF trace of every shown bubble box (`wvtrace`); `demo4.mjs` takes `BASE`.
+There is also a new `flipan.mjs` (trace summary). `dist-dbg/` is a copy of the shipped dist with the logging-only `patchlog.py` (it logs
+reserved rects; no behaviour change), never the repo.
+
+| # | check | result | evidence (`<O>/ad2f/`) |
+|---|---|---|---|
+| 1 | F23 `flip.mjs`: per-rAF trace of every bubble from `worldSay` to +2.4 s, forced payphone lines, shipped dist | **PASS, 0 jumps / 31 lines**. s8 720u150: 9 / 9 PAY-02/03/04 `side` at (861, 452). s8 Deck: 9 / 9 `side` at (861, 492). s9 720u125: 12 / 12 `side` at (936, 391), plus INS-06 `above`. In every line the crow x alternates 2656 / 2660 (s8) or 2996 / 3000 (s9): the stutter still plays and the box does not move. Only the first line after the 120 s time skip follows the settling camera by 1-3 px (863 -> 861 -> 860, the accepted AD2e note) | `flip-{720u150,deck}-s8.json`, `flip-720u125-s9.json`, `flip-*-run.txt`, `tools/flipan.mjs` |
+| 2 | F23 `refit.mjs`: reserved rects at show and at every failed 250 ms recheck (`dist-dbg/`, logging only) | **PASS, 0 refits** at s8 720u150 (13 shows), s8 Deck (15) and s9 720u125 (10). The crow head reserve is now constant: (813.33, 282.67) on 12 / 12 and 14 / 14 payphone shows at UI 150, x 987.2 on 10 / 10 at UI 125 (AD2e: 989.6 at show vs 987.2 at refit). The few `null` shows are a line waiting while the due CROSSED LINES chain holds the spot (CRW-04 follows). They are not placements; AD2e had the same | `refit-{720u150,deck}-s8.txt/.json`, `refit-720u125-s9.txt/.json` |
+| 3 | F23 `flipshot.mjs`: CDP screencast of 9 forced payphone lines per config | **PASS, 0 jumps / 27 tries** (25 shown inside the 1.2 s window; the 2nd try at Deck and 720u125 starts late behind a due chain line, the same as the AD2e shipped run). Frames: the box is opaque at the `side` spot from fade-in to fade-out (Deck +497 / +739 / +1050 ms), where AD2e showed `above` at +498 and `side` at +748 | `flipshot-{deck,720u150}-s8.json`, `flipshot-720u125-s9.json`, `turn/f23-stable-{deck,720u150}-s8/`, `turn/f23-stable-720u125-s9/`, board `crops/f23-deck-s8-ad2e-flip-vs-ad2f-stable-x2.png` |
+| 4 | `bub4.mjs`: s9 at 720u100 / 1080, s7 at 720u150 / Deck (DOG-02), s9 at 720u125 | **PASS**. 32 / 32 forced lines shown in 313-413 ms, none BLOCKED, 32 / 32 verbatim, 0 hits on the HUD panel / buttons / hint / toasts / crank circle + 24 / gain block, rAF box stable over 1.6 s on 32 / 32. PAY-02/03/04 at 720u100 / 1080: `above` slid at (1018, 399) / (1527, 599), tail dx 0-1 on the receiver. The judge's broad crow box reads `crow` on 4 / 6 (1 at 720, 3 at 1080): the accepted wing-edge contact, head and beak clear, as in AD2e. DOG-02 at 720u150 / Deck: `above` at (776, 426) / (776, 466), tail dx -10 vs the judge box centre (on the head anchor, as in AD2e). PAY at 720u125: `side` at (936, 391), tail on the booth hood (dx -29, accepted since AD2d). Screenshots match AD2e box for box | `bub4-{a,b,c}-run.txt`, `cap/bub-*.png/.json`, `crops/f21-dog02-720u150-deck-ad2e-vs-ad2f-x2.png`, `crops/pay-above-720u100-ad2e-vs-ad2f-x3.png` |
+| 5 | `chain4.mjs` CROSSED LINES, real `generator` buy in the TECH INDEX, 720u150 + Deck | **PASS: PAY-01 is `side` for the whole line**. The rAF trace holds one box only, (861, 452) / (861, 492), through 8 / 7 change records; it was `above` at the AD2e +0.2 s judge. Times from the 350 Hz dial: ring 480 Hz +1.26..1.86 / +1.22..1.82 s, PAY-01 +2.61 / +2.57 s, CRW-04 +4.18 / +4.08 s, INS-05 +7.69 / +7.73 s. At most 2 bubbles; `seen` = failedSync, PAY-01, CRW-04, INS-05; 0 errors. CRW-04 sits above the crow, tail dx 0 / -4: the tail stays on the loop base while the judge box follows the stutter, the side effect AD2e predicted | `chain4-run.txt`, `cap/chain-{720u150,deck}.json` (`wvtrace`), `cap/chain-{720u150,deck}-0N.png` |
+| 6 | `node scripts/smoke/world.mjs` on :4174 (full) and :4177 (demo) | **PASS**. 20 / 20 checks both, `fail` [], `errors` [], stderr empty. Demo `G_era3_hidden` is skipped by design (era III refused) | `world.json`, `world-demo.json` |
+| 7 | Q6 era I -> II pair, 1920x1080 UI 100, default camera, quiet, buys in the TECH INDEX | **PASS**. Cameras: e1 (1, 1920, 1520) -> s8 (1, 2064, 1464); s9 pre (.75, 2176, 1504) -> s9 (.75, 2192, 1504), the same as AD2d / AD2e. The `-plate` frames vs AD2e have 0 px changed by more than 24 above y 460 on gen-before, gen-after and pl-after; pl-before has 197 px at (486-662, 441-460), the machine top. The background is identical. After `generator` six warm tiles light on the two towers above the machine while the girl window goes dark, and the change reads at a glance | `q6-run.txt`, `cap/q6-f6-{gen,pl}-{before,after}[-plate].png`, `crops/q6-f6-gen-pair.png`, `crops/q6-f6-gen-pair-towers.png`, `crops/q6-f6-pl-pair.png`, `crops/q6-diffmask-*.png` |
+| 8 | Reduced motion | **PASS**. Talk INS-02: bubble opacity 0 -> 1 on its first frame (+651 ms), clean snap walk3 -> front, then talk / front. Demo keep with RM on: no band; 0.00 change on every denizen body from +77 to +1183 ms after the card leaves; motion from +1251 | `turn-rm-run.txt`, `turn/talk-inspector-rm/`, `demo-keep-rm.json`, `turn/demo-720-keep-rm/` |
+| 9 | WORLD VOICES RARE / OFF + font | **PASS**, identical to AD2e. RARE: non-core INS-02 refused by force and by its `chamber-seal` trigger; core INS-01 plays. OFF: force refused, no bubble, `seen` 4 -> 4, 23 variants (loops and receiver glances go on). Font: `.wv` = the HUD stack, 14 / 18 px; Consolas used for the bubble and the HUD at UI 100 and 150. Boot fallbacks: the same 9 ids (era III+ / postgame, never drawn in I-II) | `check5-run.txt`, `cap/check5.json`, `cap/font-u{100,150}-DOG-02.png` |
+| 10 | Demo POST-CAP on :4177, no forcing (time skips only), 720 + 1080 | **PASS**. Teaser: `worldSay` false, no bubble, silence `asleep`. KEEP TINKERING: the tracking line on the first two frames after the card leaves (+74 / +145 ms at 720, +86 / +159 at 1080; rows Inspector + Sensor 7 459-467 / 688-700, dog 513-516 / 769-774). Then still until +1256 / +1152 and moving at +1327 / +1225: the 1.2 s freeze. `beat.tapeFreeze` once. Arc in order: PAY-05 `above` (tail dx 1 / 0 on the receiver), INS-07 `above`, GRL-06 `below` (tail up to the girl mini), DOG-12 `below`. All verbatim, live region `<Speaker>: <line>`, 0 HUD / crank / gain hits; `postCap` step 4. Reload: card, KEEP, no second freeze (longest still 566 / 583 ms vs 2292 / 2124 the first time), dog `lie`, 3 x 130 s skips with no bubble. 0 errors | `demo-run.json`, `demo4-run.txt`, `band-{720,1080}.txt`, `turn/demo-{720,1080}-{keep,reload}/`, `crops/f22-band-720-inspector-x5.png`, `cap/demo-{720,1080}-{teaser,card,PAY-05,INS-07,GRL-06,DOG-12,hold}.png` |
+| 11 | One bubble per UI scale | **PASS**. UI 100: 720 PAY-03 `above`, 1080 INS-06 `above`. UI 125: PAY-02 `side`. UI 150: 720 DOG-02 `above` / L, Deck CRW-01 `above`. All have the ink border, the paper fill and the tail on the speaker. `worldVoice.css` is unchanged since 02:32, so the AD2d F11 band proof holds | `crops/bubble-per-ui-scale-x2.png` |
+
+**A13 gates.**
+| gate | result | evidence |
+|---|---|---|
+| workbench >= 90, lint 0 / 0, silhouette 1 component, palette-only + alpha 0 / 255 + dims, DENIZEN_ART 1.2 sizes | PASS: **cited from AD2d** (no PNG changed). The `public/assets/world/*.png` + `bg/window-lit.png` mtimes are the same as in `<O>/ad2d/png-mtimes.txt`. `npx vitest run src/assets --maxWorkers=2`: 8 files / 151 pass (incl. `worldSheets.test.ts`) | `<O>/ad2f/png-mtimes.txt`, `<O>/ad2f/assets-vitest.txt` |
+| AD in-game verdict RELEASE-READY | **YES** (F17-F23 closed, Q6 PASS, no S1 / S2 / S3 open) | this section |
+
+**DENIZEN_ART 8.2 on every AD2f frame.** One pixel grid PASS. Palette-only era rows PASS (art unchanged). No denizen faces the
+machine PASS. Tail points at the head PASS (32 ladder, 15 chain, 8 demo judgments). Bubble never covers crank, prompt or gain text
+PASS (0 hits). Nothing un-happens PASS (hole, lit lamp and windows, dark girl window, dog `lie` hold after reload). 4.2
+"re-evaluated at most every 250 ms, with hysteresis, so a pan does not flip it" **PASS** (0 jumps in 31 traced lines and 27 screencast tries, 0 refits in 38 logged shows).
+
+Accepted notes (no fix, unchanged from AD2e). The `above` payphone box at UI 100 / 1080 touches the crow's lower-left wing edge;
+the head and beak stay clear. The dog tail tip sits 7-11 client px left of the judge's dog-box centre, on the director's head
+anchor. The payphone `side` tail ends on the booth hood 29-36 px left of the receiver at UI 125 / 150. On the first payphone line
+after a long time skip, the side box follows a settling camera by 1-3 px.
+
+**F-list (open):** none. Optional, not a gate: the AD2e repo guard for F23 (`scripts/smoke/world.mjs` forces PAY-03 six times at s8
+Deck and asserts box left / top within 4 px over 700 ms after `.wv.on`) was not added. Add it when `world.mjs` is next touched
+(WP23b), so a later placement change cannot bring the jump back unseen.
+
+No tuning this round; no art defect found (no PNG touched). Order for the Director: WP23a may merge on the AD side. Keep green into
+WP23b: F17-F23, Q6, font, RARE / OFF, reduced motion, POST-CAP arc + hold, budgets, placeholders, palette, A13 art gates.
