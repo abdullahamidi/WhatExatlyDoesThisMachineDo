@@ -34,7 +34,7 @@ Left for the user: Steam app/depot ids, capsule art, trailer, SteamPipe upload (
 | WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | ✅ done (WP16a · WP16b-1 store polish · WP16b-2 docs + a11y/UX · WP16b-3 soak/GPU perf/final AD audit) |
 | WP22 | Part evolution tiers (3/5 visual MK tiers per repeatable part, tier-up beat; user directive 2026-10-24) | ✅ done (merged e5b97c4; Opus review APPROVE, EM PASS, AD round 5 RELEASE-READY after F11 HUD-inset fix) |
 | WP23a | Living world: denizens, environment arc, world voice bubbles, eras I–II + demo cut | ✅ done (merged f1065df; AD2f RELEASE-READY; X1 tier port wired) |
-| WP23b | Living world eras III–V, finale, postgame, cycle 2+; then §R release refresh | next (from main f1065df; one workflow at a time) |
+| WP23b | Living world eras III–V, finale, postgame, cycle 2+; then §R release refresh | ✅ done (merged f8a5d94; AD4 round 5 RELEASE-READY); §R next |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -120,11 +120,18 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   Opus review fixes F21–F23 + X1 findings applied. vitest 142 files / 4321 pass; world (full + demo), tiers, demo, ux,
   resolutions, stages, showcase, finale, prestige, e2e-full, a11y, store-shots 1080, perf (bootMs 634) clean.
   App JS budget 460 → 500 KB (471.4 measured; Director call in perf-budget.json).
+- **WP23b** living world, eras III–V + finale + postgame + cycle 2+ (merged f8a5d94): 63 lines verbatim (32 new), chains
+  SYNCHRONIZATION / ONE OBSERVER / LAST LOOK / LAST FRAME; era III–V environment (virga, puddles by condenser tier, white sprout,
+  booth fog, scraps, Chladni rings, pages, windows breathe / dark, lamp, motes, violet rim, double exposure, reverse; nothing
+  un-happens); finale film restores every denizen on the wave (derived times, shields, girl run, crow leads the flock, LAST LOOK
+  at 59.83 s, reduced-motion variant); postgame 90 s loop (pat + "Good boy.", PAY-12, Sensor 7 turn, mark 42); cycle 2+ traces;
+  optional machine logs perimeter-umbrella / perimeter-phase; X1 follow-ups closed. Art Waves B–C by the Opus AD. Opus review
+  APPROVE, EM green, AD4 round 5 RELEASE-READY. vitest 148 files / 4736 pass; app 483.2 KB, lazy world 116.6 KB.
 - **Art**: every sprite and background layer is PixelLab Pro in one locked palette from one style
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 4321 pass, 17 skipped (142 files; WP22 + WP23a merged) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 4736 pass, 17 skipped (148 files; WP22 + WP23a + WP23b merged) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
@@ -142,11 +149,13 @@ Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era 
 - Some WP6 parts (gears, pulleys, yoke) are hand-pixelled to exact geometry rather than PixelLab output.
 - Phaser chunk >500 KB by nature; warning limit raised rather than removed.
 - App chunk ~260 KB (target relaxed 200→300 KB: era II–V data); lazy-loading era data deferred.
-- WP23b follow-ups from the X1 review: (a) a later DOG-04 tier event can still replace a pending INS-13 in the world-voice
-  queue (worldVoice queueLine keeps one tier slot); (b) the tier tracker claims INS-13 / DOG-04 even when the scheduler refuses
-  them (WORLD VOICES OFF, speaker off screen), so the line is lost for the cycle; (c) F23 repo guard in world.mjs (AD2f note);
-  (d) root README and CHANGELOG still quote the 460 KB app budget (fix in §R).
-- Denizens are small at the default camera (Inspector ≈ 30 px tall at 1080p): readable, but easy to miss; asked the user.
+- X1 review follow-ups (a)–(c) closed in WP23b. Open: root README and CHANGELOG still quote the 460 KB app budget (fix in §R).
+- Denizens are small at the default camera (Inspector ≈ 30 px tall at 1080p; smaller at zoom 0.5 in eras III–V): readable, but
+  easy to miss. The user postponed the question ("bakarız ona sonra", 2026-10-25); do not resize unless they bring it up.
+- world.mjs `G_cost` (world update mean ≤ 0.3 ms) is load-sensitive: WP23b reads 0.60 ms and main WP23a 0.35 ms on the throttled
+  CPU (claude.exe BelowNormal, 6 of 12 cores, user active); WP23a read 0.12–0.16 ms quiet. Profile: per-frame director cost
+  WP23b 0.45 vs WP23a 0.29 ms (new atmos layer, one more walker, cast logic), no single hot spot. Re-measure quiet in §R.
+- Lazy world chunk 116.6 KB (limit raised 80 → 120 by the WP23b EM, Director confirmed; only 3.4 KB headroom).
 
 ## Important technical decisions
 - Art Director agent (`.claude/agents/art-director.md`, Opus) owns visual/mechanical correctness;
@@ -171,11 +180,11 @@ Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era 
 ## Next recommended task
 User directive 2026-10-24 (after v0.9.0 demo release-ready): parts must visibly evolve as they level (3/5 phases), and the lonely scene gets a
 living world whose denizens change per era and break the fourth wall (docs/plan/STORY_BIBLE.md, PART_TIERS.md, DENIZEN_ART.md, WP22.md, WP23.md;
-GAME_SPEC §18.2). WP22 (e5b97c4) and WP23a + X1 (f1065df) are merged. Next: WP23b (eras III–V, finale, postgame, cycle 2+;
-docs/plan/WP23.md WP23b part) as one wp-exec workflow from main (one workflow at a time: user shares the PC), plus the follow-ups
-under Known issues; then §R (store shots, STEAM_RELEASE §15, soak, packaged smokes, CHANGELOG). wp-exec needs two fixes first:
-dependency-ordered waves (EM put dependent tasks in one wave in WP22) and an AD-verify step that is not gated on its own verdict
-(WP23a validation waited on A13 = the AD gate, so AD verify never ran inside the workflow).
+GAME_SPEC §18.2). WP22 (e5b97c4), WP23a + X1 (f1065df) and WP23b (f8a5d94) are merged. Next: §R joint release refresh
+(docs/plan/WP23.md §R): store shots 1080 + 2160 with the AD set approval, STEAM_RELEASE §15 evidence re-run, packaged demo + full
+desktop smoke, CHANGELOG 0.10.0 (Director call), README budget numbers. Timing-sensitive rows (GPU perf median of 3, 60 min soak,
+world.mjs G_cost) need a quiet PC: run them when the user is away. wp-exec2 (workflows/scripts) now orders waves by depends_on,
+lets AD verify run (EM marks the AD gate N/A) and only skips a task whose dependency landed no files.
 Still user-owned for the Steam upload: real app/depot ids, capsule art, trailer, SteamPipe upload (STEAM_RELEASE sections 4, 10, 12).
 
 ### Previous (v0.9.0 demo)
