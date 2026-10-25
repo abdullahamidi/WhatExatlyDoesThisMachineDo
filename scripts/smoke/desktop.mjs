@@ -9,6 +9,7 @@ import { createRequire } from 'module';
 import { execFileSync, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { APP_VERSION } from './lib/common.mjs';
 
 const require = createRequire(import.meta.url);
 const [exeArg, outArg] = process.argv.slice(2);
@@ -16,7 +17,7 @@ const [exeArg, outArg] = process.argv.slice(2);
 const DEFAULT_PORT = 9339;
 const APP_PREFIX = 'app://wedtmd/';
 const EDITION = process.env.DESKTOP_EDITION === 'demo' ? 'demo' : 'full';
-const VERSION_LINE = EDITION === 'demo' ? 'v0.9.0 · DEMO · SAVE v2' : 'v0.9.0 · SAVE v2';
+const VERSION_LINE = EDITION === 'demo' ? `v${APP_VERSION} · DEMO · SAVE v2` : `v${APP_VERSION} · SAVE v2`;
 const CSP_RE = /Content Security Policy|Refused to/i;
 const CDP_WAIT_MS = 20000;
 const PAGE_WAIT_MS = 20000;

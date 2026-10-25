@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import {
   STAGES, ERA_TITLES, HUD_ROWS, delta, withQuery, loadChromium, readBudget, makeReport, watchPage,
-  waitReady, crankClicks, buyList, dismissEraCard, hudState, poll,
+  waitReady, crankClicks, buyList, dismissEraCard, hudState, poll, APP_VERSION,
 } from './lib/common.mjs';
 
 const START = Date.now();
@@ -296,7 +296,7 @@ async function runSteps(page) {
     await noModal();
     await press('Escape', 300);
     const text = await textOf('sys-footer');
-    report.check('12_footer', text !== null && text.startsWith('v0.9.0'), text);
+    report.check('12_footer', text !== null && text.startsWith(`v${APP_VERSION}`), text);
     await press('Escape', 300);
   });
 }

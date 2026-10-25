@@ -1,14 +1,14 @@
 # What Exactly Does This Machine Do?
 
-An idle game about an unexplained machine in a rust-coloured wasteland. Turn the hand crank, buy technologies across five eras, and watch the machine assemble itself part by part; its purpose is revealed in the finale. It is built with Phaser 3, strict TypeScript, Vite and Vitest. Progress is saved locally (`localStorage` in the browser, save files in the desktop build); there is no server.
+An idle game about an unexplained machine in a rust-coloured wasteland. Turn the hand crank, buy technologies across five eras, and watch the machine assemble itself part by part, with each part gaining visible tiers as it is upgraded. A few denizens of the wasteland change with each era and sometimes speak to you. Its purpose is revealed in the finale. It is built with Phaser 3, strict TypeScript, Vite and Vitest. Progress is saved locally (`localStorage` in the browser, save files in the desktop build); there is no server.
 
 ## Editions
 
-Version 0.9.0 (`package.json`). The full game and the Steam demo are built from one codebase.
+Version 0.10.0 (`package.json`). The full game and the Steam demo are built from one codebase.
 
 | | Full game | Demo |
 |---|---|---|
-| Content | All five eras, the finale, the postgame and new cycles. | Eras I and II, capped at the Substation Blueprint. |
+| Content | All five eras, the finale, the postgame and new cycles. | Eras I and II (with the living world for those eras), capped at the Substation Blueprint. |
 | Config | `EDITIONS.full` in `src/data/edition.ts`, no cap. | `EDITIONS.demo` in `src/data/edition.ts`: cap `substationBlueprint`, max era 2, label `DEMO`. |
 | Vite mode | `production` | `demo` |
 | Browser build | `npm run build`, output `dist/` | `npm run build:demo`, output `dist-demo/` |
@@ -42,6 +42,8 @@ Version 0.9.0 (`package.json`). The full game and the Steam demo are built from 
 **Crank.** Click the hand crank, or press Space or Enter, to make Mechanical Energy (ME). Keyboard presses are capped at 15 per second, and key repeat is ignored.
 
 **Tech Index.** Press `T` or the TECH INDEX button in the HUD. Buy technologies with the energy shown on each node. Keystones open the next era. The HUD line `NEXT:` names the next milestone or keystone.
+
+**Living world.** A few denizens of the wasteland stand at the edges of the scene and change with each era. Now and then one turns to you and speaks in a speech bubble. WORLD VOICES in SETTINGS sets how often: ON, RARE or OFF.
 
 **Eras and energies**
 
@@ -105,7 +107,7 @@ While a dialog is open the game canvas ignores pointer input, so the world does 
 **SETTINGS tab**
 
 - AUDIO: MASTER, SFX, AMBIENT and MUSIC volumes, 0 to 100 % in steps of 5. Defaults 100, 100, 100 and 70 %. The audio on/off switch is in the SYSTEM tab.
-- DISPLAY: NUMBERS (SUFFIX, SCIENTIFIC, ENGINEERING; default SUFFIX), UI SCALE (100 %, 125 %, 150 %; default 100 %), STATUS MARKERS (default off), CONFIRM NEW CYCLE (default on; shown once the finale or a new cycle is in play), FULLSCREEN (where supported).
+- DISPLAY: NUMBERS (SUFFIX, SCIENTIFIC, ENGINEERING; default SUFFIX), UI SCALE (100 %, 125 %, 150 %; default 100 %), WORLD VOICES (ON, RARE, OFF; default ON), STATUS MARKERS (default off), CONFIRM NEW CYCLE (default on; shown once the finale or a new cycle is in play), FULLSCREEN (where supported).
 - ACCESS: REDUCED MOTION (default off) and SCREEN SHAKE (default on; locked off while REDUCED MOTION is on).
 - KEYS: the three shortcuts (SPACE / ENTER crank, T TECH INDEX, ESC MENU).
 
@@ -161,7 +163,7 @@ Steam packaging, SteamPipe and Auto-Cloud details: [`docs/STEAM_RELEASE.md`](doc
 
 ## Saves
 
-The browser build keeps saves in `localStorage`. The desktop build keeps them as files (see below). A save is plain JSON with a version number (`SAVE_VERSION`, currently 2, in `src/persistence/schema.ts`). Format changes are additive and migrate step by step (`MIGRATIONS` in the same file).
+The browser build keeps saves in `localStorage`. The desktop build keeps them as files (see below). A save is plain JSON with a version number (`SAVE_VERSION`, currently 2, in `src/persistence/schema.ts`). Format changes are additive and migrate step by step (`MIGRATIONS` in the same file). The optional `world` block (living-world lines seen) was added without a version bump.
 
 **Browser keys** (`src/data/balance.ts`)
 
@@ -411,9 +413,10 @@ against the built `dist/`. Sizes are raw, in decimal KB and MB.
 
 | Budget | Limit | Checked by |
 |---|---|---|
-| App JS (`index-*.js`, raw) | 460 KB | `npm run perf:bundle` |
+| App JS (`index-*.js`, raw) | 500 KB | `npm run perf:bundle` |
+| Lazy living-world chunk (`LivingWorldDirector-*.js`, raw) | 120 KB | `npm run perf:bundle` |
 | Phaser chunk (`phaser-*.js`, raw) | 1500 KB | `npm run perf:bundle` |
-| CSS (raw) | 44 KB | `npm run perf:bundle` |
+| CSS (raw) | 45 KB | `npm run perf:bundle` |
 | `public/assets` total | 8000 KB | `npm run perf:bundle` |
 | Boot (navigation start to first frame) | 3000 ms | `scripts/smoke/perf.mjs` |
 | Heap (era V stage) | 150 MB | `scripts/smoke/perf.mjs` |

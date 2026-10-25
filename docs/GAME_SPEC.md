@@ -237,3 +237,9 @@ Append-only note. Nothing above this line was changed.
   fragments of the prior world, not survivors and not observers ("Humanity is seemingly gone" holds); people in the restored world follow the
   Art Director's conditions (DENIZEN_ART §8.1).
 - Persistence and settings: one optional `world` block in save v2 (lines seen) and one setting, WORLD VOICES ON / RARE / OFF. No save version bump.
+
+### 18.3 Release note (v0.10.0, 2026-10-25)
+Append-only note. Nothing above this line was changed.
+- Shipped in 0.10.0: evolving parts (3 or 5 visual MK tiers per repeatable part, with a tier-up beat; rendering only, no balance change) and the living world (six denizens, environment changes each era, WORLD VOICES ON / RARE / OFF, the finale and postgame layer, traces across cycles).
+- Budgets raised for the release: app JS 500 KB raw, lazy living-world chunk 120 KB, CSS 45 KB (`scripts/smoke/perf-budget.json`). Timing rows wait for a quiet PC.
+- Player-facing details: `CHANGELOG.md` (0.10.0). Release evidence: `docs/STEAM_RELEASE.md` §15.

@@ -9,6 +9,7 @@ import { createRequire } from 'module';
 import fs from 'fs';
 import path from 'path';
 import { caseC, caseD, caseE, caseF } from './demo-cases.mjs';
+import { APP_VERSION } from './lib/common.mjs';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PW_PATH);
 
@@ -26,7 +27,7 @@ fs.mkdirSync(out, { recursive: true });
 const S7 = ['wornMotor', 'gearRatio', 'gearRatio', 'gearRatio', 'reinforcedCrank', 'motorTuning', 'motorTuning', 'motorTuning', 'motorTuning', 'motorTuning', 'flywheel', 'pistonArray', 'improvedPistons'];
 const S9 = [...S7, '@blueprint', 'generator', ...Array(5).fill('motorRetrofit'), ...Array(20).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(3).fill('transformer'), 'powerLines'];
 
-const VERSION_LINE = 'v0.9.0 · DEMO · SAVE v2';
+const VERSION_LINE = `v${APP_VERSION} · DEMO · SAVE v2`;
 // The cap caption keeps the function name masked: the teaser must not spoil the full game.
 const CAP_CAPTION = 'PRIMARY FUNCTION: RES?OR?';
 // The name plate frame at the cap (RES?OR?). Text on canvas is invisible to innerText, so the frame is the check.

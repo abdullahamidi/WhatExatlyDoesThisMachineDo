@@ -5,6 +5,7 @@
 import { createRequire } from 'module';
 import fs from 'fs';
 import path from 'path';
+import { APP_VERSION } from './lib/common.mjs';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PW_PATH);
 const [base, out] = process.argv.slice(2);
@@ -87,7 +88,7 @@ try {
       }));
       check('A_boot_mark_before_first_frame', marks.boot !== null && marks.frame !== null && marks.boot < marks.frame, marks);
       const version = await text(page, '#title-version');
-      check('A_title_version', version === 'v0.9.0 · SAVE v2', version);
+      check('A_title_version', version === `v${APP_VERSION} · SAVE v2`, version);
       const continueVisible = await isVisible(page, '#title-continue');
       check('A_continue_hidden', !continueVisible, continueVisible);
       await shot(page, 'shell-A-title.png');
@@ -176,11 +177,11 @@ try {
       await settle(page);
       check('E_menu_open', await menuOpen(page));
       const footer = await text(page, '#sys-footer');
-      check('E_footer_text', footer === 'v0.9.0 · SAVE v2', footer);
+      check('E_footer_text', footer === `v${APP_VERSION} · SAVE v2`, footer);
       const fontPx = await page.$eval('#sys-footer', el => parseFloat(getComputedStyle(el).fontSize)).catch(() => null);
       check('E_footer_font_size_12px', fontPx !== null && fontPx >= 12, fontPx);
       const aria = await page.getAttribute('#sys-footer', 'aria-label').catch(() => null);
-      check('E_footer_aria_label', aria === 'Version 0.9.0', aria);
+      check('E_footer_aria_label', aria === `Version ${APP_VERSION}`, aria);
       check('E_credits_visible', await isVisible(page, '#sys-credits'));
       const quitVisible = await isVisible(page, '#sys-quit');
       check('E_quit_absent_or_hidden', !quitVisible, { present: (await count(page, '#sys-quit')) > 0, visible: quitVisible });

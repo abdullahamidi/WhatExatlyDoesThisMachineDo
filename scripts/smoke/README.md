@@ -31,11 +31,11 @@ C and D, which share one context. Screenshots in the outdir: `shell-A-title.png`
 
 | case | URL | checks (names in `results` / `fail`) |
 |---|---|---|
-| `A_nohook` | base | waits for `wedtmd:first-frame` + 600 ms: `A_no_hook` (no `window.__wedtmd`), `A_title_open` (`#title-screen.is-open`), `A_splash_gone` (`#splash` removed), `A_boot_mark_before_first_frame` (`wedtmd:boot` startTime < first-frame), `A_title_version` (`#title-version` = `v0.9.0 · SAVE v2`), `A_continue_hidden` (fresh profile), `A_escape_closes_title` |
+| `A_nohook` | base | waits for `wedtmd:first-frame` + 600 ms: `A_no_hook` (no `window.__wedtmd`), `A_title_open` (`#title-screen.is-open`), `A_splash_gone` (`#splash` removed), `A_boot_mark_before_first_frame` (`wedtmd:boot` startTime < first-frame), `A_title_version` (`#title-version` = `v<version> · SAVE v2`, version from package.json), `A_continue_hidden` (fresh profile), `A_escape_closes_title` |
 | `B_debug` | `?debug=1` | `B_hook_defined`, `B_title_closed` |
 | `C_title` | `?debug=1&title=1` | `#title-settings` opens the SYSTEM menu on SETTINGS (`C_settings_menu_open`, `C_settings_tab_selected`); Esc closes the menu, title stays (`C_esc_closes_menu`, `C_title_open_after_menu`); `#title-credits` opens credits, Esc closes them, title stays (`C_credits_open`, `C_esc_closes_credits`, `C_title_open_after_credits`); `#title-new` closes the title (`C_new_game_closes_title`), `audioUnlocked()` true (`C_audio_unlocked`); 3 crank clicks give `totalClicks` 3 (`C_three_crank_clicks`) |
 | `D_newgame` | same context as C | `saveNow()`, reload: `#title-continue` visible (`D_continue_visible`) and focused (`D_continue_focused`); `#title-new` reads `CONFIRM: ERASE ALL?` (`D_new_game_armed_label`); second press closes the title (`D_new_game_closes_title`) and resets `totalClicks` to 0 (`D_clicks_reset`) |
-| `E_footer` | `?debug=1`, Esc opens SYSTEM | `#sys-footer` = `v0.9.0 · SAVE v2` (`E_footer_text`), font size >= 12 px (`E_footer_font_size_12px`), `aria-label` = `Version 0.9.0` (`E_footer_aria_label`), `#sys-credits` visible (`E_credits_visible`), `#sys-quit` absent or hidden on web (`E_quit_absent_or_hidden`), click opens credits (`E_credits_opens`) |
+| `E_footer` | `?debug=1`, Esc opens SYSTEM | `#sys-footer` = `v<version> · SAVE v2` (`E_footer_text`, version from package.json), font size >= 12 px (`E_footer_font_size_12px`), `aria-label` = `Version <version>` (`E_footer_aria_label`), `#sys-credits` visible (`E_credits_visible`), `#sys-quit` absent or hidden on web (`E_quit_absent_or_hidden`), click opens credits (`E_credits_opens`) |
 | `F_fullscreen` | `?debug=1`, Esc, `#sys-tab-settings` | when `document.fullscreenEnabled`: `#sys-set-fullscreen` exists; `F_fullscreen_control` records `{ fullscreenEnabled, control }`. `F_keys_hint`: `.settings-keys li` includes `F11 / ALT+ENTER  FULLSCREEN` |
 | `G_crash` | `?debug=1` | a timer throws: `#crash-overlay` visible within 3 s (`G_overlay_visible_3s`), text has `THE MACHINE STALLED` and `smoke crash` (`G_overlay_text`); a second throw keeps exactly one overlay (`G_single_overlay`); `#crash-reload` reloads and the overlay is gone (`G_reload_clears_overlay`). Console/page errors containing `smoke crash` or starting with `[crash]` are dropped from `errors` for this case only |
 | `errors` | all cases | console errors, page errors, failed requests, each prefixed with the case key |
@@ -123,7 +123,7 @@ PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/
 | key | checks |
 |---|---|
 | `cdp_attach` | the exe answers on the CDP port and an `app://wedtmd/` page is found (`value.reason` on failure) |
-| `1_title_fresh` | fresh profile: `#title-screen` is open, `#title-continue` hidden, `#title-quit` visible, `#title-version` = `v0.9.0 · SAVE v2` |
+| `1_title_fresh` | fresh profile: `#title-screen` is open, `#title-continue` hidden, `#title-quit` visible, `#title-version` = `v<version> · SAVE v2` (version from package.json) |
 | `1b_content_size` | fresh profile: the page area is exactly 1280x720 (`window.innerWidth` / `innerHeight`) |
 | `2_gates` | `window.__wedtmd` undefined, `window.wedtmdHost.kind` = `electron`, `isPackaged` true |
 | `3_crank` | `#title-new` closes the title; 20 Space presses at 100 ms gaps change `#hud-me` (`before` / `after`) |
@@ -404,7 +404,7 @@ PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/
 
 | case | what |
 |---|---|
-| `A` | fresh start: title (`#title-version` = `v0.9.0 · DEMO · SAVE v2`), tech tree (5 tabs, eras III to V FULL GAME), SYSTEM menu (footer, no MEMORY tab, no DEMO ENDING row, RECORDS `/18`) |
+| `A` | fresh start: title (`#title-version` = `v<version> · DEMO · SAVE v2`), tech tree (5 tabs, eras III to V FULL GAME), SYSTEM menu (footer, no MEMORY tab, no DEMO ENDING row, RECORDS `/18`) |
 | `B` | reach the cap (S9 list + Substation Blueprint): waiting, teaser, card, wishlist, keep, tree after, SYSTEM row |
 | `C` | same page as B: reload with the cap owned, boot card, replay and skip |
 | `D` | reduced motion: portrait teaser and card |
@@ -440,7 +440,7 @@ returns it.
   element hit at its centre); `D_<s>_buy_visible_e2` (the same after era II and `powerLines`); `D_<s>_toast_clear_tabs`
   (after a `copperWinding` buy). Shot `ux-D-<s>-tree-e2.png` (`<s>` = 100 and 150).
 - `desktop.mjs` with `DESKTOP_EDITION=demo`: for the demo exe (`npm run build:steam-demo`, `out/steam/demo/win-x64/`). It
-  expects the DEMO version line `v0.9.0 · DEMO · SAVE v2` and adds check `8_demo_tabs` (the era cap tabs). The default
+  expects the DEMO version line `v<version> · DEMO · SAVE v2` (version from package.json) and adds check `8_demo_tabs` (the era cap tabs). The default
   `full` edition is unchanged.
 - Debug hook `window.__wedtmd.demoState()` returns `{ edition, phase, capReached, cardOpen, teaserActive, caption }`, or
   `null` when the demo controller is absent (full game). `phase` is `idle`, `waiting`, `teaser` or `card`.
@@ -457,7 +457,7 @@ Release gate smokes: two shared libraries and four browser runs. Same rules as t
 
 ### Shared libraries
 
-`scripts/smoke/lib/common.mjs`: Node built-ins only. Importing has no side effects and needs no `PW_PATH`.
+`scripts/smoke/lib/common.mjs`: Node built-ins only. Importing reads package.json once; no other side effects and needs no `PW_PATH`.
 
 | Export | Meaning |
 |---|---|
@@ -469,6 +469,7 @@ Release gate smokes: two shared libraries and four browser runs. Same rules as t
 | `ASSET_WARNING_RE` | Asset loader console warnings that count as errors. |
 | `GPU_ARGS` | Chromium flags for `SOAK_GPU=1` (`--use-angle=d3d11`, `--enable-gpu`, `--ignore-gpu-blocklist`). |
 | `PREVIEW_HINT` | `http://localhost:4174/` (the preview URL; never started by a smoke). |
+| `APP_VERSION` | version from the repo package.json (title / footer / aria checks) |
 | `delta(prev, next)` | Items of `next` after the `prev` prefix. Throws when `prev` is not a prefix. |
 | `withQuery(base, params)` | URL with the given query parameters set. |
 | `loadChromium()` | Playwright chromium from `PW_PATH`. Exits 2 when unset. |
@@ -485,7 +486,7 @@ Release gate smokes: two shared libraries and four browser runs. Same rules as t
 | `waitPhotoChipHidden(page, capMs)` | Blurs `#photo-exit`, polls its opacity to <= 0.001. Returns the final opacity. |
 | `pngSize(file)` | `{ width, height }` from the PNG IHDR. Throws when the file is not a PNG. |
 
-Self-test (pure, no browser): `node scripts/smoke/lib/common.mjs --selftest`. Prints one line `{ ok, checks }`; exit 0 when every check holds. Checks: `prefix_s7_s9`, `prefix_s9_s11`, `prefix_s11_s13`, `prefix_s13_s15`, `delta_length`, `delta_reverse_throws`, `with_query`, `png_gear_small_40`, `budget_heap_150`.
+Self-test (pure, no browser): `node scripts/smoke/lib/common.mjs --selftest`. Prints one line `{ ok, checks }`; exit 0 when every check holds. Checks: `prefix_s7_s9`, `prefix_s9_s11`, `prefix_s11_s13`, `prefix_s13_s15`, `delta_length`, `delta_reverse_throws`, `with_query`, `png_gear_small_40`, `budget_heap_150`, `app_version_semver`.
 
 `scripts/smoke/lib/a11y-audit.mjs`: page audit, Tab walker, focus log and WCAG maths. Never imports Playwright.
 
@@ -523,7 +524,7 @@ One run, one fresh 1280x720 context, from the title screen to a new cycle and a 
 | 09 view | `09-view`, `09-view-photo` | `09_photo_on`, `09_hud_hidden`, `09_photo_off`, `09_hud_back` | VIEW MACHINE hides the HUD; Escape restores it |
 | 10 newcycle | `10-newcycle`, `10-newcycle-confirm` | `10_menu_open`, `10_row_enabled`, `10_confirm_open`, `10_cycle2`, `10_cycle_label`, `10_fresh_run`, `10_crank_works` | BEGIN A NEW CYCLE, confirm, cycle 2; label contains `CYCLE 0043`; fresh run; crank works |
 | 11 reload | `11-reload` | `11_cycle_kept`, `11_label_kept` | SAVE, reload, CONTINUE: cycle 2 and label kept |
-| 12 footer | `12-footer` | `12_footer` | SYSTEM footer text starts with `v0.9.0` |
+| 12 footer | `12-footer` | `12_footer` | SYSTEM footer text starts with `v<version>` (package.json) |
 | run | none | `wall_time` | `wallMs` <= 300000 |
 
 Outputs:
@@ -662,9 +663,15 @@ One fresh context per size; the stems run in one continuous session per size. `V
 | `10` | `10-title` | Save, reload with `title=1`, cap set again, 1.5 s, title screen open; `#title-version` hidden for the shot; then CONTINUE | hud | capped |
 | `08` | `08-finale-reveal` | cap cleared, `primaryFunction` buy, 2 s, `finaleSeek(56)`, phase `sequence`. hud, then clean (`#ui-root` hidden) | hud, clean | uncapped |
 | `08b` | `08b-finale-typed` | `finaleSeek(64.0)`, up to 1 s polling for the 5th line; `#finale-skip` and `#finale-overlay .finale-buttons` hidden for the shot. Only when `VARIANTS` has hud | hud | uncapped |
-| `09` | `09-postgame-portrait` | cap set, `skipFinale`, KEEP IT RUNNING, phase `postgame`, 2.5 s. hud first, then clean (photo mode) | hud, clean | capped |
+| `09` | `09-postgame-portrait` | cap set, `skipFinale`, KEEP IT RUNNING, phase `postgame`, then up to 15 s polling for the KEEP clock `worldState().script.keepS >= 10`. hud first, then clean (photo mode) | hud, clean | capped |
 
 Hide rules for hud shots: `#toast-stack` is hidden except at stem 03. The era card is dismissed first and the pointer is parked at (5, 5).
+
+TECH INDEX blink (AD R): stems 02, 03, 04, 06 and 07 open and close the TECH INDEX once right after the buy list (`t`, 600 ms, Escape; the total wait is unchanged). The living world moves its cast to a new framing only while the tree is open (`unseenChangeOk`), as in play; without it the cast keeps the previous framing's spots.
+
+KEEP clock (AD R2 F2): stem 09 shoots once `keepS` (seconds since KEEP IT RUNNING) is at least 10, not after a fixed 2.5 s. The dog fades out 4 to 4.5 s after KEEP, is hidden until 7 s, runs in from the left wing at 7 to 8 s and settles at 9 s (`WORLD_ENDING.keep`), so a fixed wait put the clean shot in that gap depending on machine speed. At `keepS` 10 the postgame loop runs and the dog sleeps at its left-wing spot; both shots must end before 22 s, where the Inspector starts the walk to the pat (loop 13.34 s). No line fires before the pat.
+
+HUD style refresh (AD R2 F3): every hud shot sets and restores an inline `visibility` on each `#hud-panel` node right before the shot. `#ui-root` hidden by inline style (the clean shots of stems 01 to 04, 06 and 08) followed by a HUD counter bump can leave the frontier `.hud-value` with a stale computed `visibility: hidden` in Chromium (no rule and no inline style match; it is the animation base style), which blanked the ME number in the 2160 `02` hud shot. Photo mode and the title screen hide the HUD by class rules and do not show it; the game never sets that inline style.
 
 Per size: 19 PNGs (stems 01 to 04, 06, 07, 08 and 09 give 2 each = 16; 05, 08b and 10 give 1 each = 3). Both sizes: 38. Each PNG size is checked from its IHDR.
 
@@ -680,6 +687,8 @@ Check names (`<size>` = `1080` or `2160`; `<stem>` = `01` to `10`; `<variant>` =
 - `<size>_08_sequence`: finale phase `sequence` after `finaleSeek(56)`.
 - `<size>_08b_typed`: value `{ count, empty, last, phase, t }`: 5 complete lines, the last is `Restoration holds while the machine runs.`; phase `sequence` or `choice` both pass.
 - `<size>_09_postgame`: ending phase `postgame`.
+- `<size>_09_keep_window`: value = `keepS` read after both 09 shots; passes when 10 <= `keepS` < 22.
+- `<size>_<stem>_hud_values_visible`: hud shots where `#hud-panel` computes visible (read after the style refresh); value `{ values, hidden }`: at least one displayed `.hud-value` and none computes hidden. Stems where the panel is hidden at shot time get no entry.
 - `store_top5_complete` (only when both variants run): no store or alt file is missing.
 
 Failure keys: `FAILED:<size>/<stem>:<first line>` (the run goes on with the next stem), `FAILED:<size>/setup:<first line>`, `FAILED:launch:<first line>`.
@@ -733,7 +742,7 @@ Runs on the full build (`http://localhost:4174/?debug=1`) and on the demo build 
 | `D` (fresh, UI 150) framings | `D_s7_placed` (S7 list, framing `e1`), `D_s8_placed` (S8, framing `s8`; era card dismissed first), `D_s9_placed` (S9, framing `s9`). Each: `worldState().placements` equals the table (listed ids at their x, `null` when off-stage; scraps are not listed), the framing matches, and no placed x lies over the machine box or inside the crank circle + 24. Shots `world-D-s7-150.png`, `world-D-s8-150.png`, `world-D-s9-150.png` |
 | `E` (fresh) settings | `E_rare`: RARE refuses the non-core `INS-02` (`worldSay` false), and ON accepts it again (control). `E_off`: OFF refuses `DOG-02`; over 800 ms `audioStats().worldBlips` and `worldState().seen` do not change and no `.wv.on` shows |
 | `F` (fresh) persist | `F_seen`: after the first moment, `saveNow()` and a reload, `worldState().seen` contains `INS-01`. `F_no_repeat`: after `worldAdvance(400000)` and `worldLogShown('observer-count')`, no bubble or live text of INS-01 appears in a 6 s watch |
-| `G` (fresh) budget | S9 list: `G_display` (`displayObjects()` <= 100), `G_cost` (`worldStats().meanMs` averaged over 20 samples, 5 s, <= 0.3). `G_era3_hidden` (WP23b: replaced by `G_era3_visible`, see the WP23b keys below): S10 = S9 + `@substationBlueprint`, `boiler` (local copy of the list); the TECH INDEX opens and closes once; then every `livingWorld()` entry has `visible` false and `worldState().hidden` is true. On the demo the era III purchase is refused (`purchase('boiler').reason === 'demo'`), so the check records `value.skipped` and passes |
+| `G` (fresh) budget | S9 list: `G_display` (`displayObjects()` <= 100), `G_cost` (`worldStats().meanMs` averaged over 20 samples, 5 s, <= 0.3; sampled only when `worldState().silence` is null. A silent world (asleep on the demo) records `value.skipped` with the silence state and passes: report-only, not a cost reading). `G_era3_hidden` (WP23b: replaced by `G_era3_visible`, see the WP23b keys below): S10 = S9 + `@substationBlueprint`, `boiler` (local copy of the list); the TECH INDEX opens and closes once; then every `livingWorld()` entry has `visible` false and `worldState().hidden` is true. On the demo the era III purchase is refused (`purchase('boiler').reason === 'demo'`), so the check records `value.skipped` and passes |
 | `H` (fresh) tier port (WP23 X1) | era I: `@improvedPistons:9`, then `:10`, each through `buyInTree` (TECH INDEX closed after). `H_dog_line`: DOG-04 is queued (`worldState().pending`, `activeLines` or `seen`) after level 10 and not after 9. `H_first_top`: `@motorTuning:25`, then INS-13 is queued. `H_heartbeat`: `worldState().tierHeartbeat` is false before the top tier and true after it. `H_hole`: era II (the rest of S9), lifetime EE topped up to 100000 (8 h stretches through `session.update`), then `@motorRetrofit` 8 / 13 / 18 read `worldState().holeStage` (2 / 3 / 4). Every H check carries `tierProbe` in its detail (era, heartbeat, hole stage, lifetime EE, `cameraState()`, the Inspector and Dog from `livingWorld()`) |
 | `H` (fresh) over-cap and boot seed | `H_overcap_pre`: era II (S7 + S9 rest), no heartbeat, INS-13 not queued. `H_overcap`: one TECH INDEX release of `@gearRatio:6`, `@flywheel:4`, `@motorTuning:10`, `@improvedPistons:5`, `@motorRetrofit:18` (five tracks; the fifth is past the four-beat cap, so it has no partEvolved); the displayed tiers read 2 / 2 / 3 / 2 / 5 and INS-13 is queued after the close with the heartbeat on. `H_boot_seed`: `saveNow()`, reload, `tierHeartbeat` on before any TECH INDEX open |
 

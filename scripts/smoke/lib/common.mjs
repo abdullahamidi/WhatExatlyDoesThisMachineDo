@@ -1,4 +1,4 @@
-// Shared helpers for the release smokes (WP16a). Node built-ins only; importing has no side effects and needs no PW_PATH.
+// Shared helpers for the release smokes (WP16a). Node built-ins only; importing reads package.json once; no other side effects and needs no PW_PATH.
 // Self-test (pure, no browser): node scripts/smoke/lib/common.mjs --selftest   -> one JSON line, exit 0 / 1.
 import { createRequire } from 'module';
 import fs from 'fs';
@@ -36,6 +36,9 @@ export const GPU_ARGS = ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-bloc
 
 /** Preview server that serves dist (never start another one). */
 export const PREVIEW_HINT = 'http://localhost:4174/';
+
+/** Version from the repo package.json, read once (title, footer and aria checks compare against it). */
+export const APP_VERSION = JSON.parse(fs.readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')).version;
 
 /** Items of `next` after the `prev` prefix. Throws when prev is not a prefix of next. */
 export function delta(prev, next) {
@@ -241,6 +244,7 @@ function selfTest() {
     return size.width === 40 && size.height === 40;
   });
   check('budget_heap_150', () => readBudget().heapMb === 150);
+  check('app_version_semver', () => /^\d+\.\d+\.\d+$/.test(APP_VERSION));
   const ok = Object.values(checks).every(Boolean);
   console.log(JSON.stringify({ ok, checks }));
   process.exitCode = ok ? 0 : 1;

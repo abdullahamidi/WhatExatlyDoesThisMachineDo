@@ -401,14 +401,20 @@ async function caseG(page) {
   const objects = await page.evaluate(() => window.__wedtmd.displayObjects());
   await check(page, 'G_display', typeof objects === 'number' && objects <= 100 && buyS9.length === 0, { objects, buyFail: buyS9 }, true);
 
-  const samples = [];
-  for (let i = 0; i < 20; i++) {
-    await sleep(250);
-    samples.push(await page.evaluate(() => window.__wedtmd.worldStats()?.meanMs ?? null));
+  // G_cost is a cost reading only with the world awake. A silent world (asleep in the demo edition) is report-only: no sampling, no gate.
+  const silence = await page.evaluate(() => window.__wedtmd.worldState()?.silence ?? null);
+  if (silence !== null) {
+    await check(page, 'G_cost', true, { skipped: 'world silent (' + silence + '): not a cost reading', silence }, true);
+  } else {
+    const samples = [];
+    for (let i = 0; i < 20; i++) {
+      await sleep(250);
+      samples.push(await page.evaluate(() => window.__wedtmd.worldStats()?.meanMs ?? null));
+    }
+    const numeric = samples.every((x) => typeof x === 'number');
+    const meanMs = numeric ? samples.reduce((a, b) => a + b, 0) / samples.length : null;
+    await check(page, 'G_cost', numeric && meanMs <= 0.3, { meanMs, samples: samples.length }, true);
   }
-  const numeric = samples.every((x) => typeof x === 'number');
-  const meanMs = numeric ? samples.reduce((a, b) => a + b, 0) / samples.length : null;
-  await check(page, 'G_cost', numeric && meanMs <= 0.3, { meanMs, samples: samples.length }, true);
 
   if (await isDemo(page)) {
     await check(page, 'G_era3_visible', true, { skipped: 'demo edition: era III is refused, so there is no era III entry' }, true);

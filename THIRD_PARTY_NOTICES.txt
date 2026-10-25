@@ -1,4 +1,4 @@
-What Exactly Does This Machine Do? v0.9.0 - third-party notices
+What Exactly Does This Machine Do? v0.10.0 - third-party notices
 
 This file lists third-party software shipped inside the game build (full and demo editions).
 The texts below are copied from the installed packages; they are not paraphrased.

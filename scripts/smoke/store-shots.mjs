@@ -18,7 +18,7 @@
 //   10 title        saveNow, reload with title=1    hud (version line hidden for the shot), then CONTINUE
 //   08 finale       primaryFunction buy, seek 56 s  hud -> clean(uiRoot)
 //   08b typed       seek FINALE_TYPED_T, 1 rAF, polls up to 1 s for the 5th line   hud (SKIP and the choice buttons hidden for the shot); only when VARIANTS has hud
-//   09 postgame     skip, KEEP IT RUNNING, 2.5 s    hud(crank) -> clean(photo)
+//   09 postgame     skip, KEEP IT RUNNING, keepS >= 10   hud(crank) -> clean(photo)
 // hudShot(page, size, id, name, crank, opts): era card dismissed; crank = 3 real clicks + 150 ms (gain text); pointer parked at (5, 5);
 //   '#toast-stack' is hidden for the shot unless opts.keepToasts (F1); opts.hide = extra selectors hidden for the shot (title version F3,
 //   tree HUD F4, finale SKIP + buttons F7). withHidden sets inline visibility:hidden and restores the previous value in finally; it is not re-entrant.
@@ -26,7 +26,9 @@
 //   visibility is 'hidden' in every clean shot: photo mode for 07 and 09, #ui-root hidden for the rest), <size>_10_title_open, <size>_10_hud_hidden (#hud-panel,
 //   #hud-buttons and #toast-stack computed visibility are all 'hidden' behind the title, read before the shot), <size>_10_hud_back (#hud-panel visible again
 //   800 ms after CONTINUE), <size>_08_sequence, <size>_08b_typed ({ count, empty, last, phase, t }: 5 complete lines, the last one is FINALE_LAST_LINE; phase
-//   sequence or choice both pass), <size>_09_postgame, store_top5_complete (only when both variants run: no store or alt file missing).
+//   sequence or choice both pass), <size>_09_postgame, <size>_09_keep_window (KEEP clock after the shots, 10 <= keepS < 22),
+//   <size>_<id>_hud_values_visible (hud shots with #hud-panel visible: every displayed .hud-value computes visible after the AD R2 F3 refresh),
+//   store_top5_complete (only when both variants run: no store or alt file missing).
 // FINALE_TYPED_T = 64.0 s into the film: the last line is fully typed at 63.967 s and the buttons (phase choice) come at 64.467 s (finaleEndS in
 //   src/game/math/finale.ts), so 0.467 s of margin remain; the film clock keeps running during the shot, which is why SKIP and the buttons row are hidden by style.
 // <outdir>/store-top5.json = { sizes, plateCap, store, alt, pressKitOnly, missing }: store = the five Art Director store picks in order (rank 1-5, files per size),
@@ -36,6 +38,17 @@
 //   checks <size>_<id>_plate_cap and <size>_<id>_<variant>_no_spoiler (stems 01-07, 09, not press kit); store-top5.json gets plateCap. The check also asserts the HUD plaque text (read from #hud-plaque even when the HUD is hidden) has no RESTOR.
 // WP23a: the living world is quiet for every stem (worldQuiet(true) before each stem, again after each navigation): no bubble,
 //   blip or glance reaches a shot. No check changed or added.
+// AD R (v0.10.0): after each buy list (stems 02, 03, 04, 06, 07) the wait opens and closes the TECH INDEX once (waitWithTreeBlink):
+//   the living world moves its cast to a new framing only while the tree is open (unseenChangeOk), as in play where every buy is made
+//   in the TECH INDEX. Without it the cast keeps the previous framing's spots (era II / III cast behind the grown machine, no era IV / V girl).
+// AD R2 F2 (v0.10.0): stem 09 shoots on the KEEP clock (worldState().script.keepS), not after a fixed 2.5 s: the dog fades out 4-4.5 s
+//   after KEEP, is hidden until 7 s, runs in 7-8 s and settles at 9 s (WORLD_ENDING.keep), so a fixed wait put the clean shot in
+//   that gap by machine speed. Both 09 shots wait for keepS >= 10 (the loop runs, the dog asleep at its left-wing spot) and must end
+//   before 22 s (the Inspector's walk to the pat starts at loop 13.34 s = keepS 22.34; no line fires before the pat).
+// AD R2 F3 (v0.10.0): uiRootHiddenShot toggles #ui-root's inline visibility; a HUD counter bump (crank click) after that can leave the
+//   frontier .hud-value with a stale computed visibility:hidden in Chromium (no rule, no inline style: the animation base style keeps
+//   the hidden ancestor), so the 2160 02 hud shot had no ME number. hudShot sets and restores an inline visibility on every #hud-panel
+//   node right before the shot (fresh style), then checks the values. Photo mode and the title do not show it (class rules, not inline).
 // Documented in scripts/smoke/README.md (### store-shots.mjs; ### Existing smokes touched by WP23a).
 import fs from 'fs';
 import path from 'path';
@@ -151,6 +164,16 @@ async function main() {
   };
   /** WP23a: the living world stays quiet for the store set (no bubble, blip or glance). Optional calls: a build without the hook skips it. */
   const quietWorld = (page) => page.evaluate(() => { window.__wedtmd?.worldQuiet?.(true); });
+  /** AD R: opens and closes the TECH INDEX once right after a buy list, then waits out the rest of totalMs (the shot timing, and the
+   *  stem 03 milestone toast, stay as before). The fly-ins started with the tree closed, so the close releases nothing and the camera
+   *  does not nudge; the open lets the living world commit the new cast placements (unseenChangeOk). */
+  const waitWithTreeBlink = async (page, totalMs) => {
+    const start = Date.now();
+    await page.keyboard.press('t');
+    await page.waitForTimeout(600);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(Math.max(300, totalMs - (Date.now() - start)));
+  };
   /** Spoiler state at shot time: plate frame, HUD plaque text (evidence), visible text lines matching SPOILER_RE. */
   const spoilerState = (page) => page.evaluate((src) => {
     const re = new RegExp(src, 'i');
@@ -210,6 +233,21 @@ async function main() {
       await page.waitForTimeout(150);
     }
     await page.mouse.move(5, 5);
+    // AD R2 F3: fresh style for every HUD node (a stale visibility:hidden after the #ui-root toggle + counter bump), then the values check
+    const hud = await page.evaluate(() => {
+      const panel = document.getElementById('hud-panel');
+      if (!panel || getComputedStyle(panel).visibility !== 'visible') return null;
+      for (const el of panel.querySelectorAll('*')) {
+        if (!(el instanceof HTMLElement)) continue;
+        const prev = el.style.visibility;
+        el.style.visibility = 'visible';
+        void getComputedStyle(el).visibility;
+        el.style.visibility = prev;
+      }
+      const values = [...panel.querySelectorAll('.hud-value')].filter((el) => el.getClientRects().length > 0);
+      return { values: values.length, hidden: values.filter((el) => getComputedStyle(el).visibility !== 'visible').length };
+    });
+    if (hud !== null) report.check(`${size}_${id}_hud_values_visible`, hud.values > 0 && hud.hidden === 0, hud);
     const hide = [...(opts.keepToasts ? [] : ['#toast-stack']), ...(opts.hide ?? [])];
     await withHidden(page, hide, () => writeShot(page, size, id, name, 'hud'));
   };
@@ -280,7 +318,7 @@ async function main() {
       await crankClicks(page, 33);
       const failed = await buyList(page, S7);
       report.check(`${size}_02_buys`, failed.length === 0, failed);
-      await page.waitForTimeout(2500);
+      await waitWithTreeBlink(page, 2500);
       if (want('clean')) await uiRootHiddenShot(page, size, '02', '02-era1-full');
       if (want('hud')) await hudShot(page, size, '02', '02-era1-full', true);
     });
@@ -289,7 +327,7 @@ async function main() {
       await quietWorld(page);
       const failed = await buyList(page, delta(S7, S9));
       report.check(`${size}_03_buys`, failed.length === 0, failed);
-      await page.waitForTimeout(2500);
+      await waitWithTreeBlink(page, 2500);
       if (want('clean')) await uiRootHiddenShot(page, size, '03', '03-era2-generator');
       if (want('hud')) await hudShot(page, size, '03', '03-era2-generator', true, { keepToasts: true });
     });
@@ -298,7 +336,7 @@ async function main() {
       await quietWorld(page);
       const failed = await buyList(page, delta(S9, S11));
       report.check(`${size}_04_buys`, failed.length === 0, failed);
-      await page.waitForTimeout(2500);
+      await waitWithTreeBlink(page, 2500);
       if (want('clean')) await uiRootHiddenShot(page, size, '04', '04-era3-boiler');
       if (want('hud')) await hudShot(page, size, '04', '04-era3-boiler', true);
     });
@@ -320,7 +358,7 @@ async function main() {
       await quietWorld(page);
       const failed = await buyList(page, delta(S11, S13));
       report.check(`${size}_06_buys`, failed.length === 0, failed);
-      await page.waitForTimeout(12000);
+      await waitWithTreeBlink(page, 12000);
       if (want('clean')) await uiRootHiddenShot(page, size, '06', '06-era4-spire');
       if (want('hud')) await hudShot(page, size, '06', '06-era4-spire', true);
     });
@@ -329,7 +367,7 @@ async function main() {
       await quietWorld(page);
       const failed = await buyList(page, delta(S13, S15));
       report.check(`${size}_07_buys`, failed.length === 0, failed);
-      await page.waitForTimeout(15000);
+      await waitWithTreeBlink(page, 15000);
       if (want('hud')) await hudShot(page, size, '07', '07-era5-ruined', true);
       if (want('clean')) await cleanShot(page, size, '07', '07-era5-ruined');
     });
@@ -408,9 +446,13 @@ async function main() {
       await poll(page, () => window.__wedtmd?.session?.state?.ending?.phase === 'postgame', null, 5000, 100);
       const phase = await page.evaluate(() => window.__wedtmd?.session?.state?.ending?.phase ?? null);
       report.check(`${size}_09_postgame`, phase === 'postgame', phase);
-      await page.waitForTimeout(2500);
+      // AD R2 F2: wait for the postgame loop (keepS >= 10: the dog settled at its spot), shoot both before keepS 22 (Inspector walk)
+      const keepS = () => window.__wedtmd?.worldState?.()?.script?.keepS ?? -1;
+      await poll(page, () => (window.__wedtmd?.worldState?.()?.script?.keepS ?? -1) >= 10, null, 15000, 100);
       if (want('hud')) await hudShot(page, size, '09', '09-postgame-portrait', true);
       if (want('clean')) await cleanShot(page, size, '09', '09-postgame-portrait');
+      const keepAfter = await page.evaluate(keepS);
+      report.check(`${size}_09_keep_window`, keepAfter >= 10 && keepAfter < 22, keepAfter);
     });
   };
 

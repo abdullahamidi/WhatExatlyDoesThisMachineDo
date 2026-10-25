@@ -2,6 +2,29 @@
 
 Notable changes per release, newest first. Work packages are named WPn; plans are in `docs/plan/`.
 
+## 0.10.0 — Living machine — 2026-10-25
+
+### Added
+- **WP22** Part evolution tiers: repeatable parts change how they look as they are upgraded, through 3 or 5 visual tiers (MK I SALVAGED to MK V AS BUILT). Visual only: no balance change, no save field.
+- **WP22** Tier-up beat: a short flash and sparks when a part reaches its next tier. It never blocks input; with REDUCED MOTION it becomes a crossfade.
+- **WP22** MK marks in the Tech Index and in toasts. The showcase, the ending, the demo teaser and new cycles show each part at its reached tier.
+- **WP23a** Living world, eras I and II: six denizens stand at the edges of the scene and change with each era. Now and then one turns to you and speaks in a speech bubble.
+- **WP23a** WORLD VOICES setting (DISPLAY): ON, RARE or OFF.
+- **WP23a** The environment changes a little each era, starting with the tower windows in era II.
+- **WP23b** Living world, eras III to V: more environment changes each era (weather, puddles, fog, scattered pages, light), with a violet rim in era V.
+- **WP23b** The finale and the postgame include the denizens. The postgame has a 90-second loop of their behaviour.
+- **WP23b** New cycles leave traces in the world. Two more system logs.
+- **WP23a / WP23b** Demo: the living world covers eras I and II, with its own short arc after the Substation Blueprint cap.
+
+### Changed
+- **WP22** HUD inset follows UI SCALE (100, 125 and 150 %).
+- **WP23a** Saves: an optional `world` block (which living-world lines were seen). No save version change; older saves load as before.
+
+### Verification
+- Bundle budgets (`scripts/smoke/perf-budget.json`, checked by `scripts/perf/bundle-budget.mjs`): app JS raw <= 500 KB (was 460 KB), lazy living-world chunk <= 120 KB (loads after the scene is created, off the boot path), CSS <= 45 KB (was 44 KB).
+- Timing rows (GPU perf median of 3, 60 min soak, world update cost) are re-measured on a quiet PC. Their status is in `docs/STEAM_RELEASE.md` section 15.
+- Known note: denizens are small at the default camera (the Inspector is about 30 px tall at 1080p, smaller at zoom 0.5 in eras III to V). They are readable but easy to miss.
+
 ## 0.9.0 — Steam demo candidate — 2026-10-23
 
 ### Added

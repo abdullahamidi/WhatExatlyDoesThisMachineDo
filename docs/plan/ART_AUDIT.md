@@ -1654,3 +1654,121 @@ Notes (accepted, no fix):
   to its ball. The DENIZEN_ART 1.4 facing rule targets the pre-finale rest poses; in the postgame the dog looks at its people.
 - N8 `Good boy.` at 1080 UI 100 uses the `side` box right of Sensor 7's head; its tail sits ~35 screen px right of the Inspector's
   head (same as R4). The Inspector is the only speaker in the beat; it reads.
+
+## R — store set (v0.10.0)
+
+Art Director, §R row 14 + row 11, 2026-10-25. Verdict: **FIXES REQUIRED** (one smoke-script fix, F1; no asset, data or game change).
+The repo script's set passes every check but shows a state play never reaches: the living-world cast is on the previous framing's
+spots in 4 of the 6 store / alt frames. The fixed set is prototyped and judged (`proto/set3/`): store quality, order unchanged.
+
+Build under audit: `dist` 21:11:41 (`index-DAjYYxoV.js`, `index-cyaZ_Ykl.css`), `dist-demo` 21:12:07; `find src public scripts/art
+-newer dist/index.html` prints nothing; `APP_VERSION` 0.10.0. :4173 = `vite preview` of `dist`, started for this round and killed after
+it. One Playwright browser at a time. Evidence root `<R>` = `.../scratchpad/R/` (`store-final/` = repo-script set; `ad-store/` =
+AD work: `probe04/`, `crops/`, `tools/`, `proto/`).
+
+### Repo-script set (`<R>/store-final/`, run 22:02:50–22:06:35, `SIZES=1080,2160`)
+exit 0, `fail []`, `errors []`, 115 / 115 checks ok; 38 PNGs (19 at 1920x1080, 19 at 3840x2160); 28 `*_no_spoiler` true (plate
+frame <= 2, plaque `PRIMARY FUNCTION: RES?OR?` on 03-07 and 09, `UNKNOWN` / `R?S????` on 01 / 02, hits []), 8 `*_plate_cap` true
+(01 / 10 / 09 `substationBlueprint`, 08 null), `store_top5_complete` true, missing []. Plates read `RES?OR?` at 2160
+(`crops/p07-plate-2160-x4.png`); no RESTORE / RESTORATION text in any store or alt frame. Machine art, tiers, palette: intact
+(belts on their pulleys, valve wheel clear, MK tiers as WP22 R5).
+
+### F1 (S2, store-facing): cast on stale spots
+| frame | rank | seen | should be (play) |
+|---|---|---|---|
+| `03-era2-generator-hud` | 3 | booth, clock, lamp hidden behind the generator / transformer; crow pokes over the generator yoke | era II right wing: clock, booth + receiver, lit lamp + glow, crow, dog |
+| `04-era3-boiler-hud` | alt | no Inspector, no Sensor 7, no puddle / sprout, no lamp / booth (all behind the boiler / flywheel) | Inspector under the umbrella, Sensor 7, puddle, white sprout, warm lamp, booth fog, crow, dog |
+| `06-era4-spire-hud` | 2 | no girl | the girl on the ground (era IV beat) |
+| `07-era5-ruined-clean` | 1 | no girl | the girl in the front row, violet rim (era V beat) |
+
+Cause: `unseenChangeOk` (`src/game/math/worldPlacement.ts`) lets a cast relocation commit only while the TECH INDEX is open or
+when old and new spots are both off screen. In play every buy is made in the TECH INDEX, so the cast moves there. `store-shots.mjs`
+buys through `session.purchase` with the tree closed, so the cast keeps the old spots; stem 05 opens the tree once (06 / 07 then
+start from s11 spots and miss the girl). Probe (`ad-store/probe04/s11-probe.json`, 0-18 s after the S11 buys): inspector 1472,
+sensor7 1384, dog 2364, payphone 2420, lamp 2476, puddle / sprout hidden, unchanged for 18 s; AD4r5 s11 (real buys): 784 / 712 /
+2856 / 3050 / 3104. Game code is right (WP23a / WP23b gates); the script is not play-faithful.
+
+Fix (owner: worker via EM, `scripts/smoke/store-shots.mjs`, exact diff `<R>/ad-store/proto/F1-store-shots.diff`, patched file
+`<R>/ad-store/proto/store-shots.F1.mjs`, CRLF): add `waitWithTreeBlink(page, totalMs)` after `quietWorld` (`t`, 600 ms, Escape,
+then wait `max(300, totalMs - elapsed)`), and replace the post-buy wait in stems 02 / 03 / 04 / 06 / 07 (`waitForTimeout(2500)` x3,
+`12000`, `15000`) with `waitWithTreeBlink(page, <same ms>)`; header note lines. The blink runs right after the buys: their fly-ins
+started with the tree closed, so the close releases nothing and the camera does not nudge (framing pixel-same as before); the total
+wait is unchanged, so the stem 03 milestone toast stays opaque (shot at +5.2 s / 2160, +5.5 s / 1080; fade starts at 6.5 s).
+A blink after a 1 s settle (proto 2) shot 03 at 2160 with the toast mid-fade: rejected. README `### store-shots.mjs`: after the
+"Hide rules for hud shots" line add: "TECH INDEX blink (AD R): stems 02, 03, 04, 06 and 07 open and close the TECH INDEX once right
+after the buy list (`t`, 600 ms, Escape; the total wait is unchanged). The living world moves its cast to a new framing only while
+the tree is open (`unseenChangeOk`), as in play; without it the cast keeps the previous framing's spots."
+
+Proof (`<R>/ad-store/proto/set3/`, the F1 behaviour + a timing log, 22:23:38–22:27:22): exit 0, `fail []`, `errors []`, 115 / 115,
+28 no_spoiler + 8 plate_cap true, missing []. Board `crops/board-cast-repo-vs-fix-2160.png` (per stem: repo top, fix bottom; 03, 04,
+06, 07 wings at 2160). 02, 05, 08, 08b, 09, 10 unchanged (09 portrait placements are forced by the ending).
+
+### Store set and order (unchanged, G8)
+1 `07-era5-ruined-clean` (violet era V, the girl front row, dead lamp, black puddle), 2 `06-era4-spire-hud` (four-resource HUD,
+plaque capped, girl on the ground, sand rings), 3 `03-era2-generator-hud` (milestone toast, era II cast at the lit lamp), 4
+`05-tree-era3-hud`, 5 `09-postgame-portrait-clean` (restored world, booth tally 42, warm lamp, dog by the lantern); alt
+`04-era3-boiler-hud` (umbrella under the dry virga). Upload the 2160 files of the post-F1 run.
+
+Notes (no block): N1 a WELCOME BACK toast shows mid-session (02 / 04 log) from the 8 h `session.update` jumps in `buyList`; the
+toast stack is hidden in every hud shot but 03, where only the milestone shows. N2 gain floaters vary with the 3-click timing (06
+hud: legible at 1080, outside the frame band at 2160); intended.
+
+Re-check after F1 (Director / EM, no AD round needed if all hold): re-run into `<R>/store-final` (preview restarted): fail [],
+errors [], 115 checks, 28 + 8 true; 03 hud 2160: lamp + booth on the right wing and the milestone toast opaque; 04: Inspector with
+umbrella at the left; 06: girl left of the boiler; 07: girl in the front row. Any miss: back to the AD.
+
+**Row 11 release art sign-off (v0.10.0):** in-game PASS (WP22 round 5, WP23a AD2f, WP23b AD4r5: RELEASE-READY); store set PENDING
+F1, PASS when the post-F1 run meets the re-check above (cast as in `proto/set3/`).
+
+### R round 2 (store set after F1)
+
+Art Director, 2026-10-25. Verdict: **FIXES REQUIRED** (F2 + F3, both smoke-script only; no asset, data or game change). F1 holds:
+every cast re-check passes at 2160 and 1080. Two new script defects: the rank 5 frame (09) loses the dog by machine speed, and the 2160
+02 hud shot has no ME number.
+
+Build: `dist` 21:11 (`APP_VERSION` 0.10.0), no source change since. :4173 = fresh `vite preview` for this round, killed after it
+(netstat empty). One Playwright browser at a time. `scripts/smoke/store-shots.mjs` = `proto/store-shots.F1.mjs` (CRLF-insensitive
+diff empty); README blink paragraph present.
+
+Gate (`<R>/store-final2/`, 22:44:24-22:47:41, `SIZES=1080,2160`): exit 0, `fail []`, `errors []`, 115 / 115 checks ok; 38 PNGs;
+28 `*_no_spoiler` true (frame <= 2, plaque `RES?OR?` 03-07 / 09, `UNKNOWN` / `R?S????` 01 / 02, hits []), 8 `*_plate_cap` true
+(01 / 10 / 09 `substationBlueprint`, 08 null), `store_top5_complete` true, missing []. Store order unchanged (07, 06, 03, 05, 09; alt 04).
+
+| re-check | 2160 | 1080 | evidence (`<R>/ad-store/r2/`) |
+|---|---|---|---|
+| 03 hud: lamp + booth on the right wing, toast opaque | PASS: clock, booth + receiver, lit lamp + glow, crow, dog; MILESTONE toast full | PASS | `03-wings-2160-x1.png`, `03-wings-1080-x3.png`, `03-toast-2160.png` |
+| 04 hud: Inspector with umbrella at the left | PASS: umbrella, Sensor 7, sprout, warm lamp, booth, crow, dog | PASS | `04-wings-*` |
+| 06 hud: girl on the ground | PASS: left of the boiler | PASS | `06-wings-*` |
+| 07 clean: girl in the front row | PASS: front row, violet rim, dead lamp, black puddle + sprout | PASS | `07-wings-*` |
+| 02, 05, 08, 08b, 10 unchanged | PASS except 02 hud 2160 (F3); 05 pixel-same as set3 | PASS | `sheet-rest-*-{1080,2160}.png` |
+| 09 unchanged | FAIL: no dog (clean, both sizes) (F2) | FAIL | `09-left-4runs-2160.png`, `09-band-L-new-vs-p3-1080x2.png` |
+
+F2 (S2, store-facing, rank 5): 09 clean shows the dog only by chance. The KEEP beats (`WORLD_ENDING.keep`): the dog fades 4-4.5 s
+after KEEP, is hidden until 7 s, runs in 7-8 s, settles 9 s. Stem 09 shoots hud at +2.5 s and clean when the hud capture ends, so
+clean lands in 4.5-9 s by machine speed: `store-final` and set3 caught the dog, `store-final2` (both sizes) did not; 09 hud never
+has it. Fix: wait for `worldState().script.keepS >= 10` (loop running, dog asleep at its left-wing spot by the Sensor 7 lantern),
+both shots before 22 s (Inspector walk at loop 13.34 s; no line fires before the pat); check `<size>_09_keep_window`.
+
+F3 (S3, spare frame, guard for every hud shot): `02-era1-full-hud` 2160 has `ME` with no number (1080 fine; set3 / `store-final`
+fine; set4 repeats it). Probe (`tools/hudme-probe2.mjs`): after `uiRootHiddenShot` toggles `#ui-root` inline visibility, the next
+HUD counter bump leaves `#hud-me` computed `visibility: hidden` with no matching rule and no inline style (CDP matched styles empty;
+Chromium animation base style); dpr 1 escapes by timing. Photo mode and the title (class rules) do not reproduce it
+(`tools/hudme-probe3.mjs`); the game never sets that inline style, so no game bug. Fix: hudShot sets and restores an inline
+`visibility` on every `#hud-panel` node right before the shot, then checks `<size>_<id>_hud_values_visible` (`{ values, hidden }`).
+Evidence `r2/probe/hudme-before-after-2160.png`.
+
+Fix (owner: worker via EM): `scripts/smoke/store-shots.mjs` = `<R>/ad-store/proto/store-shots.F2F3.mjs` (CRLF, `node --check` ok;
+diff `proto/F2F3-store-shots.diff`); `scripts/smoke/README.md` = `proto/README.F2F3.md` (CRLF; diff `proto/F2F3-README.diff`:
+stem 09 row, KEEP clock + HUD style refresh paragraphs after the blink paragraph, two check names).
+
+Proof (`<R>/ad-store/proto/set5/`, F2 + F3, 23:08:53-23:12:12): exit 0, `fail []`, `errors []`, 137 / 137 (115 + 2 `09_keep_window`
+14.8 / 15.6 s + 20 `hud_values_visible`, hidden 0), 28 + 8 true, missing []. 09 clean / hud: dog asleep by the lantern at both
+sizes; 02 hud 2160: `ME 1.23M`; 03 / 04 / 06 / 07 cast and the 03 toast as `store-final2` (`r2/set5/board-02-09-03.png`,
+`r2/set5/board-cast-{2160-x1,1080-x3}.png`); other frames animation-only diffs.
+
+Re-check after F2 + F3 (Director / EM, no AD round if all hold): fresh preview, re-run into `<R>/store-final3`: fail [], errors [],
+137 checks, 28 + 8 true, missing []; 09 clean 2160 + 1080: the dog asleep at the left wing; 02 hud 2160: ME number shown; 03 / 04 /
+06 / 07 as this round. Upload the 2160 store + alt files of that run. Any miss: back to the AD.
+
+**Row 11 release art sign-off (v0.10.0):** in-game PASS (unchanged). Store set: not final. F1 PASS; PENDING F2 + F3; PASS when the
+`store-final3` run meets the re-check above (as in `proto/set5/`).
