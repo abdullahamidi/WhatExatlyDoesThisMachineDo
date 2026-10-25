@@ -1,0 +1,83 @@
+# Receiver colour master (WP23a AD-c, Art Director). Cell 8x12 art px, pivot (0.5, 0) = the cord's top at cell x 4.0:
+# the cord pixel is column 3, under the booth's phone unit (WORLD_ENV.receiverArt (13, -22) from the booth origin).
+# Full 1 px ink ring (the cord is a 1 px ink line). Codes: scripts/art/world/pal.py. Iron 2 3 4 (5 on the cup rim).
+# Build: python -I scripts/art/world/build_sheet.py receiver   Gate: python -I scripts/art/world/check_sheet.py receiver
+# hang = handset dangling upside down from its armoured cord (kink above the mouthpiece), cups to the outside (+x),
+# centred under the pivot (cols 2-5). swing0-2 = one-sided pendulum outward, away from the booth wall: +1, +2, then the
+# swing top (+2 and 1 px higher: a pendulum rises at its turn). WORLD_LOOPS.receiver plays hang 0 1 2 1 0.
+# level = era V and the payphone's "front" while it speaks: the receiver swung up level, pointed at the camera = the
+# mouthpiece cup seen face-on (rim + 2x2 holes), 1 px out from the phone unit on a 1 px cord stub; the bubble
+# anchors on its top row.
+# PLACEHOLDER CELL (copy of hang until WP23b): onHook.
+
+@frame hang
+...K....
+...K....
+...K....
+...KK...
+..KKKK..
+..K43K..
+..K4KK..
+..K3K...
+..K3K...
+..K3KK..
+..K32K..
+..KKKK..
+
+@frame swing0
+...K....
+...K....
+...KK...
+....KK..
+...KKKK.
+...K43K.
+...K4KK.
+...K3K..
+...K3K..
+...K3KK.
+...K32K.
+...KKKK.
+
+@frame swing1
+...K....
+...KK...
+....K...
+....KK..
+....KKKK
+....K43K
+....K4KK
+....K3K.
+....K3K.
+....K3KK
+....K32K
+....KKKK
+
+@frame swing2
+...KK...
+....K...
+....KK..
+....KKKK
+....K43K
+....K4KK
+....K3K.
+....K3K.
+....K3KK
+....K32K
+....KKKK
+........
+
+@frame level
+...K....
+...KKKK.
+..K5443K
+..K4KK3K
+..K4KK2K
+..K3322K
+...KKKK.
+........
+........
+........
+........
+........
+
+@copy onHook hang

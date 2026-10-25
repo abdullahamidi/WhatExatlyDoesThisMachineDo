@@ -19,6 +19,9 @@ import v2Primary from './fixtures/v2-wp11-primary.json';
 import v2Cycle2 from './fixtures/v2-cycle2.json';
 import { DEFAULT_ENDING } from '../simulation/progression/ending';
 import { DEFAULT_PRESTIGE } from '../simulation/prestige';
+import { DEFAULT_WORLD_SAVE, WORLD_KNOWN_IDS } from '../data/livingWorld';
+import type { WorldSaveState } from '../data/livingWorld';
+import { normalizeWorld } from '../simulation/worldSave';
 
 /** A fresh, mutable copy of the default prestige (tests compare against it). */
 const DEFAULT_PRESTIGE_LITERAL = { ...DEFAULT_PRESTIGE, perks: [] };
@@ -72,6 +75,7 @@ describe('round trip', () => {
       stats: deriveStats(state, 3000),
       achievements: { unlocked: {} },
       prestige: DEFAULT_PRESTIGE_LITERAL,
+      world: DEFAULT_WORLD_SAVE,
       status: 'loaded',
     });
     expect(result).not.toHaveProperty('error');
@@ -86,6 +90,7 @@ describe('round trip', () => {
       stats: deriveStats(state, 3000),
       achievements: { unlocked: {} },
       prestige: DEFAULT_PRESTIGE_LITERAL,
+      world: DEFAULT_WORLD_SAVE,
       status: 'loaded',
     });
   });
@@ -920,6 +925,135 @@ describe('browserStorage', () => {
     expect(s.getItem('k')).toBe('v');
     s.removeItem('k');
     expect(s.getItem('k')).toBeNull();
+  });
+});
+
+describe('living world block (WP23a)', () => {
+  const NOW = 1_700_000_000_000;
+  const block = (over: Partial<WorldSaveState> = {}): WorldSaveState => ({
+    seen: ['INS-01'],
+    seenEver: ['INS-01', 'DOG-01'],
+    eraMoments: [1, 2, 3, 0, 0],
+    youEras: 3,
+    ...over,
+  });
+  const metaWith = (world?: WorldSaveState) => ({
+    stats: emptyStats(NOW),
+    achievements: { unlocked: {} },
+    prestige: { ...DEFAULT_PRESTIGE, perks: [] },
+    world,
+  });
+
+  it('keeps save version 2 (the block is additive)', () => {
+    expect(SAVE_VERSION).toBe(2);
+  });
+
+  it('serialize writes the block only when meta carries one', () => {
+    const state = createInitialState(NOW);
+    expect(JSON.parse(serialize(state, DEFAULT_SETTINGS, NOW))).not.toHaveProperty('world');
+    expect(JSON.parse(serialize(state, DEFAULT_SETTINGS, NOW, metaWith()))).not.toHaveProperty('world');
+    const out = JSON.parse(serialize(state, DEFAULT_SETTINGS, NOW, metaWith(block()))) as Record<string, unknown>;
+    expect(out['world']).toEqual(block());
+  });
+
+  it('round trips the block through serialize and deserialize', () => {
+    const r = deserialize(serialize(createInitialState(NOW), DEFAULT_SETTINGS, NOW, metaWith(block())), NOW);
+    expect(r.status).toBe('loaded');
+    expect(r.world).toEqual(block());
+  });
+
+  it('a save without the block, and a missing save, load with the default block', () => {
+    expect(deserialize(serialize(createInitialState(NOW), DEFAULT_SETTINGS, NOW), NOW).world).toEqual(DEFAULT_WORLD_SAVE);
+    expect(deserialize(null, NOW).world).toEqual(DEFAULT_WORLD_SAVE);
+  });
+
+  it('a bad block never fails the load', () => {
+    for (const bad of ['junk', null, 7, [1, 2]]) {
+      const r = deserialize(raw(createInitialState(NOW), { world: bad }), NOW);
+      expect(r.status, JSON.stringify(bad)).toBe('loaded');
+      expect(r.world).toEqual(DEFAULT_WORLD_SAVE);
+    }
+  });
+
+  it('validateEnvelope fills the block', () => {
+    const withBlock = validateEnvelope(JSON.parse(serialize(createInitialState(NOW), DEFAULT_SETTINGS, NOW, metaWith(block()))), NOW);
+    expect(withBlock.ok).toBe(true);
+    if (withBlock.ok) expect(withBlock.envelope.world).toEqual(block());
+    const plain = validateEnvelope(JSON.parse(serialize(createInitialState(NOW), DEFAULT_SETTINGS, NOW)), NOW);
+    expect(plain.ok).toBe(true);
+    if (plain.ok) expect(plain.envelope.world).toEqual(DEFAULT_WORLD_SAVE);
+  });
+
+  it('a storage read failure returns the default block', () => {
+    const r = new SaveManager(new FailingStorage()).load(NOW);
+    expect(r.status).toBe('new');
+    expect(r.world).toEqual(DEFAULT_WORLD_SAVE);
+  });
+
+  it('normalizeWorld: non-objects give a fresh default with new arrays', () => {
+    for (const bad of [undefined, null, 0, 'x', true, [], [1]]) {
+      const w = normalizeWorld(bad);
+      expect(w, String(bad)).toEqual(DEFAULT_WORLD_SAVE);
+      expect(w.seen).not.toBe(DEFAULT_WORLD_SAVE.seen);
+      expect(w.eraMoments).not.toBe(DEFAULT_WORLD_SAVE.eraMoments);
+    }
+  });
+
+  it('normalizeWorld: drops unknown ids and non-strings, keeps the known beats', () => {
+    const w = normalizeWorld({
+      seen: ['INS-01', 'NOPE-99', '', 7, null, 'beat.tapeFreeze', 'beat.unknown'],
+      seenEver: [],
+      eraMoments: [0, 0, 0, 0, 0],
+      youEras: 0,
+    });
+    expect(w.seen).toEqual(['INS-01', 'beat.tapeFreeze']);
+    expect(w.seenEver).toEqual(['INS-01', 'beat.tapeFreeze']);
+  });
+
+  it('normalizeWorld: keeps the first of duplicate ids', () => {
+    expect(normalizeWorld({ seen: ['CRW-01', 'INS-01', 'CRW-01'] }).seen).toEqual(['CRW-01', 'INS-01']);
+  });
+
+  it('normalizeWorld: seenEver is the union of seenEver and seen', () => {
+    const w = normalizeWorld({ seen: ['INS-01'], seenEver: ['DOG-01'] });
+    expect(w.seen).toEqual(['INS-01']);
+    expect(w.seenEver).toEqual(['DOG-01', 'INS-01']);
+  });
+
+  it('normalizeWorld: a non-array list is empty', () => {
+    const w = normalizeWorld({ seen: 'INS-01', seenEver: { 0: 'INS-01' } });
+    expect(w.seen).toEqual([]);
+    expect(w.seenEver).toEqual([]);
+  });
+
+  it('normalizeWorld: lists are capped at 128 ids after the filter', () => {
+    const known = [...WORLD_KNOWN_IDS];
+    const long = Array.from({ length: 300 }, (_, i) => known[i % known.length] ?? 'NOPE');
+    const capped = normalizeWorld({ seen: long, seenEver: long });
+    expect(capped.seen).toEqual(known);
+    expect(capped.seenEver.length).toBeLessThanOrEqual(128);
+    expect(normalizeWorld({ seen: [...Array.from({ length: 200 }, () => 'NOPE'), 'INS-01'] }).seen).toEqual(['INS-01']);
+  });
+
+  it('normalizeWorld: clamps eraMoments and youEras', () => {
+    expect(normalizeWorld({ eraMoments: [3.7, -2, 150, Number.NaN, 'x'] }).eraMoments).toEqual([3, 0, 99, 0, 0]);
+    expect(normalizeWorld({ eraMoments: [Infinity, 1e308, 4, 5, 6] }).eraMoments).toEqual([0, 99, 4, 5, 6]);
+    expect(normalizeWorld({ eraMoments: [7] }).eraMoments).toEqual([7, 0, 0, 0, 0]);
+    expect(normalizeWorld({ eraMoments: 'nope' }).eraMoments).toEqual([0, 0, 0, 0, 0]);
+    expect(normalizeWorld({ youEras: 5 }).youEras).toBe(5);
+    expect(normalizeWorld({ youEras: 40 }).youEras).toBe(31);
+    expect(normalizeWorld({ youEras: -1 }).youEras).toBe(0);
+    expect(normalizeWorld({ youEras: 1.5 }).youEras).toBe(0);
+    expect(normalizeWorld({ youEras: '3' }).youEras).toBe(0);
+    expect(normalizeWorld({ youEras: Number.NaN }).youEras).toBe(0);
+  });
+
+  it('normalizeWorld never returns its input and is idempotent', () => {
+    const input = { seen: ['INS-01'], seenEver: ['INS-01'], eraMoments: [1, 0, 0, 0, 0], youEras: 1 };
+    const out = normalizeWorld(input);
+    expect(out).not.toBe(input);
+    expect(out.seen).not.toBe(input.seen);
+    expect(normalizeWorld(out)).toEqual(out);
   });
 });
 

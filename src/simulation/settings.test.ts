@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_SETTINGS_VALUES, NOTATIONS, REDUCED_MOTION, UI_SCALES, VOLUME_RANGE } from '../data/settings';
+import { DEFAULT_SETTINGS_VALUES, NOTATIONS, REDUCED_MOTION, UI_SCALES, VOLUME_RANGE, WORLD_VOICES } from '../data/settings';
 import type { SettingsState } from '../data/types';
 import { motionPolicy, normalizeSettings } from './settings';
 
@@ -18,7 +18,7 @@ describe('normalizeSettings defaults', () => {
     const valid: SettingsState = {
       muted: true, masterVolume: 40, sfxVolume: 0, ambientVolume: 75, musicVolume: 20,
       notation: 'engineering', reducedMotion: true, screenShake: false, statusMarkers: true, uiScale: 150,
-      confirmNewCycle: false,
+      confirmNewCycle: false, worldVoices: 'rare',
     };
     expect(normalizeSettings(valid)).toEqual(valid);
   });
@@ -48,6 +48,7 @@ describe('normalizeSettings per field', () => {
     ['statusMarkers', 1], ['statusMarkers', 'on'],
     ['uiScale', '125'], ['uiScale', null], ['uiScale', { value: 125 }],
     ['confirmNewCycle', 'no'], ['confirmNewCycle', 0], ['confirmNewCycle', null],
+    ['worldVoices', 'ON'], ['worldVoices', 1], ['worldVoices', null], ['worldVoices', true],
   ];
 
   it.each(badTypes)('wrong type for %s (%j) falls back to default', (field, bad) => {
@@ -60,7 +61,7 @@ describe('normalizeSettings per field', () => {
     const base: SettingsState = {
       muted: true, masterVolume: 30, sfxVolume: 31, ambientVolume: 32, musicVolume: 33,
       notation: 'scientific', reducedMotion: true, screenShake: false, statusMarkers: true, uiScale: 125,
-      confirmNewCycle: false,
+      confirmNewCycle: false, worldVoices: 'off',
     };
     const out = normalizeSettings({ [field]: bad }, base);
     expect(out[field]).toEqual(base[field]);
@@ -119,6 +120,14 @@ describe('normalizeSettings per field', () => {
 
   it.each(UI_SCALES)('accepts uiScale %d', (s) => {
     expect(normalizeSettings({ uiScale: s }).uiScale).toBe(s);
+  });
+
+  it.each(WORLD_VOICES)('accepts worldVoices %s', (w) => {
+    expect(normalizeSettings({ worldVoices: w }).worldVoices).toBe(w);
+  });
+
+  it.each([['ON'], ['Rare'], [''], ['loud'], [0], [null]])('unknown worldVoices %j falls back to default on', (w) => {
+    expect(normalizeSettings({ worldVoices: w }).worldVoices).toBe('on');
   });
 
   it.each([[0], [90], [124], [126], [200], [NaN], [-100]])('unknown uiScale %d falls back to default', (s) => {
@@ -220,6 +229,30 @@ describe('settings data sanity', () => {
     expect(normalizeSettings({ musicVolume: 250 }).musicVolume).toBe(100);
     expect(normalizeSettings({ musicVolume: -3 }).musicVolume).toBe(0);
     expect(normalizeSettings({ musicVolume: NaN }).musicVolume).toBe(70);
+  });
+
+  it('world voices default to on (WP23a); a missing or invalid value gives on, a valid one is kept', () => {
+    expect(D.worldVoices).toBe('on');
+    expect(WORLD_VOICES).toContain(D.worldVoices);
+    expect(normalizeSettings({ muted: true }).worldVoices).toBe('on');
+    expect(normalizeSettings({ worldVoices: 'loud' }).worldVoices).toBe('on');
+    expect(normalizeSettings({ worldVoices: 'off' }).worldVoices).toBe('off');
+  });
+
+  it('a v2 save without worldVoices loads with on and keeps every other field', () => {
+    const saved: Record<string, unknown> = { ...D, muted: true, uiScale: 125 };
+    delete saved['worldVoices'];
+    const wire = JSON.parse(JSON.stringify(saved)) as unknown;
+    const out = normalizeSettings(wire);
+    expect(out.worldVoices).toBe('on');
+    expect(out).toEqual({ ...D, muted: true, uiScale: 125 });
+  });
+
+  it('a patch through normalizeSettings sets worldVoices and keeps the other keys', () => {
+    const base: SettingsState = { ...D, masterVolume: 40, uiScale: 150, worldVoices: 'on' };
+    const out = normalizeSettings({ worldVoices: 'rare' }, base);
+    expect(out).toEqual({ ...base, worldVoices: 'rare' });
+    expect(normalizeSettings({ worldVoices: 'off', muted: true }, out)).toEqual({ ...out, worldVoices: 'off', muted: true });
   });
 
   it('confirm new cycle is on by default and keeps a valid boolean', () => {

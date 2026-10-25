@@ -44,6 +44,7 @@ export function startSession(
     stats: load.stats,
     achievements: load.achievements,
     prestige: c.prestige,
+    world: load.world,
     maxEra,
     now: clock,
   });
@@ -65,6 +66,7 @@ export function startSession(
     stats: session.stats,
     achievements: session.achievements,
     prestige: session.prestige,
+    world: session.world,
   });
   return { session, load, offline, saved, bootAchievements, clamped: c.changed };
 }

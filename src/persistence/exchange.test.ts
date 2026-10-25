@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { DEFAULT_WORLD_SAVE } from '../data/livingWorld';
+import type { WorldSaveState } from '../data/livingWorld';
 import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
 import { emptyStats } from '../simulation/stats';
 import { serialize } from './codec';
@@ -99,6 +101,28 @@ describe('parseImport', () => {
     expect(v1.envelope.stats.clicks).toBe(321);
     expect(v1.envelope.achievements).toEqual({ unlocked: {} });
     expect(v1.envelope.prestige).toEqual({ cycle: 1, echoesEarned: 0, perks: [] });
+  });
+
+  it('keeps the living-world block through an encoded export and import (WP23a)', () => {
+    const world: WorldSaveState = {
+      seen: ['INS-01', 'CRW-01'],
+      seenEver: ['INS-01', 'CRW-01', 'beat.tapeFreeze'],
+      eraMoments: [2, 0, 0, 0, 0],
+      youEras: 1,
+    };
+    const exported = serialize(createInitialState(NOW), DEFAULT_SETTINGS, NOW, {
+      stats: emptyStats(NOW),
+      achievements: { unlocked: {} },
+      prestige: { cycle: 1, echoesEarned: 0, perks: [] },
+      world,
+    });
+    const result = parseImport(encodeSave(exported), NOW);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.envelope.world).toEqual(world);
+
+    const plain = parseImport(encodeSave(save), NOW);
+    expect(plain.ok).toBe(true);
+    if (plain.ok) expect(plain.envelope.world).toEqual(DEFAULT_WORLD_SAVE);
   });
 
   const badSaves: Array<[string, string]> = [

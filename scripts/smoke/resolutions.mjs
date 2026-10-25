@@ -1,9 +1,11 @@
 // WP19 T11 resolutions smoke: HUD, tech tree and SYSTEM menu rects against the canvas at 5 viewports x uiScale 100 / 150,
 // plus the title panel at uiScale 150 (1280x720, 1280x800). Usage: PW_PATH=... node scripts/smoke/resolutions.mjs <url-with-?debug=1> <outdir>
 // Prints ONE JSON object { results, fail, errors }; exit code 1 when fail or errors is non-empty.
+// WP23a T13b: at uiScale 150 every viewport also shows one living-world bubble: <w>x<h>-150_bubble_inside and _bubble_clear_hud.
 import { createRequire } from 'module';
 import fs from 'fs';
 import path from 'path';
+import { buyList, crankClicks } from './lib/common.mjs';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PW_PATH);
 const [url, out] = process.argv.slice(2);
@@ -45,6 +47,8 @@ const sized = r => r !== null && r.w > 0 && r.h > 0;
 const inside = (a, c) => sized(a) && sized(c)
   && a.l >= c.l - TOL && a.t >= c.t - TOL
   && a.l + a.w <= c.l + c.w + TOL && a.t + a.h <= c.t + c.h + TOL;
+// Strict overlap of two rects: touching edges do not count.
+const overlaps = (a, c) => a.l < c.l + c.w && a.l + a.w > c.l && a.t < c.t + c.h && a.t + a.h > c.t;
 const sameRect = (a, c) => sized(a) && sized(c)
   && Math.abs(a.l - c.l) <= TOL && Math.abs(a.t - c.t) <= TOL
   && Math.abs(a.w - c.w) <= TOL && Math.abs(a.h - c.h) <= TOL;
@@ -70,6 +74,31 @@ const newRun = async (browser, w, h, key) => {
 const failRun = (key, e) => {
   const msg = String(e && e.message ? e.message : e).split('\n')[0];
   fail.push(`FAILED:${key}:${msg}`);
+};
+
+// WP23a T13b: one living-world bubble on screen (run at uiScale 150). Escape until no modal is open (the tree and the SYSTEM menu
+// hide bubbles), then 16 clicks + Gear Ratio (a first moment), the scheduler clock advanced and INS-01, or the first fallback line
+// that plays on this framing, in one evaluate. Returns { bought, id, rects } with the rects of every shown bubble (client px).
+const bubbleRects = async page => {
+  for (let i = 0; i < 3 && (await page.evaluate(() => window.__wedtmd.modalCount())) > 0; i++) {
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+  }
+  await crankClicks(page, 16, 0);
+  const bought = await buyList(page, ['gearRatio']);
+  const id = await page.evaluate(() => {
+    const w = window.__wedtmd;
+    w.worldQuiet(false);
+    w.worldAdvance(120000);
+    return ['INS-01', 'INS-02', 'DOG-01', 'CRW-01'].find(line => w.worldSay(line)) ?? null;
+  });
+  await page.waitForFunction(() => document.querySelector('.wv.on') !== null, null, { timeout: 3000 }).catch(() => {});
+  await page.waitForTimeout(400);
+  const rects = await page.evaluate(() => [...document.querySelectorAll('.wv.on')].map(el => {
+    const r = el.getBoundingClientRect();
+    return { l: r.left, t: r.top, w: r.width, h: r.height };
+  }));
+  return { bought, id, rects };
 };
 
 // One viewport x scale run. Returns the measured HUD panel height (null when missing).
@@ -124,6 +153,18 @@ const runMatrix = async (browser, w, h, scale) => {
       canvas: compact(canvas), ui: compact(ui), hud: compact(hud), buttons: compact(buttons),
       tech: compact(tech), system: compact(system), settings: compact(settings),
     };
+    if (scale === 150) {
+      // WP23a T13b: the bubble inside the canvas, and clear of the HUD panel, the HUD buttons and the toast stack (empty rects skipped).
+      const b = await bubbleRects(page);
+      const hudRects = [await rect(page, '#hud-panel'), await rect(page, '#hud-buttons'), await rect(page, '#toast-stack')].filter(sized);
+      check(`${key}_bubble_inside`, b.rects.length > 0 && b.rects.every(r => inside(r, canvas)), {
+        line: b.id, bought: b.bought, bubbles: b.rects.map(compact), canvas: compact(canvas),
+      });
+      check(`${key}_bubble_clear_hud`, b.rects.length > 0 && b.rects.every(r => sized(r) && hudRects.every(hr => !overlaps(r, hr))), {
+        line: b.id, bubbles: b.rects.map(compact), hud: hudRects.map(compact),
+      });
+      await shot(page, `res-${w}x${h}-${scale}-bubble.png`);
+    }
     hudH = hud ? hud.h : null;
   } catch (e) {
     failRun(key, e);

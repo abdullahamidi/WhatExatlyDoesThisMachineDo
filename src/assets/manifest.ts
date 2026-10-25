@@ -9,6 +9,8 @@ export interface AssetEntry {
   origin: { x: number; y: number };
   tileable: 'none' | 'x' | 'xy';
   frame?: { width: number; height: number; count: number };
+  /** Era-variant sheets: frame rows are the era variants I, II, III, IV, V, whole; height = frame.height * eraRows. */
+  eraRows?: number;
   /** Pre-rendered rotation sheet (RotSprite frames, grid layout, frame size = width x height). Loaded as `${id}#rot`. */
   rotation?: { file: string; frames: number }; // file under public/assets/
   /** Postgame restored-accent variant (A17 art, wired WP18b): same width/height, frame layout and rotation layout as the original.
@@ -567,6 +569,136 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
   'machine.steamLance': {
     id: 'machine.steamLance', file: 'machine/legacy/steam-lance.png', width: 16, height: 32, origin: { x: 0.5, y: 0 }, tileable: 'none',
     description: 'Steam lance valve hung under the null gallery deck: mount plate, globe valve with a rust handwheel, flanged inlet at the bottom (texture 8,32).',
+  },
+  'world.inspector': {
+    id: 'world.inspector', file: 'world/inspector.png', width: 380, height: 240, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 20, height: 40, count: 114 },
+    eraRows: 6,
+    description: 'Inspector sheet, 19 frames per era row (dome hat, long coat, clipboard at the chest, umbrella) in rows I, II, III, IV, V, whole; planned file world/inspector.png.',
+  },
+  'world.clipboardPages': {
+    id: 'world.clipboardPages', file: null, width: 18, height: 3, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 6, height: 3, count: 3 },
+    description: 'Cycle trace on the Inspector clipboard, 3 frames of 6x3; WP23b art, procedural fallback until then.',
+  },
+  'world.dog': {
+    id: 'world.dog', file: 'world/dog.png', width: 560, height: 120, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 28, height: 20, count: 120 },
+    eraRows: 6,
+    description: 'Dog sheet, 20 frames per era row (low wedge, one upright ear, curled tail) in rows I, II, III, IV, V, whole; planned file world/dog.png.',
+  },
+  'world.stakeChain': {
+    id: 'world.stakeChain', file: 'world/stake-chain.png', width: 20, height: 6, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 10, height: 6, count: 2 },
+    description: 'Stake with its chain on the ground, 2 frames; planned file world/stake-chain.png.',
+  },
+  'world.hole': {
+    id: 'world.hole', file: 'world/hole.png', width: 64, height: 6, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 16, height: 6, count: 4 },
+    description: 'Dig hole in the ground, 4 frames (dig stages); planned file world/hole.png.',
+  },
+  'world.redBall': {
+    id: 'world.redBall', file: null, width: 3, height: 3, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    description: 'Red ball prop, one 3x3 frame: mutedOrange ball with a glint and a shadow (postgame); WP23b art, procedural fallback until then.',
+  },
+  'world.crow': {
+    id: 'world.crow', file: 'world/crow.png', width: 240, height: 108, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 24, height: 18, count: 60 },
+    eraRows: 6,
+    description: 'Crow sheet, 10 frames per era row (wedge body, two wing fans, hooked beak) in rows I, II, III, IV, V, whole; planned file world/crow.png.',
+  },
+  'world.girl': {
+    id: 'world.girl', file: 'world/girl.png', width: 160, height: 168, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 16, height: 28, count: 60 },
+    eraRows: 6,
+    description: 'Girl with the lantern, 10 frames per era row (hood, raincoat, lantern, stand, talk, shield, back-run) in rows I, II, III, IV, V, whole; planned file world/girl.png.',
+  },
+  'world.girlMini': {
+    id: 'world.girlMini', file: 'world/girl-mini.png', width: 16, height: 12, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 8, height: 12, count: 2 },
+    description: 'Girl seen from the pylon plane, 2 frames (lantern warm, lantern cold white); planned file world/girl-mini.png.',
+  },
+  'world.girlWindow': {
+    id: 'world.girlWindow', file: 'world/girl-window.png', width: 16, height: 6, origin: { x: 0, y: 0 }, tileable: 'none',
+    frame: { width: 4, height: 6, count: 4 },
+    description: 'Girl in the far window, 4 frames (flicker a, flicker b, dark, restored figure at the curtain); planned file world/girl-window.png.',
+  },
+  'world.lantern': {
+    id: 'world.lantern', file: null, width: 12, height: 4, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 6, height: 4, count: 2 },
+    description: 'Lantern prop, 2 frames; WP23b art, procedural fallback until then.',
+  },
+  'world.payphone': {
+    id: 'world.payphone', file: 'world/payphone.png', width: 168, height: 312, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 28, height: 52, count: 36 },
+    eraRows: 6,
+    description: 'Payphone booth, 6 frames per era row (dark, lit hood, ring-shake x2, fog overlay, cracked restored whole) in rows I, II, III, IV, V, whole; tally marks are procedural; planned file world/payphone.png.',
+  },
+  'world.receiver': {
+    id: 'world.receiver', file: 'world/receiver.png', width: 48, height: 72, origin: { x: 0.5, y: 0 }, tileable: 'none',
+    frame: { width: 8, height: 12, count: 36 },
+    eraRows: 6,
+    description: 'Booth receiver, 6 frames per era row (hang, swing x3, level, on hook) in rows I, II, III, IV, V, whole; planned file world/receiver.png.',
+  },
+  'world.lamp': {
+    id: 'world.lamp', file: 'world/street-lamp.png', width: 48, height: 60, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 12, height: 60, count: 4 },
+    description: 'Street lamp, 4 frames (dead, lit, warm, restored); planned file world/street-lamp.png.',
+  },
+  'world.lampGlow': {
+    id: 'world.lampGlow', file: 'world/lamp-glow.png', width: 64, height: 16, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 32, height: 16, count: 2 },
+    description: 'Lamp glow overlay, 2 frames (cold, warm); planned file world/lamp-glow.png.',
+  },
+  'world.clock': {
+    id: 'world.clock', file: 'world/street-clock.png', width: 32, height: 44, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 16, height: 44, count: 2 },
+    description: 'Street clock, 2 frames (ruin, restored); the hands are a procedural overlay; planned file world/street-clock.png.',
+  },
+  'world.sensor7': {
+    id: 'world.sensor7', file: 'world/sensor7.png', width: 160, height: 240, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 20, height: 40, count: 48 },
+    eraRows: 6,
+    description: 'Sensor 7, 8 frames per era row (tripod, four head poses, lens fog, two readout glyphs) in rows I, II, III, IV, V, whole; the LED is a separate 1 px sprite; planned file world/sensor7.png.',
+  },
+  'world.puddle': {
+    id: 'world.puddle', file: null, width: 320, height: 5, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 32, height: 5, count: 10 },
+    description: 'Puddle strip, 10 frames (3 sizes x grey, ring, black, plus whole); WP23b art, procedural fallback until then.',
+  },
+  'world.sprout': {
+    id: 'world.sprout', file: null, width: 40, height: 24, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 8, height: 24, count: 5 },
+    description: 'Sprout, 5 frames (4 white stages, 1 green bloom); WP23b art, procedural fallback until then.',
+  },
+  'world.scraps': {
+    id: 'world.scraps', file: 'world/scraps.png', width: 24, height: 4, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 8, height: 4, count: 3 },
+    description: 'Scrap pile on the ground, 3 frames (burned away by the firebox tiers); planned file world/scraps.png.',
+  },
+  'world.mote': {
+    id: 'world.mote', file: 'world/mote.png', width: 4, height: 2, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 2, height: 2, count: 2 },
+    description: 'Ash mote and white moth speck, 2 frames (ash, moth); one emitter with a pool of 5; planned file world/mote.png.',
+  },
+  'world.page': {
+    id: 'world.page', file: null, width: 6, height: 4, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    frame: { width: 3, height: 4, count: 2 },
+    description: 'Paper page that lifts from the ground about every 40 s in era IV, 2 frames; WP23b art, procedural fallback until then.',
+  },
+  'world.shadow': {
+    id: 'world.shadow', file: null, width: 26, height: 3, origin: { x: 0.5, y: 0.5 }, tileable: 'none',
+    description: 'Procedural shadow ellipse baked once in game; this 26x3 texture is a fallback only and never gets a file.',
+  },
+  'bg.windowLit': {
+    id: 'bg.windowLit', file: 'bg/window-lit.png', width: 8, height: 6, origin: { x: 0, y: 0 }, tileable: 'none',
+    frame: { width: 4, height: 6, count: 2 },
+    description: 'Lit skyline window in rust-amber, 2 frames (lit, breathe), six placements on the skyline windows; planned file bg/window-lit.png.',
+  },
+  'bg.virga': {
+    id: 'bg.virga', file: null, width: 512, height: 128, origin: { x: 0, y: 1 }, tileable: 'x',
+    frame: { width: 512, height: 64, count: 2 },
+    description: 'Rain streak strip tiling on x above the mountain ridge, 2 frames (falling, frozen), sky ramp only; WP23b art, procedural fallback until then.',
   },
 };
 

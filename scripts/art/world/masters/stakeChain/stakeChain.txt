@@ -1,0 +1,14 @@
+# Stake + cut chain (WP23a AD-b, Art Director). Cell 10x6 art px, pivot (0.5, 1); front row at dog x - 16.
+# Iron stake (lit cap 4, post 3); one long link off the cap, then a last link on the ground cut open at its end,
+# leading to nothing. Selective ink outline (front-row prop). fallen = PLACEHOLDER (copy of chained) until
+# WP23b draws the finale frame (chain fallen off).
+
+@frame chained
+..........
+.KKK......
+K444KKKK..
+.K3K4444K.
+.K3KKKKK..
+KK33KK333.
+
+@copy fallen chained

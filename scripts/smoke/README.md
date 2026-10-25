@@ -318,7 +318,8 @@ npm script `perf:bundle` runs the second command (`npm run build && npm run perf
 |---|---|---|
 | app js raw | `index-*.js` | <= 460 KB (`appRawKb`) |
 | phaser js raw | `phaser-*.js` | <= 1500 KB (`phaserKb`) |
-| css raw | `*.css` | <= 40 KB (`cssKb`) |
+| lazy world js raw | `LivingWorldDirector-*.js` | <= 80 KB (`lazyWorldKb`, WP23a) |
+| css raw | `*.css` | <= 45 KB (`cssKb`) |
 | public assets | `public/assets` total | <= 8000 KB (`publicAssetsKb`) |
 
 The gzip size of the app chunk is printed with status `report` and never breaches. A raw breach prints `BREACH` and exits 1.
@@ -675,3 +676,54 @@ Outputs:
 - `<outdir>/store-shots.json` (2-space JSON) and stdout: `{ shots, results, fail, errors }`. Each `shots[]` entry: `{ file, size, stem, variant, width, height }`, where `file` is absolute and `stem` is the file stem. Each `results` entry of a check with a detail is `{ ok, value }`.
 - `<outdir>/store-top5.json` = `{ sizes, plateCap, store, alt, pressKitOnly, missing }`. `plateCap` = `substationBlueprint`. `store` = the five store picks in `STORE_TOP5` order (rank 1 to 5, files per size). `alt` = the alternative(s) in `STORE_ALT` (`04-era3-boiler-hud`, replaces the rank 5 shot). `pressKitOnly` = shots that are never store screenshots, with the reason: `08-finale-reveal-hud`, `08-finale-reveal-clean`, `08b-finale-typed-hud`, `09-postgame-portrait-hud`, `10-title-hud`. `missing` = `<size>/<name>` for every store or alt file not captured for a requested size.
 - Exit 0 clean; 1 when `fail` or `errors` is non-empty; 2 on a usage error.
+
+## Living world (WP23a): `world.mjs`
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/world.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/world
+```
+
+Runs on the full build (`http://localhost:4174/?debug=1`) and on the demo build (`http://localhost:4177/?debug=1`, the demo preview). Fresh 1280x720 context per case, A to G. Prints ONE JSON object `{ results, fail, errors }`; expect `fail` and `errors` to be `[]`. Exit code 1 when either is non-empty; exit 2 on a usage error. A failing check carries `worldState().silence` in its detail. The script starts no server.
+
+| case | checks (names in `results` / `fail`) |
+|---|---|
+| `A` (fresh, no clicks) | `A_frozen`: the Inspector and Dog variants from `livingWorld()` stay the same over 2 s (five samples, 400 ms apart). `A_crank_step`: one real crank click changes the Inspector or the Dog variant. Shot `world-A-s0.png` |
+| `B` (fresh) first line | 16 real crank clicks (one clears the crank prompt, 15 more pay for Gear Ratio at 15 ME), `buyInPage(['gearRatio'])`, then one evaluate: `worldQuiet(false)`, `worldAdvance(120000)`, `worldLogShown('observer-count')`, `worldAdvance(6000)`. `B_bubble`: `worldBubble().visible` within 8 s. `B_rects`: the visible `.wv.on` box does not overlap `#hud-panel`, `#toast-stack` (only while a toast shows), `#hud-buttons` or `#hud-hint`, at UI 100 and at UI 150. `B_live`: `#world-voice-live` text is exactly `Inspector: Unchanged. I'm not on the count either.`. `B_aria`: every `.wv` has `aria-hidden="true"`, no `tabindex`, and is not focusable. Shots `world-B-100.png` (UI 100) and `world-B-150.png` (UI 150) |
+| `C` (fresh) silence | after the first moment, the bubble is gone and no toast shows. Control: `worldSay('INS-02')` is true. Then each state refuses it (`worldSay` false, no `.wv.on`): `C_tree` (TECH INDEX open, key `t`), `C_card` (45 clicks, the S8 list with `buyInPage`; `#era-card` visible), `C_photo` (`photoMode(true, { hint: false })`), `C_menu` (SYSTEM menu, Escape) |
+| `D` (fresh, UI 150) framings | `D_s7_placed` (S7 list, framing `e1`), `D_s8_placed` (S8, framing `s8`; era card dismissed first), `D_s9_placed` (S9, framing `s9`). Each: `worldState().placements` equals the table (listed ids at their x, `null` when off-stage; scraps are not listed), the framing matches, and no placed x lies over the machine box or inside the crank circle + 24. Shots `world-D-s7-150.png`, `world-D-s8-150.png`, `world-D-s9-150.png` |
+| `E` (fresh) settings | `E_rare`: RARE refuses the non-core `INS-02` (`worldSay` false), and ON accepts it again (control). `E_off`: OFF refuses `DOG-02`; over 800 ms `audioStats().worldBlips` and `worldState().seen` do not change and no `.wv.on` shows |
+| `F` (fresh) persist | `F_seen`: after the first moment, `saveNow()` and a reload, `worldState().seen` contains `INS-01`. `F_no_repeat`: after `worldAdvance(400000)` and `worldLogShown('observer-count')`, no bubble or live text of INS-01 appears in a 6 s watch |
+| `G` (fresh) budget | S9 list: `G_display` (`displayObjects()` <= 100), `G_cost` (`worldStats().meanMs` averaged over 20 samples, 5 s, <= 0.3). `G_era3_hidden`: S10 = S9 + `@substationBlueprint`, `boiler` (local copy of the list); the TECH INDEX opens and closes once; then every `livingWorld()` entry has `visible` false and `worldState().hidden` is true. On the demo the era III purchase is refused (`purchase('boiler').reason === 'demo'`), so the check records `value.skipped` and passes |
+
+Check names (20): `A_frozen`, `A_crank_step`, `B_bubble`, `B_rects`, `B_live`, `B_aria`, `C_tree`, `C_card`, `C_photo`, `C_menu`, `D_s7_placed`, `D_s8_placed`, `D_s9_placed`, `E_rare`, `E_off`, `F_seen`, `F_no_repeat`, `G_display`, `G_cost`, `G_era3_hidden`.
+
+Debug API used (`window.__wedtmd`, WP23 C7): `worldState()`, `worldSay(id)`, `worldQuiet(on)`, `worldAdvance(ms)`, `worldLogShown(logId)`, `livingWorld()`, `worldStats()`, `worldBubble()`. Also the existing `session` (`updateSettings`, `purchase`), `saveNow()`, `photoMode()`, `photoState()`, `techTreeOpen()`, `systemMenuOpen()`, `audioStats()`, `displayObjects()`, `crankClientPoint()`. `worldClock` is not used.
+
+Shots in the outdir: `world-A-s0.png`, `world-B-100.png`, `world-B-150.png`, `world-D-s7-150.png`, `world-D-s8-150.png`, `world-D-s9-150.png`. The UI 150 bubble shot shows the forced `INS-02` line: `INS-01` has left the screen by then, and the layout is the same.
+
+Timing is deterministic without waiting for the game clock:
+- `worldAdvance(ms)` moves the scheduler clock and the play time together, so the first-moment gate (90 s), the gaps, the TTLs and the idle gate all move at once. It does not wait for frames: the checks poll for the bubble (cap 8 s).
+- `worldAdvance(120000)`, `worldLogShown('observer-count')` and `worldAdvance(6000)` run in ONE evaluate. No frame runs between them, so the core log reply (priority 1) takes the slot before the 45 s idle line (priority 4) can. The reply comes when the log clears (5 s of scheduler time) plus the 1 s clear gap.
+- `worldSay(id)` forces a line past gaps and caps, but not past hard silence. C and E use it as a probe; each refusal is preceded by a control that the same line plays in the plain state.
+
+Constants in the script mirror DENIZEN_ART §3 and must move with it: machine x-ranges per framing (S7 1576-2316, S8 1576-2552, S9 1576-2808), the placement table (`PLACED`), the crank hub x 1920 with 96 world px clearance (hit circle 72 + 24) and the wing clearance 24. Gear Ratio costs 15 ME, so the first moment needs 16 clicks, not one.
+
+Demo note: the demo caps era II. The teaser follows the Substation Blueprint milestone after `DEMO_END.triggerDelayMs` (4 s), so the D and G reads happen within the first seconds after the S9 buys.
+
+### Existing smokes touched by WP23a
+
+Five existing smokes gain living-world checks (WP23 T13). Their old checks keep their names and order. The new names:
+`B_bubble_hidden_teaser`, `B_no_spoiler_bubble`, `G_freeze`, `G_pay05`, `G_ins07`, `G_grl06`, `G_dog12`, `G_hold`, `G_no_refreeze`,
+`W_live_region`, `W_bubble_aria_hidden`, `W_tab_walk_unchanged`, `A_no_bubble_prompt`, `A_crank_point_unchanged`,
+`<w>x<h>-150_bubble_inside`, `<w>x<h>-150_bubble_clear_hud`.
+
+- `store-shots.mjs`: `worldQuiet(true)` runs before every stem, and again after each navigation (stems 01 and 10 reload). No bubble, blip or glance reaches a store shot. No check changed or added.
+- `demo.mjs` (demo build only):
+  - `B_bubble_hidden_teaser` (case B, during the teaser): `worldSay('GRL-05')` is refused. It passes only when the hook answers, the demo phase is `teaser`, no `.wv.on` node exists and `worldBubble()` is null or not visible. A missing hook fails the check.
+  - `B_no_spoiler` is unchanged (teaser frame, `document.body.innerText` has no `RESTOR`). `B_no_spoiler_bubble` re-runs the same scan at the end of case B with a bubble on screen: `worldQuiet(false)`, one crank click, one purchase, `worldAdvance(120000)`, `worldSay('GRL-05')`. The GRL-05 bubble must be visible and the scan must find no `RESTOR`. The name differs from `B_no_spoiler` so the teaser value stays recorded.
+  - Case G (POST-CAP, fresh page, runs last): the cap, then KEEP TINKERING. `G_freeze`: the KEEP TINKERING click and a requestAnimationFrame watch run in ONE evaluate; frame 2 is the baseline (frame 1 may still be the pre-freeze frame). It passes when the first frame whose `livingWorld()` variants differ comes at least 1000 ms after the click (`TAPE_FREEZE_MIN_HOLD_MS`, slack under the 1200 ms freeze; the watch lasts 4 s) and `seenEver` has exactly one `beat.tapeFreeze`. Then `worldAdvance(21000)` gives `G_pay05` (PAY-05 `We're sorry. This call cannot be completed.`), and `worldAdvance(125000)` before each of `G_ins07`, `G_grl06` and `G_dog12`. Each check needs the bubble with its text and the id in `worldState().seen`. `G_hold`: after a reload the dog entry of `livingWorld()` has variant `lie`. `G_no_refreeze`: `seen` and `seenEver` are unchanged after `worldAdvance(300000)`, and `seenEver` still has one tape freeze.
+- `a11y.mjs` (T13b): `W_live_region` (the polite live region reads `<Speaker>: <line>` for a shown line), `W_bubble_aria_hidden` (every bubble is `aria-hidden="true"` and not focusable), `W_tab_walk_unchanged` (the Tab walk is the same with a bubble on screen). Bubbles come from `worldSay`.
+- `ux.mjs` (T13b): `A_no_bubble_prompt` (no bubble while the crank prompt shows), `A_crank_point_unchanged` (the crank click point is the same with the layer on).
+- `resolutions.mjs` (T13b): `<w>x<h>-150_bubble_inside` (the bubble box lies inside the viewport at UI 150) and `<w>x<h>-150_bubble_clear_hud` (it does not overlap the HUD rects), one pair per resolution.
+
+Expected run: `fail: []` and `errors: []` for `demo.mjs` on `http://localhost:4177/` (case G included) and for each smoke above on its own build.

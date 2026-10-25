@@ -4,6 +4,7 @@
 // WP21 adds A_toast_clear_tabs and D_<s>_buy_visible / _buy_visible_e2 / _toast_clear_tabs (tree toast clear of tabs, PURCHASE in view).
 // WP16b-2 adds A_one_prompt_t0 / _hint / _goal, A_hint_chip_hidden, A_chip_back, A_feedback_beside_buy, D_100_graph_centered and case T (T_<w>x<h>_<s>_toast_shown / _toast_clear).
 // WP16b-3 adds case M (M_cycle_start, M_one_prompt_t0, M_one_prompt_goal): new cycle with Muscle Memory, one prompt.
+// WP23a T13b adds A_no_bubble_prompt and A_crank_point_unchanged (case A: no bubble over the crank prompt, the crank point stays put).
 // Usage: PW_PATH=... node scripts/smoke/ux.mjs <url> <outdir>   (url like http://localhost:4175/?debug=1)
 // Prints ONE JSON object { results, fail, errors }; exit code 1 when fail or errors is non-empty.
 import { createRequire } from 'module';
@@ -138,6 +139,12 @@ const caseA = async page => {
   ok('A_no_hint', !(await isVisible(page, '#hud-hint')));
   const p0 = await promptState(page);
   ok('A_one_prompt_t0', p0.count === 1 && p0.prompt === true, p0);
+  // WP23a: with the crank prompt up no bubble may show (onboarding silence); the crank point is read before any bubble.
+  const pt0 = await page.evaluate(() => window.__wedtmd.crankClientPoint());
+  const say0 = await page.evaluate(() => window.__wedtmd.worldSay('INS-01'));
+  const bubble0 = await page.evaluate(() => window.__wedtmd.worldBubble());
+  const silence0 = await page.evaluate(() => window.__wedtmd.worldState()?.silence ?? null);
+  ok('A_no_bubble_prompt', say0 === false && bubble0?.visible !== true && silence0 === 'onboarding', { say0, bubble: bubble0?.visible ?? null, silence: silence0 });
   await shot(page, 'ux-A1-prompt');
   await crank(page, 1, 0);
   await page.waitForTimeout(300);
@@ -207,6 +214,17 @@ const caseA = async page => {
   ok('A_one_prompt_goal', p2.count === 1 && p2.goal === true, p2);
   ok('A_chip_back', await page.evaluate(() => { const el = document.getElementById('hud-tech'); return (el.getAttribute('data-affordable') ?? '') === '' || getComputedStyle(el, '::after').display !== 'none'; }));
   await shot(page, 'ux-A5-goal');
+  // WP23a: a bubble appears later in the run (quiet off, 120 s of play, INS-02 forced in one evaluate); the crank point must not move.
+  const say1 = await page.evaluate(() => {
+    const w = window.__wedtmd;
+    w.worldQuiet(false);
+    w.worldAdvance(120000);
+    return w.worldSay('INS-02');
+  });
+  await page.waitForFunction(() => window.__wedtmd.worldBubble()?.visible === true, null, { timeout: 3000 }).catch(() => {});
+  const bubbleUp = await page.evaluate(() => window.__wedtmd.worldBubble()?.visible === true);
+  const pt1 = await page.evaluate(() => window.__wedtmd.crankClientPoint());
+  ok('A_crank_point_unchanged', say1 === true && bubbleUp && pt0 !== undefined && pt1 !== undefined && pt0.x === pt1.x && pt0.y === pt1.y, { say1, bubbleUp, before: pt0, after: pt1 });
 };
 
 // B era cards: the card waits while the tree is open, a click skips it, reduced motion gives no camera nudge.

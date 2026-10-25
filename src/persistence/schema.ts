@@ -21,6 +21,8 @@ import { emptyResourceMap } from '../simulation/resources';
 import { deriveStats } from '../simulation/stats';
 import { normalizePrestige } from '../simulation/prestige';
 import { DEFAULT_ENDING, ENDING_PHASES, normalizeEnding } from '../simulation/progression/ending';
+import { normalizeWorld } from '../simulation/worldSave';
+import type { WorldSaveState } from '../data/livingWorld';
 
 /** Current save schema version. v2 stores per-resource maps (`state.res`, `state.lifetime`). */
 export const SAVE_VERSION = 2;
@@ -299,6 +301,14 @@ export function readPrestige(input: unknown): PrestigeState {
 }
 
 /**
+ * Lenient reader for the optional living-world block (WP23a, no version bump). Missing or bad data takes
+ * the defaults; never an error. See normalizeWorld.
+ */
+export function readWorld(input: unknown): WorldSaveState {
+  return normalizeWorld(input);
+}
+
+/**
  * Lenient normaliser for a (migrated) save envelope. Missing optional fields take defaults;
  * present core fields (version, savedAt, state) of the wrong type are errors. Settings, stats,
  * achievements and prestige never fail a save. The result contains only known fields and always has all of them.
@@ -321,6 +331,7 @@ export function validateEnvelope(
   const stats = readStats(input['stats'], state.value, nowMs);
   const achievements = readAchievements(input['achievements']);
   const prestige = readPrestige(input['prestige']);
+  const world = readWorld(input['world']);
   return {
     ok: true,
     envelope: {
@@ -331,6 +342,7 @@ export function validateEnvelope(
       stats,
       achievements,
       prestige,
+      world,
     },
   };
 }

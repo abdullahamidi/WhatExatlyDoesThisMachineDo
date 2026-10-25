@@ -12,8 +12,18 @@ export interface GameCommands { refocus: Signal<void>; openTechTree: Signal<void
 export interface PartEvolvedEvent { techId: TechId; fromTier: number; toTier: number; topTier: number; hosts: readonly MachineComponentId[] }
 /** WP22: a level bought between two tiers (small torque spark + tick). */
 export interface PartTorquedEvent { techId: TechId; host: MachineComponentId; step: number }
+/**
+ * WP23a: one living-world audio cue. blip = a speech blip from a speaker (count, reversed for the reply);
+ * ring = the payphone ring; dialTone = the payphone dial tone switching on or off.
+ * Speaker ids are spelled out here (no import from data/livingWorld) so this file stays a leaf.
+ */
+export type WorldSound =
+  | { kind: 'blip'; speaker: 'inspector' | 'dog' | 'crow' | 'girl' | 'payphone'; count: number; reversed: boolean }
+  | { kind: 'ring' }
+  | { kind: 'dialTone'; on: boolean };
 export interface GameFeedback {
   purchaseDenied: Signal<PurchaseFailure>; partLanded: Signal<MachineComponentId>; finaleBeat: Signal<FinaleBeat>;
   partEvolved: Signal<PartEvolvedEvent>; partTorqued: Signal<PartTorquedEvent>;
+  worldSound: Signal<WorldSound>;
 }
 export interface GameContext { session: GameSession; commands: GameCommands; feedback: GameFeedback; modals: ModalStack; newCycle: NewCycleHook }

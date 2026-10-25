@@ -1,5 +1,5 @@
-import { DEFAULT_SETTINGS_VALUES, NOTATIONS, REDUCED_MOTION, UI_SCALES, VOLUME_RANGE } from '../data/settings';
-import type { NumberNotation, SettingsState, UiScale } from '../data/types';
+import { DEFAULT_SETTINGS_VALUES, NOTATIONS, REDUCED_MOTION, UI_SCALES, VOLUME_RANGE, WORLD_VOICES } from '../data/settings';
+import type { NumberNotation, SettingsState, UiScale, WorldVoices } from '../data/types';
 
 export interface MotionPolicy {
   shake: boolean;
@@ -31,6 +31,10 @@ function pickUiScale(v: unknown, fallback: UiScale): UiScale {
   return (UI_SCALES as readonly unknown[]).includes(v) ? (v as UiScale) : fallback;
 }
 
+function pickWorldVoices(v: unknown, fallback: WorldVoices): WorldVoices {
+  return (WORLD_VOICES as readonly unknown[]).includes(v) ? (v as WorldVoices) : fallback;
+}
+
 // Lenient settings reader: never throws, never returns `base` itself.
 // Each field: wrong type or invalid value -> base value (defaults when no base). Unknown keys are dropped.
 export function normalizeSettings(raw: unknown, base?: SettingsState): SettingsState {
@@ -48,6 +52,7 @@ export function normalizeSettings(raw: unknown, base?: SettingsState): SettingsS
     statusMarkers: pickBoolean(src['statusMarkers'], fallback.statusMarkers),
     uiScale: pickUiScale(src['uiScale'], fallback.uiScale),
     confirmNewCycle: pickBoolean(src['confirmNewCycle'], fallback.confirmNewCycle),
+    worldVoices: pickWorldVoices(src['worldVoices'], fallback.worldVoices),
   };
 }
 

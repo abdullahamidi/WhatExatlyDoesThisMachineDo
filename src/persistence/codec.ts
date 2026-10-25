@@ -1,15 +1,21 @@
 import type { AchievementsState, GameState, LoadResult, PrestigeState, SaveEnvelope, SettingsState, StatsState } from '../data/types';
+import type { WorldSaveState } from '../data/livingWorld';
 import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
 import { emptyStats } from '../simulation/stats';
 import { DEFAULT_PRESTIGE } from '../simulation/prestige';
+import { normalizeWorld } from '../simulation/worldSave';
 import { MIGRATIONS, SAVE_VERSION, migrate, validateEnvelope } from './schema';
 import type { Migration } from './schema';
 
-/** Cosmetic progress written next to the core save (WP12); prestige is the new-cycle block (WP14). */
+/**
+ * Cosmetic progress written next to the core save (WP12); prestige is the new-cycle block (WP14).
+ * `world` is the optional living-world block (WP23a): written only when given.
+ */
 export interface SaveMeta {
   stats: StatsState;
   achievements: AchievementsState;
   prestige: PrestigeState;
+  world?: WorldSaveState;
 }
 
 /**
@@ -28,17 +34,19 @@ export function serialize(state: GameState, settings: SettingsState, nowMs: numb
           stats: meta.stats,
           achievements: meta.achievements,
           prestige: meta.prestige,
+          ...(meta.world === undefined ? {} : { world: meta.world }),
         };
   return JSON.stringify(envelope);
 }
 
-function fresh(nowMs: number): Pick<LoadResult, 'state' | 'settings' | 'stats' | 'achievements' | 'prestige'> {
+function fresh(nowMs: number): Pick<LoadResult, 'state' | 'settings' | 'stats' | 'achievements' | 'prestige' | 'world'> {
   return {
     state: createInitialState(nowMs),
     settings: { ...DEFAULT_SETTINGS },
     stats: emptyStats(nowMs),
     achievements: { unlocked: {} },
     prestige: { ...DEFAULT_PRESTIGE, perks: [] },
+    world: normalizeWorld(undefined),
   };
 }
 
@@ -88,6 +96,7 @@ export function deserialize(
     stats: envelope.stats,
     achievements: envelope.achievements,
     prestige: envelope.prestige,
+    world: envelope.world,
     status: parsed.migrated ? 'migrated' : 'loaded',
   };
 }

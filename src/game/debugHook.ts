@@ -22,6 +22,7 @@ import type { ShowcaseState } from './scenes/ShowcaseScene';
 import type { FinaleState } from './rendering/FinaleDirector';
 import type { FinaleFrame } from './math/finale';
 import type { CycleTransitionState } from './rendering/CycleTransition';
+import type { WorldDebugApi, WorldDebugState } from './rendering/LivingWorldDirector';
 import type { NewCycleController } from './newCycle';
 import type { DemoEndDebugState } from '../ui/demoEndModel';
 
@@ -66,6 +67,16 @@ declare global {
       audioStats(): GameAudioStats | null;
       prestige(): PrestigeState;
       cycleState(): CycleDebugState;
+      // WP23a: living world debug API (C7). Null, false, [] or no-op when the World scene or its director is missing
+      worldState(): WorldDebugState | null;
+      worldSay(id: string): boolean;
+      worldQuiet(on: boolean): void;
+      worldAdvance(ms: number): void;
+      worldLogShown(logId: string): void;
+      worldClock(hour: number | null): void;
+      livingWorld(): { id: string; variant: string; x: number; visible: boolean; speaking: boolean }[];
+      worldStats(): { objects: number; meanMs: number };
+      worldBubble(): { visible: boolean; rect: { x: number; y: number; w: number; h: number } | null; text: string; side: string } | null;
       // WP18: parts visibility probe, photo mode and the final-machine teaser (ShowcaseScene)
       partsVisible(): { visible: number; total: number; hidden: MachineComponentId[] } | null;
       photoMode(on: boolean, opts?: { hint?: boolean }): boolean;
@@ -146,6 +157,36 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     preview: extras.newCycle.preview(),
     transition: game.scene.getScene<WorldScene>('World').getCycleTransition()?.getState() ?? { active: false, tMs: 0, alpha: 0 },
   });
+  /** WP23a living world (C7): the director's debug API; null without a World scene or once the director is torn down. */
+  const worldDirector = (): WorldDebugApi | null => game.scene.getScene<WorldScene>('World')?.getWorldDirector()?.debug() ?? null;
+  /** Scheduler, era, framing and silence state; null when the director is missing. */
+  const worldState = (): WorldDebugState | null => worldDirector()?.worldState() ?? null;
+  /** Forces a line (bypasses gaps and caps, not hard silence); false when refused or missing. */
+  const worldSay = (id: string): boolean => worldDirector()?.worldSay(id) ?? false;
+  /** Quiet on: no bubbles, no blips, no glances (figures stay). */
+  const worldQuiet = (on: boolean): void => {
+    worldDirector()?.worldQuiet(on);
+  };
+  /** Advances the scheduler clock and the play-time offset together (debug only). */
+  const worldAdvance = (ms: number): void => {
+    worldDirector()?.worldAdvance(ms);
+  };
+  /** Feeds the director's SYS LOG port: the log shows now and clears after its duration. */
+  const worldLogShown = (logId: string): void => {
+    worldDirector()?.worldLogShown(logId);
+  };
+  /** Local-hour override for the GRL-02 line; null restores the real clock. */
+  const worldClock = (hour: number | null): void => {
+    worldDirector()?.worldClock(hour);
+  };
+  /** Each living-world figure and prop: id, current frame, world x, visibility and speaking flag; [] when missing. */
+  const livingWorld = (): { id: string; variant: string; x: number; visible: boolean; speaking: boolean }[] =>
+    worldDirector()?.livingWorld() ?? [];
+  /** Object count and mean director frame time (ms); zeros when missing. */
+  const worldStats = (): { objects: number; meanMs: number } => worldDirector()?.worldStats() ?? { objects: 0, meanMs: 0 };
+  /** The speech bubble as shown now (visibility, rect, text, side); null when missing. */
+  const worldBubble = (): { visible: boolean; rect: { x: number; y: number; w: number; h: number } | null; text: string; side: string } | null =>
+    worldDirector()?.worldBubble() ?? null;
   /** Display list size of the world scene (perf probe). */
   const displayObjects = (): number => game.scene.getScene('World').children.list.length;
   /** Session update + HUD + tech tree time per frame (WP15), last 120 frames; zeros while the world scene is missing. */
@@ -236,6 +277,15 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     audioStats,
     prestige,
     cycleState,
+    worldState,
+    worldSay,
+    worldQuiet,
+    worldAdvance,
+    worldLogShown,
+    worldClock,
+    livingWorld,
+    worldStats,
+    worldBubble,
     partsVisible,
     photoMode,
     photoState,

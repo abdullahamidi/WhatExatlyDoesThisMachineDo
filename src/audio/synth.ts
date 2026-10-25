@@ -27,12 +27,17 @@ const BELL_PARTIAL_RATIO = 2.76; // bell voice partner: inharmonic fork-like par
 const OCTAVE_RATIO = 2; // warm voice partner: sine an octave up
 const ANALYSER_FFT_SIZE = 2048; // samples read for the stats peak
 const PEAK_FLOOR_DB = -120; // stats peakDb reports silence as this
+const BLIP_ATTACK_S = 0.003; // world blip: anti-click attack at the start of each blip (decay is still AUDIO.world.blip.ms)
+const RING_EDGE_S = 0.005; // payphone ring burst fades in and out over this long
 
 /** Volume buses under the master: one-shots go to `sfx`, persistent loops and scheduled series to `ambient`, music to `music`. */
 export type AudioBus = 'sfx' | 'ambient' | 'music';
 
 /** Where a call is routed: the master itself or one of the buses. */
 type AudioRoute = 'master' | AudioBus;
+
+/** Speakers with a blip voice (the keys of AUDIO.world.blip). */
+export type WorldBlipVoice = 'inspector' | 'dog' | 'crow' | 'girl' | 'payphone';
 
 /** Live counters for the debug readout. peakDb is null until the analyser has been armed by a first stats() call. */
 export interface SynthStats {
@@ -69,6 +74,9 @@ export interface Synth {
   playResolveChord(): void; // AUDIO.resolveChord major triad plus octave, slow attack, long decay (finale S5)
   playChirps(): void; // AUDIO.chirp FM-ish sine sweeps, `count` of them (finale flock)
   playStamp(): void; // AUDIO.stamp low thump, lowpassed rattle and metallic click, under 300 ms (new cycle)
+  playBlip(voice: WorldBlipVoice, count: number, reversed: boolean): void; // AUDIO.world.blip: count (1..8) blips gapMs apart; reversed = ramp up then cut
+  playRing(): void; // AUDIO.world.ring payphone ring: bursts of two sines, gapMs apart
+  setDialTone(on: boolean): void; // AUDIO.world.dialTone two sines faded in and out; stops by itself after maxMs, never loops; on while sounding is a no-op
   playMusicNote(slot: 0 | 1, theme: MusicThemeId, ev: MusicNoteEvent): void; // one note on a music slot; ev.startS is an absolute context time
   setMusicSlotGain(slot: 0 | 1, gain: number, rampS: number): void; // slot level (crossfade), ramped linearly over rampS; 0 = silent
   setMusicDuck(level: number, rampS: number): void; // ducks both slots together (0..1), ramped linearly over rampS
@@ -626,6 +634,193 @@ function playStampRattle(
   src.stop(startAt + decay + STOP_PAD_S);
 }
 
+/** Per-speaker blip tuning as the synth reads AUDIO.world.blip. The optional keys are set only on the voices that use them. */
+interface BlipSpec {
+  wave: OscillatorType;
+  hz: number;
+  ms: number;
+  gapMs: number;
+  gain: number;
+  wobbleHz?: number; // dog: pitch wobble LFO rate
+  wobbleCents?: number; // dog: pitch wobble depth in cents
+  fmHz?: number; // crow: FM modulator rate
+  fmDepth?: number; // crow: FM depth in Hz
+  bandpassHz?: number; // payphone: bandpass centre
+}
+
+/**
+ * World blip sequence on one oscillator: `count` envelope steps gapMs apart. Forward: a short attack, then an exponential
+ * decay over ms. Reversed: an exponential ramp up over ms, then a hard cut. The dog's wobble (LFO on detune) and the crow's
+ * FM (modulator on frequency) run on the same oscillator; the payphone bandpass sits after the envelope. The nodes are
+ * released when every source has ended.
+ */
+function playBlipSequence(
+  context: AudioContext,
+  out: AudioNode,
+  startAt: number,
+  count: number,
+  b: BlipSpec,
+  reversed: boolean,
+  tally: VoiceTally,
+): void {
+  const gap = b.gapMs / 1000;
+  const decay = b.ms / 1000;
+  const endAt = startAt + (count - 1) * gap + decay;
+  const env = context.createGain();
+  for (let i = 0; i < count; i++) {
+    const t = startAt + i * gap;
+    env.gain.setValueAtTime(ENVELOPE_FLOOR, t);
+    if (reversed) {
+      env.gain.exponentialRampToValueAtTime(b.gain, t + decay);
+      env.gain.setValueAtTime(ENVELOPE_FLOOR, t + decay);
+    } else {
+      env.gain.linearRampToValueAtTime(b.gain, t + Math.min(BLIP_ATTACK_S, decay / 2));
+      env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, t + decay);
+    }
+  }
+  const osc = context.createOscillator();
+  osc.type = b.wave;
+  osc.frequency.value = b.hz;
+  osc.connect(env);
+  const oscs: OscillatorNode[] = [osc];
+  const nodes: AudioNode[] = [env];
+  if (b.wobbleHz !== undefined && b.wobbleCents !== undefined) {
+    const lfo = context.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = b.wobbleHz;
+    const depth = context.createGain();
+    depth.gain.value = b.wobbleCents;
+    lfo.connect(depth);
+    depth.connect(osc.detune);
+    oscs.push(lfo);
+    nodes.push(depth);
+  }
+  if (b.fmHz !== undefined && b.fmDepth !== undefined) {
+    const mod = context.createOscillator();
+    mod.type = 'sine';
+    mod.frequency.value = b.fmHz;
+    const depth = context.createGain();
+    depth.gain.value = b.fmDepth;
+    mod.connect(depth);
+    depth.connect(osc.frequency);
+    oscs.push(mod);
+    nodes.push(depth);
+  }
+  if (b.bandpassHz !== undefined) {
+    const bp = context.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = b.bandpassHz;
+    env.connect(bp);
+    bp.connect(out);
+    nodes.push(bp);
+  } else {
+    env.connect(out);
+  }
+  let live = oscs.length;
+  tally.live += 1;
+  for (const o of oscs) {
+    o.onended = () => {
+      o.disconnect();
+      live -= 1;
+      if (live > 0) return;
+      for (const n of nodes) n.disconnect();
+      tally.live -= 1;
+    };
+    o.start(startAt);
+    o.stop(endAt + STOP_PAD_S);
+  }
+}
+
+/** One payphone ring burst: two sines through one envelope, a short fade in and out around a flat hold. Released when both have ended. */
+function playRingBurst(
+  context: AudioContext,
+  out: AudioNode,
+  startAt: number,
+  decay: number,
+  gain: number,
+  hzs: readonly number[],
+  tally: VoiceTally,
+): void {
+  const endAt = startAt + decay;
+  const edge = Math.min(RING_EDGE_S, decay / 2);
+  const env = context.createGain();
+  env.gain.setValueAtTime(ENVELOPE_FLOOR, startAt);
+  env.gain.linearRampToValueAtTime(gain, startAt + edge);
+  env.gain.setValueAtTime(gain, endAt - edge);
+  env.gain.linearRampToValueAtTime(0, endAt);
+  env.connect(out);
+  let live = hzs.length;
+  tally.live += 1;
+  for (const hz of hzs) {
+    const osc = context.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = hz;
+    osc.connect(env);
+    osc.onended = () => {
+      osc.disconnect();
+      live -= 1;
+      if (live > 0) return;
+      env.disconnect();
+      tally.live -= 1;
+    };
+    osc.start(startAt);
+    osc.stop(endAt + STOP_PAD_S);
+  }
+}
+
+/** A dial tone that is sounding (or was): its envelope, its two oscillators and the context time it stops by itself. */
+interface DialTone {
+  env: GainNode;
+  oscs: OscillatorNode[];
+  endAt: number;
+}
+
+/** Starts the dial tone now (AUDIO.world.dialTone): fade in over fadeMs, hold, fade out over the last fadeMs, stop at maxMs. */
+function startDialTone(context: AudioContext, out: AudioNode, tally: VoiceTally): DialTone {
+  const d = AUDIO.world.dialTone;
+  const hzs = [d.hzA, d.hzB];
+  const t0 = context.currentTime;
+  const fade = d.fadeMs / 1000;
+  const endAt = t0 + d.maxMs / 1000;
+  const env = context.createGain();
+  env.gain.setValueAtTime(ENVELOPE_FLOOR, t0);
+  env.gain.linearRampToValueAtTime(d.gain, t0 + fade);
+  env.gain.setValueAtTime(d.gain, Math.max(t0 + fade, endAt - fade));
+  env.gain.linearRampToValueAtTime(0, endAt);
+  env.connect(out);
+  let live = hzs.length;
+  tally.live += 1;
+  const oscs: OscillatorNode[] = [];
+  for (const hz of hzs) {
+    const osc = context.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = hz;
+    osc.connect(env);
+    osc.onended = () => {
+      osc.disconnect();
+      live -= 1;
+      if (live > 0) return;
+      env.disconnect();
+      tally.live -= 1;
+    };
+    osc.start(t0);
+    osc.stop(endAt + STOP_PAD_S);
+    oscs.push(osc);
+  }
+  return { env, oscs, endAt };
+}
+
+/** Fades a sounding dial tone to silence over fadeMs from its current level, then stops its oscillators early. */
+function fadeOutDialTone(context: AudioContext, tone: DialTone): void {
+  const now = context.currentTime;
+  const fade = AUDIO.world.dialTone.fadeMs / 1000;
+  const param = tone.env.gain;
+  param.cancelScheduledValues(now);
+  param.setValueAtTime(param.value, now);
+  param.linearRampToValueAtTime(0, now + fade);
+  for (const osc of tone.oscs) osc.stop(now + fade + STOP_PAD_S);
+}
+
 /** One music slot: note -> lowpass -> slotGain (crossfade level) -> duckGain (finale ducks) -> music bus and echo send. */
 interface MusicSlot {
   lowpass: BiquadFilterNode;
@@ -792,6 +987,7 @@ export function createSynth(context: AudioContext): Synth {
   let pad: PadNodes | null = null;
   let servo: ServoNodes | null = null;
   let drone: DroneNodes | null = null;
+  let dialTone: DialTone | null = null;
   let musicGraph: MusicGraph | null = null;
   let analyser: { node: AnalyserNode; buf: Float32Array<ArrayBuffer> } | null = null;
   const oneShots: VoiceTally = { live: 0 };
@@ -1237,6 +1433,37 @@ export function createSynth(context: AudioContext): Synth {
       });
     },
 
+    playBlip(voice: WorldBlipVoice, count: number, reversed: boolean): void {
+      run('playBlip', 'sfx', (out) => {
+        // The sequence is clamped to 1..AUDIO.world.maxBlips (one blip for a non-finite count).
+        const n = Number.isFinite(count) ? Math.min(AUDIO.world.maxBlips, Math.max(1, Math.floor(count))) : 1;
+        playBlipSequence(context, out, context.currentTime, n, AUDIO.world.blip[voice], reversed, oneShots);
+      });
+    },
+
+    playRing(): void {
+      run('playRing', 'sfx', (out) => {
+        const r = AUDIO.world.ring;
+        const t0 = context.currentTime;
+        for (let i = 0; i < r.bursts; i++) {
+          playRingBurst(context, out, t0 + (i * (r.burstMs + r.gapMs)) / 1000, r.burstMs / 1000, r.gain, [r.hzA, r.hzB], oneShots);
+        }
+      });
+    },
+
+    setDialTone(on: boolean): void {
+      run('setDialTone', 'sfx', (out) => {
+        // A tone still sounding is left alone: an "on" never restarts it, and it stops by itself at maxMs.
+        const sounding = dialTone !== null && context.currentTime < dialTone.endAt;
+        if (on) {
+          if (!sounding) dialTone = startDialTone(context, out, oneShots);
+          return;
+        }
+        if (sounding && dialTone !== null) fadeOutDialTone(context, dialTone);
+        dialTone = null;
+      });
+    },
+
     playMusicNote(slot: 0 | 1, theme: MusicThemeId, ev: MusicNoteEvent): void {
       run('playMusicNote', 'music', (out) => {
         if (!Number.isFinite(ev.startS) || !Number.isFinite(ev.durS) || !Number.isFinite(ev.hz) || ev.hz <= 0) return;
@@ -1338,6 +1565,7 @@ export function createSynth(context: AudioContext): Synth {
         drone?.partialLevel.disconnect();
         drone?.gain.disconnect();
         drone?.depth.disconnect();
+        for (const o of dialTone?.oscs ?? []) o.stop();
         stopMusicNotes();
         if (musicGraph !== null) {
           for (const s of musicGraph.slots) {

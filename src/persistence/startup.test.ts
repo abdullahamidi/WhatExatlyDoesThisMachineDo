@@ -208,6 +208,24 @@ describe('startSession', () => {
     expect(deserialize(storage.getItem(SAVE_KEY), t0).prestige).toEqual({ cycle: 1, echoesEarned: 0, perks: [] });
   });
 
+  it('(i) the living-world block reaches the session and is written back by the boot save (WP23a)', () => {
+    const storage = new MemoryStorage();
+    const state = withLevels({}, { lastSimTime: t0, createdAt: t0 - HOUR_MS });
+    const world = {
+      seen: ['INS-01', 'CRW-01'],
+      seenEver: ['INS-01', 'CRW-01', 'beat.tapeFreeze'],
+      eraMoments: [2, 0, 0, 0, 0] as [number, number, number, number, number],
+      youEras: 1,
+    };
+    const prestige = { cycle: 1, echoesEarned: 0, perks: [] };
+    storage.setItem(SAVE_KEY, serialize(state, { ...DEFAULT_SETTINGS, muted: false }, t0, { stats: emptyStats(t0), achievements: { unlocked: {} }, prestige, world }));
+
+    const result = startSession(new SaveManager(storage), t0, clock);
+    expect(result.load.world).toEqual(world);
+    expect(result.session.world).toEqual(world);
+    expect(deserialize(storage.getItem(SAVE_KEY), t0).world).toEqual(world);
+  });
+
   it('(h) a 2 h offline gap unlocks shortNap at boot and reports it in bootAchievements', () => {
     const storage = new MemoryStorage();
     const state = withLevels({}, { lastSimTime: t0 - 2 * HOUR_MS, createdAt: t0 - 3 * HOUR_MS });
@@ -321,6 +339,22 @@ describe('startSession edition era cap (WP21)', () => {
     expect(result.session.prestige).toEqual({ cycle: 1, echoesEarned: 0, perks: [] });
     expect(storage.getItem(SAVE_FULLGAME_KEY)).toBe(raw);
     expect(result.clamped).toBe(true);
+  });
+
+  it('(g) the era cap keeps the living-world block (WP23a)', () => {
+    const storage = new MemoryStorage();
+    const world = {
+      seen: ['INS-01'],
+      seenEver: ['INS-01'],
+      eraMoments: [1, 0, 0, 0, 0] as [number, number, number, number, number],
+      youEras: 0,
+    };
+    storage.setItem(SAVE_KEY, JSON.stringify({ ...v2Primary, world }));
+
+    const result = startSession(new SaveManager(storage), NOW, nowClock, { maxEra: 2 });
+    expect(result.clamped).toBe(true);
+    expect(result.session.world).toEqual(world);
+    expect(deserialize(storage.getItem(SAVE_KEY), NOW).world).toEqual(world);
   });
 
   it('(f) a custom fullGameBackupKey receives the backup instead of the default', () => {

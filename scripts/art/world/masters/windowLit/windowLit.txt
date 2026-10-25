@@ -1,0 +1,20 @@
+# bg.windowLit colour master (WP23a AD-a, Art Director). Two 4x6 frames on the far window plane (sf 0.3).
+# Rust-amber only: #ad6236 (e) pane, #c98552 (f) centre; never warm yellow before the finale (DENIZEN_ART 1.5).
+# No outline (distant layer rule, ART_BRIEF). The renderer crops each placement to its pane (3x6, 4x6, 2x4: README).
+# lit = steady pane with a 2x4 centre; breathe = the exhale frame (centre 2x2), era IV downbeat.
+
+@frame lit
+eeee
+effe
+effe
+effe
+effe
+eeee
+
+@frame breathe
+eeee
+eeee
+effe
+effe
+eeee
+eeee

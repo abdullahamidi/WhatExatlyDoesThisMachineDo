@@ -1,0 +1,36 @@
+# Girl mini colour master (WP23a AD-c, Art Director): the girl seen at a pylon foot on the pylon plane (sf 0.55).
+# Two 8x12 cells, pivot (0.5, 1): boots on row 11. Body 5x10 (cols 2-6, rows 2-11). Full 1 px ink ring.
+# Not an era-row sheet: the coat is baked in the era I-II sand of world.girl rows I-II (v lit side, u, s shade; the
+# raincoat yellow is the colour that returns in era III), face = the hood opening in shadow (b, no features),
+# legs a. Few colour clusters on purpose (workbench singletons): ink hood tip, one cluster per material.
+# The lantern is the 1 px glow dot at her right hip (col 3, row 8), boxed in ink (cap above, base below) so it reads as
+# a lit lantern: warm = #ffd27a, cold = #ddc9a3 (the cold white lantern of era II, from generator on).
+# Build: python -I scripts/art/world/build_sheet.py girlMini   Gate: python -I scripts/art/world/check_sheet.py girlMini
+
+@frame warm
+........
+........
+....K...
+...KKK..
+..KvbsK.
+..KvbsK.
+..KvusK.
+..KKusK.
+..KCusK.
+..KKKKK.
+..KaaaK.
+..KKKKK.
+
+@frame cold
+........
+........
+....K...
+...KKK..
+..KvbsK.
+..KvbsK.
+..KvusK.
+..KKusK.
+..KwusK.
+..KKKKK.
+..KaaaK.
+..KKKKK.

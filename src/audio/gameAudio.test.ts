@@ -5,7 +5,7 @@ import type { FinaleBeat } from '../data/finale';
 import type { MachineComponentId } from '../data/machineComponents';
 import { RESOURCE_IDS } from '../data/types';
 import type { GameState, PurchaseFailure, ResourceMap, TechId } from '../data/types';
-import type { GameFeedback, PartEvolvedEvent, PartTorquedEvent } from '../game/context';
+import type { GameFeedback, PartEvolvedEvent, PartTorquedEvent, WorldSound } from '../game/context';
 import { GameSession } from '../simulation';
 import { createInitialState } from '../simulation/state';
 import { emptyResourceMap } from '../simulation/resources';
@@ -51,6 +51,9 @@ function createFakeSynth() {
     playResolveChord: vi.fn(),
     playChirps: vi.fn(),
     playStamp: vi.fn(),
+    playBlip: vi.fn(),
+    playRing: vi.fn(),
+    setDialTone: vi.fn(),
     playMusicNote: vi.fn(),
     setMusicSlotGain: vi.fn(),
     setMusicDuck: vi.fn(),
@@ -85,15 +88,18 @@ interface FakeWindow {
   unlock(): void;
   /** Runs the update interval once. */
   tick(): void;
+  /** Moves the wall clock (performance.now) forward. */
+  advanceWall(seconds: number): void;
 }
 
 /** Window stand-in: records listeners, captures the update interval and provides the AudioContext constructor. */
 function createFakeWindow(): FakeWindow {
   const listeners = new Map<string, Array<() => void>>();
   let interval: (() => void) | null = null;
+  let wallMs = 0;
   const win = {
     AudioContext: FakeAudioContext,
-    performance: { now: (): number => 0 },
+    performance: { now: (): number => wallMs },
     document: { visibilityState: 'visible', addEventListener: vi.fn(), removeEventListener: vi.fn() },
     addEventListener(type: string, fn: () => void): void {
       listeners.set(type, [...(listeners.get(type) ?? []), fn]);
@@ -117,6 +123,9 @@ function createFakeWindow(): FakeWindow {
       if (fn === null) throw new Error('update interval was never armed');
       fn();
     },
+    advanceWall(seconds: number): void {
+      wallMs += seconds * 1000;
+    },
   };
 }
 
@@ -135,13 +144,16 @@ function createFeedback(): GameFeedback {
     finaleBeat: createSignal<FinaleBeat>(),
     partEvolved: createSignal<PartEvolvedEvent>(),
     partTorqued: createSignal<PartTorquedEvent>(),
+    worldSound: createSignal<WorldSound>(),
   };
 }
 
 interface Rig {
   session: GameSession;
   audio: GameAudio;
+  feedback: GameFeedback;
   tick(): void;
+  advanceWall(seconds: number): void;
 }
 
 let current: GameAudio | null = null;
@@ -152,10 +164,11 @@ let warnSpy: { readonly mock: { readonly calls: unknown[][] }; mockRestore(): vo
 function buildRig(techLevels: Partial<Record<TechId, number>> = {}, unlock = true): Rig {
   const session = new GameSession({ state: fundedState(techLevels), now: () => 0 });
   const fakeWindow = createFakeWindow();
-  const audio = createGameAudio(session, createFeedback(), fakeWindow.win);
+  const feedback = createFeedback();
+  const audio = createGameAudio(session, feedback, fakeWindow.win);
   current = audio;
   if (unlock) fakeWindow.unlock();
-  return { session, audio, tick: fakeWindow.tick };
+  return { session, audio, feedback, tick: fakeWindow.tick, advanceWall: fakeWindow.advanceWall };
 }
 
 /** Structural view of a vi.fn: the calls it recorded. */
@@ -321,5 +334,83 @@ describe('gameAudio readout', () => {
     audio.dispose();
     expect(audio.stats().levels).toBeNull();
     expect(audio.stats().ambient).toBeNull();
+  });
+});
+
+describe('gameAudio world sounds', () => {
+  it('a blip is forwarded with its arguments and counted', () => {
+    const { feedback, audio } = buildRig();
+    clearSynthCalls();
+    feedback.worldSound.emit({ kind: 'blip', speaker: 'dog', count: 2, reversed: true });
+    expect(fake.playBlip).toHaveBeenCalledTimes(1);
+    expect(lastArgs(fake.playBlip)).toEqual(['dog', 2, true]);
+    expect(audio.stats().worldBlips).toBe(1);
+  });
+
+  it('refuses a third concurrent blip sequence until one ends', () => {
+    const { feedback, audio, advanceWall } = buildRig();
+    clearSynthCalls();
+    // Wall clock: inspector x2 ends at 2 * 70 + 55 = 195 ms, girl x1 at 80 + 70 = 150 ms.
+    feedback.worldSound.emit({ kind: 'blip', speaker: 'inspector', count: 2, reversed: false });
+    feedback.worldSound.emit({ kind: 'blip', speaker: 'girl', count: 1, reversed: false });
+    feedback.worldSound.emit({ kind: 'blip', speaker: 'crow', count: 1, reversed: false });
+    expect(fake.playBlip).toHaveBeenCalledTimes(2);
+    expect(audio.stats().worldBlips).toBe(2);
+    advanceWall(0.16); // girl has ended, inspector still sounds
+    feedback.worldSound.emit({ kind: 'blip', speaker: 'crow', count: 1, reversed: false });
+    expect(fake.playBlip).toHaveBeenCalledTimes(3);
+    expect(lastArgs(fake.playBlip)).toEqual(['crow', 1, false]);
+    expect(audio.stats().worldBlips).toBe(3);
+    feedback.worldSound.emit({ kind: 'blip', speaker: 'payphone', count: 1, reversed: false });
+    expect(fake.playBlip).toHaveBeenCalledTimes(3);
+    expect(audio.stats().worldBlips).toBe(3);
+  });
+
+  it('muted: no world sound reaches the synth and no blip is counted', () => {
+    const { session, feedback, audio } = buildRig();
+    session.updateSettings({ muted: true });
+    clearSynthCalls();
+    feedback.worldSound.emit({ kind: 'blip', speaker: 'inspector', count: 1, reversed: false });
+    feedback.worldSound.emit({ kind: 'ring' });
+    feedback.worldSound.emit({ kind: 'dialTone', on: true });
+    feedback.worldSound.emit({ kind: 'dialTone', on: false });
+    expect(fake.playBlip).not.toHaveBeenCalled();
+    expect(fake.playRing).not.toHaveBeenCalled();
+    expect(fake.setDialTone).not.toHaveBeenCalled();
+    expect(audio.stats().worldBlips).toBe(0);
+  });
+
+  it('ring and dial tone are forwarded; blips are not', () => {
+    const { feedback } = buildRig();
+    clearSynthCalls();
+    feedback.worldSound.emit({ kind: 'ring' });
+    expect(fake.playRing).toHaveBeenCalledTimes(1);
+    feedback.worldSound.emit({ kind: 'dialTone', on: true });
+    feedback.worldSound.emit({ kind: 'dialTone', on: false });
+    expect(fake.setDialTone).toHaveBeenCalledTimes(2);
+    expect(lastArgs(fake.setDialTone)).toEqual([false]);
+    expect(fake.playBlip).not.toHaveBeenCalled();
+  });
+
+  it('before unlock nothing plays and the readout is 0', () => {
+    const { feedback, audio } = buildRig({}, false);
+    feedback.worldSound.emit({ kind: 'blip', speaker: 'girl', count: 1, reversed: false });
+    feedback.worldSound.emit({ kind: 'ring' });
+    feedback.worldSound.emit({ kind: 'dialTone', on: true });
+    expect(fake.playBlip).not.toHaveBeenCalled();
+    expect(fake.playRing).not.toHaveBeenCalled();
+    expect(fake.setDialTone).not.toHaveBeenCalled();
+    expect(audio.stats().worldBlips).toBe(0);
+  });
+
+  it('dispose unsubscribes the world sounds and resets the readout', () => {
+    const { feedback, audio } = buildRig();
+    feedback.worldSound.emit({ kind: 'blip', speaker: 'payphone', count: 1, reversed: false });
+    expect(audio.stats().worldBlips).toBe(1);
+    audio.dispose();
+    expect(audio.stats().worldBlips).toBe(0);
+    clearSynthCalls();
+    feedback.worldSound.emit({ kind: 'ring' });
+    expect(fake.playRing).not.toHaveBeenCalled();
   });
 });

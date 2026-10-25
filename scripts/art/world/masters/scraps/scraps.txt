@@ -1,0 +1,21 @@
+# Paper scraps (WP23a AD-b, Art Director). Cell 8x4 art px, pivot (0.5, 1); back row, depth -0.2, x 1330 / 1420 /
+# 1530. scrap0 flat sheet with a curled corner, scrap1 crumpled ball, scrap2 folded strip. Paper w/v, ink edge K
+# (the far plain behind the back row is as light as paper), ground shadow s.
+
+@frame scrap0
+.....KK.
+.KKKKwvK
+KwwwwvvK
+.sssssss
+
+@frame scrap1
+..KKK...
+.KwwvK..
+KwvwvvK.
+.sssss..
+
+@frame scrap2
+...KK...
+..KwvK..
+.KwvKvK.
+Kwv..vvK
