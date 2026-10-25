@@ -154,7 +154,8 @@ Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era 
   easy to miss. The user postponed the question ("bakarız ona sonra", 2026-10-25); do not resize unless they bring it up.
 - world.mjs `G_cost` (world update mean ≤ 0.3 ms) is load-sensitive: WP23b reads 0.60 ms and main WP23a 0.35 ms on the throttled
   CPU (claude.exe BelowNormal, 6 of 12 cores, user active); WP23a read 0.12–0.16 ms quiet. Profile: per-frame director cost
-  WP23b 0.45 vs WP23a 0.29 ms (new atmos layer, one more walker, cast logic), no single hot spot. Re-measure quiet in §R.
+  WP23b 0.45 vs WP23a 0.29 ms (new atmos layer, one more walker, cast logic), no single hot spot. Quiet PC 2026-10-26 (v0.10.0, case G
+  with the era card closed): 0.179 / 0.186 / 0.173 ms, PASS (limit 0.3).
 - Lazy world chunk 116.6 KB (limit raised 80 → 120 by the WP23b EM, Director confirmed; only 3.4 KB headroom).
 
 ## Important technical decisions

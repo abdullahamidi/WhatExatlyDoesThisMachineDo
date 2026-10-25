@@ -401,9 +401,13 @@ async function caseG(page) {
   const objects = await page.evaluate(() => window.__wedtmd.displayObjects());
   await check(page, 'G_display', typeof objects === 'number' && objects <= 100 && buyS9.length === 0, { objects, buyFail: buyS9 }, true);
 
-  // G_cost is a cost reading only with the world awake. A silent world (asleep in the demo edition) is report-only: no sampling, no gate.
+  // G_cost is a cost reading only while the world animates. Speech silences (era card, tech index, modal...) keep the world
+  // updating, so they still count; the era card is closed first like a player would. Asleep / hidden layer / hidden tab stop the
+  // world clocks: report-only, no sampling, no gate.
+  await dismissEraCard(page);
+  await sleep(300);
   const silence = await page.evaluate(() => window.__wedtmd.worldState()?.silence ?? null);
-  if (silence !== null) {
+  if (silence === 'asleep' || silence === 'layer-hidden' || silence === 'tab-hidden') {
     await check(page, 'G_cost', true, { skipped: 'world silent (' + silence + '): not a cost reading', silence }, true);
   } else {
     const samples = [];
