@@ -1,6 +1,6 @@
 // WP23a living-world smoke (T12): denizens freeze and step, the first line's bubble and its layout at UI 100 and 150, hard
-// silence per state, the placements per framing, the WORLD VOICES setting, the save and the frame budget. Cases A to G, one
-// fresh 1280x720 context per case. Why: the living world is a layer, so every check reads the debug hook (window.__wedtmd)
+// silence per state, the placements per framing, the WORLD VOICES setting, the save, the frame budget and the tier port (H). Cases A to H,
+// one fresh 1280x720 context per case. Why: the living world is a layer, so every check reads the debug hook (window.__wedtmd)
 // and the DOM only.
 // Usage: PW_PATH=<playwright> node scripts/smoke/world.mjs "<url with ?debug=1>" <outdir>
 // Prints ONE JSON object { results, fail, errors }; exit code 1 when fail or errors is non-empty. Runs on :4174 and :4177.
@@ -66,6 +66,14 @@ async function check(page, name, cond, extra, keep = false) {
 const bubbleVisible = (page) => page.evaluate(() => window.__wedtmd.worldBubble()?.visible === true).catch(() => false);
 const worldSay = (page, id) => page.evaluate((lineId) => window.__wedtmd.worldSay(lineId), id);
 const seenOf = (page) => page.evaluate(() => window.__wedtmd.worldState()?.seen ?? []);
+// Queue state of one line: waiting (pending), playing (activeLines) or seen (ids as worldState reports them). null without a director.
+const lineState = (page, id) => page.evaluate((lineId) => {
+  const s = window.__wedtmd.worldState();
+  if (!s) return null;
+  return { pending: s.pending.includes(lineId), playing: s.activeLines.includes(lineId), seen: s.seen.includes(lineId) };
+}, id);
+// True when a lineState result says the line is queued, playing or seen.
+const lineHeld = (st) => st !== null && (st.pending || st.playing || st.seen);
 
 // Polls the bubble until it shows `want` (true or false) or capMs passed. Returns whether it does.
 async function waitBubble(page, want, capMs) {
@@ -420,6 +428,161 @@ async function caseG(page) {
   await check(page, 'G_era3_hidden', st.entries > 0 && !st.anyVisible && st.hidden === true, { bought, ...st }, true);
 }
 
+// H tier port (WP23 A10, X1): the WP22 tier maths behind the living world. Era I and II only, so the demo runs every check.
+// H_dog_line: DOG-04 (improvedPistons tier 3) is queued at level 10 and not at 9; the buy's tier event or the TECH INDEX close
+// re-check queues it (an over-cap swap emits no event). H_first_top: the first MK V (motorTuning 25) queues INS-13 the same way.
+// H_heartbeat: worldState().tierHeartbeat (the Sensor 7 LED beat) is off before the first top tier and on after it.
+// H_hole: worldState().holeStage at motorRetrofit 8 / 13 / 18 once lifetime EE reached the load-beneath level (WORLD_HOLE).
+// caseHOver (also case H): H_overcap_pre and H_overcap (a fresh era II save, then one TECH INDEX release that changes five tracks;
+// the fifth change is past the four-beat cap, so it swaps with no partEvolved event, and INS-13 must come from the close re-check),
+// and H_boot_seed (the same save reloaded: the heartbeat is on before any TECH INDEX close).
+// Every H check carries tierProbe() in its detail: era, heartbeat, hole stage, lifetime EE, cameraState(), the Inspector and the Dog.
+const HOLE_EE = 100000; // WORLD_HOLE.loadBeneathEe
+const HOLE_STAGE = { 8: 2, 13: 3, 18: 4 }; // motorRetrofit tiers 3 / 4 / 5, less WORLD_HOLE.tierOffset (1)
+const OVERCAP_BUYS = ['@gearRatio:6', '@flywheel:4', '@motorTuning:10', '@improvedPistons:5', '@motorRetrofit:18'];
+const OVERCAP_TIERS = { gearRatio: 2, flywheel: 2, motorTuning: 3, improvedPistons: 2, motorRetrofit: 5 };
+
+// Tier probe for the H checks: the heartbeat and hole stage, the era, lifetime EE, the camera, and where the Inspector and the Dog
+// stand (R6: a line needs its speaker on screen).
+const tierProbe = (page) => page.evaluate(() => {
+  const w = window.__wedtmd;
+  const s = w.worldState();
+  const cast = (id) => (w.livingWorld() ?? []).find((e) => e.id === id) ?? null;
+  return {
+    era: s?.era ?? null,
+    tierHeartbeat: s?.tierHeartbeat ?? null,
+    holeStage: s?.holeStage ?? null,
+    lifetimeEe: w.session.state.lifetime.ee,
+    camera: w.cameraState(),
+    inspector: cast('inspector'),
+    dog: cast('dog'),
+  };
+});
+
+// Polls partTiers() until every wanted track shows its tier (the beats swap about 1 s after a release). Returns the last snapshot.
+async function waitTiers(page, want, capMs) {
+  const deadline = Date.now() + capMs;
+  const matches = (got) => Object.entries(want).every(([id, t]) => got?.[id] === t);
+  let got = await page.evaluate(() => window.__wedtmd.partTiers());
+  while (!matches(got) && Date.now() < deadline) {
+    await sleep(150);
+    got = await page.evaluate(() => window.__wedtmd.partTiers());
+  }
+  return got;
+}
+
+// Polls tierProbe until the heartbeat is on or capMs passed. A loaded save seeds the tracker on its first applied frame.
+async function waitHeartbeat(page, capMs) {
+  const deadline = Date.now() + capMs;
+  let probe = await tierProbe(page);
+  while (probe.tierHeartbeat !== true && Date.now() < deadline) {
+    await sleep(150);
+    probe = await tierProbe(page);
+  }
+  return probe;
+}
+
+// Lifetime EE up to need: 8 h stretches (the buy loop's own jump) while it is short, at most 40. Returns the EE reached.
+// Clicks KEEP TINKERING when the demo END OF DEMO card is open (demo edition only); returns whether it was open.
+async function closeDemoCard(page) {
+  const open = await page.evaluate(() => document.getElementById('demo-end')?.classList.contains('is-open') === true).catch(() => false);
+  if (open) {
+    await page.click('#demo-keep', { timeout: 3000 }).catch(() => {});
+    await sleep(600);
+  }
+  return open;
+}
+
+async function topUpLifetimeEe(page, need) {
+  return page.evaluate((target) => {
+    const s = window.__wedtmd.session;
+    for (let k = 0; k < 40 && s.state.lifetime.ee < target; k++) s.update(s.state.lastSimTime + 8 * 3600 * 1000);
+    return s.state.lifetime.ee;
+  }, need);
+}
+
+async function caseH(page) {
+  await crankClicks(page, 45, 0);
+  const buyS7 = await buyInTree(page, S7);
+  const buy9 = await buyInTree(page, ['@improvedPistons:9']);
+  const dog9 = await lineState(page, 'DOG-04');
+  const buy10 = await buyInTree(page, ['@improvedPistons:10']);
+  const dog10 = await lineState(page, 'DOG-04');
+  const dogFail = [...buyS7, ...buy9, ...buy10];
+  // No top tier is bought yet, so the heartbeat is still off.
+  const beforeTop = await tierProbe(page);
+  await check(page, 'H_dog_line', dogFail.length === 0 && !lineHeld(dog9) && lineHeld(dog10), { buyFail: dogFail, dog9, dog10, ...beforeTop });
+
+  // The first MK V: motorTuning 25 is the top tier of a 5-tier track, so the TECH INDEX close queues INS-13 (once per cycle).
+  const buyTop = await buyInTree(page, ['@motorTuning:25']);
+  const top = await lineState(page, 'INS-13');
+  const afterTop = await tierProbe(page);
+  const tuning = await page.evaluate(() => window.__wedtmd.partTiers()?.motorTuning ?? null);
+  await check(page, 'H_first_top', buyTop.length === 0 && lineHeld(top), { buyFail: buyTop, top, motorTuningTier: tuning, ...afterTop });
+  await check(page, 'H_heartbeat', beforeTop.tierHeartbeat === false && afterTop.tierHeartbeat === true, {
+    heartbeatBeforeTop: beforeTop.tierHeartbeat, heartbeatAfterTop: afterTop.tierHeartbeat, motorTuningTier: tuning, ...afterTop,
+  });
+
+  // Era II: the rest of the S9 list (the generator opens the era card). Lifetime EE first reaches the load-beneath level, then
+  // motorRetrofit to levels 8, 13 and 18 (tiers 3, 4, 5) each read the hole stage.
+  const buyEra2 = await buyInTree(page, S9.slice(S7.length));
+  await dismissEraCard(page);
+  await sleep(300);
+  const ee = await topUpLifetimeEe(page, HOLE_EE);
+  const holeRows = [];
+  for (const level of [8, 13, 18]) {
+    // Demo edition: the EE top-up reaches the plate cap, so the END OF DEMO card opens and holds the world; keep tinkering first.
+    const demoCard = await closeDemoCard(page);
+    const failed = await buyInTree(page, ['@motorRetrofit:' + level]);
+    const demoCardAfter = await closeDemoCard(page);
+    // the world state applies on its own cadence after the release: wait up to 3 s for the stage (demo runs were read too early)
+    let probe = await tierProbe(page);
+    for (let t = 0; t < 30 && probe.holeStage !== HOLE_STAGE[level]; t++) {
+      await sleep(100);
+      probe = await tierProbe(page);
+    }
+    const displayedTier = await page.evaluate(() => window.__wedtmd.partTiers()?.motorRetrofit ?? null);
+    const actualLevel = await page.evaluate(() => window.__wedtmd.session.state.techLevels.motorRetrofit ?? 0);
+    holeRows.push({ level, actualLevel, demoCard, demoCardAfter, failed, expected: HOLE_STAGE[level], holeStage: probe.holeStage, displayedTier });
+  }
+  const holeOk = holeRows.every((r) => r.failed.length === 0 && r.holeStage === r.expected);
+  const holeProbe = await tierProbe(page);
+  await check(page, 'H_hole', buyEra2.length === 0 && ee >= HOLE_EE && holeOk, { buyFail: buyEra2, lifetimeEe: ee, rows: holeRows, ...holeProbe });
+}
+
+// H_overcap (WP23 A10): a fresh era II save, then ONE TECH INDEX release that changes five tracks. The release plays at most four
+// tier-up beats (PART_TIER_FX.maxBeatsPerRelease); the fifth change (motorRetrofit 5 -> 18, tier 5 = top) swaps instantly with no
+// partEvolved event, so INS-13 must come from the close re-check. H_boot_seed: the same save reloaded, and the heartbeat is on
+// before any TECH INDEX close.
+async function caseHOver(page) {
+  await crankClicks(page, 45, 0);
+  const buyS7 = await buyInTree(page, S7);
+  const buyEra2 = await buyInTree(page, S9.slice(S7.length));
+  await dismissEraCard(page);
+  await sleep(300);
+  const pre = await tierProbe(page);
+  const preIns = await lineState(page, 'INS-13');
+  await check(page, 'H_overcap_pre', buyS7.length === 0 && buyEra2.length === 0 && pre.era === 2 && pre.tierHeartbeat === false && !lineHeld(preIns), {
+    buyFail: [...buyS7, ...buyEra2], preIns, ...pre,
+  });
+
+  const release = await buyInTree(page, OVERCAP_BUYS);
+  const tiers = await waitTiers(page, OVERCAP_TIERS, 3000);
+  const ins = await lineState(page, 'INS-13');
+  const post = await tierProbe(page);
+  const tiersOk = Object.entries(OVERCAP_TIERS).every(([id, t]) => tiers?.[id] === t);
+  await check(page, 'H_overcap', release.length === 0 && tiersOk && lineHeld(ins) && post.tierHeartbeat === true, {
+    buyFail: release, tiers, expectedTiers: OVERCAP_TIERS, ins, ...post,
+  });
+
+  // Save, reload, and read the heartbeat before any TECH INDEX open: the boot seed is the only thing that can turn it on.
+  const saved = await page.evaluate(() => window.__wedtmd.saveNow());
+  await page.reload({ waitUntil: 'load' });
+  await waitReady(page);
+  const booted = await waitHeartbeat(page, 5000);
+  await check(page, 'H_boot_seed', saved === true && booted.tierHeartbeat === true, { saved, ...booted });
+}
+
 // One fresh context per case. Errors are tagged with the case key that is current when they happen.
 // An exception becomes FAILED:<case>:<message> in fail.
 async function runCase(browser, key, fn) {
@@ -449,6 +612,8 @@ try {
   await runCase(browser, 'E', caseE);
   await runCase(browser, 'F', caseF);
   await runCase(browser, 'G', caseG);
+  await runCase(browser, 'H', caseH);
+  await runCase(browser, 'H', caseHOver);
 } catch (e) {
   fail.push(`FAILED:setup:${firstLine(e)}`);
 } finally {

@@ -1,7 +1,8 @@
 // Tests for worldTierRules (WP23a): the stub port values, the 4 s ripple gap, the Inspector and Sensor 7 notices on every beat,
 // the lamp flicker techs, the DOG-04 offer only at improvedPistons tier 3 (a 2 -> 4 jump offers it once), DOG-04 and INS-13
-// once per cycle from a partEvolved event and from a TECH INDEX close, the heartbeat state, the 10 s ear-flick gap, reset, injected
-// gaps, and a purity check (no Phaser). Pure maths, no Phaser.
+// once per cycle from a partEvolved event and from a TECH INDEX close, at most one tier offer per event or close (INS-13 first;
+// the dog line waits for the next close), the heartbeat state, the 10 s ear-flick gap, reset, injected gaps, and a purity check
+// (no Phaser). Pure maths, no Phaser.
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { createTierTracker, STUB_TIER_PORT } from './worldTierRules';
@@ -225,12 +226,34 @@ describe('onIndexClose DOG-04 offer', () => {
     expect(t.onIndexClose(levelsOf({ improvedPistons: 20 }), 2500).offers).toEqual([]);
   });
 
-  it('gives firstTop and the dog offer on the same close when a part is at top and improvedPistons is at tier 3', () => {
+  it('offers INS-13 alone on a close where a part is at top and improvedPistons is at tier 3, then DOG-04 on the next close', () => {
     const t = createTierTracker(portWithDogTier(() => 3, () => true));
-    expect(t.onIndexClose(levelsOf({ improvedPistons: 30 }), 0).offers).toEqual([
-      { kind: 'tier', firstTop: true },
-      { kind: 'tier', techId: 'improvedPistons', tier: 3 },
-    ]);
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 30 }), 0).offers).toEqual([{ kind: 'tier', firstTop: true }]);
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 30 }), 2500).offers).toEqual([{ kind: 'tier', techId: 'improvedPistons', tier: 3 }]);
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 30 }), 5000).offers).toEqual([]);
+  });
+});
+
+describe('one tier offer per event or close', () => {
+  it('offers INS-13 alone on an event that crosses the dog tier and the top tier, and DOG-04 on the next close', () => {
+    const t = createTierTracker(portWithDogTier(() => 5, () => true));
+    const fx = t.onEvolved(evo({ techId: 'improvedPistons', fromTier: 2, toTier: 5, topTier: 5 }), 0);
+    expect(fx.offers).toEqual([{ kind: 'tier', firstTop: true }]);
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 25 }), 2500).offers).toEqual([{ kind: 'tier', techId: 'improvedPistons', tier: 3 }]);
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 25 }), 5000).offers).toEqual([]);
+  });
+
+  it('offers the dog line from an event once INS-13 is already claimed', () => {
+    const t = createTierTracker(portWithDogTier(() => 3, () => true));
+    expect(t.onEvolved(evo({ fromTier: 4, toTier: 5, topTier: 5 }), 0).offers).toEqual([{ kind: 'tier', firstTop: true }]);
+    expect(t.onEvolved(evo({ techId: 'improvedPistons', fromTier: 2, toTier: 3 }), 10000).offers).toEqual([{ kind: 'tier', techId: 'improvedPistons', tier: 3 }]);
+  });
+
+  it('never offers two tier lines from one close, whatever the port says', () => {
+    const t = createTierTracker(portWithDogTier(() => 5, () => true));
+    for (let i = 0; i < 3; i++) {
+      expect(t.onIndexClose(levelsOf({ improvedPistons: 25 }), i * 2500).offers.length).toBeLessThanOrEqual(1);
+    }
   });
 });
 

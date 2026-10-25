@@ -56,8 +56,10 @@ const DOG_LINE = WORLD_TIER_PROPS.dogLine;
 /**
  * Tracks the tier state of one cycle. The first top tier (INS-13) is offered once per cycle, from either a partEvolved
  * event or a TECH INDEX close (WP22 over-cap instant swaps emit no event, so the close re-checks anyTop). The dog line
- * (DOG-04, improvedPistons tier 3) gets the same two chances, once per cycle, so an over-cap release can offer both in one
- * close. reset() starts a new cycle and clears the gaps. Nothing here reads the clock except through the nowMs arguments.
+ * (DOG-04, improvedPistons tier 3) gets the same two chances, once per cycle. The scheduler keeps ONE pending tier entry (a
+ * newer tier offer replaces the older one), so each event or close offers at most one tier line, INS-13 first; a dog line that
+ * loses the slot stays unclaimed, and the next close offers it. reset() starts a new cycle and clears the gaps. Nothing here
+ * reads the clock except through the nowMs arguments.
  */
 export function createTierTracker(port: TierPort, cfg: TierTrackerConfig = WORLD_VOICE_CONFIG): TierTracker {
   let lastRippleMs: number | null = null;
@@ -72,31 +74,29 @@ export function createTierTracker(port: TierPort, cfg: TierTrackerConfig = WORLD
     return { kind: 'tier', firstTop: true };
   }
 
+  // Claims the once-per-cycle dog line. Returns the offer when it was not yet offered, else null.
+  function claimDog(): WorldOffer | null {
+    if (dogOffered) return null;
+    dogOffered = true;
+    return { kind: 'tier', techId: DOG_LINE.techId, tier: DOG_LINE.tier };
+  }
+
   return {
     onEvolved(e, nowMs) {
       const ripple = lastRippleMs === null || nowMs - lastRippleMs >= cfg.rippleOutsideGapMs;
       if (ripple) lastRippleMs = nowMs;
 
-      const offers: WorldOffer[] = [];
-      if (e.techId === DOG_LINE.techId) {
-        for (let t = e.fromTier + 1; t <= e.toTier; t++) {
-          if (t === DOG_LINE.tier) {
-            dogOffered = true;
-            offers.push({ kind: 'tier', techId: e.techId, tier: t });
-          }
-        }
-      }
-      if (e.toTier === e.topTier) {
-        const first = claimFirstTop();
-        if (first !== null) offers.push(first);
-      }
+      // One tier offer per event, INS-13 first. The dog line is claimed only when it is the offer; a crossing that loses the slot
+      // stays unclaimed for the next close.
+      let offer: WorldOffer | null = e.toTier === e.topTier ? claimFirstTop() : null;
+      if (offer === null && e.techId === DOG_LINE.techId && e.fromTier < DOG_LINE.tier && e.toTier >= DOG_LINE.tier) offer = claimDog();
 
       return {
         ripple,
         lampFlicker: LAMP_TECHS.includes(e.techId),
         sheetTick: true,
         sensorBlink: true,
-        offers,
+        offers: offer === null ? [] : [offer],
         heartbeat: firstTopSeen,
       };
     },
@@ -108,22 +108,17 @@ export function createTierTracker(port: TierPort, cfg: TierTrackerConfig = WORLD
     },
 
     onIndexClose(levels) {
-      const offers: WorldOffer[] = [];
-      if (port.anyTop(levels)) {
-        const first = claimFirstTop();
-        if (first !== null) offers.push(first);
-      }
-      // The dog line can also become eligible here: WP22 moves a part to tier 3 with no partEvolved event (over-cap swaps).
-      if (!dogOffered && port.tierOf(DOG_LINE.techId, levels) >= DOG_LINE.tier) {
-        dogOffered = true;
-        offers.push({ kind: 'tier', techId: DOG_LINE.techId, tier: DOG_LINE.tier });
-      }
+      // One tier offer per close, INS-13 first. WP22 moves a part to tier 3 with no partEvolved event (over-cap swaps), so the dog
+      // line can become eligible here too; a close that offers INS-13 leaves the dog line for the next close.
+      const first = port.anyTop(levels) ? claimFirstTop() : null;
+      const dog = first === null && port.tierOf(DOG_LINE.techId, levels) >= DOG_LINE.tier ? claimDog() : null;
+      const offer = first ?? dog;
       return {
         ripple: false,
         lampFlicker: false,
         sheetTick: false,
         sensorBlink: false,
-        offers,
+        offers: offer === null ? [] : [offer],
         heartbeat: firstTopSeen,
       };
     },

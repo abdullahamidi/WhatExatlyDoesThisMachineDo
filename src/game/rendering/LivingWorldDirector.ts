@@ -34,7 +34,8 @@ import type { Rect, SpeakerAnchor } from '../math/worldPlacement';
 import { deriveWorldState } from '../math/worldState';
 import type { WorldStateInput, WorldVisualState } from '../math/worldState';
 import { blipCount, talkTimeline } from '../math/worldTurn';
-import { createTierTracker, STUB_TIER_PORT } from '../math/worldTierRules';
+import { WP22_TIER_PORT } from '../math/worldTierPort';
+import { createTierTracker } from '../math/worldTierRules';
 import type { TierEffects, TierPort, TierTracker } from '../math/worldTierRules';
 import { createToastGate, silenceReason, TOAST_GATE_CONFIG } from '../math/worldSilence';
 import type { SilenceInputs, ToastGate } from '../math/worldSilence';
@@ -94,6 +95,10 @@ export interface WorldDebugState {
   postCap: { active: boolean; step: number } | null;
   placements: Record<string, { x: number; row: string } | null>;
   activeLines: string[];
+  // WP23a X1: the tier tracker's MK V heartbeat (on once the first top tier of the cycle is in) and the applied dog hole stage
+  // (0 = no hole; null before the first applied state).
+  tierHeartbeat: boolean;
+  holeStage: number | null;
 }
 
 /** Debug API (C7) behind window.__wedtmd. Every call is a no-op or null once the director is destroyed. */
@@ -239,6 +244,9 @@ export class LivingWorldDirector {
   private hiddenSinceWall: number | null = null;
   // A ripple that came while the TECH INDEX was open. It plays once when the index closes (A10: one per release).
   private rippleLatched = false;
+  // The tier tracker seeds once the cast holds its first applied state: a walker is on screen only after apply, and R6 (the speaker
+  // on screen) gates every offer. A reset or a new cycle seeds again.
+  private tierSeedPending = true;
 
   constructor(deps: WorldDirectorDeps) {
     this.scene = deps.scene;
@@ -247,7 +255,8 @@ export class LivingWorldDirector {
     this.edition = deps.edition;
     this.view = deps.view;
     this.ports = deps.ports;
-    this.tier = deps.tier ?? STUB_TIER_PORT;
+    // X1: the default tier port is the WP22 tier maths (the stub stood in until WP23a's X1 wiring).
+    this.tier = deps.tier ?? WP22_TIER_PORT;
     const state = this.session.state;
     this.rows = createWorldRows(this.scene);
     this.props = new WorldProps(this.scene, this.rows);
@@ -324,6 +333,10 @@ export class LivingWorldDirector {
 
     this.refreshSilence();
     this.stepVisual(cadence);
+    if (this.tierSeedPending && this.applied !== null) {
+      this.tierSeedPending = false;
+      this.seedTiers();
+    }
 
     // A cue goes before the glances: a running glance ends first, and no glance starts on the frame a line starts (AD2 F10).
     const cue = this.scheduler.tick(this.ctxNow());
@@ -502,6 +515,7 @@ export class LivingWorldDirector {
     this.delayed = [];
     this.scheduler.reset();
     this.tracker.reset();
+    this.tierSeedPending = true;
     this.toastGate.reset();
     this.glanceK = 0;
     this.glanceDueAt = null;
@@ -532,6 +546,13 @@ export class LivingWorldDirector {
       this.cast.syncNow(this.scene.time.now);
       this.cast.notice('earFlick');
     }
+  }
+
+  // The close re-check without a close, run once a save loads or a cycle starts: a save may already hold a top tier or the dog tier,
+  // so the heartbeat and the offers match the machine. Seen lines are refused by the scheduler, so nothing repeats.
+  private seedTiers(): void {
+    const fx = this.tracker.onIndexClose(this.session.state.techLevels, this.nowMs);
+    for (const offer of fx.offers) this.offer(offer);
   }
 
   // TECH INDEX open or close. A close restarts the INS-13 / DOG-04 re-check and the 2.5 s gate (A10, D2).
@@ -1163,6 +1184,8 @@ export class LivingWorldDirector {
       postCap: { active: st.postCap.active, step: st.postCap.step },
       placements,
       activeLines: this.active.map((a) => a.id),
+      tierHeartbeat: this.tracker.heartbeat(),
+      holeStage: applied === null ? null : applied.state.props.holeStage,
     };
   }
 

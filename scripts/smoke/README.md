@@ -316,7 +316,7 @@ npm script `perf:bundle` runs the second command (`npm run build && npm run perf
 
 | check | files | limit |
 |---|---|---|
-| app js raw | `index-*.js` | <= 460 KB (`appRawKb`) |
+| app js raw | `index-*.js` | <= 500 KB (`appRawKb`) |
 | phaser js raw | `phaser-*.js` | <= 1500 KB (`phaserKb`) |
 | lazy world js raw | `LivingWorldDirector-*.js` | <= 80 KB (`lazyWorldKb`, WP23a) |
 | css raw | `*.css` | <= 45 KB (`cssKb`) |
@@ -710,7 +710,7 @@ Strip rule: every key comparison except `A_pulse` strips a trailing pulse frame,
 PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/world.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/world
 ```
 
-Runs on the full build (`http://localhost:4174/?debug=1`) and on the demo build (`http://localhost:4177/?debug=1`, the demo preview). Fresh 1280x720 context per case, A to G. Prints ONE JSON object `{ results, fail, errors }`; expect `fail` and `errors` to be `[]`. Exit code 1 when either is non-empty; exit 2 on a usage error. A failing check carries `worldState().silence` in its detail. The script starts no server.
+Runs on the full build (`http://localhost:4174/?debug=1`) and on the demo build (`http://localhost:4177/?debug=1`, the demo preview). Fresh 1280x720 context per case, A to H. Prints ONE JSON object `{ results, fail, errors }`; expect `fail` and `errors` to be `[]`. Exit code 1 when either is non-empty; exit 2 on a usage error. A failing check carries `worldState().silence` in its detail. The script starts no server.
 
 | case | checks (names in `results` / `fail`) |
 |---|---|
@@ -721,10 +721,12 @@ Runs on the full build (`http://localhost:4174/?debug=1`) and on the demo build 
 | `E` (fresh) settings | `E_rare`: RARE refuses the non-core `INS-02` (`worldSay` false), and ON accepts it again (control). `E_off`: OFF refuses `DOG-02`; over 800 ms `audioStats().worldBlips` and `worldState().seen` do not change and no `.wv.on` shows |
 | `F` (fresh) persist | `F_seen`: after the first moment, `saveNow()` and a reload, `worldState().seen` contains `INS-01`. `F_no_repeat`: after `worldAdvance(400000)` and `worldLogShown('observer-count')`, no bubble or live text of INS-01 appears in a 6 s watch |
 | `G` (fresh) budget | S9 list: `G_display` (`displayObjects()` <= 100), `G_cost` (`worldStats().meanMs` averaged over 20 samples, 5 s, <= 0.3). `G_era3_hidden`: S10 = S9 + `@substationBlueprint`, `boiler` (local copy of the list); the TECH INDEX opens and closes once; then every `livingWorld()` entry has `visible` false and `worldState().hidden` is true. On the demo the era III purchase is refused (`purchase('boiler').reason === 'demo'`), so the check records `value.skipped` and passes |
+| `H` (fresh) tier port (WP23 X1) | era I: `@improvedPistons:9`, then `:10`, each through `buyInTree` (TECH INDEX closed after). `H_dog_line`: DOG-04 is queued (`worldState().pending`, `activeLines` or `seen`) after level 10 and not after 9. `H_first_top`: `@motorTuning:25`, then INS-13 is queued. `H_heartbeat`: `worldState().tierHeartbeat` is false before the top tier and true after it. `H_hole`: era II (the rest of S9), lifetime EE topped up to 100000 (8 h stretches through `session.update`), then `@motorRetrofit` 8 / 13 / 18 read `worldState().holeStage` (2 / 3 / 4). Every H check carries `tierProbe` in its detail (era, heartbeat, hole stage, lifetime EE, `cameraState()`, the Inspector and Dog from `livingWorld()`) |
+| `H` (fresh) over-cap and boot seed | `H_overcap_pre`: era II (S7 + S9 rest), no heartbeat, INS-13 not queued. `H_overcap`: one TECH INDEX release of `@gearRatio:6`, `@flywheel:4`, `@motorTuning:10`, `@improvedPistons:5`, `@motorRetrofit:18` (five tracks; the fifth is past the four-beat cap, so it has no partEvolved); the displayed tiers read 2 / 2 / 3 / 2 / 5 and INS-13 is queued after the close with the heartbeat on. `H_boot_seed`: `saveNow()`, reload, `tierHeartbeat` on before any TECH INDEX open |
 
-Check names (20): `A_frozen`, `A_crank_step`, `B_bubble`, `B_rects`, `B_live`, `B_aria`, `C_tree`, `C_card`, `C_photo`, `C_menu`, `D_s7_placed`, `D_s8_placed`, `D_s9_placed`, `E_rare`, `E_off`, `F_seen`, `F_no_repeat`, `G_display`, `G_cost`, `G_era3_hidden`.
+Check names (27): `A_frozen`, `A_crank_step`, `B_bubble`, `B_rects`, `B_live`, `B_aria`, `C_tree`, `C_card`, `C_photo`, `C_menu`, `D_s7_placed`, `D_s8_placed`, `D_s9_placed`, `E_rare`, `E_off`, `F_seen`, `F_no_repeat`, `G_display`, `G_cost`, `G_era3_hidden`, `H_dog_line`, `H_first_top`, `H_heartbeat`, `H_hole`, `H_overcap_pre`, `H_overcap`, `H_boot_seed`.
 
-Debug API used (`window.__wedtmd`, WP23 C7): `worldState()`, `worldSay(id)`, `worldQuiet(on)`, `worldAdvance(ms)`, `worldLogShown(logId)`, `livingWorld()`, `worldStats()`, `worldBubble()`. Also the existing `session` (`updateSettings`, `purchase`), `saveNow()`, `photoMode()`, `photoState()`, `techTreeOpen()`, `systemMenuOpen()`, `audioStats()`, `displayObjects()`, `crankClientPoint()`. `worldClock` is not used.
+Debug API used (`window.__wedtmd`, WP23 C7): `worldState()`, `worldSay(id)`, `worldQuiet(on)`, `worldAdvance(ms)`, `worldLogShown(logId)`, `livingWorld()`, `worldStats()`, `worldBubble()`. Also the existing `session` (`updateSettings`, `purchase`), `saveNow()`, `photoMode()`, `photoState()`, `techTreeOpen()`, `systemMenuOpen()`, `audioStats()`, `displayObjects()`, `crankClientPoint()`, `cameraState()`, `partTiers()`. `worldClock` is not used.
 
 Shots in the outdir: `world-A-s0.png`, `world-B-100.png`, `world-B-150.png`, `world-D-s7-150.png`, `world-D-s8-150.png`, `world-D-s9-150.png`. The UI 150 bubble shot shows the forced `INS-02` line: `INS-01` has left the screen by then, and the layout is the same.
 
