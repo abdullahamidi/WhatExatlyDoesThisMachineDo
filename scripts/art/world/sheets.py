@@ -25,6 +25,15 @@ FRAMES = {
     'scraps': ('scrap0', 'scrap1', 'scrap2'),
     'mote': ('ash', 'moth'),
     'windowLit': ('lit', 'breathe'),
+    'lantern': ('lit', 'fallen'),
+    'redBall': ('ball',),
+    'clipboardPages': ('thin', 'medium', 'thick'),
+    # WP23b AD3c (R7 frame names; WORLD_PUDDLE index = (size - 1) * 3 + look, whole 9; WORLD_SPROUT bloomFrame 4)
+    'puddle': ('size1Grey', 'size1Ring', 'size1Black', 'size2Grey', 'size2Ring', 'size2Black', 'size3Grey', 'size3Ring',
+               'size3Black', 'whole'),
+    'sprout': ('stage1', 'stage2', 'stage3', 'stage4', 'bloom'),
+    'page': ('flat', 'tilt'),
+    'virga': ('fall', 'frozen'),
 }
 
 # key -> asset id, file under public/assets/, cell (w, h) art px, era rows?, pivot, per-sheet recolour pins,
@@ -38,7 +47,10 @@ SHEETS = {
     'dog': dict(id='world.dog', file='world/dog.png', cell=(28, 20), era_rows=True, pivot='feet', ring=True,
                 pins={}, master='dog'),
     'crow': dict(id='world.crow', file='world/crow.png', cell=(24, 18), era_rows=True, pivot='feet', ring=True,
-                 pins={}, master='crow'),
+                 pins={}, master='crow',
+                 # WP23b AD3b: flight cells (legs tucked) are drawn relative to the perch by the finale script, not
+                 # stood on a surface: exempt from the feet-on-the-bottom-row check
+                 airborne=('fly0', 'fly1', 'fly2')),
     'girl': dict(id='world.girl', file='world/girl.png', cell=(16, 28), era_rows=True, pivot='feet', ring=True,
                  pins={'A': 2, 'B': 2, 'C': 2}, master='girl'),  # raincoat yellow + warm lantern dot return only in row III
     # (she is the colour thread); before that the C dot takes the sepia map: #ddc9a3 = the cold white lantern of era II
@@ -49,15 +61,19 @@ SHEETS = {
     'sensor7': dict(id='world.sensor7', file='world/sensor7.png', cell=(20, 40), era_rows=True, pivot='feet',
                     ring=True, pins={}, master='sensor7',
                     # stacked overlays (same pivot as tripod): head-only and readout-only cells, exempt from the feet check
-                    overlays=('headL', 'headC', 'headR', 'headUp', 'glyphDash', 'glyphOne')),
+                    overlays=('headL', 'headC', 'headR', 'headUp', 'fog', 'glyphDash', 'glyphOne')),   # fog: AD3c, on headR
     'girlWindow': dict(id='world.girlWindow', file='world/girl-window.png', cell=(4, 6), era_rows=False, pivot='plane',
-                       ring=False, pins={}, master='girlWindow', only=('c', 'd', 'e', 'f')),   # rust only, no outline
+                       ring=False, pins={}, master='girlWindow', only=('c', 'd', 'e', 'f'),    # rust only, no outline
+                       # WP23b AD3b: the restored frame (LAST LOOK, postgame) is lit warm like the restored skyline's
+                       # windows (#f0a848 / #ffd27a): the accent ramp is allowed in that frame only
+                       only_frames={'restored': ('c', 'd', 'e', 'f', 'A', 'B', 'C')}),
     'girlMini': dict(id='world.girlMini', file='world/girl-mini.png', cell=(8, 12), era_rows=False, pivot='feet',
                      ring=True, pins={}, master='girlMini'),
     'lamp': dict(id='world.lamp', file='world/street-lamp.png', cell=(12, 60), era_rows=False, pivot='feet',
                  ring=True, pins={}, master='lamp'),
     'lampGlow': dict(id='world.lampGlow', file='world/lamp-glow.png', cell=(32, 16), era_rows=False, pivot='centre',
-                     ring=False, pins={}, master='lampGlow', only=('e', 'f')),   # two-tone rust-amber; alpha at runtime
+                     ring=False, pins={}, master='lampGlow', only=('e', 'f'),    # two-tone rust-amber; alpha at runtime
+                     only_frames={'warm': ('e', 'f', 'A', 'B')}),   # AD3c warm: + #d9822b / #f0a848, never #ffd27a
     'clock': dict(id='world.clock', file='world/street-clock.png', cell=(16, 44), era_rows=False, pivot='feet',
                   ring=True, pins={}, master='clock'),
     'stakeChain': dict(id='world.stakeChain', file='world/stake-chain.png', cell=(10, 6), era_rows=False, pivot='feet',
@@ -70,6 +86,27 @@ SHEETS = {
                  pins={}, master='mote'),
     'windowLit': dict(id='bg.windowLit', file='bg/window-lit.png', cell=(4, 6), era_rows=False, pivot='plane',
                       ring=False, pins={}, master='windowLit', only=('e', 'f')),   # rust-amber only: #ad6236 / #c98552
+    # WP23b AD3a props (single row, selective outline): the dropped lantern, the cycle 2+ red ball, the clipboard pages
+    'lantern': dict(id='world.lantern', file='world/lantern.png', cell=(6, 4), era_rows=False, pivot='feet', ring=False,
+                    pins={}, master='lantern'),
+    'redBall': dict(id='world.redBall', file='world/red-ball.png', cell=(3, 3), era_rows=False, pivot='feet', ring=False,
+                    pins={}, master='redBall'),
+    'clipboardPages': dict(id='world.clipboardPages', file='world/clipboard-pages.png', cell=(6, 3), era_rows=False,
+                           pivot='feet', ring=False, pins={}, master='clipboardPages'),
+    # WP23b AD3c props and the virga strip (single row). The two restored cells (puddle whole, sprout bloom) may use the
+    # restored-world colours (pal.RESTORED) through `restored_frames`; every other cell is palette-only, no green or blue.
+    'puddle': dict(id='world.puddle', file='world/puddles.png', cell=(32, 5), era_rows=False, pivot='feet', ring=False,
+                   pins={}, master='puddle', grow=('size1Grey', 'size2Grey', 'size3Grey'),    # puddles never dry
+                   restored_frames={'whole': ('g', 'h', 'i', 'j', 'k', 'm', 'n', 'o')}),
+    'sprout': dict(id='world.sprout', file='world/sprout.png', cell=(8, 24), era_rows=False, pivot='feet', ring=False,
+                   pins={}, master='sprout', grow=('stage1', 'stage2', 'stage3', 'stage4'),     # never shrinks
+                   restored_frames={'bloom': ('g', 'h', 'i', 'j', 'k', 'm', 'n', 'o')}),
+    'page': dict(id='world.page', file='world/page.png', cell=(3, 4), era_rows=False, pivot='centre', ring=False,
+                 pins={}, master='page'),
+    # a tile strip of separate rain streaks (`parts`: no one-component rule), sky ramp only, no outline (far layer)
+    'virga': dict(id='bg.virga', file='bg/virga.png', cell=(512, 64), era_rows=False, pivot='plane', ring=False,
+                  pins={}, master='virga', parts=True, only=('p', 'q', 'r', 'x'),
+                  vertical=True),    # frames stacked top to bottom: 512x128 = 2 frames of 512x64 (manifest frame grid)
 }
 
 # Era-row sheets may use VIOLET_LIGHT in row V (the rim). Nothing else off the 25 is allowed anywhere.
@@ -78,4 +115,12 @@ EXTRA_COLOURS = {'#9a6ad0': (_V,)}
 for _k, _s in SHEETS.items():
     _s['frames'] = FRAMES[_k]
     _s['rows'] = len(ERA_ROWS) if _s['era_rows'] else 1
-    _s['size'] = (_s['cell'][0] * len(FRAMES[_k]), _s['cell'][1] * _s['rows'])
+    _s['size'] = ((_s['cell'][0], _s['cell'][1] * len(FRAMES[_k])) if _s.get('vertical')     # AD3c: one column of frames
+                  else (_s['cell'][0] * len(FRAMES[_k]), _s['cell'][1] * _s['rows']))
+
+
+def cell_origin(spec, col, row):
+    """Top-left px of a cell in the sheet: frames are columns (era rows are rows), or one column when `vertical`."""
+    if spec.get('vertical'):
+        return 0, col * spec['cell'][1]
+    return col * spec['cell'][0], row * spec['cell'][1]

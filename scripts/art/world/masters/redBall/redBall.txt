@@ -1,0 +1,9 @@
+# Red ball prop (WP23b AD3a, Art Director). Cell 3x3 art px, pivot (0.5, 1); front row at dog x + 14 (cycle 2+, postgame).
+# The palette has no red (DENIZEN_ART 1.5): ball #d9822b (A), glint #f0a848 (B) upper left, shadow #8c4a2a (d) lower
+# right, 2 px each (a 1 px glint / shadow scores 88 < 90: workbench singletons). No outline: it must stay the warmest
+# pixel on screen. Single row, not an era sheet.
+
+@frame ball
+BB.
+AAA
+.dd

@@ -1,0 +1,16 @@
+# Inspector page (WP23b AD3c, Art Director). Cell 3x4 art px, origin (0.5, 0.5). Era IV: a page lifts from the
+# clipboard and rises with the dust (WORLD_PAGES). flat = the sheet face-on (#ddc9a3 paper, one ruled line #a8957a,
+# #c9b28a shade edge); tilt = the sheet turned on its corner mid-flip, its lower edge in shade (the renderer swaps at
+# half rise; no rotation needed). Every colour cluster >= 2 px (workbench singletons). No text, no outline.
+
+@frame flat
+wwv
+uuv
+wwv
+wwv
+
+@frame tilt
+..w
+.ww
+www
+vv.

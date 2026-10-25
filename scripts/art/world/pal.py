@@ -13,9 +13,16 @@ PAL = {
 }
 VIOLET_LIGHT = '#9a6ad0'
 VIOLET_CODE = 'L'
-ALL = dict(PAL, **{VIOLET_CODE: VIOLET_LIGHT})          # 26 codes: the 25 + violet
+# WP23b AD3c: the restored-world colours (src/data/palette.ts PALETTE green0-3, skyClear0-3). NOT part of the 25: a sheet
+# may use them only in the frames its `restored_frames` names (sprout bloom, puddle whole); check_sheet enforces it.
+RESTORED = {
+    'g': '#2e4a36', 'h': '#5f8a4a', 'i': '#8fb46a', 'j': '#c2d68a',                                  # green0-3
+    'k': '#3f6690', 'm': '#6f9fc8', 'n': '#a8d0e8', 'o': '#d6ecf0',                                  # skyClear0-3
+}
+ALL = dict(PAL, **{VIOLET_CODE: VIOLET_LIGHT}, **RESTORED)   # 34 codes: the 25 + violet + 8 restored
 
 assert len(PAL) == 25 and len(set(PAL.values())) == 25
+assert not set(RESTORED) & set(PAL) and VIOLET_CODE not in RESTORED
 
 
 def rgb(h):

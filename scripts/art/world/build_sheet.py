@@ -19,7 +19,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from PIL import Image  # noqa: E402
 from pal import ALL, render, grid  # noqa: E402
-from sheets import SHEETS, FRAMES, ERA_ROWS  # noqa: E402
+from sheets import SHEETS, FRAMES, ERA_ROWS, cell_origin  # noqa: E402
 from erarecolor import recolor_rows  # noqa: E402
 
 REPO = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
@@ -129,7 +129,7 @@ def build(sheet, frames_dir=None):
     for r in range(spec['rows']):
         for c, fn in enumerate(FRAMES[sheet]):
             im = render(cell_rows(sheet, frames, fn, r), w)
-            out.paste(im, (c * w, r * h))
+            out.paste(im, cell_origin(spec, c, r))
             if frames_dir:
                 tag = ERA_ROWS[r] if spec['era_rows'] else 'cell'
                 im.save(os.path.join(frames_dir, '%s-%s-%02d-%s.png' % (sheet, tag, c, fn)))

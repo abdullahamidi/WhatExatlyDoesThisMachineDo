@@ -1,5 +1,5 @@
 // World tier coupling (WP23a): the TierPort seam, the stub that stands in until X1, and the tier tracker that turns part tier
-// events into world effects (ripple, lamp flicker, Inspector tick, Sensor 7 blink, dog offers, heartbeat, ear flick).
+// events into world effects (ripple, lamp flicker, Inspector tick, Sensor 7 blink, tier offers, heartbeat, ear flick).
 // Why: WP22 owns the tier maths. The living world needs only "what should the world do now", so the tiers sit behind TierPort
 // (D8) and X1 can bind the real ones without touching the director or the cast. The rules are table-tested here.
 // Pure: no Phaser, no DOM. Event types are type-only imports from game/context; numbers and tier props come from
@@ -28,7 +28,7 @@ export const STUB_TIER_PORT: TierPort = {
 /**
  * What one tier event asks of the world. One-shot flags are true only for the event that asks for them:
  * ripple (subject to the 4 s gap), lampFlicker, sheetTick, sensorBlink. heartbeat is state, not a one-shot:
- * it mirrors TierTracker.heartbeat() after the event (true once the first top tier of the cycle was seen).
+ * it mirrors TierTracker.heartbeat() after the event (true once a top tier was observed this cycle).
  */
 export interface TierEffects {
   ripple: boolean;
@@ -52,33 +52,33 @@ export interface TierTrackerConfig { rippleOutsideGapMs: number; earFlickGapMs: 
 
 const LAMP_TECHS: readonly TechId[] = WORLD_TIER_PROPS.lampFlickerTechs;
 const DOG_LINE = WORLD_TIER_PROPS.dogLine;
+// Line ids the tier offers claim by (WORLD_LINES in src/data/livingWorld.ts): a line that is in seen is not offered again.
+const FIRST_TOP_LINE = 'INS-13';
+const DOG_LINE_ID = 'DOG-04';
 
 /**
- * Tracks the tier state of one cycle. The first top tier (INS-13) is offered once per cycle, from either a partEvolved
- * event or a TECH INDEX close (WP22 over-cap instant swaps emit no event, so the close re-checks anyTop). The dog line
- * (DOG-04, improvedPistons tier 3) gets the same two chances, once per cycle. The scheduler keeps ONE pending tier entry (a
- * newer tier offer replaces the older one), so each event or close offers at most one tier line, INS-13 first; a dog line that
- * loses the slot stays unclaimed, and the next close offers it. reset() starts a new cycle and clears the gaps. Nothing here
- * reads the clock except through the nowMs arguments.
+ * Tracks the tier state of one cycle. topObserved is set by a partEvolved event that reaches the top tier, or by a TECH INDEX
+ * close that sees a part at top (WP22 over-cap instant swaps emit no event, so the close re-checks anyTop); reset() clears it.
+ * heartbeat() is topObserved, whatever the offers. Tier offers claim by seen, not by a latch (WP23b follow-up b): every event and
+ * every close offers at most ONE tier line, INS-13 first while topObserved and INS-13 is unseen, else DOG-04 while improvedPistons
+ * is at tier 3 or more and DOG-04 is unseen. An offer repeats on each later event or close until its line is in seen, so WORLD
+ * VOICES OFF or a speaker off screen loses nothing (the scheduler keeps one pending tier entry, so a repeat waits harmlessly).
+ * Nothing here reads the clock except through the nowMs arguments.
  */
-export function createTierTracker(port: TierPort, cfg: TierTrackerConfig = WORLD_VOICE_CONFIG): TierTracker {
+export function createTierTracker(
+  port: TierPort,
+  cfg: TierTrackerConfig = WORLD_VOICE_CONFIG,
+  isSeen: (id: string) => boolean = () => false,
+): TierTracker {
   let lastRippleMs: number | null = null;
   let lastEarFlickMs: number | null = null;
-  let firstTopSeen = false;
-  let dogOffered = false;
+  let topObserved = false;
 
-  // Claims the once-per-cycle first top tier. Returns the offer when it was not yet seen, else null.
-  function claimFirstTop(): WorldOffer | null {
-    if (firstTopSeen) return null;
-    firstTopSeen = true;
-    return { kind: 'tier', firstTop: true };
-  }
-
-  // Claims the once-per-cycle dog line. Returns the offer when it was not yet offered, else null.
-  function claimDog(): WorldOffer | null {
-    if (dogOffered) return null;
-    dogOffered = true;
-    return { kind: 'tier', techId: DOG_LINE.techId, tier: DOG_LINE.tier };
+  // The one tier offer of an event or close: INS-13 first, then DOG-04 when its tier condition holds. Null when neither is due.
+  function tierOffer(dogTier: boolean): WorldOffer | null {
+    if (topObserved && !isSeen(FIRST_TOP_LINE)) return { kind: 'tier', firstTop: true };
+    if (dogTier && !isSeen(DOG_LINE_ID)) return { kind: 'tier', techId: DOG_LINE.techId, tier: DOG_LINE.tier };
+    return null;
   }
 
   return {
@@ -86,10 +86,8 @@ export function createTierTracker(port: TierPort, cfg: TierTrackerConfig = WORLD
       const ripple = lastRippleMs === null || nowMs - lastRippleMs >= cfg.rippleOutsideGapMs;
       if (ripple) lastRippleMs = nowMs;
 
-      // One tier offer per event, INS-13 first. The dog line is claimed only when it is the offer; a crossing that loses the slot
-      // stays unclaimed for the next close.
-      let offer: WorldOffer | null = e.toTier === e.topTier ? claimFirstTop() : null;
-      if (offer === null && e.techId === DOG_LINE.techId && e.fromTier < DOG_LINE.tier && e.toTier >= DOG_LINE.tier) offer = claimDog();
+      if (e.toTier === e.topTier) topObserved = true;
+      const offer = tierOffer(e.techId === DOG_LINE.techId && e.toTier >= DOG_LINE.tier);
 
       return {
         ripple,
@@ -97,7 +95,7 @@ export function createTierTracker(port: TierPort, cfg: TierTrackerConfig = WORLD
         sheetTick: true,
         sensorBlink: true,
         offers: offer === null ? [] : [offer],
-        heartbeat: firstTopSeen,
+        heartbeat: topObserved,
       };
     },
 
@@ -108,28 +106,25 @@ export function createTierTracker(port: TierPort, cfg: TierTrackerConfig = WORLD
     },
 
     onIndexClose(levels) {
-      // One tier offer per close, INS-13 first. WP22 moves a part to tier 3 with no partEvolved event (over-cap swaps), so the dog
-      // line can become eligible here too; a close that offers INS-13 leaves the dog line for the next close.
-      const first = port.anyTop(levels) ? claimFirstTop() : null;
-      const dog = first === null && port.tierOf(DOG_LINE.techId, levels) >= DOG_LINE.tier ? claimDog() : null;
-      const offer = first ?? dog;
+      // WP22 moves a part to top or to tier 3 with no partEvolved event (over-cap swaps), so both reads happen on the close.
+      if (port.anyTop(levels)) topObserved = true;
+      const offer = tierOffer(port.tierOf(DOG_LINE.techId, levels) >= DOG_LINE.tier);
       return {
         ripple: false,
         lampFlicker: false,
         sheetTick: false,
         sensorBlink: false,
         offers: offer === null ? [] : [offer],
-        heartbeat: firstTopSeen,
+        heartbeat: topObserved,
       };
     },
 
     heartbeat() {
-      return firstTopSeen;
+      return topObserved;
     },
 
     reset() {
-      firstTopSeen = false;
-      dogOffered = false;
+      topObserved = false;
       lastRippleMs = null;
       lastEarFlickMs = null;
     },

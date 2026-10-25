@@ -7,6 +7,7 @@ import type { CompleteEra, FinaleBeat } from '../../data/finale';
 import { MACHINE_COMPONENTS } from '../../data/machineComponents';
 import { beatsBetween, finaleEndS, finaleFrame } from '../math/finale';
 import type { CameraPose, FinaleFrame, FinaleShot } from '../math/finale';
+import type { WorldFinalePort } from '../math/worldScript';
 import { visualMaxForEra } from '../math/showcase';
 import type { DisplaySource } from '../sources';
 import { buildFinaleOverlay } from '../../ui/finaleView';
@@ -25,7 +26,8 @@ import type { Terrain } from './Terrain';
 
 // Finale director (WP13 T11). Owns the film clock and, each frame, pushes one FinaleFrame (math/finale.ts) to every
 // finale renderer, the camera override and the overlay. It owns no economy state: it reads the session and calls
-// only finishEndingSequence() (sequence -> choice). KEEP and new-cycle are wired in bootstrap.
+// only finishEndingSequence() (sequence -> choice). KEEP and new-cycle are wired in bootstrap. The living world film
+// (WP23b) gets the same phase and clock through the world port, and its crow lead goes to FinaleFx.
 // It also owns the completion-beat display override (WP18): the display source shows the visual max per era, never the session.
 
 /** Rolling window of update() costs for the perf probe (same window as MachineView). */
@@ -50,6 +52,8 @@ export interface FinaleDirectorDeps {
   camera: CameraController;
   /** Beat sink (ctx.feedback.finaleBeat). 'flock' is not routed here: FinaleFx emits it once per spawn. */
   emitBeat(beat: FinaleBeat): void;
+  /** Living world film port (WP23b): null until the living world director implements applyFinale. */
+  world?: () => WorldFinalePort | null;
 }
 
 export interface FinaleState {
@@ -243,6 +247,9 @@ export class FinaleDirector {
     d.eclipse.applyFinale(frame.eclipse);
     d.beam.applyFinale(frame.beam);
     d.dust.applyFinale(frame.dust);
+    // WP23b: the living world film (every phase, neutral included) and the crow lead it hands the flock; set before the birds draw.
+    const lead = d.world?.()?.applyFinale({ phase: this.phase(), t: this.t, reduced: this.reduced }).lead ?? null;
+    d.fx.setLead(lead);
     d.fx.applyFinale(frame, dtMs);
     d.machine.applyFinale({ boost: frame.boost, restored: frame.restored });
     if (frame.camera !== null) {

@@ -4,7 +4,7 @@ import { INSTALL_LINES } from './notifications';
 import { SYSTEM_LOGS } from './systemLogs';
 import { ACHIEVEMENTS } from './achievements';
 import { TIER_SWEEP } from './machineTiers';
-import { WORLD_SWEEP } from './livingWorld';
+import { WORLD_SWEEP_EXPANDED } from './worldSweep';
 
 // WP20 text sweep over the data tables. Player-facing copy uses the typographic
 // multiplier (×5, not x5), the ellipsis character (…) and US spelling.
@@ -28,7 +28,7 @@ function sweepEntries(): SweepEntry[] {
     entries.push({ where: `${id}.description`, text: def.description });
   }
   entries.push(...TIER_SWEEP);
-  entries.push(...WORLD_SWEEP);
+  entries.push(...WORLD_SWEEP_EXPANDED);
   return entries;
 }
 
@@ -75,5 +75,44 @@ describe('player-facing text sweep (WP20)', () => {
   it('keeps the generator blueprint install line identical to its flavor', () => {
     expect(INSTALL_LINES.generatorBlueprint).toBe(TECHNOLOGIES.generatorBlueprint.flavor);
     expect(INSTALL_LINES.generatorBlueprint).toBe('Primary function: UNKNOWN.');
+  });
+});
+
+// WP23b (bible §5.3): every living-world output for cycles 1-99, checked on the expanded text the player reads.
+describe('living world expanded text (WP23b)', () => {
+  // "where: text" for every expanded output matching the predicate, so a failing assertion names the line and cycle.
+  const worldOffenders = (failing: (text: string) => boolean): string[] =>
+    WORLD_SWEEP_EXPANDED.filter((entry) => failing(entry.text)).map((entry) => `${entry.where}: ${entry.text}`);
+
+  // Longest expanded output of one token line over its cycles.
+  const longestOf = (id: string): number =>
+    Math.max(...WORLD_SWEEP_EXPANDED.filter((entry) => entry.where.startsWith(`WORLD_LINES.${id}@c`)).map((e) => e.text.length));
+
+  it('expands each token line once per cycle from 1 to 99', () => {
+    for (const id of ['CRW-05', 'CRW-09', 'GRL-12', 'PAY-14']) {
+      expect(WORLD_SWEEP_EXPANDED.filter((entry) => entry.where.startsWith(`WORLD_LINES.${id}@c`))).toHaveLength(99);
+    }
+  });
+
+  it('keeps every expanded output at 52 characters or fewer', () => {
+    expect(worldOffenders((text) => text.length > 52)).toEqual([]);
+  });
+
+  it('ends every expanded output in . ? or an ellipsis', () => {
+    expect(worldOffenders((text) => !/[.?…]$/.test(text))).toEqual([]);
+  });
+
+  it('has no exclamation mark and no three-dot ellipsis in any expanded output', () => {
+    expect(worldOffenders((text) => /!|\.\.\./.test(text))).toEqual([]);
+  });
+
+  it('never matches /restor/i before the finale', () => {
+    expect(worldOffenders((text) => /restor/i.test(text))).toEqual([]);
+  });
+
+  it('keeps the longest token outputs within their bounds (GRL-12, CRW-05, PAY-14)', () => {
+    expect(longestOf('GRL-12')).toBeLessThanOrEqual(40);
+    expect(longestOf('CRW-05')).toBeLessThanOrEqual(45);
+    expect(longestOf('PAY-14')).toBeLessThanOrEqual(46);
   });
 });

@@ -1,20 +1,25 @@
-// Living world director (WP23a): the Phaser glue of the living world. Owns the cast and prop renderers, the bubble controller, the
-// tier tracker, the toast gate and the scheduler; turns session events, the TECH INDEX, the era card, modals and scene state into
-// silence, cues, bubbles, sounds, glances and persisted world memory; exposes the debug API (C7).
+// Living world director (WP23a, WP23b): the Phaser glue of the living world. Owns the cast, prop and atmosphere renderers, the bubble
+// controller, the tier tracker, the toast gate and the scheduler; turns session events, the TECH INDEX, the era card, modals and scene
+// state into silence, cues, bubbles, sounds, glances, era V double exposures and persisted world memory; exposes the debug API (C7).
 // Why: one owner for the living world's clocks and state, so WorldScene only forwards events. The cadence, silence and cue rules stay
 // in the tested math modules (worldVoice, worldSilence, worldTierRules, worldState, worldPlacement); this file sequences them. The save
-// is written only through session.recordWorld. Phaser and DOM code: checked by typecheck and the EM smokes. WP23a.
+// is written only through session.recordWorld. Phaser and DOM code: checked by typecheck and the EM smokes. WP23a; eras III-V, the
+// finale film and the postgame in WP23b (applyFinale is the WorldFinalePort; the film frame is pure, worldFinale.ts).
 import type Phaser from 'phaser';
 import type { Edition } from '../../data/edition';
-import type { OfflineReport, TechId, WorldVoices } from '../../data/types';
+import type { EndingPhase, OfflineReport, TechId, WorldVoices } from '../../data/types';
 import { SYSTEM_LOG_CONFIG } from '../../data/systemLogs';
-import { VIEW } from '../../data/world';
+import { CAMERA, VIEW } from '../../data/world';
 import {
-  LIVING_WORLD, WORLD_A11Y_PREFIX, WORLD_GLANCE_SEED, WORLD_LAYOUT, WORLD_LINES, WORLD_ROWS, WORLD_VOICE_CONFIG,
+  LIVING_WORLD, WORLD_A11Y_PREFIX, WORLD_CHAIN_STARTS, WORLD_GLANCE_SEED, WORLD_LAYOUT, WORLD_LINES, WORLD_ROWS,
+  WORLD_VOICE_CONFIG,
 } from '../../data/livingWorld';
 import type {
   ChainId, DenizenId, FramingKey, GroundId, SpeakerId, WorldLine, WorldOffer, WorldPlacement,
 } from '../../data/livingWorld';
+import { WORLD_DOUBLE_EXPOSURE, WORLD_GIRL } from '../../data/worldEras';
+import { WORLD_ENDING, WORLD_POSTGAME_LOOP } from '../../data/worldEnding';
+import { expandWorldText } from '../../data/worldText';
 import type { GameSession } from '../../simulation';
 import { affordableTechIds } from '../../simulation/progression/affordable';
 import { currentEra } from '../../simulation/progression/era';
@@ -28,11 +33,15 @@ import type { WorldVoiceView } from '../../ui/worldVoice';
 import type { GameFeedback, PartEvolvedEvent, PartTorquedEvent } from '../context';
 import type { CameraPose } from '../math/finale';
 import { bubbleDurationMs } from '../math/worldBubble';
-import { GLANCE_TARGETS, glanceSchedule } from '../math/worldGlance';
+import { GLANCE_TARGETS, doubleExposureSchedule, glanceSchedule } from '../math/worldGlance';
 import { framingKeyOfPose, framingPose, isOnScreen, placeCast, unseenChangeOk, viewRectOf } from '../math/worldPlacement';
 import type { Rect, SpeakerAnchor } from '../math/worldPlacement';
+import { worldFinaleFrame } from '../math/worldFinale';
+import { clampGirlStep } from '../math/worldGirlStep';
 import { deriveWorldState } from '../math/worldState';
-import type { WorldStateInput, WorldVisualState } from '../math/worldState';
+import type { GirlStageName, VirgaMode, WorldStateInput, WorldVisualState } from '../math/worldState';
+import type { CrowLead, ScriptCastId, WorldFinalePort, WorldFinalePortInput, WorldFinaleResult, WorldScriptFrame } from '../math/worldScript';
+import { isDownbeat } from '../math/worldPlayback';
 import { blipCount, talkTimeline } from '../math/worldTurn';
 import { WP22_TIER_PORT } from '../math/worldTierPort';
 import { createTierTracker } from '../math/worldTierRules';
@@ -41,9 +50,11 @@ import { createToastGate, silenceReason, TOAST_GATE_CONFIG } from '../math/world
 import type { SilenceInputs, ToastGate } from '../math/worldSilence';
 import { createWorldScheduler } from '../math/worldVoice';
 import type { WorldScheduler } from '../math/worldVoice';
+import { lineSettledId } from '../math/worldVoiceRules';
 import type { WorldCue, WorldSchedulerCtx } from '../math/worldVoiceRules';
 import { LivingWorld } from './LivingWorld';
 import type { LivingId } from './LivingWorld';
+import { WorldAtmos } from './WorldAtmos';
 import { WorldProps } from './WorldProps';
 import { createWorldRows, sortWorldRows } from './worldRows';
 import type { WorldRows } from './worldRows';
@@ -59,6 +70,8 @@ export interface WorldDirectorPorts {
   teaserOn(): boolean;
   demoCardOpen(): boolean;
   tabHidden(): boolean;
+  // WP23b: the cycle transition is running (read by the finale film's LAST FRAME; absent = false).
+  cycleTransitionActive?(): boolean;
 }
 
 export interface WorldDirectorDeps {
@@ -93,13 +106,57 @@ export interface WorldDebugState {
   pending: string[];
   chain: { chainId: string; step: number } | null;
   postCap: { active: boolean; step: number } | null;
-  placements: Record<string, { x: number; row: string } | null>;
+  placements: Record<string, { x: number; row: string; dy: number } | null>;
   activeLines: string[];
   // WP23a X1: the tier tracker's MK V heartbeat (on once the first top tier of the cycle is in) and the applied dog hole stage
   // (0 = no hole; null before the first applied state).
   tierHeartbeat: boolean;
   holeStage: number | null;
+  // WP23b: the ending phase, cycle and era age (s); the applied visual state (defaults before the first apply).
+  phase: string;
+  cycle: number;
+  eraAgeS: number;
+  stare: boolean;
+  vents: boolean;
+  reverse: boolean;
+  girlStage: GirlStageName;
+  girlSteps: number;
+  marks: number;                          // the state tally count; the drawn tally is marks + script.marksPlus (postgame extra mark)
+  readout: 'dash' | 'one';
+  puddle: number;
+  sprout: number;
+  scraps: number;
+  windowsLit: number;
+  virga: VirgaMode;
+  chladni: number;
+  lamp: WorldVisualState['props']['lamp'];
+  unison: boolean;                        // true once a unison group (SYNCHRONIZATION step 1) started
+  doubleExposures: number;                // era V flashes started (scheduled and ripple-driven)
+  opener: 'none' | 'waiting' | 'done';    // PAY-13 / PAY-14 opener: waiting once armed (cycle 2+), done once a PAY-13 / PAY-14 line is seen
+  script: WorldDebugScript | null;        // WP23b: the finale film / postgame frame last applied (null: none yet, or reset or new cycle)
 }
+
+// The last script frame, in debug form: the clocks (s), the LAST LOOK and the crow lead, each cast member's frame and world x, and the
+// postgame extra tally mark (marksPlus).
+export interface WorldDebugScript {
+  active: boolean;
+  t: number;
+  reduced: boolean;
+  lastLook: boolean;
+  keepS: number | null;     // Infinity after a boot into postgame; null before KEEP
+  postgameS: number;        // postgame clock: since KEEP, or since the boot into postgame
+  loopS: number;            // the 90 s loop clock (0 before the loop)
+  lead: CrowLead | null;
+  sensorTurn: boolean;
+  cast: Record<ScriptCastId, { visible: boolean; frame: string; row: number; x: number }>;
+  marksPlus: 0 | 1;         // the extra tally mark (PropScript.marksPlus): drawn tally = worldState().marks + marksPlus
+}
+
+// The film or postgame frame and its clocks, as the port last applied them.
+interface FilmState { frame: WorldScriptFrame; reduced: boolean; postgameS: number; loopS: number; sensorTurn: boolean }
+
+// One debug probe entry (LivingWorld, WorldProps, CastExtras and WorldAtmos share the shape).
+type ProbeEntry = { id: string; variant: string; x: number; visible: boolean; speaking: boolean };
 
 /** Debug API (C7) behind window.__wedtmd. Every call is a no-op or null once the director is destroyed. */
 export interface WorldDebugApi {
@@ -114,11 +171,12 @@ export interface WorldDebugApi {
   worldBubble(): { visible: boolean; rect: { x: number; y: number; w: number; h: number } | null; text: string; side: string } | null;
 }
 
-type WalkingSpeaker = Exclude<SpeakerId, 'girl' | 'payphone'>;
+// The cast walkers that speak to camera: the girl only while she stands on the ground (anchorOf and the plane sprites handle the rest).
+type WalkingSpeaker = Exclude<SpeakerId, 'payphone'>;
 type GlanceId = Exclude<DenizenId, 'sensor7' | 'girl'>;
 type Placements = Readonly<Record<GroundId, WorldPlacement | null>>;
 
-// What the renderers show. placeKey (visible flag and placements) is the part a relocation or a visibility change gates;
+// What the renderers show. placeKey (visible flag, placements and framing) is the part a relocation or a visibility change gates;
 // stateKey is the whole visual state. partial* is the state with the applied visible flag, committed while the gate holds.
 interface Plan {
   state: WorldVisualState;
@@ -127,6 +185,7 @@ interface Plan {
   stateKey: string;
   partialState: WorldVisualState;
   partialKey: string;
+  framing: FramingKey;
 }
 
 // wait: the bubble is not up yet (retried until placeWaitMs); shown: the bubble is up; hidden: it came down, the hold runs to doneAtMs.
@@ -136,6 +195,7 @@ interface ActiveLine {
   readonly id: string;
   readonly speaker: SpeakerId;
   readonly chainId: ChainId | null;  // the chain this line runs in (CROSSED LINES, postCap); null for a plain line
+  readonly scripted: boolean;        // INS-PG: no camera turn or talk pose, and never persisted (the scheduler does not know it)
   readonly text: string;
   readonly durationMs: number;
   readonly startMs: number;    // scheduler clock of the line's t = 0 (later than the cue by a chain prelude)
@@ -158,11 +218,28 @@ const TIMING_WINDOW = 120;
 const CYCLE_SEED_SALT = 7919;
 const GAME_VIEW: Rect = { x: 0, y: 0, w: VIEW.width, h: VIEW.height };
 const LINES_BY_ID: ReadonlyMap<string, WorldLine> = new Map(WORLD_LINES.map((line) => [line.id, line] as const));
-// Cast members whose head is reserved from bubbles (AD2 F2 / F16), in the order the ladder reads them.
-const HEAD_RESERVE_IDS: readonly LivingId[] = ['inspector', 'dog', 'crow', 'sensor7'];
+// Cast members whose head is reserved from bubbles (AD2 F2 / F16), in the order the ladder reads them. The girl is reserved whenever she
+// stands on the ground (era IV back row x 880, era V front row x 976): cast.anchor('girl') is null on a far plane (window, mini, miniNear).
+const HEAD_RESERVE_IDS: readonly LivingId[] = ['inspector', 'dog', 'crow', 'girl', 'sensor7'];
+// SYS LOG replies that start a chain (WORLD_CHAIN_STARTS logReply entries: sync-success, observer-one). Built once.
+const CHAIN_BY_LOG: ReadonlyMap<string, ChainId> = new Map(
+  (Object.keys(WORLD_CHAIN_STARTS) as (keyof typeof WORLD_CHAIN_STARTS)[]).flatMap((chainId): [string, ChainId][] => {
+    const start = WORLD_CHAIN_STARTS[chainId];
+    return start.kind === 'logReply' ? [[start.logId, chainId]] : [];
+  }),
+);
+// The PAY-13 / PAY-14 opener lines (trigger kind opener): the opener counts as settled once one of them is in seen.
+const OPENER_IDS: readonly string[] = WORLD_LINES.filter((line) => line.trigger.kind === 'opener').map((line) => line.id);
+
+// Every ending phase frames portrait (WP23b): the portrait reference pose is the view the ending placements are checked against.
+function portraitPose(): CameraPose {
+  const ref = WORLD_LAYOUT.framingPoses.find((r) => r.key === 'portrait');
+  return { centerX: ref?.centerX ?? CAMERA.focus.x, centerY: CAMERA.focus.y, zoom: ref?.zoom ?? CAMERA.defaultZoom };
+}
+const PORTRAIT_POSE: CameraPose = portraitPose();
 
 function isWalker(speaker: SpeakerId): speaker is WalkingSpeaker {
-  return speaker === 'inspector' || speaker === 'dog' || speaker === 'crow';
+  return speaker !== 'payphone';
 }
 
 function glanceIdOf(denizen: DenizenId): GlanceId | null {
@@ -183,7 +260,7 @@ function anyOnScreen(placements: Placements, view: Rect): boolean {
   return false;
 }
 
-export class LivingWorldDirector {
+export class LivingWorldDirector implements WorldFinalePort {
   private readonly scene: Phaser.Scene;
   private readonly session: GameSession;
   private readonly feedback: GameFeedback;
@@ -194,6 +271,7 @@ export class LivingWorldDirector {
   private readonly rows: WorldRows;
   private readonly props: WorldProps;
   private readonly cast: LivingWorld;
+  private readonly atmos: WorldAtmos;
   private readonly tracker: TierTracker;
   private readonly scheduler: WorldScheduler;
   private readonly toastGate: ToastGate;
@@ -230,11 +308,15 @@ export class LivingWorldDirector {
   private glance: Glance | null = null;
   private glanceK = 0;
   private glanceDueAt: number | null = null;
+  // Era V double exposures: the schedule index and the due time on the scheduler clock (null = not armed).
+  private dblK = 0;
+  private dblDueAt: number | null = null;
   private dirty = true;
   private forceApply = true;
   private lastRevision = -1;
   private applied: Plan | null = null;
   private wanted: Plan | null = null;
+  // The framing of the last built plan, for the debug state only (worldState). Rendering takes Plan.framing.
   private framing: FramingKey = 'e1';
   private timingCount = 0;
   private timingNext = 0;
@@ -247,6 +329,31 @@ export class LivingWorldDirector {
   // The tier tracker seeds once the cast holds its first applied state: a walker is on screen only after apply, and R6 (the speaker
   // on screen) gates every offer. A reset or a new cycle seeds again.
   private tierSeedPending = true;
+  // WP23b scheduler context: the era age (restarts when the era changes), the era card close, the MK V unison edge, the
+  // SYNCHRONIZATION hold, the cycle opener state and the unison debug flag. lastEra is set in the constructor.
+  private lastEra: number;
+  private eraSinceMs = 0;
+  private eraCardClosedAtMs: number | null = null;
+  private beatWasLow = false;
+  private unisonEdge = false;
+  private unisonHeld = false;
+  private unisonStarted = false;
+  private openerState: 'none' | 'waiting' | 'done' = 'none';
+  // The opener timer has fired: the opener is offered on each cadence until a PAY-13 / PAY-14 line is seen (a refused offer is kept).
+  private openerDue = false;
+  // WP23b finale and postgame clocks (scene time, ms). keepAtMs: KEEP IT RUNNING. bootAtMs: a boot into the postgame, or the first
+  // sight of it without a KEEP (a cycle restarted it). sensorTurnEndMs: the Sensor 7 turn hold. INS-PG is due (waiting for a free
+  // moment) or done (once per session, so a new cycle does not replay it).
+  private keepAtMs: number | null = null;
+  private bootAtMs: number | null = null;
+  // The same two stamps on the scheduler clock (nowMs): PAY-12 and the Sensor 7 turn gate on them (postgameGateMs).
+  private keepNowMs: number | null = null;
+  private bootNowMs: number | null = null;
+  private sensorTurnEndMs: number | null = null;
+  private sensorOffered = false;
+  private insPgDue = false;
+  private insPgDone = false;
+  private film: FilmState | null = null;
 
   constructor(deps: WorldDirectorDeps) {
     this.scene = deps.scene;
@@ -259,10 +366,14 @@ export class LivingWorldDirector {
     this.tier = deps.tier ?? WP22_TIER_PORT;
     const state = this.session.state;
     this.rows = createWorldRows(this.scene);
-    this.props = new WorldProps(this.scene, this.rows);
-    this.tracker = createTierTracker(this.tier);
+    // The raw MK V clock (not gated by the tracker) drives the downbeat accents of the cast and the props.
+    const beatLow = (now: number): boolean => this.tier.heartbeatLow(now);
+    this.props = new WorldProps(this.scene, this.rows, beatLow);
+    this.atmos = new WorldAtmos(this.scene, this.rows);
+    // Z6: an offer repeats until its line is settled (lineSettledId), so a refused INS-13 never starves DOG-04.
+    this.tracker = createTierTracker(this.tier, undefined, (id) => lineSettledId(id, this.session.world, this.session.prestige.cycle));
     // The Sensor 7 LED beats once the first top tier of the cycle is in (WP22 heartbeat, World scene clock).
-    this.cast = new LivingWorld(this.scene, this.rows, (now) => this.tracker.heartbeat() && this.tier.heartbeatLow(now));
+    this.cast = new LivingWorld(this.scene, this.rows, (now) => this.tracker.heartbeat() && beatLow(now), beatLow);
     sortWorldRows(this.rows);
     this.scheduler = createWorldScheduler();
     this.toastGate = createToastGate();
@@ -278,6 +389,10 @@ export class LivingWorldDirector {
     this.logsSeen = new Set(seedTracker(state, Date.now()).shown);
     this.hasClicked = state.totalClicks > 0;
     this.hasPurchased = anyPurchased(state.techLevels, this.session.techs);
+    this.lastEra = currentEra(state.techLevels);
+    // A session that boots into the postgame runs the loop clock from boot (keepS Infinity, no KEEP beats).
+    if (state.ending.phase === 'postgame') { this.bootAtMs = this.scene.time.now; this.bootNowMs = this.nowMs; }
+    this.armOpener();
     this.ctx = {
       nowMs: 0, playMs: 0, lastInputMs: 0, warmupUntilMs: WORLD_VOICE_CONFIG.sessionWarmupMs, era: 1, cycle: 1,
       edition: this.edition.id, setting: this.session.settings.worldVoices, silence: null,
@@ -314,10 +429,18 @@ export class LivingWorldDirector {
     // World slept: this.nowMs and the cast clock still hold the time from before the sleep).
     const sceneNow = this.scene.time.now;
     this.cast.syncNow(sceneNow);
+    // The MK V heartbeat's low-to-high edge is the unison downbeat: read once per frame, before this frame's scheduler tick.
+    const low = this.tier.heartbeatLow(sceneNow);
+    this.unisonEdge = isDownbeat(this.beatWasLow, low);
+    this.beatWasLow = low;
 
-    // Era card falling edge: its toast gate starts now.
+    this.trackEra(now);
+    // Era card falling edge: its toast gate starts now, and eraEntry lines wait eraEntryAfterCardMs from here.
     const eraUp = this.ports.eraCardShown();
-    if (this.eraWasUp && !eraUp) this.toastGate.onEraCardClosed(now);
+    if (this.eraWasUp && !eraUp) {
+      this.toastGate.onEraCardClosed(now);
+      this.eraCardClosedAtMs = now;
+    }
     this.eraWasUp = eraUp;
 
     this.runDue(now);
@@ -328,6 +451,7 @@ export class LivingWorldDirector {
     const cadence = this.cadenceAcc >= CADENCE_MS;
     if (cadence) {
       this.cadenceAcc = 0;
+      this.stepOpener();
       this.refreshOnboarding();
     }
 
@@ -337,6 +461,7 @@ export class LivingWorldDirector {
       this.tierSeedPending = false;
       this.seedTiers();
     }
+    this.stepPostgame(sceneNow);
 
     // A cue goes before the glances: a running glance ends first, and no glance starts on the frame a line starts (AD2 F10).
     const cue = this.scheduler.tick(this.ctxNow());
@@ -345,6 +470,7 @@ export class LivingWorldDirector {
       this.startCue(cue);
     }
     this.stepGlances(now, cadence);
+    this.stepDoubleExposures(now, cadence);
 
     this.stepLines(now);
     this.stepBubbles(now);
@@ -353,6 +479,8 @@ export class LivingWorldDirector {
     this.crankSteps = 0;
     this.cast.update(step, crank, sceneNow, this.cam);
     this.props.update(step, crank, sceneNow);
+    // The pages start from the inspector's feet (null while the inspector is hidden: no pages).
+    this.atmos.update(step, sceneNow, this.cast.poseOf('inspector'));
 
     this.recordTiming(performance.now() - t0);
   }
@@ -361,6 +489,7 @@ export class LivingWorldDirector {
   onLogShown(logId: string): void {
     this.logsSeen.add(logId);
     this.toastGate.onLogShown(this.nowMs);
+    this.dirty = true;
     if (logId === 'sensor-null') this.sensorReply();
   }
 
@@ -368,6 +497,9 @@ export class LivingWorldDirector {
   onLogCleared(logId: string): void {
     this.toastGate.onLogCleared(this.nowMs);
     this.offer({ kind: 'logReply', logId });
+    // A reply that starts a chain (sync-success, observer-one) offers the chain's first step; the scheduler checks its first line.
+    const chainId = CHAIN_BY_LOG.get(logId);
+    if (chainId !== undefined) this.offer({ kind: 'chain', chainId, step: 1 });
   }
 
   /** The SYS LOG poll defers while a bubble is up (D3). */
@@ -413,6 +545,7 @@ export class LivingWorldDirector {
     this.bubbles.destroy();
     this.cast.destroy();
     this.props.destroy();
+    this.atmos.destroy();
     this.rows.back.destroy();
     this.rows.front.destroy();
     this.destroyed = true;
@@ -433,7 +566,7 @@ export class LivingWorldDirector {
       s.on('reset', () => this.onNewGame()),
       s.on('cycle', () => this.onNewGame()),
       s.on('settings', (settings) => this.onSettings(settings.worldVoices)),
-      s.on('ending', () => { this.dirty = true; }),
+      s.on('ending', (e) => this.onEnding(e.phase)),
       this.feedback.partEvolved.on((e) => this.onEvolved(e)),
       this.feedback.partTorqued.on((e) => this.onTorqued(e)),
       this.ports.onTechTreeOpenChange((open) => this.onTreeOpen(open)),
@@ -455,6 +588,7 @@ export class LivingWorldDirector {
     this.offer({ kind: 'buy', techId: id });
     if (id === 'generator') this.offer({ kind: 'chain', chainId: 'crossedLines', step: 1 });
     if (id === 'wornMotor') this.offer({ kind: 'beat', beat: 'beat.failedSync' });
+    this.armOpener();
   }
 
   private onUnlock(): void {
@@ -519,9 +653,21 @@ export class LivingWorldDirector {
     this.toastGate.reset();
     this.glanceK = 0;
     this.glanceDueAt = null;
+    this.dblK = 0;
+    this.dblDueAt = null;
     this.logsSeen = new Set(seedTracker(s, Date.now()).shown);
     this.hasClicked = s.totalClicks > 0;
     this.hasPurchased = anyPurchased(s.techLevels, this.session.techs);
+    this.openerState = 'none';
+    this.openerDue = false;
+    this.unisonStarted = false;
+    // The finale script and the postgame clocks go with the cycle (INS-PG stays once per session: only a pending one is dropped).
+    this.resetPostgame();
+    this.insPgDue = false;
+    this.cast.setScript(null);
+    this.props.setScript(null);
+    this.atmos.setScript(null);
+    this.armOpener();
     this.indexClosedAtMs = null;
     this.clickTimes = [];
     this.rapidOn = false;
@@ -562,17 +708,16 @@ export class LivingWorldDirector {
     this.indexClosedAtMs = this.nowMs;
     const fx = this.tracker.onIndexClose(this.session.state.techLevels, this.nowMs);
     for (const offer of fx.offers) this.offer(offer);
-    // The ripple latched while the index was open plays once, now that the index has closed.
+    // The ripple latched while the index was open plays once, now that the index has closed (every era, WP23b).
     if (this.rippleLatched) {
       this.rippleLatched = false;
-      const era = currentEra(this.session.state.techLevels);
-      if (!this.session.settings.reducedMotion && (era === 1 || era === 2)) this.playRipple(era);
+      if (!this.session.settings.reducedMotion) this.playRipple(currentEra(this.session.state.techLevels));
     }
   }
 
   private applyTierEffects(fx: TierEffects): void {
     const era = currentEra(this.session.state.techLevels);
-    if (fx.ripple && !this.session.settings.reducedMotion && (era === 1 || era === 2)) {
+    if (fx.ripple && !this.session.settings.reducedMotion) {
       // At most one ripple per TECH INDEX release: while the index is open, the ripple waits for its close (onTreeOpen).
       if (this.ports.techTreeOpen()) this.rippleLatched = true;
       else this.playRipple(era);
@@ -589,6 +734,49 @@ export class LivingWorldDirector {
   private playRipple(era: number): void {
     this.cast.ripple(era);
     this.props.ripple(era);
+  }
+
+  // The era age and the era entry (WP23b). A rise after boot restarts the age, forgets the old card and offers the entry line (the
+  // scheduler holds it until the card has closed); a fall (a new game) restarts the age only.
+  private trackEra(now: number): void {
+    const era = currentEra(this.session.state.techLevels);
+    if (era === this.lastEra) return;
+    const rose = era > this.lastEra;
+    this.lastEra = era;
+    this.eraSinceMs = now;
+    this.eraCardClosedAtMs = null;
+    if (rose) this.offer({ kind: 'eraEntry', era });
+  }
+
+  // The cycle opener (WP23b): armed once per cycle 2+ on the first purchase (at boot or a new cycle when a purchase already
+  // exists). The timer sets openerDue and offers the opener openerAfterPurchaseMs later; stepOpener offers it again on each cadence
+  // until a PAY-13 / PAY-14 line is seen. An opener line already in seen settles it at once.
+  private armOpener(): void {
+    const cycle = this.session.prestige.cycle;
+    if (this.openerState !== 'none' || !this.hasPurchased || cycle < 2) return;
+    const world = this.session.world;
+    if (OPENER_IDS.some((id) => world.seen.includes(id))) {
+      this.openerState = 'done';
+      return;
+    }
+    this.openerState = 'waiting';
+    this.later(this.nowMs + WORLD_VOICE_CONFIG.openerAfterPurchaseMs, () => {
+      this.openerDue = true;
+      this.offer({ kind: 'opener', fromCycle: cycle });
+    }, false);
+  }
+
+  // Each cadence while the opener is due: settled once a PAY-13 / PAY-14 line is in seen, else offered again. The scheduler holds a
+  // queued line and refuses a seen one; an offer refused while WORLD VOICES are off or the booth is off screen plays later.
+  private stepOpener(): void {
+    if (this.openerState !== 'waiting' || !this.openerDue) return;
+    const world = this.session.world;
+    if (OPENER_IDS.some((id) => world.seen.includes(id))) {
+      this.openerState = 'done';
+      this.openerDue = false;
+      return;
+    }
+    this.offer({ kind: 'opener', fromCycle: this.session.prestige.cycle });
   }
 
   // Rapid clicking: the count of clicks inside rapidWindowMs reaches rapidClicksPerS per second. Offered on the rising edge.
@@ -679,19 +867,33 @@ export class LivingWorldDirector {
     const input: WorldStateInput = {
       levels,
       lifetimeEe: s.lifetime.ee,
+      lifetimePr: s.lifetime.pr,
       cycle: this.session.prestige.cycle,
       edition: this.edition.id,
       dogLies: this.edition.demo && world.seenEver.includes('DOG-12'),
       motorRetrofitTier: this.tier.tierOf('motorRetrofit', levels),
+      tiers: {
+        condenser: this.tier.tierOf('condenser', levels),
+        firebox: this.tier.tierOf('firebox', levels),
+        standingWave: this.tier.tierOf('standingWave', levels),
+      },
+      observerOne: this.logsSeen.has('observer-one'),
       phase: s.ending.phase,
     };
     const state = deriveWorldState(input);
-    const pose = framingPose(levels);
-    const framing = framingKeyOfPose(pose);
+    // Every ending phase frames portrait (WP23b): the film and the postgame never move the placements with the camera.
+    const ending = s.ending.phase !== 'none';
+    const pose = ending ? PORTRAIT_POSE : framingPose(levels);
+    const framing = ending ? 'portrait' : framingKeyOfPose(pose);
     this.framing = framing;
-    const placements = placeCast(levels, framing, pose);
-    const placeKey = JSON.stringify([state.visible, placements]);
-    const stateKey = JSON.stringify(state);
+    const placed = placeCast(levels, framing, pose, this.session.prestige.cycle);
+    // B-A3: the girl moves at most stepMaxWorldPx per commit. The held-back rest of her step is planned again at the next cadence.
+    const girl = clampGirlStep(this.applied?.placements.girl ?? null, placed.girl, WORLD_GIRL.stepMaxWorldPx);
+    const placements: Placements = girl === placed.girl ? placed : { ...placed, girl };
+    if (girl !== placed.girl) this.dirty = true;
+    const placeKey = JSON.stringify([state.visible, placements, framing]);
+    // The whole plan: a placement-only change (a machine part that moves the framing) counts as a change too.
+    const stateKey = JSON.stringify([state, placements, framing]);
     const applied = this.applied;
     if (applied !== null && stateKey === applied.stateKey) {
       this.wanted = null;
@@ -699,39 +901,136 @@ export class LivingWorldDirector {
       return;
     }
     const gated = applied !== null && placeKey !== applied.placeKey;
+    // A partial commit keeps the applied placements and framing, so its key carries them too.
     const partialState: WorldVisualState = gated && applied !== null ? { ...state, visible: applied.state.visible } : state;
-    const partialKey = partialState === state ? stateKey : JSON.stringify(partialState);
-    this.wanted = { state, placements, placeKey, stateKey, partialState, partialKey };
+    const partialKey = partialState === state ? stateKey : JSON.stringify([partialState, applied?.placements, applied?.framing]);
+    this.wanted = { state, placements, placeKey, stateKey, partialState, partialKey, framing };
   }
 
   private commit(plan: Plan): void {
     this.applied = plan;
     this.wanted = null;
     this.forceApply = false;
-    this.applyVisual(plan.state, plan.placements);
+    this.applyVisual(plan.state, plan.placements, plan.framing);
   }
 
   // Keeps the old placements and visibility (the gate holds) and takes the rest of the new state.
   private commitPartial(plan: Plan, applied: Plan): void {
     const next: Plan = { ...applied, state: plan.partialState, stateKey: plan.partialKey };
     this.applied = next;
-    this.applyVisual(next.state, next.placements);
+    this.applyVisual(next.state, next.placements, next.framing);
   }
 
-  private applyVisual(state: WorldVisualState, placements: Placements): void {
+  private applyVisual(state: WorldVisualState, placements: Placements, framing: FramingKey): void {
     const reducedMotion = this.session.settings.reducedMotion;
     this.cast.apply(state, placements, { reducedMotion });
-    this.props.apply(state, placements, { reducedMotion });
+    this.props.apply(state, placements, { reducedMotion, framing });
+    this.atmos.apply(state, { reducedMotion });
+  }
+
+  // ---- finale film and postgame (WP23b): the WorldFinalePort ----
+
+  /**
+   * The finale film and postgame port (FinaleDirector calls it every frame of an ending and once at none). The frame is pure
+   * (worldFinale.ts); the renderers only draw it. none clears the script and the clocks. Any other phase keeps the KEEP and loop
+   * clocks, the sensor turn and LAST FRAME (the cycle transition, in choice and postgame).
+   */
+  applyFinale(i: WorldFinalePortInput): WorldFinaleResult {
+    if (this.destroyed) return { lead: null };
+    if (i.phase === 'none') {
+      this.resetPostgame();
+      this.cast.setScript(null);
+      this.props.setScript(null);
+      this.atmos.setScript(null);
+      return { lead: null };
+    }
+    const sceneNow = this.scene.time.now;
+    // The postgame without a KEEP (a boot, or a cycle that restarted it mid-postgame) starts the boot clock at first sight.
+    if (i.phase === 'postgame' && this.keepAtMs === null && this.bootAtMs === null) { this.bootAtMs = sceneNow; this.bootNowMs = this.nowMs; }
+    const keepS = this.keepClockS(sceneNow);
+    const loopS = this.loopClockS(sceneNow);
+    const sensorTurn = this.sensorTurnEndMs !== null && sceneNow < this.sensorTurnEndMs;
+    const frame = worldFinaleFrame({
+      phase: i.phase, t: i.t, reduced: i.reduced, keepS, loopS, sensorTurn,
+      lastFrame: this.ports.cycleTransitionActive?.() === true, cycle: this.session.prestige.cycle,
+    });
+    this.cast.setScript(frame);
+    this.props.setScript(frame);
+    this.atmos.setScript(frame);
+    this.film = { frame, reduced: i.reduced, postgameS: this.keepAtMs !== null ? keepS : loopS, loopS, sensorTurn };
+    return { lead: frame.lead };
+  }
+
+  // KEEP IT RUNNING (choice to postgame) starts the KEEP clock. Every ending change re-plans at once (forceApply), so the film never
+  // waits for the relocation gate.
+  private onEnding(phase: EndingPhase): void {
+    if (phase === 'postgame') { this.keepAtMs = this.scene.time.now; this.keepNowMs = this.nowMs; }
+    this.dirty = true;
+    this.forceApply = true;
+  }
+
+  // The KEEP and loop clocks, the sensor turn, the offer flag and the film frame go (a reset, a new cycle, or the ending back at none).
+  private resetPostgame(): void {
+    this.keepAtMs = null;
+    this.bootAtMs = null;
+    this.sensorTurnEndMs = null;
+    this.sensorOffered = false;
+    this.film = null;
+    this.keepNowMs = null;
+    this.bootNowMs = null;
+  }
+
+  // Seconds since KEEP IT RUNNING; Infinity after a boot into the postgame (no KEEP beats); -1 before the postgame.
+  private keepClockS(sceneNow: number): number {
+    if (this.keepAtMs !== null) return (sceneNow - this.keepAtMs) / 1000;
+    return this.bootAtMs !== null ? Infinity : -1;
+  }
+
+  // Seconds on the 90 s postgame loop: the KEEP clock less its loop start, or the boot clock; 0 before the postgame.
+  private loopClockS(sceneNow: number): number {
+    if (this.keepAtMs !== null) return Math.max(0, (sceneNow - this.keepAtMs) / 1000 - WORLD_ENDING.keep.loopStartS);
+    return this.bootAtMs !== null ? Math.max(0, (sceneNow - this.bootAtMs) / 1000) : 0;
+  }
+
+  // Postgame time on the scheduler clock (ms): PAY-12 and the Sensor 7 turn gate on it, so a debug advance reaches them. Since the loop
+  // start after KEEP, or since the boot into the postgame. 0 before the postgame.
+  private postgameGateMs(): number {
+    if (this.keepNowMs !== null) return Math.max(0, this.nowMs - this.keepNowMs - WORLD_ENDING.keep.loopStartS * 1000);
+    return this.bootNowMs !== null ? Math.max(0, this.nowMs - this.bootNowMs) : 0;
+  }
+
+  // Postgame voices (WP23b). PAY-12 is a scheduler line (postgameMs). The Sensor 7 turn is offered once per cycle after its delay
+  // (the scheduler plays it once; seen). INS-PG is scripted: once per session, at the Inspector's pat, with the setting ON only; it
+  // waits for a quiet, free moment and has no camera turn (startLine) and is never persisted (persist).
+  private stepPostgame(sceneNow: number): void {
+    if (this.session.state.ending.phase !== 'postgame') return;
+    const loopMs = this.loopClockS(sceneNow) * 1000;
+    if (!this.sensorOffered && this.postgameGateMs() >= WORLD_ENDING.sensorTurn.afterPostgameS * 1000) {
+      this.sensorOffered = true;
+      this.offer({ kind: 'beat', beat: 'beat.sensorTurn' });
+    }
+    if (!this.insPgDone && loopMs >= WORLD_POSTGAME_LOOP.patAtS * 1000) {
+      this.insPgDone = true;
+      this.insPgDue = this.session.settings.worldVoices === 'on';
+    }
+    if (this.insPgDue && this.silence === null && this.active.length === 0 && this.speakerOnScreen('inspector')) {
+      this.insPgDue = false;
+      this.startLine('INS-PG', this.nowMs, 0, null);
+    }
   }
 
   // ---- glances (step 6): wordless turns to camera, never with a line, never near one ----
 
+  // Glances run in eras I-IV (WORLD_GLANCE) and stop while the stare is on (observer-one): a running one ends at once.
   private stepGlances(now: number, cadence: boolean): void {
+    // WP23b: no glance while the ending runs (the finale film and the postgame paint the cast).
+    const filming = this.session.state.ending.phase !== 'none';
     const running = this.glance;
-    if (running !== null && now >= running.endAt) this.endGlance(running);
-    if (this.glance !== null || this.quiet || this.asleep || this.silence !== null || this.active.length > 0) return;
+    if (running !== null && (now >= running.endAt || filming || this.applied?.state.stare === true)) this.endGlance(running);
+    if (this.glance !== null || filming || this.quiet || this.asleep || this.silence !== null || this.active.length > 0) return;
+    if (this.applied?.state.stare === true) return;
     const era = currentEra(this.session.state.techLevels);
-    if (era !== 1 && era !== 2) return;
+    if (era === 5) return;
     const cycle = this.session.prestige.cycle;
     const seed = WORLD_GLANCE_SEED + CYCLE_SEED_SALT * cycle;
     if (this.glanceDueAt === null) this.glanceDueAt = now + glanceSchedule(this.glanceK, seed, era).afterMs;
@@ -743,6 +1042,26 @@ export class LivingWorldDirector {
     this.startGlance(id, now);
     this.glanceK += 1;
     this.glanceDueAt = null;
+  }
+
+  // Era V double exposures (WP23b): a flash of one whole-self frame on its own hash stream (doubleExposureSchedule). Wordless, only in
+  // era V with the ending at none, never under reduced motion, quiet or asleep. The due time waits for the target to be on screen.
+  private stepDoubleExposures(now: number, cadence: boolean): void {
+    const s = this.session.state;
+    const eligible = currentEra(s.techLevels) === 5 && s.ending.phase === 'none' && !this.session.settings.reducedMotion
+      && !this.quiet && !this.asleep;
+    if (!eligible) {
+      this.dblDueAt = null;
+      return;
+    }
+    const seed = WORLD_DOUBLE_EXPOSURE.seed + CYCLE_SEED_SALT * this.session.prestige.cycle;
+    if (this.dblDueAt === null) this.dblDueAt = now + doubleExposureSchedule(this.dblK, seed).afterMs;
+    if (!cadence || now < this.dblDueAt) return;
+    const { target } = doubleExposureSchedule(this.dblK, seed);
+    if (!this.speakerOnScreen(target)) return;
+    this.cast.flashDouble(target);
+    this.dblK += 1;
+    this.dblDueAt = null;
   }
 
   // The scheduled denizen when it is on screen, else the next on-screen target in GLANCE_TARGETS order.
@@ -789,21 +1108,39 @@ export class LivingWorldDirector {
       for (const id of cue.ids) this.startBeat(id);
       return;
     }
-    const id = cue.ids[0];
-    if (id === undefined) return;
     const chainId: ChainId | null = cue.kind === 'chainStep' ? (cue.chainId ?? null) : null;
-    if (cue.kind === 'chainStep' && cue.chainId === 'crossedLines' && cue.step === 1) {
-      // CROSSED LINES opens with a dial tone, then a ring, then the first line (bible 6.1).
-      const pre = WORLD_VOICE_CONFIG.crossedLinesPrelude;
+    // CROSSED LINES opens with a dial tone, then a ring, then the first line (bible 6.1).
+    const pre = WORLD_VOICE_CONFIG.crossedLinesPrelude;
+    const crossed = cue.kind === 'chainStep' && cue.chainId === 'crossedLines' && cue.step === 1;
+    if (crossed) {
       this.setDial(true);
       this.later(now + pre.dialToneMs, () => {
         this.setDial(false);
         this.ring();
       }, true);
-      this.startLine(id, now, pre.dialToneMs + pre.ringMs, chainId);
-      return;
     }
-    this.startLine(id, now, 0, chainId);
+    // SYNCHRONIZATION step 1 is the unison pair (bible 6.1): the cast and the booth hold (see holdUnison).
+    if (cue.kind === 'chainStep' && cue.chainId === 'synchronization' && cue.step === 1) this.holdUnison();
+    if (cue.ids.length > 1) this.unisonStarted = true;
+    // Every member of the cue starts on this tick: a unison pair takes both bubble slots at once.
+    const delayMs = crossed ? pre.dialToneMs + pre.ringMs : 0;
+    for (const id of cue.ids) this.startLine(id, now, delayMs, chainId);
+  }
+
+  // SYNCHRONIZATION step 1 (bible 6.1): every cast member holds its front pose and the booth lifts its receiver. The hold ends
+  // when PAY-09 hides, at unisonHoldMs (the cap), or when the lines are cut (endAll).
+  private holdUnison(): void {
+    this.cast.snapAll(true);
+    this.props.receiverLevel(true);
+    this.unisonHeld = true;
+    this.later(this.nowMs + WORLD_VOICE_CONFIG.unisonHoldMs, () => this.releaseUnison(), false);
+  }
+
+  private releaseUnison(): void {
+    if (!this.unisonHeld) return;
+    this.unisonHeld = false;
+    this.cast.snapAll(false);
+    this.props.receiverLevel(false);
   }
 
   private startBeat(id: string): void {
@@ -813,6 +1150,9 @@ export class LivingWorldDirector {
       this.props.tapeFreeze(ms);
     } else if (id === 'beat.failedSync') {
       this.cast.failedSync();
+    } else if (id === 'beat.sensorTurn') {
+      // The postgame camera beat: Sensor 7's head turns to camera for holdS (the script frame reads sensorTurn).
+      this.sensorTurnEndMs = this.scene.time.now + WORLD_ENDING.sensorTurn.holdS * 1000;
     }
     this.persist(id, 1);
   }
@@ -820,14 +1160,19 @@ export class LivingWorldDirector {
   private startLine(id: string, nowMs: number, delayMs: number, chainId: ChainId | null): void {
     const line = LINES_BY_ID.get(id);
     if (line === undefined) throw new Error(`living world: no line '${id}'`);
-    const durationMs = bubbleDurationMs(line.text);
+    // Shown, announced and timed alike: the placeholders ({cycle} and the word forms) expand for this cycle.
+    const text = expandWorldText(line.text, this.session.prestige.cycle);
+    const durationMs = bubbleDurationMs(text);
     const tl = talkTimeline(durationMs, this.session.settings.reducedMotion);
     const startMs = nowMs + delayMs;
     this.active.push({
-      id, chainId, speaker: line.speaker, text: line.text, durationMs, startMs, showAtMs: tl.bubbleShowAtMs,
+      id, chainId, speaker: line.speaker, scripted: line.scripted === true, text, durationMs, startMs, showAtMs: tl.bubbleShowAtMs,
       turned: false, phase: 'wait', slot: null, nextTryMs: startMs + tl.bubbleShowAtMs, hideAtMs: 0, doneAtMs: 0,
     });
     if (id === 'PAY-02') this.ringIfDue(nowMs);
+    // The booth rings in tune for PAY-09 (bible 6.1), once before an opener line (the dead booth, WP23b) and once for PAY-12, the
+    // postgame's only ring (bible 9.2).
+    if (id === 'PAY-09' || id === 'PAY-12' || line.trigger.kind === 'opener') this.ring();
   }
 
   private ring(): void {
@@ -925,10 +1270,10 @@ export class LivingWorldDirector {
     a.hideAtMs = now + a.durationMs;
     a.doneAtMs = a.hideAtMs + WORLD_VOICE_CONFIG.turnHoldAfterMs;
     this.bubbleEdgeMs = now;
-    if (isWalker(speaker)) this.cast.setTalking(speaker, true, blipCount(a.text));
+    if (isWalker(speaker) && !a.scripted) this.cast.setTalking(speaker, true, blipCount(a.text));
     if (this.session.settings.worldVoices !== 'off') {
       this.blipEvents += 1;
-      this.feedback.worldSound.emit({ kind: 'blip', speaker, count: blipCount(a.text), reversed: false });
+      this.feedback.worldSound.emit({ kind: 'blip', speaker, count: blipCount(a.text), reversed: this.applied?.state.reverse === true });
     }
     this.view.announce(WORLD_A11Y_PREFIX[speaker], a.text);
     return true;
@@ -937,6 +1282,8 @@ export class LivingWorldDirector {
   // The bubble comes down: the speaker is released (turnHoldAfterMs of hold), the fraction is persisted.
   private hideLine(a: ActiveLine, fraction: number): void {
     if (a.slot !== null) this.bubbles.hide(a.slot);
+    // PAY-09 ends the SYNCHRONIZATION hold when its bubble comes down (bible 6.1: all snap back on the beat).
+    if (a.id === 'PAY-09') this.releaseUnison();
     a.phase = 'hidden';
     this.bubbleEdgeMs = this.nowMs;
     this.turnHold(a, WORLD_VOICE_CONFIG.turnHoldAfterMs);
@@ -950,12 +1297,13 @@ export class LivingWorldDirector {
   }
 
   private turnOn(a: ActiveLine): void {
+    if (a.scripted) return;   // INS-PG: no camera turn (the postgame script holds the pose)
     if (isWalker(a.speaker)) this.cast.turnToCamera(a.speaker, 'talk');
     else if (a.speaker === 'payphone') this.props.receiverLevel(true);
   }
 
   private turnHold(a: ActiveLine, holdMs: number): void {
-    if (!isWalker(a.speaker)) return;
+    if (!isWalker(a.speaker) || a.scripted) return;
     this.cast.setTalking(a.speaker, false);
     this.cast.release(a.speaker, holdMs);
   }
@@ -987,6 +1335,7 @@ export class LivingWorldDirector {
     this.active.length = 0;
     this.bubbles.hideAll(true);
     this.setDial(false);
+    this.releaseUnison();
     this.scheduler.interrupt(reason, this.ctxNow());
   }
 
@@ -1004,6 +1353,7 @@ export class LivingWorldDirector {
 
   // blocked: the bubble never came up (placeWait expired). A cut by silence is not a block.
   private persist(id: string, fraction: number, blocked = false): void {
+    if (LINES_BY_ID.get(id)?.scripted === true) return;   // INS-PG: scripted, session only, never in the scheduler's seen
     const next = this.scheduler.shown(id, fraction, this.ctxNow(), blocked ? { blocked: true } : undefined);
     if (next !== null) this.session.recordWorld(next);
   }
@@ -1048,6 +1398,11 @@ export class LivingWorldDirector {
     c.lifetimeEe = s.lifetime.ee;
     c.localHour = this.clockHour ?? new Date().getHours();
     c.chainMemberWaiting = this.chainMemberWaiting();
+    c.phase = s.ending.phase;
+    c.eraAgeMs = now - this.eraSinceMs;
+    c.eraCardClosedAtMs = this.eraCardClosedAtMs;
+    c.postgameMs = this.postgameGateMs();   // PAY-12 waits 10 min of postgame time (scheduler clock; KEEP or boot)
+    c.unisonEdge = this.unisonEdge;
     return c;
   }
 
@@ -1065,7 +1420,9 @@ export class LivingWorldDirector {
     return this.cam;
   }
 
+  // The girl is the cast member on the ground stage and the props plane (window, mini, miniNear) otherwise.
   private anchorOf(speaker: SpeakerId, cam: CameraPose): SpeakerAnchor | null {
+    if (speaker === 'girl' && this.applied?.state.girl.stageName !== 'ground') return this.props.anchor('girl', cam);
     if (isWalker(speaker)) return this.cast.anchor(speaker, cam);
     return this.props.anchor(speaker, cam);
   }
@@ -1133,9 +1490,9 @@ export class LivingWorldDirector {
       worldClock: (hour) => {
         this.clockHour = hour === null || !Number.isFinite(hour) ? null : Math.floor(hour);
       },
-      livingWorld: () => (this.destroyed ? [] : [...this.cast.probe(), ...this.props.probe()]),
+      livingWorld: () => (this.destroyed ? [] : this.probeList()),
       worldStats: () => ({
-        objects: this.cast.stats().objects + this.props.stats().objects,
+        objects: this.cast.stats().objects + this.props.stats().objects + this.atmos.stats().objects,
         meanMs: this.refreshTimingMean(),
       }),
       worldBubble: () => this.debugBubble(),
@@ -1153,18 +1510,32 @@ export class LivingWorldDirector {
     return true;
   }
 
+  // Debug probe: the cast, the props, the cast extras and the atmosphere. The girl is one member: her cast entry on the ground, her
+  // props entry on a far plane; the other entry is dropped (an invisible duplicate).
+  private probeList(): ProbeEntry[] {
+    const props = this.props.probe();
+    const onPlane = props.some((e) => e.id === 'girl' && e.visible);
+    return [
+      ...this.cast.probe().filter((e) => e.id !== 'girl' || !onPlane),
+      ...props.filter((e) => e.id !== 'girl' || onPlane),
+      ...this.cast.extrasProbe(),
+      ...this.atmos.probe(),
+    ];
+  }
+
   private debugState(): WorldDebugState | null {
     if (this.destroyed) return null;
     const s = this.session.state;
     const world = this.session.world;
     const st = this.scheduler.state();
-    const placements: Record<string, { x: number; row: string } | null> = {};
+    const placements: Record<string, { x: number; row: string; dy: number } | null> = {};
     const applied = this.applied;
     if (applied !== null) {
       for (const [key, p] of Object.entries(applied.placements)) {
-        placements[key] = p === null ? null : { x: p.x, row: p.row };
+        placements[key] = p === null ? null : { x: p.x, row: p.row, dy: p.dy ?? 0 };
       }
     }
+    const v = applied?.state ?? null;
     return {
       era: currentEra(s.techLevels),
       framing: this.framing,
@@ -1185,7 +1556,44 @@ export class LivingWorldDirector {
       placements,
       activeLines: this.active.map((a) => a.id),
       tierHeartbeat: this.tracker.heartbeat(),
-      holeStage: applied === null ? null : applied.state.props.holeStage,
+      holeStage: v === null ? null : v.props.holeStage,
+      phase: s.ending.phase,
+      cycle: this.session.prestige.cycle,
+      eraAgeS: (this.nowMs - this.eraSinceMs) / 1000,
+      stare: v?.stare === true,
+      vents: v?.vents === true,
+      reverse: v?.reverse === true,
+      girlStage: v?.girl.stageName ?? 'window',
+      girlSteps: v?.girl.steps ?? 0,
+      marks: v?.props.marks ?? 0,
+      readout: v?.sensor.readout ?? 'dash',
+      puddle: v?.props.puddle.size ?? 0,
+      sprout: v?.props.sprout ?? 0,
+      scraps: v?.props.scraps ?? 0,
+      windowsLit: v?.props.windowsLit ?? 0,
+      virga: v?.props.virga ?? 'off',
+      chladni: v?.props.chladni ?? 0,
+      lamp: v?.props.lamp ?? 'dead',
+      unison: this.unisonStarted,
+      doubleExposures: this.cast.flashCount(),
+      opener: this.openerState,
+      script: this.debugScript(),
+    };
+  }
+
+  // The last film or postgame frame in debug form (the cast's frame, row and world x = home + dx), or null.
+  private debugScript(): WorldDebugScript | null {
+    const f = this.film;
+    if (f === null) return null;
+    const { frame } = f;
+    const member = (id: ScriptCastId): WorldDebugScript['cast'][ScriptCastId] => {
+      const p = frame.cast[id];
+      return { visible: p.visible, frame: p.frame, row: p.row, x: WORLD_ENDING.homeX[id] + p.dx };
+    };
+    return {
+      active: true, t: frame.t, reduced: f.reduced, lastLook: frame.lastLook, keepS: frame.keepS, postgameS: f.postgameS,
+      loopS: f.loopS, lead: frame.lead, sensorTurn: f.sensorTurn, marksPlus: frame.props.marksPlus,
+      cast: { inspector: member('inspector'), dog: member('dog'), crow: member('crow'), girl: member('girl'), sensor7: member('sensor7') },
     };
   }
 

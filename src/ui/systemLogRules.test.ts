@@ -30,9 +30,9 @@ const logState = (createdAt: number, overrides: Partial<ResourceMap> = {}) => ({
 });
 
 describe('SYSTEM_LOGS table', () => {
-  it('has 8 to 20 entries with unique ids', () => {
+  it('has 8 to 22 entries with unique ids', () => {
     expect(SYSTEM_LOGS.length).toBeGreaterThanOrEqual(8);
-    expect(SYSTEM_LOGS.length).toBeLessThanOrEqual(20);
+    expect(SYSTEM_LOGS.length).toBeLessThanOrEqual(22);
     const ids = new Set(SYSTEM_LOGS.map((e) => e.id));
     expect(ids.size).toBe(SYSTEM_LOGS.length);
   });
@@ -56,6 +56,37 @@ describe('SYSTEM_LOGS table', () => {
       expect(atLeast).toBeGreaterThanOrEqual(last[key] ?? 0);
       last[key] = atLeast;
     }
+  });
+});
+
+// WP23b optional machine logs (bible §5.4): 22 entries, the two new slots pinned by table position, text and trigger.
+describe('SYSTEM_LOGS WP23b slots', () => {
+  const indexOf = (id: string): number => SYSTEM_LOGS.findIndex((e) => e.id === id);
+
+  it('has 22 entries', () => {
+    expect(SYSTEM_LOGS).toHaveLength(22);
+  });
+
+  it('puts perimeter-umbrella directly before steam-rain (lifetime PR 100K)', () => {
+    const i = indexOf('perimeter-umbrella');
+    expect(i).toBeGreaterThan(0);
+    expect(SYSTEM_LOGS[i + 1]?.id).toBe('steam-rain');
+    expect(SYSTEM_LOGS[i]).toEqual({
+      id: 'perimeter-umbrella',
+      text: 'Umbrella detected. Precipitation: none.',
+      trigger: { kind: 'lifetime', res: 'pr', atLeast: 100000 },
+    });
+  });
+
+  it('puts perimeter-phase directly after signal-below (lifetime RS 5M)', () => {
+    const i = indexOf('perimeter-phase');
+    expect(i).toBeGreaterThan(0);
+    expect(SYSTEM_LOGS[i - 1]?.id).toBe('signal-below');
+    expect(SYSTEM_LOGS[i]).toEqual({
+      id: 'perimeter-phase',
+      text: 'Perimeter moving in phase. Not counted.',
+      trigger: { kind: 'lifetime', res: 'rs', atLeast: 5000000 },
+    });
   });
 });
 

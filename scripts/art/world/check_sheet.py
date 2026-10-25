@@ -1,10 +1,15 @@
 # Sheet gate (WP23a, Art Director): checks one built PNG against sheets.SHEETS and, when the asset id is already in
 # src/assets/manifest.ts, against the manifest dims. Exit 1 on any error.
 #   - PNG is RGBA, 8 bit per channel (IHDR colour type 6, depth 8); size == cell x frames by cell x rows
-#   - alpha only 0 or 255; every opaque pixel on the 25-colour palette (VIOLET_LIGHT only in era row V)
+#   - alpha only 0 or 255; every opaque pixel on the 25-colour palette (VIOLET_LIGHT only in era row V), narrowed by the
+#     sheet's `only` codes and widened per frame by `only_frames` (still palette-only); the restored-world colours
+#     (pal.RESTORED: PALETTE green0-3 / skyClear0-3) only in the frames a sheet names in `restored_frames` (WP23b AD3c:
+#     sprout bloom, puddle whole)
 #   - era-row sheets: row I uses only the sepia codes (ink, rust a/b, sand ramp)
-#   - per cell: not empty, 1 silhouette component (4-connected), full 1 px ink ring when the sheet asks for one,
-#     feet on the bottom row for pivot 'feet' (except the sheet's stacked `overlays`, e.g. Sensor 7 heads and glyphs)
+#   - per cell: not empty, 1 silhouette component (4-connected; every sheet since WP23b AD3a, unless the sheet sets
+#     parts=True, e.g. a strip of separate streaks), full 1 px ink ring when the sheet asks for one,
+#     feet on the bottom row for pivot 'feet' (except the sheet's stacked `overlays`, e.g. Sensor 7 heads and glyphs,
+#     and its `airborne` frames, e.g. the crow's flight cells: WP23b AD3b)
 #   - frames listed in the sheet's `grow` (e.g. hole stages) only ever add pixels: no un-happening (DENIZEN_ART 8.2)
 #   - prints per-row colour stats
 # usage: python -I scripts/art/world/check_sheet.py <sheet> [--png <file>] [--manifest <manifest.ts>]
@@ -16,8 +21,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from PIL import Image  # noqa: E402
-from pal import ALL, INV, PALETTE_RGB, rgb  # noqa: E402
-from sheets import SHEETS, FRAMES, ERA_ROWS, EXTRA_COLOURS  # noqa: E402
+from pal import ALL, INV, PALETTE_RGB, RESTORED, rgb  # noqa: E402
+from sheets import SHEETS, FRAMES, ERA_ROWS, EXTRA_COLOURS, cell_origin  # noqa: E402
 from erarecolor import SEPIA_ROW_CODES  # noqa: E402
 
 REPO = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
@@ -104,6 +109,10 @@ def check(sheet, png=None, manifest=None):
     px = im.load()
     cw, ch = spec['cell']
     only = {rgb(ALL[c]) for c in spec.get('only', ())} or None
+    # per-frame override of `only` (WP23b AD3b: the girl window's restored frame is the post-finale warm lamp light)
+    only_frames = {fn: {rgb(ALL[c]) for c in codes} for fn, codes in spec.get('only_frames', {}).items()}
+    # restored-world colours, per frame (WP23b AD3c): pal.RESTORED codes only, never on a pre-finale frame
+    restored_frames = {fn: {rgb(RESTORED[c]) for c in codes} for fn, codes in spec.get('restored_frames', {}).items()}
     alphas = set()
     for r in range(spec['rows']):
         allowed = set(PALETTE_RGB)
@@ -114,13 +123,18 @@ def check(sheet, png=None, manifest=None):
             allowed &= only
         row_counts = {}
         masks = {}
+        base_allowed = allowed
         for c, fn in enumerate(FRAMES[sheet]):
+            allowed = (base_allowed | only_frames[fn]) & set(PALETTE_RGB) if fn in only_frames else base_allowed
+            if fn in restored_frames:
+                allowed = allowed | restored_frames[fn]
+            ox, oy = cell_origin(spec, c, r)
             mask = [[False] * cw for _ in range(ch)]
             masks[fn] = mask
             edge_bad = 0
             for y in range(ch):
                 for x in range(cw):
-                    p = px[c * cw + x, r * ch + y]
+                    p = px[ox + x, oy + y]
                     alphas.add(p[3])
                     if p[3] == 0:
                         continue
@@ -138,17 +152,18 @@ def check(sheet, png=None, manifest=None):
                         continue
                     edge = any(not (0 <= nx < cw and 0 <= ny < ch) or not mask[ny][nx]
                                for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
-                    if edge and px[c * cw + x, r * ch + y][:3] != rgb(ALL['K']):
+                    if edge and px[ox + x, oy + y][:3] != rgb(ALL['K']):
                         edge_bad += 1
             n = components(mask, cw, ch)
             if n == 0:
                 errors.append('%s %s: empty cell' % (ERA_ROWS[r] if spec['era_rows'] else '-', fn))
                 continue
-            if spec['ring'] and n != 1:
+            if n != 1 and not spec.get('parts'):                     # every cell, props too (WP23b); opt out: parts=True
                 errors.append('%s %s: %d silhouette components (want 1)' % (ERA_ROWS[r] if spec['era_rows'] else '-', fn, n))
             if spec['ring'] and edge_bad:
                 errors.append('%s %s: %d edge px not ink (full ink ring)' % (ERA_ROWS[r] if spec['era_rows'] else '-', fn, edge_bad))
-            if spec['pivot'] == 'feet' and fn not in spec.get('overlays', ()) and not any(mask[ch - 1]):
+            if (spec['pivot'] == 'feet' and fn not in spec.get('overlays', ()) and fn not in spec.get('airborne', ())
+                    and not any(mask[ch - 1])):
                 errors.append('%s %s: feet not on the bottom row' % (ERA_ROWS[r] if spec['era_rows'] else '-', fn))
         grow = spec.get('grow', ())
         for a, b in zip(grow, grow[1:]):

@@ -8,7 +8,13 @@
 # level = era V and the payphone's "front" while it speaks: the receiver swung up level, pointed at the camera = the
 # mouthpiece cup seen face-on (rim + 2x2 holes), 1 px out from the phone unit on a 1 px cord stub; the bubble
 # anchors on its top row.
-# PLACEHOLDER CELL (copy of hang until WP23b): onHook.
+# WP23b AD3b (drawn, no placeholders left): onHook = the handset hung up on the unit's OUTER side, upright, cups
+# facing the unit, on a 1 px hook prong above the earpiece, the armoured cord from the mouthpiece back into the
+# unit's bottom corner. Drawn for the ON-HOOK pivot: booth origin + WORLD_ENV.receiverOnHookArt (13, -34) art px =
+# booth cell (27.0, 18) = the unit's top-right corner, so cell column 4 lies on the unit's right ink column (booth
+# x 27) and the cell rows 0-11 are the unit rows 18-29 (README AD3b hand-off for T14). Cell columns 0-3 stay empty:
+# the booth's unit shows through. The booth keeps an empty cradle in every frame (also the whole row), so the LAST
+# LOOK blink (booth lit, row 5) never doubles or drops the handset.
 
 @frame hang
 ...K....
@@ -80,4 +86,17 @@
 ........
 ........
 
-@copy onHook hang
+
+@frame onHook
+........
+.....K..
+....KKKK
+....K43K
+....KK4K
+.....K3K
+.....K3K
+....KK3K
+....K32K
+....KKKK
+.....K..
+....KK..

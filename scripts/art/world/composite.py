@@ -4,7 +4,7 @@
 #
 # Poses (DENIZEN_ART 3; WP23a-assignments EM decision 9): focus world px + zoom; VIEW 1280x720 game px.
 #   e1 = s0-s7 era I, zoom 1 (store shot 02-era1-full)   s8 = era II generator, zoom 1   s9 = era II full, zoom .75
-#   (store shot 03-era2-generator is the s9 pose). Device scale = shot height / 720 (1.5 at 1080p).
+#   (store shot 03-era2-generator is the s9 pose). s11 / s15 = zoom .5 (eras III-V; WP23b). Device scale = shot height / 720.
 # Ground rows: world y = GROUND_Y 1680 (back row) or + 24..48 (front row). Far window plane: sf 0.3, skyline art x2,
 # tile instance origin strip (768, 428) (EM decision 8).
 #
@@ -25,7 +25,11 @@ from build_sheet import load_master, cell_rows  # noqa: E402
 VIEW = (1280, 720)
 GROUND_Y = 1680
 PIXEL_SCALE = 2
-POSES = {'e1': ((1920, 1520), 1.0), 's8': ((2064, 1464), 1.0), 's9': ((2192, 1504), 0.75)}
+POSES = {'e1': ((1920, 1520), 1.0), 's8': ((2064, 1464), 1.0), 's9': ((2192, 1504), 0.75),
+         # WP23b AD3a: zoom .5 framings (DENIZEN_ART 3: view x 642-3202 / 640-3200), matched to the store shots by the
+         # ground line and the anchors: 04-era3-boiler = s11 (GROUND_Y at game y 560), 07-era5-ruined and
+         # 09-postgame-portrait = s15 (era V camera: GROUND_Y at game y 660)
+         's11': ((1922, 1280), 0.5), 's15': ((1920, 1080), 0.5)}
 SKYLINE = dict(sf=0.3, origin=(768, 428), scale=2)
 # skyline art (x, y, crop w, h) of the six lit panes: DENIZEN_ART 5.1 placements, and the AD-a proposal that keeps all six
 # on the dark face of the tower that carries the girl's window (the three low panes sit at the skyline ground line and

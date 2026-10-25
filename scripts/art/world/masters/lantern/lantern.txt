@@ -1,0 +1,19 @@
+# Lantern prop (WP23b AD3a, Art Director). Cell 6x4 art px, pivot (0.5, 1); back row at x 965 (WP23b Z2; finale baseL hold,
+# postgame relic). The girl's lantern (world.girl: ink cage, glow dot C, rust base d) with its bail handle on top.
+# lit = standing in the grass just after the drop, the 1 px glow dot C still burning beside the rust frame d;
+# fallen = on its side (handle left, base right), the ink cage around the still-warm glass B / C and the rust base d.
+# AD4 (WP23b round 4): the old all-dark glass (1) vanished on the dark base of the regrowth bush at x 965 (baseL hold, postgame);
+# the warm glass is the relic she left: the warmest point in the inner left gap.
+# Selective ink outline. Single row, not an era sheet. Clusters of >= 2 px (workbench singletons; 3-wide body = 82).
+
+@frame lit
+..KK..
+.KKKK.
+.KCdK.
+.KddK.
+
+@frame fallen
+..KKK.
+.KKBdK
+.KKCdK
+..KKK.

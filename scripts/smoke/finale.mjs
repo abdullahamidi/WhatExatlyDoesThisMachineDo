@@ -1,4 +1,4 @@
-// WP13 finale smoke (WP18 additions: completeEra, hidden parts, camera per keyframe, reduced survey; WP18b: restoredSwapped = number of parts on a #restored texture). Usage: PW_PATH=... [PERF=1] node finale.mjs <url> <outdir>
+// WP13 finale smoke (WP18 additions: completeEra, hidden parts, camera per keyframe, reduced survey; WP18b: restoredSwapped = number of parts on a #restored texture; WP23b: finale_world_* keys = the living world film and postgame clock, read from worldState().script). Usage: PW_PATH=... [PERF=1] node finale.mjs <url> <outdir>
 // Records keys only (no asserts). Every result key starts with finale_ (plus errors / FAILED).
 // Uses the WP13 debug hook (finaleState, skipFinale, finaleSeek, displayObjects, componentState().frame,
 // session.updateSettings) and the WP18 hook fields partsVisible and cameraState and the WP18b field restoredTextures; missing hook fields resolve to null, never throw.
@@ -108,6 +108,98 @@ const perfSample = async label => {
   ok(`finale_perf_${label}`, { t: s?.t ?? null, phase: s?.phase ?? null, finaleMeanMs: s?.meanMs ?? null, machineMeanMs: await machineMean(), displayObjects: await dispObjs() });
 };
 
+// WP23b world film probes (T20). worldState().script is the living world's finale frame for the current film time (null outside
+// the film or without the world director). Records only: no asserts, the EM and the art director read the values and the shots.
+const WORLD_IDS = ['inspector', 'dog', 'crow', 'girl', 'sensor7'];
+// Keyframes of the world film (film seconds, WP23b R4 film table and AD4 list). LAST LOOK is not listed here: it is derived in-game (lastLookFlip).
+const WORLD_KEYS = [['13', 13], ['24_3', 24.3], ['31_1', 31.1], ['38', 38], ['41', 41], ['45', 45], ['59_83', 59.83]];
+// KEEP IT RUNNING clock marks (seconds since the click, the script's keepS): turn away 1.5 (keep.turnAwayS), crow beat 3.0, dog faded
+// by 5.0, dog back on the left wing by 9.0 (the loop starts there). R1b Z1.
+const KEEP_MARKS = [0.5, 1.5, 3.0, 5.0, 6.0, 9.0];
+// One script sample: the cast poses of the five denizens, the crow lead, the film clocks and the marks (null without the script).
+const worldScript = () => page.evaluate((ids) => {
+  const st = window.__wedtmd?.worldState?.() ?? null;
+  const s = st?.script ?? null;
+  if (!s) return null;
+  const cast = {};
+  for (const id of ids) {
+    const c = s.cast?.[id];
+    cast[id] = c ? { visible: c.visible, frame: c.frame, row: c.row, x: c.x } : null;
+  }
+  return { t: s.t ?? null, reduced: s.reduced ?? null, lastLook: s.lastLook ?? null, keepS: s.keepS ?? null, postgameS: s.postgameS ?? null, loopS: s.loopS ?? null, sensorTurn: s.sensorTurn ?? null, lead: s.lead ?? null, cast, marks: st?.marks ?? null, marksPlus: s.marksPlus ?? null };
+}, WORLD_IDS);
+// Seeks the film clock and reads the script at once (the script is pushed synchronously by the seek).
+const sampleAt = async t => { await seek(t); return worldScript(); };
+// Keyframe: script sample at t, then a 250 ms settle and the shot (same settle as shotLog).
+const worldShot = async (label, t) => {
+  const s = await sampleAt(t);
+  await page.waitForTimeout(250);
+  ok(`finale_world_k${label}`, { seekT: t, ...s });
+  await page.screenshot({ path: `${out}/finale-world-k${label}.png` });
+};
+// Derived restore times: the film clock is scanned in-page (24.0 to 40.0, 0.05 s grid) for the first time each denizen's row is 5
+// (the crossfade ends there), then bisected to about 0.0002 s. Synchronous: no waits, no timing guess. Records rows 0.25 s either side.
+const restoreFlips = () => page.evaluate((ids) => {
+  const api = window.__wedtmd;
+  if (!api?.finaleSeek || !api.worldState) return null;
+  const castAt = t => { api.finaleSeek(t); return api.worldState()?.script?.cast ?? null; };
+  const rowAt = (t, id) => castAt(t)?.[id]?.row ?? null;
+  const grid = [];
+  for (let i = 0; i <= 320; i++) grid.push(24 + i * 0.05);
+  const rows = grid.map(t => { const c = castAt(t); return ids.map(id => c?.[id]?.row ?? null); });
+  const res = {};
+  ids.forEach((id, k) => {
+    const i = rows.findIndex(r => r[k] === 5);
+    if (i <= 0) { res[id] = { flipS: null, rowAtStart: i === 0 ? 5 : null }; return; }
+    let lo = grid[i - 1], hi = grid[i];
+    for (let n = 0; n < 8; n++) { const mid = (lo + hi) / 2; if (rowAt(mid, id) === 5) hi = mid; else lo = mid; }
+    const flipS = Math.round(hi * 1000) / 1000;
+    res[id] = { flipS, before: rowAt(flipS - 0.25, id), after: rowAt(flipS + 0.25, id) };
+  });
+  return res;
+}, WORLD_IDS);
+// LAST LOOK flip: the first film time (55 to 62, 0.05 s grid, bisected) where worldState().script.lastLook is true.
+const lastLookFlip = () => page.evaluate(() => {
+  const api = window.__wedtmd;
+  if (!api?.finaleSeek || !api.worldState) return null;
+  const at = t => { api.finaleSeek(t); return api.worldState()?.script?.lastLook === true; };
+  let lo = null, hi = null;
+  for (let i = 0; i <= 140; i++) {
+    const t = 55 + i * 0.05;
+    if (at(t)) { hi = t; break; }
+    lo = t;
+  }
+  if (lo === null || hi === null) return { flipS: null };
+  for (let n = 0; n < 10; n++) { const mid = (lo + hi) / 2; if (at(mid)) hi = mid; else lo = mid; }
+  return { flipS: Math.round(hi * 1000) / 1000 };
+});
+// Reduced motion (RUN 3): whole at 24.3, girl gone, crow cut at 38.0 and back at 49.3. Script samples only, no shot.
+const worldAtReduced = async () => ({ k24_3: await sampleAt(24.3), k37_5: await sampleAt(37.5), k38: await sampleAt(38), k49_3: await sampleAt(49.3) });
+// KEEP IT RUNNING from the skipped choice (RUN 2), then the script on the KEEP clock (real seconds, keepS) until 9.0 s.
+// snaps = the first sample at each KEEP_MARKS value; crowBeat = crow frame / visible / x changes from 3.0 to 6.5 s (the scratch pecks).
+const worldPostgame = async () => {
+  await keepClick();
+  const snaps = {}, crowBeat = [];
+  let lastCrow = '';
+  const deadline = Date.now() + 20000;
+  while (Date.now() < deadline) {
+    const s = await worldScript();
+    const k = s?.keepS ?? -1;
+    if (s !== null && k >= 0) {
+      for (const m of KEEP_MARKS) if (snaps[m.toFixed(1)] === undefined && k >= m) snaps[m.toFixed(1)] = s;
+      if (k >= 3.0 && k <= 6.5) {
+        const c = s.cast.crow;
+        const sig = c ? `${c.frame}|${c.visible}|${c.x}` : 'null';
+        if (sig !== lastCrow) { lastCrow = sig; crowBeat.push({ keepS: k, crow: c }); }
+      }
+    }
+    if (snaps['9.0'] !== undefined) break;
+    await page.waitForTimeout(40);
+  }
+  await page.screenshot({ path: `${out}/finale-world-postgame.png` });
+  return { snaps, crowBeat };
+};
+
 try {
   if (PERF) {
     // perf run: S1 (t 8-10, max boost), S3 (t 22-36, wipe + masks + seeds), postgame
@@ -136,6 +228,12 @@ try {
   ok('finale_1_buy', { buy, phase: s1?.phase ?? null, t: s1?.t ?? null, hudHidden: await hudHidden(), crankDelta: (await totalClicks()) - c0, modals: await modals() });
   await page.keyboard.press('t'); await page.waitForTimeout(200);
   ok('finale_1_t_sequence', { treeOpen: await treeOpen(), phase: await phase() });
+
+  // WP23b: the world film at its keyframes (sequence phase, before KEYS: the 'end' key finishes the sequence), the derived restore flips and LAST LOOK
+  for (const [label, t] of WORLD_KEYS) await worldShot(label, t);
+  ok('finale_world_restore', await restoreFlips());
+  const lastLook = await lastLookFlip();
+  ok('finale_world_lastlook', { flipS: lastLook?.flipS ?? null, pre: lastLook?.flipS != null ? await sampleAt(lastLook.flipS - 0.05) : null, post: lastLook?.flipS != null ? await sampleAt(lastLook.flipS + 0.05) : null });
 
   for (const [label, t] of KEYS) await shotLog(label, t);
 
@@ -197,6 +295,10 @@ try {
   const sk = await fin();
   ok('finale_skip', { tBeforeEsc: pre?.t ?? null, treeAtSeq, msToChoice, phase: sk?.phase ?? null, t: sk?.t ?? null, keepShown: await keepShown(), menuOpen: await menuOpen() });
   await page.screenshot({ path: `${out}/finale-skip-choice.png` });
+  // WP23b: KEEP IT RUNNING from this choice, then the postgame world script on the KEEP clock (turn away, crow beat, dog fade and return, marks)
+  const pg = await worldPostgame();
+  const m6 = pg.snaps['6.0'] ?? null;
+  ok('finale_world_postgame', { snaps: pg.snaps, crowBeat: pg.crowBeat, marksDrawn: typeof m6?.marks === 'number' && typeof m6?.marksPlus === 'number' ? m6.marks + m6.marksPlus : null });
 
   // RUN 3: reduced motion set BEFORE the buy
   await open();
@@ -219,6 +321,8 @@ try {
   const r3 = await fin();
   ok('finale_r_42', { t: r3?.t ?? null, completeEra: r3?.frame?.completeEra ?? null, camera: await camState(), restoredSwapped: await restoredSwapped() });
   await page.screenshot({ path: `${out}/finale-reduced-42.png` });
+  // WP23b: reduced motion world film (every cast member whole at 24.3, girl gone, crow cut from 38.0 to 49.3)
+  ok('finale_world_reduced', await worldAtReduced());
 } catch (e) { res.finale_FAILED = String(e).split('\n')[0]; }
 res.errors = errors; console.log(JSON.stringify(res, null, 1));
 if (ctx) await ctx.close();
