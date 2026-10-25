@@ -87,21 +87,24 @@ Machine-local depths are relative to the machine container, which sits at world 
 |---|---|---|---|---|---|---|---|
 | `machine.frame` | `machine/support-frame.png` | 200 x 110 | 0.5, 1 | none | none | machine layer `frame`, depth 10 | Riveted, rusty support frame whose base sits on the ground line. |
 | `machine.crank` | `machine/hand-crank.png` | 48 x 48 | 0.5, 0.5 | none | rot 80 (`machine/rot/hand-crank-rot.png`) | machine layer `front`, depth 30 | Hand crank with its hub at the centre; the player clicks it to work the machine. |
-| `machine.gearSmall` | `machine/gear-small.png` | 40 x 40 | 0.5, 0.5 | none | rot 80 (`machine/rot/gear-small-rot.png`) | machine layer `mid`, depth 21 | Small toothed gear meshed into the drive train. |
-| `machine.gearLarge` | `machine/gear-large.png` | 64 x 64 | 0.5, 0.5 | none | rot 140 (`machine/rot/gear-large-rot.png`) | machine layer `mid`, depth 20 | Large reinforced toothed gear that slows and steadies the drive. |
-| `machine.flywheel` | `machine/flywheel.png` | 96 x 96 | 0.5, 0.5 | none | rot 180 (`machine/rot/flywheel-rot.png`) | machine layer `mid`, depth 20 | Heavy flywheel that stores momentum for the machine. |
-| `machine.motor` | `machine/worn-motor.png` | 64 x 48 | 0.5, 0.5 | none | none | machine layer `mid`, depth 21 | Worn electric motor bolted to the frame, shaking as it runs. |
+| `machine.gearSmall` | `machine/gear-small.png` (tiers t2 `machine/tiers/gear-small-t2.png` + rot `machine/tiers/rot/gear-small-t2-rot.png`, t3 `machine/tiers/gear-small-t3.png` + rot `machine/tiers/rot/gear-small-t3-rot.png`) | 40 x 40 | 0.5, 0.5 | none | rot 80 (`machine/rot/gear-small-rot.png`) | machine layer `mid`, depth 21 | Small toothed gear meshed into the drive train. |
+| `machine.gearLarge` | `machine/gear-large.png` (tiers t2 `machine/tiers/gear-large-t2.png` + rot `machine/tiers/rot/gear-large-t2-rot.png`, t3 `machine/tiers/gear-large-t3.png` + rot `machine/tiers/rot/gear-large-t3-rot.png`) | 64 x 64 | 0.5, 0.5 | none | rot 140 (`machine/rot/gear-large-rot.png`) | machine layer `mid`, depth 20 | Large reinforced toothed gear that slows and steadies the drive. |
+| `machine.flywheel` | `machine/flywheel.png` (tiers t3 `machine/tiers/flywheel-t3.png` + rot `machine/tiers/rot/flywheel-t3-rot.png`) | 96 x 96 | 0.5, 0.5 | none | rot 180 (`machine/rot/flywheel-rot.png`) | machine layer `mid`, depth 20 | Heavy flywheel that stores momentum for the machine. |
+| `machine.motor` | `machine/worn-motor.png` (tiers t2 `machine/tiers/worn-motor-t2.png`, t3 `machine/tiers/worn-motor-t3.png`, t4 `machine/tiers/worn-motor-t4.png`, t5 `machine/tiers/worn-motor-t5.png` + pulse `machine/tiers/worn-motor-t5b.png`) | 64 x 48 | 0.5, 0.5 | none | none | machine layer `mid`, depth 21 | Worn electric motor bolted to the frame, shaking as it runs. |
 | `machine.bearingPlate` | `machine/bearing-plate.png` | 16 x 16 | 0.5, 0.5 | none | none | machine layer `frame`, depth 11 | Square riveted steel bearing plate with a round bearing housing at its centre. |
 | `machine.pulleyMotor` | `machine/pulley-motor.png` | 12 x 12 | 0.5, 0.5 | none | rot 24 (`machine/rot/pulley-motor-rot.png`) | machine layer `mid`, depth 22 | Tiny steel V-pulley seen face-on, with a rim ring and a hub dot. |
-| `machine.pulleyMain` | `machine/pulley-main.png` | 24 x 24 | 0.5, 0.5 | none | rot 140 (`machine/rot/pulley-main-rot.png`) | machine layer `mid`, depth 22 | Cast main pulley face-on with a 4-hole web and a raised crank-pin boss at its right side. |
-| `machine.pulleyCrank` | `machine/pulley-crank.png` | 32 x 32 | 0.5, 0.5 | none | rot 80 (`machine/rot/pulley-crank-rot.png`) | machine layer `mid`, depth 22 | Small flat-belt pulley (r8, centred in a 32×32 canvas) with crowned rim and solid three-rib web; belt rides inside the pinion root. |
-| `machine.pulleyFlywheel` | `machine/pulley-flywheel.png` | 28 x 28 | 0.5, 0.5 | none | rot 180 (`machine/rot/pulley-flywheel-rot.png`) | machine layer `mid`, depth 23 | Hub pulley bolted to the flywheel, seen face-on with four spokes. |
-| `machine.pedestal` | `machine/flywheel-pedestal.png` | 48 x 64 | 0.5, 1 | none | none | machine layer `back`, depth 21 | Cast-iron A-frame bearing stand in side view with a plummer block cap and bolted foot plates. |
-| `machine.motorPlinth` | `machine/motor-plinth.png` | 48 x 10 | 0.5, 1 | none | none | machine layer `mid`, depth 20 | Low riveted iron skid with four hold-down bolts and sand dust along its top edge. |
-| `machine.pistonBlock` | `machine/piston-block.png` | 96 x 58 | 0.5, 1 | none | none | machine layer `back`, depth 1 | Static block of three identical vertical cylinders with capped heads on a foot plate. |
+| `machine.pulleyMain` | `machine/pulley-main.png` (tiers t2 `machine/tiers/pulley-main-t2.png` + rot `machine/tiers/rot/pulley-main-t2-rot.png`, t3 `machine/tiers/pulley-main-t3.png` + rot `machine/tiers/rot/pulley-main-t3-rot.png`) | 24 x 24 | 0.5, 0.5 | none | rot 140 (`machine/rot/pulley-main-rot.png`) | machine layer `mid`, depth 22 | Cast main pulley face-on with a 4-hole web and a raised crank-pin boss at its right side. |
+| `machine.pulleyCrank` | `machine/pulley-crank.png` (tiers t3 `machine/tiers/pulley-crank-t3.png` + rot `machine/tiers/rot/pulley-crank-t3-rot.png`) | 32 x 32 | 0.5, 0.5 | none | rot 80 (`machine/rot/pulley-crank-rot.png`) | machine layer `mid`, depth 22 | Small flat-belt pulley (r8, centred in a 32×32 canvas) with crowned rim and solid three-rib web; belt rides inside the pinion root. |
+| `machine.pulleyFlywheel` | `machine/pulley-flywheel.png` (tiers t3 `machine/tiers/pulley-flywheel-t3.png` + rot `machine/tiers/rot/pulley-flywheel-t3-rot.png`) | 28 x 28 | 0.5, 0.5 | none | rot 180 (`machine/rot/pulley-flywheel-rot.png`) | machine layer `mid`, depth 23 | Hub pulley bolted to the flywheel, seen face-on with four spokes. |
+| `machine.pedestal` | `machine/flywheel-pedestal.png` (tiers t2 `machine/tiers/flywheel-pedestal-t2.png`, t3 `machine/tiers/flywheel-pedestal-t3.png` + pulse `machine/tiers/flywheel-pedestal-t3b.png`) | 48 x 64 | 0.5, 1 | none | none | machine layer `back`, depth 21 | Cast-iron A-frame bearing stand in side view with a plummer block cap and bolted foot plates. |
+| `machine.motorPlinth` | `machine/motor-plinth.png` (tiers t2 `machine/tiers/motor-plinth-t2.png`, t3 `machine/tiers/motor-plinth-t3.png`, t4 `machine/tiers/motor-plinth-t4.png`, t5 `machine/tiers/motor-plinth-t5.png`) | 48 x 10 | 0.5, 1 | none | none | machine layer `mid`, depth 20 | Low riveted iron skid with four hold-down bolts and sand dust along its top edge. |
+| `machine.pistonBlock` | `machine/piston-block.png` (tiers t2 `machine/tiers/piston-block-t2.png`, t3 `machine/tiers/piston-block-t3.png`, t4 `machine/tiers/piston-block-t4.png`, t5 `machine/tiers/piston-block-t5.png` + pulse `machine/tiers/piston-block-t5b.png`) | 96 x 58 | 0.5, 1 | none | none | machine layer `back`, depth 1 | Static block of three identical vertical cylinders with capped heads on a foot plate. |
 | `machine.pistonYoke` | `machine/piston-yoke.png` | 80 x 16 | 0.5, 0.75 | none | none | machine layer `back`, depth 0 | Horizontal steel crosshead bar with a centre pin eye and three plunger rods rising from it. |
 | `machine.crankBrace` | `machine/crank-brace.png` | 48 x 48 | 0.5, 0.5 | none | rot 80 (`machine/rot/crank-brace-rot.png`) | machine layer `front`, depth 31 | Riveted doubler strap and bolted boss flange that overlay the hand crank. |
 | `machine.namePlate` | `machine/era5/name-plate.png` | 240 x 11 | 0.5, 1 | none | 6 (40 x 11) | machine layer `frame`, depth 12 | Six-frame name plate on the girder: the stamped label lights one more stage per frame. |
+| `machine.gearRim` | `machine/tiers/decals/gear-rim.png` | 64 x 64 | 0.5, 0.5 | none | none | machine layer `mid`, depth 20.5 | Static brass annulus (radius 20-22) laid over the large gear rim at MK III: rotationally symmetric, a glint arc at the upper left; never turns with the gear. |
+| `machine.flywheelRim2` | `machine/tiers/decals/flywheel-rim-2.png` | 96 x 96 | 0.5, 0.5 | none | none | machine layer `mid`, depth 20.5 | Static clean-iron annulus over the flywheel rim at MK II (re-tyred rim): lit arc upper left, shadow arc lower right; rotationally symmetric. |
+| `machine.flywheelRim3` | `machine/tiers/decals/flywheel-rim-3.png` | 96 x 96 | 0.5, 0.5 | none | none | machine layer `mid`, depth 20.6 | Flywheel rim 2 plus a one pixel brass inlay ring, drawn over rim 2 at MK III; rotationally symmetric. |
 
 ### Machine — Era II
 
@@ -110,14 +113,14 @@ Machine-local depths are relative to the machine container, which sits at world 
 | `machine.generatorPlinth` | `machine/era2/generator-plinth.png` | 104 x 10 | 0.5, 1 | none | none | machine layer `mid`, depth 20 | Cast bedplate with a tension-screw slot that the generator set stands on. |
 | `machine.generator` | `machine/era2/generator.png` | 96 x 64 | 0.5, 0.5 | none | none | machine layer `mid`, depth 21 | Generator body with a coil housing, a shaft end and a cable terminal on the right. |
 | `machine.pulleyGenerator` | `machine/era2/pulley-generator.png` | 20 x 20 | 0.5, 0.5 | none | rot 80 (`machine/era2/rot/pulley-generator-rot.png`) | machine layer `mid`, depth 25 | Generator belt pulley seen face-on, with a rim, spokes and a hub. |
-| `machine.coils1` | `machine/era2/coils-1.png` | 64 x 40 | 0.5, 0.5 | none | none | machine layer `mid`, depth 22 | First coil stage: a single winding of copper wire around the generator frame. |
+| `machine.coils1` | `machine/era2/coils-1.png` (tiers t2 `machine/tiers/coils-1-t2.png`) | 64 x 40 | 0.5, 0.5 | none | none | machine layer `mid`, depth 22 | First coil stage: a single winding of copper wire around the generator frame. |
 | `machine.coils2` | `machine/era2/coils-2.png` | 64 x 40 | 0.5, 0.5 | none | none | machine layer `mid`, depth 23 | Second coil stage: a denser copper winding that covers the first stage. |
-| `machine.coils3` | `machine/era2/coils-3.png` | 64 x 40 | 0.5, 0.5 | none | none | machine layer `mid`, depth 24 | Third coil stage: a heavy copper winding that covers the lower stages. |
-| `machine.motorRetrofit` | `machine/era2/motor-retrofit.png` | 32 x 16 | 0.5, 0.5 | none | none | machine layer `mid`, depth 23 | Retrofit control box with a wired terminal strip, bolted on top of the worn motor. |
+| `machine.coils3` | `machine/era2/coils-3.png` (tiers t5 `machine/tiers/coils-3-t5.png`) | 64 x 40 | 0.5, 0.5 | none | none | machine layer `mid`, depth 24 | Third coil stage: a heavy copper winding that covers the lower stages. |
+| `machine.motorRetrofit` | `machine/era2/motor-retrofit.png` (tiers t2 `machine/tiers/motor-retrofit-t2.png`, t3 `machine/tiers/motor-retrofit-t3.png`, t4 `machine/tiers/motor-retrofit-t4.png`, t5 `machine/tiers/motor-retrofit-t5.png` + pulse `machine/tiers/motor-retrofit-t5b.png`) | 32 x 16 | 0.5, 0.5 | none | none | machine layer `mid`, depth 23 | Retrofit control box with a wired terminal strip, bolted on top of the worn motor. |
 | `machine.dynamo` | `machine/era2/dynamo.png` | 24 x 24 | 0.5, 0.5 | none | none | machine layer `frame`, depth 12 | Small friction dynamo: a housing with a roller that rides the underside of the crank belt, clamped to the frame. |
 | `machine.capacitorRack` | `machine/era2/capacitor-rack.png` | 48 x 64 | 0.5, 1 | none | none | machine layer `mid`, depth 20 | Rack of capacitor cans on a steel frame with two lugs on the top plate. |
 | `machine.sparkGap` | `machine/era2/spark-gap.png` | 128 x 48 | 0.5, 1 | none | 4 (32 x 48) | machine layer `mid`, depth 26 | Four-frame spark gap sheet: two electrodes with a flickering discharge between them. |
-| `machine.transformer` | `machine/era2/transformer.png` | 64 x 64 | 0.5, 1 | none | none | machine layer `mid`, depth 20 | Transformer tank with a primary and a bushing lug on its top. |
+| `machine.transformer` | `machine/era2/transformer.png` (tiers t2 `machine/tiers/transformer-t2.png`, t3 `machine/tiers/transformer-t3.png`, t4 `machine/tiers/transformer-t4.png`, t5 `machine/tiers/transformer-t5.png` + pulse `machine/tiers/transformer-t5b.png`) | 64 x 64 | 0.5, 1 | none | none | machine layer `mid`, depth 20 | Transformer tank with a primary and a bushing lug on its top. |
 | `machine.cableMast` | `machine/era2/cable-mast.png` | 16 x 112 | 0.5, 1 | none | none | machine layer `back`, depth 0 | Tall steel mast with a cable head at the top that carries the line to the pylons. |
 | `machine.generatorGlow` | `machine/legacy/generator-glow.png` | 384 x 64 | 0.5, 0.5 | none | 4 (96 x 64) | machine layer `mid`, depth 24 | Four-frame EE gauge overlay laid 1:1 on the generator (frame = EE/s level): field-coil turn gaps, armature air-gap ring, terminal caps and brush sparks light cyan; everything stays inside the generator silhouette except the level-3 brush sparks, which rise up to 2 px above the terminal caps; drawn under the belt and the generator pulley. |
 
@@ -130,18 +133,18 @@ Machine-local depths are relative to the machine container, which sits at world 
 | `machine.steamManifold` | `machine/era3/steam-manifold.png` | 96 x 14 | 0.5, 1 | none | none | machine layer `back`, depth 2 | Flat steam manifold header with three branch stubs and a port at its left end. |
 | `machine.gauge` | `machine/era3/gauge.png` | 24 x 24 | 0.5, 1 | none | none | machine layer `mid`, depth 22 | Round pressure gauge dial with a bezel and tick marks, without its needle. |
 | `machine.gaugeNeedle` | `machine/era3/gauge-needle.png` | 600 x 24 | 0.5, 1 | none | 25 (24 x 24) | machine layer `mid`, depth 23 | Twenty-five frame sheet of the gauge needle, one needle angle per frame from zero to full scale. |
-| `machine.fireGlow1` | `machine/era3/firebox-1.png` | 96 x 24 | 0.5, 0.5 | none | 4 (24 x 24) | machine layer `mid`, depth 22 | Four-frame firebox glow sheet, first stage: a dull ember behind the fire door. |
+| `machine.fireGlow1` | `machine/era3/firebox-1.png` (tiers t2 `machine/tiers/firebox-1-t2.png`) | 96 x 24 | 0.5, 0.5 | none | 4 (24 x 24) | machine layer `mid`, depth 22 | Four-frame firebox glow sheet, first stage: a dull ember behind the fire door. |
 | `machine.fireGlow2` | `machine/era3/firebox-2.png` | 96 x 24 | 0.5, 0.5 | none | 4 (24 x 24) | machine layer `mid`, depth 23 | Four-frame firebox glow sheet, second stage: a brighter fire behind the fire door. |
-| `machine.fireGlow3` | `machine/era3/firebox-3.png` | 96 x 24 | 0.5, 0.5 | none | 4 (24 x 24) | machine layer `mid`, depth 24 | Four-frame firebox glow sheet, third stage: a white-hot fire behind the fire door. |
-| `machine.inductionHeater` | `machine/era3/induction-heater.png` | 56 x 40 | 0.5, 1 | none | none | machine layer `mid`, depth 25 | Induction heater coil housing on a small plinth with a cable tie on its side. |
+| `machine.fireGlow3` | `machine/era3/firebox-3.png` (tiers t5 `machine/tiers/firebox-3-t5.png`) | 96 x 24 | 0.5, 0.5 | none | 4 (24 x 24) | machine layer `mid`, depth 24 | Four-frame firebox glow sheet, third stage: a white-hot fire behind the fire door. |
+| `machine.inductionHeater` | `machine/era3/induction-heater.png` (tiers t2 `machine/tiers/induction-heater-t2.png`, t3 `machine/tiers/induction-heater-t3.png`, t4 `machine/tiers/induction-heater-t4.png`, t5 `machine/tiers/induction-heater-t5.png` + pulse `machine/tiers/induction-heater-t5b.png`) | 56 x 40 | 0.5, 1 | none | none | machine layer `mid`, depth 25 | Induction heater coil housing on a small plinth with a cable tie on its side. |
 | `machine.superheater` | `machine/era3/superheater.png` | 40 x 32 | 0.5, 1 | none | none | machine layer `mid`, depth 22 | Superheater drum with a tube bundle and a glowing outlet collar. |
 | `machine.reliefValves` | `machine/era3/relief-valves.png` | 16 x 24 | 0.5, 1 | none | none | machine layer `mid`, depth 22 | Pair of spring-loaded relief valves on a short stand, capped with vent hoods. |
 | `machine.steamHammer` | `machine/era3/steam-hammer.png` | 48 x 96 | 0.5, 1 | none | none | machine layer `mid`, depth 21 | Steam hammer housing with a cylinder, a steam inlet on its side and a guide column below. |
 | `machine.hammerRam` | `machine/era3/hammer-ram.png` | 12 x 36 | 0.5, 1 | none | none | machine layer `mid`, depth 20 | Hammer ram: a short iron piston with a flat striking face at its foot. |
-| `machine.condenser` | `machine/era3/condenser.png` | 80 x 24 | 0.5, 1 | none | none | machine layer `mid`, depth 20 | Long condenser tank on feet with a condensate port at its right end. |
+| `machine.condenser` | `machine/era3/condenser.png` (tiers t2 `machine/tiers/condenser-t2.png`, t3 `machine/tiers/condenser-t3.png`, t4 `machine/tiers/condenser-t4.png`, t5 `machine/tiers/condenser-t5.png` + pulse `machine/tiers/condenser-t5b.png`) | 80 x 24 | 0.5, 1 | none | none | machine layer `mid`, depth 20 | Long condenser tank on feet with a condensate port at its right end. |
 | `machine.turbine` | `machine/era3/turbine.png` | 80 x 64 | 0.5, 1 | none | none | machine layer `mid`, depth 21 | Turbine casing with a steam inlet on the left and an export cable terminal on the right. |
 | `machine.turbineRotor` | `machine/era3/turbine-rotor.png` | 28 x 28 | 0.5, 0.5 | none | rot 64 (`machine/era3/rot/turbine-rotor-rot.png`) | machine layer `mid`, depth 22 | Turbine rotor seen face-on, a bladed wheel on a hub. |
-| `machine.bellows` | `machine/legacy/bellows.png` | 240 x 28 | 0.5, 1 | none | 4 (60 x 28) | machine layer `front`, depth 30 | Four-frame great forge bellows (open, half, closed, half) on two iron legs; the boards hinge at the iron snout and the nozzle (texture 59, rows 16..17) feeds the hose to the boiler tuyere. |
+| `machine.bellows` | `machine/legacy/bellows.png` (tiers t2 `machine/tiers/bellows-t2.png`, t3 `machine/tiers/bellows-t3.png` + pulse `machine/tiers/bellows-t3b.png`) | 240 x 28 | 0.5, 1 | none | 4 (60 x 28) | machine layer `front`, depth 30 | Four-frame great forge bellows (open, half, closed, half) on two iron legs; the boards hinge at the iron snout and the nozzle (texture 59, rows 16..17) feeds the hose to the boiler tuyere. |
 
 ### Machine — Era IV
 
@@ -149,19 +152,19 @@ Machine-local depths are relative to the machine container, which sits at world 
 |---|---|---|---|---|---|---|---|
 | `machine.spireTower` | `machine/era4/spire-tower.png` | 80 x 320 | 0.5, 1 | none | none | machine layer `mid`, depth 20 | Lattice resonator tower on a squat base, tapering to a bare mast at the top. |
 | `machine.spireExciter` | `machine/era4/spire-exciter.png` | 24 x 32 | 0.5, 1 | none | none | machine layer `mid`, depth 22 | Small steam exciter housing on the tower foot with a steam inlet on its left side. |
-| `machine.spireWave` | `machine/era4/spire-wave.png` | 128 x 270 | 0.5, 1 | none | 8 (16 x 270) | machine layer `mid`, depth 21 | Eight-frame standing wave sheet: a thin vibrating rod shown at one phase per frame. |
-| `machine.coilRing1` | `machine/era4/coil-ring-1.png` | 248 x 8 | 0.5, 0.5 | none | 4 (62 x 8) | machine layer `mid`, depth 23 | Four-frame toroidal coil ring, widest of the four stacked windings. |
+| `machine.spireWave` | `machine/era4/spire-wave.png` (tiers t2 `machine/tiers/spire-wave-t2.png`, t3 `machine/tiers/spire-wave-t3.png`, t4 `machine/tiers/spire-wave-t4.png`, t5 `machine/tiers/spire-wave-t5.png`) | 128 x 270 | 0.5, 1 | none | 8 (16 x 270) | machine layer `mid`, depth 21 | Eight-frame standing wave sheet: a thin vibrating rod shown at one phase per frame. |
+| `machine.coilRing1` | `machine/era4/coil-ring-1.png` (tiers t2 `machine/tiers/coil-ring-1-t2.png`) | 248 x 8 | 0.5, 0.5 | none | 4 (62 x 8) | machine layer `mid`, depth 23 | Four-frame toroidal coil ring, widest of the four stacked windings. |
 | `machine.coilRing2` | `machine/era4/coil-ring-2.png` | 192 x 8 | 0.5, 0.5 | none | 4 (48 x 8) | machine layer `mid`, depth 23 | Four-frame toroidal coil ring, second winding up the tower. |
 | `machine.coilRing3` | `machine/era4/coil-ring-3.png` | 144 x 8 | 0.5, 0.5 | none | 4 (36 x 8) | machine layer `mid`, depth 23 | Four-frame toroidal coil ring, third winding up the tower. |
 | `machine.coilRing4` | `machine/era4/coil-ring-4.png` | 120 x 8 | 0.5, 0.5 | none | 4 (30 x 8) | machine layer `mid`, depth 23 | Four-frame toroidal coil ring, narrowest winding at the top of the coil. |
-| `machine.calliope` | `machine/era4/calliope.png` | 72 x 40 | 0.5, 1 | none | none | machine layer `back`, depth 3 | Calliope: a row of three steam whistles on a brass-trimmed manifold box. |
-| `machine.servoBase` | `machine/era4/servo-base.png` | 28 x 20 | 0.5, 1 | none | none | machine layer `mid`, depth 23 | Low servo gearbox housing with a bolted foot and an empty hub seat on top. |
-| `machine.servoArm` | `machine/era4/servo-arm.png` | 48 x 48 | 0.5, 0.5 | none | rot 80 (`machine/era4/rot/servo-arm-rot.png`) | machine layer `front`, depth 33 | Servo arm seen face-on: a hub, a toothed arm and a pin boss that the coupling rod hooks onto. |
+| `machine.calliope` | `machine/era4/calliope.png` (tiers t2 `machine/tiers/calliope-t2.png`, t3 `machine/tiers/calliope-t3.png`, t4 `machine/tiers/calliope-t4.png`, t5 `machine/tiers/calliope-t5.png` + pulse `machine/tiers/calliope-t5b.png`) | 72 x 40 | 0.5, 1 | none | none | machine layer `back`, depth 3 | Calliope: a row of three steam whistles on a brass-trimmed manifold box. |
+| `machine.servoBase` | `machine/era4/servo-base.png` (tiers t2 `machine/tiers/servo-base-t2.png`, t3 `machine/tiers/servo-base-t3.png` + pulse `machine/tiers/servo-base-t3b.png`) | 28 x 20 | 0.5, 1 | none | none | machine layer `mid`, depth 23 | Low servo gearbox housing with a bolted foot and an empty hub seat on top. |
+| `machine.servoArm` | `machine/era4/servo-arm.png` (tiers t2 `machine/tiers/servo-arm-t2.png` + rot `machine/tiers/rot/servo-arm-t2-rot.png`, t3 `machine/tiers/servo-arm-t3.png` + rot `machine/tiers/rot/servo-arm-t3-rot.png`) | 48 x 48 | 0.5, 0.5 | none | rot 80 (`machine/era4/rot/servo-arm-rot.png`) | machine layer `front`, depth 33 | Servo arm seen face-on: a hub, a toothed arm and a pin boss that the coupling rod hooks onto. |
 | `machine.koenigFork` | `machine/era4/koenig-fork.png` | 88 x 44 | 0.5, 1 | none | 4 (22 x 44) | machine layer `mid`, depth 20 | Four-frame Koenig tuning fork sheet, the tines swinging as it rings. |
 | `machine.emitterDish` | `machine/era4/emitter-dish.png` | 40 x 64 | 0.5, 0.5 | none | none | machine layer `mid`, depth 24 | Parabolic emitter dish on a yoke, facing outward from the tower. |
 | `machine.dishWaves` | `machine/era4/dish-waves.png` | 240 x 64 | 0.5, 0.5 | none | 6 (40 x 64) | machine layer `mid`, depth 24 | Six-frame sheet of the rings of wave light that leave an emitter dish. |
 | `machine.crystal` | `machine/era4/crystal.png` | 128 x 48 | 0.5, 1 | none | 4 (32 x 48) | machine layer `mid`, depth 24 | Four-frame quartz crystal sheet seated in the crown, one glow level per frame. |
-| `machine.exciterFeed` | `machine/legacy/exciter-feed.png` | 16 x 28 | 0.5, 1 | none | none | machine layer `mid`, depth 23 | Cyan glass insulator on a riveted terminal box with a copper strap into the spire exciter; the cable lug is the cap (texture 10,1). |
+| `machine.exciterFeed` | `machine/legacy/exciter-feed.png` (tiers t2 `machine/tiers/exciter-feed-t2.png`, t3 `machine/tiers/exciter-feed-t3.png` + pulse `machine/tiers/exciter-feed-t3b.png`) | 16 x 28 | 0.5, 1 | none | none | machine layer `mid`, depth 23 | Cyan glass insulator on a riveted terminal box with a copper strap into the spire exciter; the cable lug is the cap (texture 10,1). |
 
 ### Machine — Era V
 
@@ -192,8 +195,8 @@ Machine-local depths are relative to the machine container, which sits at world 
 | `machine.lensLight` | `machine/era5/lens-light.png` (restored `machine/era5/restored/lens-light.png`) | 128 x 48 | 0.5, 1 | none | 4 (32 x 48) | machine layer `mid`, depth 21 | Four-frame lens light sheet: a pale beam source at the lens base, flickering per frame. |
 | `machine.lensColumn` | `machine/era5/lens-column.png` | 32 x 48 | 0.5, 1 | none | none | machine layer `mid`, depth 23 | Lens column: a tall glass tube that gathers the core into one line. |
 | `machine.aperture` | `machine/era5/aperture.png` (restored `machine/era5/restored/aperture.png`) | 384 x 28 | 0.5, 1 | none | 6 (64 x 28) | machine layer `mid`, depth 23 | Six-frame aperture sheet: a crown shutter that opens one leaf per frame toward the sky. |
-| `machine.backfeedTerminal` | `machine/legacy/backfeed-terminal.png` | 16 x 28 | 0.5, 0 | none | none | machine layer `mid`, depth 24 | Suspension string under the null gallery deck: hanger plate with a violet lead-in bushing, four cyan glass discs, conductor clamp and copper jumper; the cable lug is the bottom cap (texture 8,26). |
-| `machine.steamLance` | `machine/legacy/steam-lance.png` | 16 x 32 | 0.5, 0 | none | none | machine layer `mid`, depth 25 | Steam lance valve hung under the null gallery deck: mount plate, globe valve with a rust handwheel, flanged inlet at the bottom (texture 8,32). |
+| `machine.backfeedTerminal` | `machine/legacy/backfeed-terminal.png` (tiers t2 `machine/tiers/backfeed-terminal-t2.png`, t3 `machine/tiers/backfeed-terminal-t3.png` + pulse `machine/tiers/backfeed-terminal-t3b.png`) | 16 x 28 | 0.5, 0 | none | none | machine layer `mid`, depth 24 | Suspension string under the null gallery deck: hanger plate with a violet lead-in bushing, four cyan glass discs, conductor clamp and copper jumper; the cable lug is the bottom cap (texture 8,26). |
+| `machine.steamLance` | `machine/legacy/steam-lance.png` (tiers t2 `machine/tiers/steam-lance-t2.png`, t3 `machine/tiers/steam-lance-t3.png` + pulse `machine/tiers/steam-lance-t3b.png`) | 16 x 32 | 0.5, 0 | none | none | machine layer `mid`, depth 25 | Steam lance valve hung under the null gallery deck: mount plate, globe valve with a rust handwheel, flanged inlet at the bottom (texture 8,32). |
 
 ### FX
 
@@ -304,6 +307,120 @@ PNG gate (8-bit RGBA, size, alpha 0 or 255, palette only).
 - A variant that is missing or failed to load keeps the original texture; there is no painter fallback for restored keys.
 - Regenerate the PNGs with `python -I scripts/art/a17/restored.py`.
 - Add a variant for another id: put the PNG (same size) under `<dir>/restored/`, add `restored: { file }` to its manifest entry, add a row to the restored table in `src/assets/manifest.test.ts`. No code change.
+
+## Part evolution tiers (WP22)
+
+Repeatable part tracks evolve through 3 or 5 tiers (MK I-V) as their tech level rises. A tier is a rendering-only view of
+tech levels: no save field, no simulation change. Design: `docs/plan/PART_TIERS.md`; build contract: `docs/plan/WP22.md`.
+MK I is always the shipped file; tier art adds variants, never edits the shipped PNG.
+
+### Ladders
+
+| tier | 5-step name | 3-step name | material | silhouette | light |
+|---|---|---|---|---|---|
+| MK I | SALVAGED | SALVAGED | shipped art: clustered rust, caked dust, odd bolts | as found | none |
+| MK II | PATCHED | REINFORCED (3-step: patch + band merged) | bright rust flakes knocked back to iron, stains stay low, riveted patch plates (`#5a5f63` / `#7d8286` / rivets `#a3a6a4`), new bright bolts | +1 small bolt-on | none |
+| MK III | REINFORCED | AS BUILT (3-step: finish + lamp + heartbeat merged) | rust 0 outside identity marks, dust cleaned, machined lit edges | +1 structural element that reads at 1 px (band, gusset, strap, radiator, saddle) | none |
+| MK IV | TUNED | - | iron straps become brass hoops (rust ramp in clean straight bands, `#ffd27a` glint), plates re-enamelled (`#c9b28a`), small `#d9822b` hazard mark on a moving or live guard | +1 instrument or cover (cowl, sight glass, oiler, valve wheel) | brass glint |
+| MK V | AS BUILT | - | flawless, polished top edges, 1 px warm seam (`#d9822b` with a `#f0a848` core) | +pilot lamp (3x3 `#ffd27a` core, `#f0a848` cross, `#d9822b` corners, ink ring) | heartbeat |
+
+- The top tier always carries the warm accent: a lamp on static parts, a brass glint ring on rotating parts.
+- MK V never uses green or blue, regrowth tones or `RESTOR` text (store-shot `no_spoiler`).
+- Brass is the rust ramp in clean straight bands; rust is patches. Brass from MK IV on does not count as rust in G1.
+
+### Gates (every variant; `scripts/art/tiers/check_gates.py` machine-checks G1-G3, the pulse and decal rules)
+
+| gate | rule |
+|---|---|
+| G1 step | the track's tier changes at least 4 px of silhouette, structure, brass or accent (all its hosts plus decal px); MK II keeps at least 30 % less MK I rust; MK III keeps 0 MK I rust outside identity marks |
+| G2 identity | every opaque MK I px stays opaque; outline, mounting points and identity marks stay (motor: nameplate footprint, shaft, feet). Waived only for the procedural spire wave (its waveform is redrawn per mode) |
+| G3 contract | same canvas, origin, frame count and frame layout; alpha 0 or 255; palette = Rust Wasteland plus the era extension colours the MK I file already uses or the host spec names (fire glow 3 steam white `#e8e0cc`, condenser sight-glass cyan ramp; decals: Rust Wasteland only); reserved zones gain no px (table below); rot sheets keep the shipped sheet's alpha exactly |
+| G4 craft | `pixelart_workbench lint` 0 errors; `score` at or above the MK I score minus 3 (rot sheets measured on the real sheet; sheets over the workbench limits on frame-aligned tiles) |
+| G5 scale | every step reads at zoom 0.5 (1 screen px per art px) in the era where it is usually reached, judged on a real screenshot crop (`composite_*.py`), not only at 4x |
+
+### Rotating hosts and decals
+
+- Rotating hosts (gears, main pulley, flywheel, flywheel and crank pulleys, servo arm) change by exact per-pixel palette
+  maps applied to the static PNG and to the shipped rot sheet (DERUST-LIGHT, DERUST-FULL, POLISH; PART_TIERS 2.3). The sheet
+  is never re-rotated, so frame counts and the 80 / 140 and 180 / 180 ratio locks stay as shipped.
+- A static decal over a spinning part must be rotationally symmetric: rims, rings, plain discs, a centred lamp. No bolts,
+  spokes or text. Its fixed upper-left highlight is physically right on a turning wheel. Every decal px lies over a px the
+  host keeps opaque in all rot frames and in its static PNG; the mask is symmetric under 90 degree turns and mirrors.
+- Decals draw in the host's layer at host depth + bias: `machine.gearRim` on gearLarge from MK III (+0.5),
+  `machine.flywheelRim2` on the flywheel from MK II (+0.5), `machine.flywheelRim3` from MK III (+0.6, over rim 2). Belts,
+  links and parts in front of the host still cover the decal; a decal never covers a belt. There is no hub decal: the
+  pulley and crank cover the hubs.
+
+### Reserved zones (texture px; G3, no new opaque px; "keep" = px stay exactly as MK I because a link attaches there)
+
+| host | reserved / keep |
+|---|---|
+| worn motor | x23-43 rows 0-7 (retrofit kit), x52-63 (pulley and belt), rows 41-47 (plinth); identity: nameplate x24-37 rows 18-25 |
+| motor retrofit kit | x0-12 rows 0-4; stays inside its 32x16 and never covers more of the motor |
+| flywheel pedestal | rows 0-38 (behind the flywheel disc and hub pulley) |
+| coils 3 | new px only over the generator body |
+| piston block | plunger rod columns x18-21, x46-49, x74-77 rows 36-45 (the yoke rods run behind the block) |
+| transformer | x0-15 rows 0-20 (left bushing cable), x49-63 rows 0-4 (right bushing cable) |
+| induction heater | keep the tie insulator x50-55 rows 0-5; new px only over the boiler |
+| condenser | keep the hotwell nozzle x76-79 rows 0-13 |
+| bellows | keep the nozzle tip x59 rows 15-18 (hose link); new px only over the boiler |
+| exciter feed | keep the cable lug rows 0-1 |
+| calliope | the three manifold ports: x0-14, x28-41, x58-71 rows 37-39 |
+| servo base | keep the breather cap x17-20 rows 0-2; the arm hub covers x9-18 rows 5-14 (nothing new drawn there) |
+| spire wave | columns 0-1 and 14-15 of every frame (the wave stays inside the rod column) |
+| backfeed terminal | rows 24-27 (cable lug and the cable leaving it); keep the bushing px (12, 1) and x6-9 rows 25-27 |
+| steam lance | keep the inlet pipe x4-11 rows 27-31 (link at (8, 32)); x12-15 rows 24-31 (lance puff start) |
+| rot hosts, decals | alpha unchanged (palette maps only); decals stay over opaque host px |
+
+Every host also keeps other parts' sockets, belt and cable paths and `MACHINE_BOUNDS` clear.
+
+### Files and manifest wiring
+
+- Files under `public/assets/machine/tiers/`: `<stem>-t<N>.png`; rot sheets `rot/<stem>-t<N>-rot.png`; heartbeat low
+  frames `<stem>-t<N>b.png`; decals `decals/<name>.png`. `<stem>` is the entry's own file stem (`machine.motor` ->
+  `worn-motor`, `machine.pedestal` -> `flywheel-pedestal`).
+- Manifest: `tiers?: readonly { from; file; rotationFile?; pulseFile? }[]` on the host entry. `from` = tier number 2..5,
+  strictly ascending. Variants may be sparse: the resolver shows the highest declared tier at or below the current one,
+  else the base (`machine.coils1` only t2, `machine.coils3` only t5, `machine.fireGlow1` t2, `machine.fireGlow3` t5,
+  `machine.coilRing1` t2, the flywheel set only t3).
+- Texture keys: `<id>#t<N>`, `<id>#t<N>#rot` (`#rot` always last), `<id>#t<N>b`. `planAssetLoads` emits them after the
+  entry's own, `#rot` and restored loads; everything loads at boot (WP22 T13 defers `#t*#rot` only if `bootMs` fails).
+- A rotation entry's every tier carries both `file` (static, same palette map) and `rotationFile`. `rotationFile` only on
+  entries with `rotation`. No entry has both `tiers` and `restored` (restored wins on restored ids).
+- Heartbeat frame rule: `pulseFile` only on the asset's highest tier and never on a rotation entry. The frame has the same
+  alpha as its tier; only warm accent px change, each one ramp step dimmer (`#ffd27a` -> `#f0a848` -> `#d9822b` ->
+  `#8c4a2a`); a frame sheet dims the same px in every frame. All top-tier lamps alternate `#t<N>` / `#t<N>b` on one
+  shared clock (`TIER_HEARTBEAT.periodMs` 2400 in `src/data/machineTiers.ts`), so every MK V part pulses in unison.
+- Decals are their own ids (`machine.gearRim`, `machine.flywheelRim2`, `machine.flywheelRim3`); their load-failure
+  fallback is a procedural annulus painter at the manifest size (WP22 T1b).
+- `node scripts/art/tiers/check_wiring.mjs` checks that every PNG under `machine/tiers/` is referenced exactly once,
+  every reference exists, the naming and pulse / rot rules, and the PNG sizes.
+
+### Pipeline (`scripts/art/tiers/`, run from the repo root; Art Director only)
+
+| method | hosts | tools |
+|---|---|---|
+| A scripted hand-pixel stamps | motor, plinth, retrofit kit, coils 1 / 3, fire glows 1 / 3, condenser, induction heater, servo base, exciter feed, backfeed terminal, steam lance, flywheel pedestal, bellows (4 frames), coil ring 1 (4 frames) | `<host>_tiers.py` char-grid edits of the shipped PNG (template `motor_tiers.py`), shared `tierlib.py` (locked palette, exact maps, PNG writer) |
+| B PixelLab `edit_image` + snap + hand fix | transformer (radiator, fan), calliope (4th whistle), piston block (tie rods, hoops) only | block-in with method A first, then `pixellab_merge.py` (alpha cut, nearest locked-palette snap, hand correction). A generation is never shipped raw |
+| C palette maps on rot sheets | gear large / small, main pulley, flywheel, flywheel pulley, crank pulley, servo arm | `palette_tiers.py` (clone of `scripts/art/a17/restored.py`; map applied to the PNG and its rot sheet, no re-rotation) |
+| D procedural | spire wave modes 4-7 (8 frames) | `wave_tiers.py` (sin(n pi y / L) cos(wt) per frame; amplitude 5 sqrt(3 / n)) |
+| E decals | gear rim, flywheel rims 2 / 3 | `decal_tiers.py` (pure annulus geometry) |
+
+- Rebuild everything and run the gates: `python scripts/art/tiers/batch1.py --report <gates.md> --g4 <g4.json>`;
+  gates alone: `python scripts/art/tiers/check_gates.py --report <out.md> --g4 <g4.json> [--notes <notes.md>]`.
+- Review: `contact_tiers.py` / `contact_p1.py` (contact sheets), `composite_shot.py`, `composite_p1.py`,
+  `composite_p1b.py`, `composite_p2.py`, `composite_host.py` (variants painted into a real 1280x720 shot at zoom 0.5 / 1
+  only where the MK I px is visible, so parts in front keep covering them).
+- Finalise with crop / pad only, never resample. `tierlib.png_bytes_best` writes each PNG as the smaller of an optimised
+  RGBA and an optimised indexed encoding (both lossless; the indexed one is round-trip checked).
+
+### Budget (AD4f, 91 PNGs)
+
+- Bytes: 518,590 (506.4 KiB) of the 1,228,800 B cap for `machine/tiers/**`; `public/assets` 1724.0 KB as
+  `bundle-budget.mjs` counts it (manual limit 2700, script gate 8000). Largest file: `rot/flywheel-t3-rot.png` 228,696 B.
+- Decoded RGBA of the added textures (every PNG w x h x 4, frames included): 16.10 MiB, about 52.9 MiB total with the
+  36.8 MiB baseline (target 56 MiB). The flywheel MK III rot sheet alone is 6.4 MiB.
+- To shrink: re-save with optimal PNG compression or drop palette entropy; never resample or change a canvas.
 
 ## Size mismatch warning
 

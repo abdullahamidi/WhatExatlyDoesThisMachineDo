@@ -17,6 +17,8 @@ import {
   viewBounds,
   boundsInView,
   fitView,
+  hudTopInsetAt,
+  hudSafeCenterY,
 } from '../math/camera';
 import { visibleMachineBounds, boundsToWorld } from '../math/machineBounds';
 import type { CameraPose } from '../math/finale';
@@ -44,6 +46,7 @@ export class CameraController {
   private lastWheelMs = Number.NEGATIVE_INFINITY; // performance.now() of the last applied wheel step
   /** True while the finale drives the camera (setOverride): drag, wheel and auto-frame are ignored. */
   private overridden = false;
+  private uiScale: number; // last UI scale the framing used; a change refocuses once (WP22 F11)
   private readonly unsubscribes: Array<() => void> = [];
 
   // pointer handlers are arrow properties so `this` is bound and the same references can be removed in destroy()
@@ -112,6 +115,7 @@ export class CameraController {
     this.camera = scene.cameras.main;
     this.camera.setBounds(0, 0, WORLD.width, WORLD.height);
     this.camera.setBackgroundColor(PALETTE_CSS.ink);
+    this.uiScale = session.settings.uiScale;
     const initial = this.target();
     this.zoom = initial.zoom;
     this.center = initial.center;
@@ -125,6 +129,7 @@ export class CameraController {
       session.on('purchase', () => this.autoFrame()),
       session.on('unlock', () => this.autoFrame()),
       session.on('reset', () => this.refocus()),
+      session.on('settings', (s) => this.uiScaleChanged(s.uiScale)),
     );
   }
 
@@ -217,9 +222,25 @@ export class CameraController {
       defaultZoom: CAMERA.defaultZoom,
       defaultCenter: { x: CAMERA.focus.x, y: CAMERA.focus.y },
       world: WORLD,
-      hudTopInsetPx: CAMERA.hudTopInsetPx,
+      hudTopInsetPx: this.hudInset(),
       fullView: { groundY: GROUND_Y, groundBandPx: CAMERA.fullViewGroundBandPx, topMinPx: CAMERA.fullViewTopMinPx },
     });
+  }
+
+  // Screen px under the HUD panel at the current UI scale (WP22 F11).
+  private hudInset(): number {
+    return hudTopInsetAt(CAMERA.hudTopInsetPx, this.uiScale, CAMERA.hudTopInsetPadPx);
+  }
+
+  // The HUD inset follows the UI scale: refocus once when it changes. Not while the finale overrides the camera, and not
+  // in the choice / postgame portrait (its pose does not depend on the inset).
+  private uiScaleChanged(uiScale: number): void {
+    if (uiScale === this.uiScale) return;
+    this.uiScale = uiScale;
+    if (this.overridden) return;
+    const phase = this.session.state.ending.phase;
+    if (phase === 'choice' || phase === 'postgame') return;
+    this.refocus();
   }
 
   // Purchases and unlocks grow the machine: refocus only when the machine no longer fits the current view.
@@ -305,6 +326,13 @@ export class CameraController {
     if (!motionPolicy(this.session.settings).cameraTween) return;
     const next = nudgeCenter(this.center, this.zoom, target, VIEW, CAMERA_NUDGE);
     if (next === null) return;
+    if (this.zoom > this.minZoom + 1e-9) {
+      // the nudge must not pan the machine top back under the HUD when the machine fits below it (WP22 F11).
+      // At the min zoom the fullView framing ignores the inset, so the nudge does too.
+      const machine = boundsToWorld(visibleMachineBounds(this.session.state.techLevels));
+      next.y = hudSafeCenterY(next.y, this.center.y, machine, this.zoom,
+        { height: VIEW.height, insetPx: this.hudInset(), marginPx: CAMERA.fitMarginPx });
+    }
     this.animateTo({ center: clampCenter(next, this.zoom, VIEW, WORLD), zoom: this.zoom });
   }
 }

@@ -369,3 +369,51 @@ describe('purchase bursts (WP20 T6)', () => {
     expect(purchaseBurstMessage({ id: 'gearRatio', fromLevel: 1, toLevel: 4, lastMs: 0 }).title).toContain('→');
   });
 });
+describe('purchase bursts with part tiers (WP22 A6)', () => {
+  const W = TOAST_BURST.windowMs;
+
+  it('a single step onto a tier threshold appends the new mark', () => {
+    const b = nextPurchaseBurst(null, 'motorTuning', 5, 0, W);
+    expect(b).toEqual({ id: 'motorTuning', fromLevel: 4, toLevel: 5, lastMs: 0 });
+    expect(purchaseBurstMessage(b as PurchaseBurst).title).toBe('MOTOR TUNING — LV 5 · MK II');
+  });
+
+  it('a single step off a threshold adds no mark', () => {
+    const b = nextPurchaseBurst(null, 'motorTuning', 6, 0, W);
+    expect(purchaseBurstMessage(b as PurchaseBurst).title).toBe('MOTOR TUNING — LV 6');
+  });
+
+  it('a burst that crosses a threshold appends the mark of its last level', () => {
+    const msg = purchaseBurstMessage({ id: 'motorTuning', fromLevel: 3, toLevel: 6, lastMs: 0 });
+    expect(msg.title).toBe('MOTOR TUNING — LV 3 → 6 · MK II');
+  });
+
+  it('a merged burst that crosses a threshold keeps the mark', () => {
+    let b = nextPurchaseBurst(null, 'motorTuning', 4, 0, W);
+    b = nextPurchaseBurst(b, 'motorTuning', 5, 300, W);
+    b = nextPurchaseBurst(b, 'motorTuning', 6, 600, W);
+    expect(purchaseBurstMessage(b as PurchaseBurst).title).toBe('MOTOR TUNING — LV 3 → 6 · MK II');
+  });
+
+  it('a burst that stays inside one tier adds no mark', () => {
+    const msg = purchaseBurstMessage({ id: 'motorTuning', fromLevel: 6, toLevel: 9, lastMs: 0 });
+    expect(msg.title).toBe('MOTOR TUNING — LV 6 → 9');
+  });
+
+  it('an untracked tech adds no mark', () => {
+    const msg = purchaseBurstMessage({ id: 'horizonField', fromLevel: 4, toLevel: 5, lastMs: 0 });
+    expect(msg.title).toBe('HORIZON FIELD — LV 5');
+  });
+
+  it('a three-tier track marks its second tier at level 6', () => {
+    const msg = purchaseBurstMessage({ id: 'gearRatio', fromLevel: 5, toLevel: 6, lastMs: 0 });
+    expect(msg.title).toBe('GEAR RATIO — LV 6 · MK II');
+  });
+
+  it('keeps the purchase key, body and tone with the mark', () => {
+    const msg = purchaseBurstMessage({ id: 'motorTuning', fromLevel: 4, toLevel: 5, lastMs: 0 });
+    expect(msg.key).toBe('purchase:motorTuning');
+    expect(msg.body).toBeNull();
+    expect(msg.tone).toBe('info');
+  });
+});

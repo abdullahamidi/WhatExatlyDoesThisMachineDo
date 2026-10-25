@@ -32,6 +32,9 @@ Left for the user: Steam app/depot ids, capsule art, trailer, SteamPipe upload (
 | WP20 | First-impression UX polish (onboarding, fly-in visible, tree fit, era cards, text sweep) | ✅ done |
 | WP21 | Demo edition (cap at Substation Blueprint, end card + final-machine teaser, wishlist) | ✅ done |
 | WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | ✅ done (WP16a · WP16b-1 store polish · WP16b-2 docs + a11y/UX · WP16b-3 soak/GPU perf/final AD audit) |
+| WP22 | Part evolution tiers (3/5 visual MK tiers per repeatable part, tier-up beat; user directive 2026-10-24) | ✅ done (merged e5b97c4; Opus review APPROVE, EM PASS, AD round 5 RELEASE-READY after F11 HUD-inset fix) |
+| WP23a | Living world: denizens, environment arc, world voice bubbles, eras I–II + demo cut | paused at fix round 2 (run wf_b2535911-eb6, resumable; worktree wedtmd-shell, branch claude/world-wp23a); resumes now, one track at a time (user is on the PC) |
+| WP23b | Living world eras III–V, finale, postgame, cycle 2+; then §R release refresh | planned (after WP22 + WP23a merge) |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -101,11 +104,18 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   after 3 fixes: lance steam vents beside the valve, toasts compact while the era card is up, SYSTEM footer fits at UI 150.
   Quiet GPU perf frame p95 16.8 / post 16.7 ms (≤ 17); 60 min soak heap 91.5 → 92.7 MB, display 74 flat, DOM +0;
   packaged demo + full exes pass desktop.mjs. STEAM_RELEASE section 15 all PASS.
+- **WP22** part evolution tiers (merged e5b97c4): 21 repeatable-part tracks, 66 tier steps, MK I SALVAGED → MK V AS BUILT
+  (3 or 5 tiers by reach); 91 tier PNGs + rot sheets + rim decals (Opus AD, palette lock); 900 ms tier-up beat (flash, ghost,
+  debris, shine, sparks; ≤ 4 per release; never blocks input; reduced-motion crossfade), torque tick, refit audio, MK V heartbeat;
+  MK marks in tree + toasts; showcase / finale / teaser / prestige at the right tiers; siphon 5/10 + anchor 2/3 retune, ring1Bead2.
+  F11: HUD inset follows UI scale (240/304/368) + release nudge kept below it. vitest 126 files / 3732 pass; tiers.mjs full + demo,
+  ux, resolutions, stages, store-shots 1080 clean. Decoded PNG 52.9 MiB (limit 56). Note: the wp-exec waves started dependent
+  workers before their inputs landed (round 0 mostly "blocked"); the fix rounds caught up. Check wave ordering before WP23b.
 - **Art**: every sprite and background layer is PixelLab Pro in one locked palette from one style
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 3428 pass, 16 skipped (119 files) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 3732 pass, 16 skipped (126 files; WP22 merged) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
@@ -145,6 +155,14 @@ Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era 
   EM `claude-sonnet-5-5`, workers `claude-haiku-5-5`.
 
 ## Next recommended task
+User directive 2026-10-24 (after v0.9.0 demo release-ready): parts must visibly evolve as they level (3/5 phases), and the lonely scene gets a
+living world whose denizens change per era and break the fourth wall (docs/plan/STORY_BIBLE.md, PART_TIERS.md, DENIZEN_ART.md, WP22.md, WP23.md;
+GAME_SPEC §18.2). Seed commit 0fab65c on main. WP22 is merged (e5b97c4). Next: resume WP23a (wp-exec run wf_b2535911-eb6, same args)
+in wedtmd-shell, one workflow at a time (user shares the PC), then merge main into it (shared files per WP23.md §0, WP22 blocks first),
+X1 tier-port wiring, validate merged tree, merge; then WP23b, then §R (store shots, STEAM_RELEASE §15, soak, packaged smokes, CHANGELOG).
+Still user-owned for the Steam upload: real app/depot ids, capsule art, trailer, SteamPipe upload (STEAM_RELEASE sections 4, 10, 12).
+
+### Previous (v0.9.0 demo)
 Roadmap complete. v0.9.0 demo is release-ready. Remaining steps need the user (Steamworks account):
 1. Real Steam ids for placeholders full app `0000000` / depot `0000001`, demo app `0000002` / depot `0000003`: wishlist target
    in `src/data/edition.ts` `STEAM_STORE`; create `steam/*.vdf` from the docs/STEAM_RELEASE.md section 4 templates (not in repo yet).

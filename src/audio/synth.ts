@@ -53,6 +53,8 @@ export interface Synth {
   playCrank(): void; // AUDIO.crank ratchet: `ticks` short bursts, `tickGapMs` apart
   playPurchase(): void; // AUDIO.purchase light thunk
   playClunk(): void; // AUDIO.clunk sine thump + noise burst (part landed)
+  playRefit(): void; // AUDIO.refit ratchet ticks then FM bell (tier-up beat); one refit at a time
+  playTorqueTick(step: number): void; // AUDIO.torqueTick one noise tick, pitch climbs with step
   playDeny(): void; // AUDIO.deny low buzz, `count` pulses
   playSting(): void; // AUDIO.sting 3 notes
   setHum(hz: number, gain: number): void; // one persistent oscillator, ramped; gain 0 = silent
@@ -227,6 +229,55 @@ function playVoice(context: AudioContext, out: AudioNode, v: VoiceSpec, tally: V
   };
   osc.start(v.startAt);
   osc.stop(end + STOP_PAD_S);
+}
+
+/**
+ * FM bell: a sine carrier at hz, pitch-modulated by a sine at hz x ratio. The modulation depth starts at hz x ratio x index
+ * (peak frequency deviation of index x modulator Hz) and falls to 1 % over decay, so the strike is bright and the tail settles
+ * to a pure sine. Two voices in tally; the shared nodes are released when both oscillators have ended.
+ */
+function playFmBell(
+  context: AudioContext,
+  out: AudioNode,
+  tally: VoiceTally,
+  b: { hz: number; ratio: number; index: number; startAt: number; decay: number; peak: number },
+): void {
+  const carrier = context.createOscillator();
+  const modulator = context.createOscillator();
+  const modGain = context.createGain();
+  const env = context.createGain();
+  const end = b.startAt + b.decay;
+  const depth = b.hz * b.ratio * b.index;
+  const depthFloor = Math.max(depth * 0.01, ENVELOPE_FLOOR); // modulation depth falls to 1 % of its strike value
+  carrier.type = 'sine';
+  carrier.frequency.setValueAtTime(b.hz, b.startAt);
+  modulator.type = 'sine';
+  modulator.frequency.setValueAtTime(b.hz * b.ratio, b.startAt);
+  modGain.gain.setValueAtTime(depth, b.startAt);
+  modGain.gain.exponentialRampToValueAtTime(depthFloor, end);
+  env.gain.setValueAtTime(b.peak, b.startAt);
+  env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, end);
+  modulator.connect(modGain);
+  modGain.connect(carrier.frequency);
+  carrier.connect(env);
+  env.connect(out);
+  tally.live += 2;
+  let open = 2; // oscillators still sounding; the shared nodes go with the last one
+  const release = (): void => {
+    tally.live -= 1;
+    open -= 1;
+    if (open > 0) return;
+    carrier.disconnect();
+    modulator.disconnect();
+    modGain.disconnect();
+    env.disconnect();
+  };
+  carrier.onended = release;
+  modulator.onended = release;
+  carrier.start(b.startAt);
+  modulator.start(b.startAt);
+  carrier.stop(end + STOP_PAD_S);
+  modulator.stop(end + STOP_PAD_S);
 }
 
 /** One-shot noise burst from the shared noise buffer, starting at a random offset, with an exponential envelope. */
@@ -991,6 +1042,8 @@ export function createSynth(context: AudioContext): Synth {
   let musicGraph: MusicGraph | null = null;
   let analyser: { node: AnalyserNode; buf: Float32Array<ArrayBuffer> } | null = null;
   const oneShots: VoiceTally = { live: 0 };
+  let refitBusyUntil = 0; // context time the tier-up refit is busy until: one refit at a time
+  let torqueLive = 0; // torque ticks still sounding, capped at AUDIO.torqueTick.maxConcurrent
   const musicTally: MusicTally = { live: 0, dropped: 0 };
   const activeNotes = new Set<MusicNote>();
   const warned = new Set<string>();
@@ -1136,6 +1189,85 @@ export function createSynth(context: AudioContext): Synth {
         const decay = k.decayMs / 1000;
         voice(out,{ wave: 'sine', hz: k.hz, startAt: t0, decay, peak: k.gain });
         playNoise(context, out, getNoise(), t0, decay, k.noiseGain);
+      });
+    },
+
+    playRefit(): void {
+      run('playRefit', 'sfx', (out) => {
+        const r = AUDIO.refit;
+        const t0 = context.currentTime;
+        if (t0 < refitBusyUntil) return; // a refit is still sounding: this beat is dropped
+        const noise = getNoise();
+        const bellAt = t0 + r.bellAtMs / 1000;
+        refitBusyUntil = bellAt + r.bellMs / 1000;
+        const tickDecay = r.tickMs / 1000;
+        for (let i = 0; i < r.ticks; i++) {
+          const hz = r.tickHz[i];
+          if (hz === undefined) continue;
+          const startAt = t0 + (i * r.tickGapMs) / 1000;
+          const src = context.createBufferSource();
+          const band = context.createBiquadFilter();
+          const env = context.createGain();
+          src.buffer = noise;
+          band.type = 'bandpass';
+          band.frequency.value = hz;
+          band.Q.value = r.tickQ;
+          env.gain.setValueAtTime(r.tickGain, startAt);
+          env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, startAt + tickDecay);
+          src.connect(band);
+          band.connect(env);
+          env.connect(out);
+          src.onended = () => {
+            src.disconnect();
+            band.disconnect();
+            env.disconnect();
+          };
+          const offset = Math.random() * Math.max(0, noise.duration - tickDecay);
+          src.start(startAt, offset);
+          src.stop(startAt + tickDecay + STOP_PAD_S);
+        }
+        const bellDecay = r.bellMs / 1000;
+        playFmBell(context, out, oneShots, {
+          hz: r.bellHz,
+          ratio: r.bellPartialRatio,
+          index: r.bellIndex,
+          startAt: bellAt,
+          decay: bellDecay,
+          peak: r.bellGain,
+        });
+      });
+    },
+
+    playTorqueTick(step: number): void {
+      run('playTorqueTick', 'sfx', (out) => {
+        const q = AUDIO.torqueTick;
+        if (torqueLive >= q.maxConcurrent) return; // at the cap: this tick is dropped
+        const clamped = Number.isFinite(step) ? Math.min(Math.max(step, 0), q.maxStep) : 0;
+        const t0 = context.currentTime;
+        const decay = q.ms / 1000;
+        const noise = getNoise();
+        const src = context.createBufferSource();
+        const band = context.createBiquadFilter();
+        const env = context.createGain();
+        src.buffer = noise;
+        band.type = 'bandpass';
+        band.frequency.value = q.hz * 2 ** (clamped / 12);
+        band.Q.value = q.q;
+        env.gain.setValueAtTime(q.gain, t0);
+        env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, t0 + decay);
+        src.connect(band);
+        band.connect(env);
+        env.connect(out);
+        src.onended = () => {
+          torqueLive -= 1;
+          src.disconnect();
+          band.disconnect();
+          env.disconnect();
+        };
+        const offset = Math.random() * Math.max(0, noise.duration - decay);
+        src.start(t0, offset);
+        src.stop(t0 + decay + STOP_PAD_S);
+        torqueLive += 1;
       });
     },
 

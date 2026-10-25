@@ -1,4 +1,5 @@
 import { MACHINE_COMPONENT_IDS, MACHINE_COMPONENTS } from '../../data/machineComponents';
+import { PART_TIERS } from '../../data/machineTiers';
 import { TECH_IDS } from '../../data/types';
 import type { TechId } from '../../data/types';
 import { TECHNOLOGIES } from '../../data/technologies';
@@ -52,7 +53,9 @@ let visualMax: LevelFloor | null = null;
 
 /**
  * The tech levels at which EVERY machine part is visible: for each component, the max of its own gate, its alternative
- * gates, the latch gate and the stage gates. Derived from MACHINE_COMPONENTS; cached and frozen.
+ * gates, the latch gate and the stage gates. Then every part track (PART_TIERS) is raised to its top tier, so the finale
+ * completion, postgame, photo mode and the demo teaser show every part at its MK top. Derived from MACHINE_COMPONENTS and
+ * PART_TIERS; cached and frozen.
  */
 export function visualMaxLevels(): LevelFloor {
   if (visualMax === null) {
@@ -66,6 +69,10 @@ export function visualMaxLevels(): LevelFloor {
       if (anim.kind === 'stage') {
         for (const [tech, level] of anim.gates) raise(levels, tech, level);
       }
+    }
+    for (const track of PART_TIERS) {
+      const top = track.levels[track.levels.length - 1];
+      if (top !== undefined) raise(levels, track.techId, top);
     }
     visualMax = ordered(levels);
   }

@@ -25,6 +25,12 @@ export const AUDIO = {
   // Heavy clunk when a machine part lands (sine thump plus noise burst).
   clunk: { hz: 70, decayMs: 260, noiseGain: 0.5, gain: 0.9 },
 
+  // WP22 tier-up refit: `ticks` rising noise ratchet ticks (bandpass centre tickHz[i], bandpass Q tickQ), then an FM bell at bellAtMs (= PART_TIER_FX.settleMs).
+  // FM bell: sine carrier bellHz, sine modulator bellHz x bellPartialRatio (the modulator:carrier ratio); modulation depth starts at bellIndex x modulator Hz and falls to 1 % over bellMs; peak bellGain.
+  refit: { ticks: 3, tickGapMs: 85, tickMs: 26, tickHz: [820, 980, 1170], tickQ: 4, tickGain: 0.2, bellAtMs: 600, bellHz: 1560, bellPartialRatio: 2.76, bellIndex: 0.9, bellMs: 520, bellGain: 0.16 },
+  // WP22 torque tick between tiers: one noise tick (bandpass Q q), pitch hz * 2^(min(step, maxStep) / 12); at most maxConcurrent at once.
+  torqueTick: { hz: 700, q: 4, maxStep: 12, ms: 22, gain: 0.18, maxConcurrent: 3 },
+
   // Low buzz on a denied purchase: `count` pulses of `ms`, `gapMs` apart.
   deny: { hz: 90, ms: 90, count: 2, gapMs: 70, gain: 0.4 },
 

@@ -4,6 +4,8 @@
 // Writes 14 PNGs into <outdir> (3840x2160: viewport 1280x720 at deviceScaleFactor 3) and prints ONE JSON:
 // showcase_* result objects, shots (14 entries), errors (must be empty). Reads only window.__wedtmd.
 // A missing hook field resolves to null and fails its assertion.
+// WP22: RESTORED_TOTAL 34 (D5 option A). checkTiersTop at showcase_B_k41_5, showcase_B_k45_2, showcase_B_k56, showcase_C,
+// showcase_D2 and showcase_C2: every TOP_TIERS track at its top tier in partTiers() (settled within 3 s). A mismatch goes to errors; the result is kept as tiersTop.
 import { createRequire } from 'module';
 import { mkdirSync } from 'fs';
 const require = createRequire(import.meta.url);
@@ -20,7 +22,13 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
 const PORTRAIT = { x: 1920, y: 1080, z: 0.5 };
 const cameraOk = (cam, x, y, z) => !!cam && near(cam.centerX, x, 2) && near(cam.centerY, y, 2) && near(cam.zoom, z, 0.01);
 const atPortrait = cam => cameraOk(cam, PORTRAIT.x, PORTRAIT.y, PORTRAIT.z);
-const RESTORED_TOTAL = 33;   // machine parts that have an A17 restored variant
+const RESTORED_TOTAL = 34;   // machine parts that have an A17 restored variant (WP22 D5 option A: + ring1Bead2)
+// WP22 top tier per repeatable track (PART_TIERS.md); checkTiersTop compares partTiers() with it.
+const TOP_TIERS = {
+  gearRatio: 3, flywheel: 3, motorTuning: 5, improvedPistons: 5, copperWinding: 5, motorRetrofit: 5, transformer: 5,
+  firebox: 5, inductionHeater: 5, condenser: 5, bellowsDrive: 3, harmonicCoil: 5, pressureResonator: 5, crankServo: 3,
+  standingWave: 5, gridExciter: 3, containmentRing: 5, resonantSiphon: 3, graviticAnchor: 3, mainsBackfeed: 3, steamLance: 3,
+};
 // crown close-up by real keys from the portrait: `=` x4 (zoom .5 -> 1.5), ArrowRight x2 (+64 world px each), ArrowUp x6 (-64 each) -> camera (2048, 696, 1.5)
 const CROWN = { zoomIn: 4, right: 2, up: 6, x: 2048, y: 696, z: 1.5 };
 // every hidden part is the 3 s inversion ghost; a missing list (null) fails
@@ -123,6 +131,21 @@ const checkRestored = async (key, want) => {
   check(n === want && r?.total === RESTORED_TOTAL, `${key} restored swapped ${n} total ${r?.total ?? null} want ${want}/${RESTORED_TOTAL}`);
   return n;
 };
+const partTiers = () => page.evaluate(() => window.__wedtmd?.partTiers?.() ?? null);
+// WP22: every TOP_TIERS track at its top tier in partTiers() (tracks with a visible host). Re-reads up to 3 s while a tier beat
+// is still in flight; pushes one mismatch line per call (missing tracks count); returns { tiers, mismatches }.
+const checkTiersTop = async (key) => {
+  const miss = (t) => (t === null ? ['partTiers null'] : Object.entries(TOP_TIERS).filter(([id, top]) => t[id] !== top).map(([id, top]) => `${id}:${t[id] ?? null}/${top}`));
+  let tiers = await partTiers();
+  let mismatches = miss(tiers);
+  for (let i = 0; i < 30 && mismatches.length > 0; i++) {
+    await page.waitForTimeout(100);
+    tiers = await partTiers();
+    mismatches = miss(tiers);
+  }
+  check(mismatches.length === 0, `${key} tiers top mismatch: ${mismatches.join(', ')}`);
+  return { tiers, mismatches };
+};
 const resonantSiphon = () => page.evaluate(() => window.__wedtmd?.session?.state?.techLevels?.resonantSiphon ?? null);
 const totalClicks = () => page.evaluate(() => window.__wedtmd?.session?.state?.totalClicks ?? null);
 const computed = (id, prop) => page.evaluate(({ id, prop }) => { const el = document.getElementById(id); return el ? getComputedStyle(el)[prop] : null; }, { id, prop });
@@ -201,7 +224,8 @@ try {
     const hidden25 = (await parts())?.hidden ?? null;
     const fs25 = await fin();
     check(fs25 !== null && fs25.t < 3, `showcase_B_k2_5 film clock passed the completion step: t ${fs25?.t ?? null}`);
-    const must25 = ['siphonTube3L', 'coilStage3', 'steamLance'];
+    // WP22 D5: siphonTube3L shows from resonantSiphon 10 and the greedy end holds 11, so it is no longer hidden here
+    const must25 = ['coilStage3', 'steamLance', 'fireboxGlow3'];
     check(Array.isArray(hidden25) && hidden25.length >= 6 && must25.every(id => hidden25.includes(id)), `showcase_B_k2_5 hidden: ${JSON.stringify(hidden25)}`);
     check(fs25?.frame?.completeEra === 0, `showcase_B_k2_5 completeEra ${fs25?.frame?.completeEra ?? null}`);
     res.showcase_B_k2_5 = { buyFailed, primaryFunction, seekT: 2.0, t: fs25?.t ?? null, completeEra: fs25?.frame?.completeEra ?? null, hidden: hidden25, restoredSwapped: await checkRestored('showcase_B_k2_5', 0) };
@@ -235,14 +259,14 @@ try {
     await page.waitForTimeout(300);
     const cam415 = await cameraState();
     check(cameraOk(cam415, 1320, 1380, 1), `showcase_B_k41_5 camera ${JSON.stringify(cam415)}`);
-    res.showcase_B_k41_5 = { camera: cam415, restoredSwapped: await checkRestored('showcase_B_k41_5', RESTORED_TOTAL) };
+    res.showcase_B_k41_5 = { camera: cam415, restoredSwapped: await checkRestored('showcase_B_k41_5', RESTORED_TOTAL), tiersTop: await checkTiersTop('showcase_B_k41_5') };
     await shot('b_k41_5');
 
     await seek(45.2);
     await page.waitForTimeout(300);
     const cam452 = await cameraState();
     check(cameraOk(cam452, 2520, 1380, 1), `showcase_B_k45_2 camera ${JSON.stringify(cam452)}`);
-    res.showcase_B_k45_2 = { camera: cam452, restoredSwapped: await checkRestored('showcase_B_k45_2', RESTORED_TOTAL) };
+    res.showcase_B_k45_2 = { camera: cam452, restoredSwapped: await checkRestored('showcase_B_k45_2', RESTORED_TOTAL), tiersTop: await checkTiersTop('showcase_B_k45_2') };
     await shot('b_k45_2');
 
     await seek(56);
@@ -251,7 +275,7 @@ try {
     const cam56 = await cameraState();
     check(fs56?.shot === 'S4', `showcase_B_k56 shot ${fs56?.shot ?? null}`);
     check(atPortrait(cam56), `showcase_B_k56 camera ${JSON.stringify(cam56)}`);
-    res.showcase_B_k56 = { shot: fs56?.shot ?? null, camera: cam56, restoredSwapped: await checkRestored('showcase_B_k56', RESTORED_TOTAL) };
+    res.showcase_B_k56 = { shot: fs56?.shot ?? null, camera: cam56, restoredSwapped: await checkRestored('showcase_B_k56', RESTORED_TOTAL), tiersTop: await checkTiersTop('showcase_B_k56') };
     await shot('b_k56');
   });
 
@@ -275,13 +299,14 @@ try {
     check(inv(hidden), `showcase_C hidden parts: ${JSON.stringify(hidden)}`);
     check(viewMachine !== null && viewMachine.hidden === false && viewMachine.w > 0 && viewMachine.h > 0, `showcase_C view button ${JSON.stringify(viewMachine)}`);
     const restoredC = await checkRestored('showcase_C', RESTORED_TOTAL);
+    const tiersC = await checkTiersTop('showcase_C');
     const keys = { nullCore: await texKey('nullCore'), ring1Bead: await texKey('ring1Bead'), aperture: await texKey('aperture') };
     check(keys.nullCore === 'machine.nullCore#restored#rot', `showcase_C nullCore key ${keys.nullCore}`);
     check(keys.ring1Bead === 'machine.ringBead#restored', `showcase_C ring1Bead key ${keys.ring1Bead}`);
     check(keys.aperture === 'machine.aperture#restored', `showcase_C aperture key ${keys.aperture}`);
     const lit = { generatorGlow: await frameOf('generatorGlow'), crystal: await frameOf('crystal'), lensLight: await frameOf('lensLight'), anchorGlow1L: await frameOf('anchorGlow1L') };
     check(lit.generatorGlow === 3 && lit.crystal === 2 && lit.lensLight === 3 && lit.anchorGlow1L === 2, `showcase_C lamp frames ${JSON.stringify(lit)} want 3/2/3/2`);
-    res.showcase_C = { storedPhase: sp, phase: fs?.phase ?? null, title, plate, camera, hidden, viewMachine, restoredSwapped: restoredC, keys, lit };
+    res.showcase_C = { storedPhase: sp, phase: fs?.phase ?? null, title, plate, camera, hidden, viewMachine, restoredSwapped: restoredC, tiersTop: tiersC, keys, lit };
     await shot('c_postgame_portrait');
   });
 
@@ -365,6 +390,7 @@ try {
     check(cameraOk(camera, CROWN.x, CROWN.y, CROWN.z), `showcase_D2 camera ${JSON.stringify(camera)} want ${CROWN.x},${CROWN.y},${CROWN.z}`);
     check(chipHidden(chip), `showcase_D2 exit chip ${JSON.stringify(chip)}`);
     const swapped = await checkRestored('showcase_D2', RESTORED_TOTAL);
+    const tiersD2 = await checkTiersTop('showcase_D2');
     check(crystal === 2, `showcase_D2 crystal frame ${crystal} want 2`);
     await shot('d_photo_crown', { still: true });
     await page.keyboard.press('Escape');
@@ -373,7 +399,7 @@ try {
     const cameraAfter = await cameraState();
     check(photoAfter?.active === false, `showcase_D2 photo after Esc ${JSON.stringify(photoAfter)}`);
     check(atPortrait(cameraAfter), `showcase_D2 camera after Esc ${JSON.stringify(cameraAfter)}`);
-    res.showcase_D2 = { photo, camera, chip, crystal, restoredSwapped: swapped, exit: { photo: photoAfter, camera: cameraAfter } };
+    res.showcase_D2 = { photo, camera, chip, crystal, restoredSwapped: swapped, tiersTop: tiersD2, exit: { photo: photoAfter, camera: cameraAfter } };
   });
 
   // RUN C2 (same context): reload keeps postgame and lands on the canonical portrait with every part shown.
@@ -389,7 +415,8 @@ try {
     check(atPortrait(camera), `showcase_C2 camera ${JSON.stringify(camera)}`);
     check(inv(hidden), `showcase_C2 hidden parts: ${JSON.stringify(hidden)}`);
     const restoredC2 = await checkRestored('showcase_C2', RESTORED_TOTAL);
-    res.showcase_C2 = { storedPhase: sp, phase: fs?.phase ?? null, camera, hidden, restoredSwapped: restoredC2 };
+    const tiersC2 = await checkTiersTop('showcase_C2');
+    res.showcase_C2 = { storedPhase: sp, phase: fs?.phase ?? null, camera, hidden, restoredSwapped: restoredC2, tiersTop: tiersC2 };
   });
 
   // RUN F (same context, postgame): VIEW MACHINE with Enter (hint off), ArrowRight re-arms the hint, T opens the

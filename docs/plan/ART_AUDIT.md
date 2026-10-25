@@ -662,6 +662,410 @@ New notes (S3, accepted, no block):
 - R2-N2: a fresh lance puff appears about 2 art px right of the collar, then grows and drifts; reads as a vent jet (steam is clear for a
   short way out of a port). Accepted.
 
+## WP22 — part tiers audit
+
+Art Director round 1 (AD5, plan AD4), 2026-10-24. Verdict: **FIXES REQUIRED** (F1, F2, F3 must land; F4, F5 should land; F6 optional).
+The tier art itself is release quality: 91 / 91 variants pass G1-G5, every era I-II track reads at every tier at zoom 1 and 0.5, the
+heartbeat is in phase on all 13 pulse hosts, decals sit correctly under the belts. The defects are in the beat FX layering, the
+bolt-down points and the ring 1 bead after the alignment. All are code / data fixes for workers; no PNG changes.
+
+Evidence root `<A>` = `C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP22/ad/audit/`
+(tools in `<A>tools/`: `kit.mjs`, `beat.mjs`, `stages.mjs`, `tracks.mjs`, `tracks2.mjs`, `ring.mjs`, `flyins.mjs`, `hb.mjs`, `binput.mjs`, `ghostmock.py`, `crops.py`, `sheet.py`, `mounts.py`).
+Beat frames use Playwright's fake clock (`page.clock`): paused, Phaser's smoothed delta flushed with 15 frames, then stepped 16 ms per frame,
+so every grab is an exact beat time (screenshots take 0.55-1.4 s on this box, so real-time grabs cannot hit 60 ms steps).
+
+Build under audit: worktree `C:/Users/sanan/wedtmd-art` (branch `claude/tiers-wp22`) after F1-F6; typecheck clean; `npx vitest run` 126 files,
+3711 pass / 16 skipped. `npm run build` (dist 18:49:47; newest source edit 18:46:10): app js 433.6 / 460 KB, css 40.0 (<= 40.1), public 1724.0 KB (<= 2700), bundle budget PASS;
+`npm run build:demo` (dist-demo 18:50:10): app js 435.6 KB, css 42.8 (<= 42.9), PASS. Full build on :4175 (existing preview, untouched); demo on :4176 started by
+the AD (netstat empty before), stopped after (`taskkill //PID 15048 //T //F`, netstat empty).
+
+Step 0 gate (`scripts/smoke/tiers.mjs`): :4176 demo `fail []`, `errors []` (A-E, H; F/G skipped by design). :4175 full `fail ["B_input"]`,
+`errors []`, every other check true (A, C, D, E, F, G, H). B_input is the smoke script, not the build: `snap(0)` runs before the crank
+click, and a full screenshot takes 0.55-1.4 s here, so the click lands after the 900 ms beat (`activeAtClick 0`, clicks +1; 3 / 3 runs;
+on :4176 it passed with the click at about 900 ms). Direct probe without the screenshot (`<A>tools/binput.mjs`): click 330-590 ms after
+Esc, `activeAtClick 1`, `activeAfterClick 1`, totalClicks +1, 3 / 3. Input during a beat is never blocked. Fix F5. Audit continued.
+
+### G1-G5 per host
+G1-G3 = `python -I scripts/art/tiers/check_gates.py --report <A>gates/gates-ad5.md --g4 .../WP22/ad/final/g4.json`: files 91, bytes 518,591,
+**failures 0** (142 PASS rows: per file and per track tier step). G4 = AD4f records (`WP22/ad/final/g4.json`, all 91 lint 0 errors) plus an AD5
+re-measure via `pixelart_workbench` (uploads `<A>g4/uploads.txt`): 14 scores identical to the records (worn-motor-t4 91.7, piston-block-t5
+96.0, transformer-t5 95.1, motor-retrofit-t2 92.0 / MK I 93.8, condenser-t2 95.3, bellows-t2 94.5 / 96.3, coil-ring-1-t2 100, steam-lance-t3
+96.6, flywheel-pedestal-t2 97.5 / 98.3, decals/flywheel-rim-3 96.0, spire-wave-t2..t5 88.0 / MK I 88.0); lint 0 errors on spire-wave-t2..t5,
+motor-retrofit-t2, bellows-t2, worn-motor-t4, flywheel-rim-3. Note: `spire-wave-t2..t5.png` were regenerated at 17:14, after the AD4f G4
+records (16:14; md5 differs from `ad/p2/md5-post2.txt`); re-measured: scores and lint unchanged (orphan_pixel warnings 960-1060 = the dotted
+field lines; MK I has 1135). The regenerated set climbs 3 / 4 / 5 / 6 / 7 antinodes MK I to MK V (monotonic, physics-true).
+G5 = live in-game captures on the wired build (not composites).
+
+| host (track, tiers) | variants | G1-G3 | G4 lint / score vs MK I | G5 in game (zoom 1 / 0.5) | evidence |
+|---|---|---|---|---|---|
+| worn-motor (motorTuning, 5) | t2-t5, t5b | PASS | 0 / >= 90.3 vs 91.7 | PASS: patches, iron bands, brass hoops + cowl, eye lamp; Era I backdrop brass reads brass (risk 2) | `<A>tracks/rows/track-motorTuning.png` |
+| motor-plinth (motorTuning, 5) | t2-t5 | PASS | 0 / >= 91.9 vs 90.2 | PASS | same |
+| gear-large, gear-small, pulley-main (gearRatio, 3) | t2, t3 + rot | PASS | 0 / sheets >= MK I | PASS: derust, polished; rim brass at 0.5 | `<A>tracks/rows/track-gearRatio.png` |
+| decal gear-rim (gearRatio t3) | 1 | PASS (symmetric, over opaque) | 0 | PASS: under belt loop and piston rod | `<A>crops/decals-belt-crossings-x3.png` |
+| flywheel, pulley-flywheel, pulley-crank (flywheel, 3) | t3 + rot | PASS | 0 / 9-tile mean 91.7 vs 91.6 | PASS | `<A>tracks/rows/track-flywheel.png` |
+| flywheel-pedestal (flywheel, 3) | t2, t3, t3b | PASS | 0 / 97.5, 97.3 vs 98.3 | PASS | same |
+| decals flywheel-rim-2 / -3 (flywheel t2 / t3) | 2 | PASS | 0 / 96.0 | PASS: re-tyred rim, brass inlay; belts over | `<A>crops/decals-hubs-z2.png` |
+| piston-block (improvedPistons, 5) | t2-t5, t5b | PASS | 0 / >= MK I - 3 | PASS: braces at MK III are the strongest step | `<A>tracks/rows/track-improvedPistons.png` |
+| coils-1 t2 / coils-3 t5 (copperWinding, 5) | 2 | PASS | 0 | PASS | `<A>tracks/rows/track-copperWinding.png` |
+| motor-retrofit (motorRetrofit, 5) | t2-t5, t5b | PASS | 0 / 92.0 vs 93.8 (-1.8) | PASS (small host, MK II quiet, beat carries it) | `<A>tracks/rows/track-motorRetrofit.png` |
+| transformer (transformer, 5) | t2-t5, t5b | PASS | 0 / 95.1 vs 94.9 | PASS: radiators, fans, lamp | `<A>tracks/rows/track-transformer.png` |
+| firebox-1 t2 / firebox-3 t5 (firebox, 5) | 2 (4 frames) | PASS | 0 | PASS (D3: taller, brighter flames at zoom 1) | `<A>p1/rows/D3-D4.png` |
+| induction-heater (inductionHeater, 5) | t2-t5, t5b | PASS | 0 | PASS (s11, s16) | `<A>stages/1920x1080/s16-z1.png` |
+| condenser (condenser, 5) | t2-t5, t5b | PASS | 0 / 95.3 = MK I | PASS; D1 MK II quiet (4 rust specks off, bright rivets) | `<A>p1/rows/D1-condenser.png` |
+| bellows (bellowsDrive, 3) | t2, t3, t3b | PASS | 0 / 94.5 vs 96.3 (-1.8) | PASS; D2 MK II straps dark on dark, MK III nozzle + lamp clear | `<A>p1/rows/D2-bellows.png` |
+| coil-ring-1 t2 (harmonicCoil, 5) | 1 (4 frames) | PASS | 0 / 100 | PASS; D4 cyan glints quiet at 0.5 | `<A>p1/rows/D3-D4.png` |
+| calliope (pressureResonator, 5) | t2-t5, t5b | PASS | 0 | PASS (s16) | `<A>stages/1920x1080/s16-z1.png` |
+| servo-base, servo-arm rot (crankServo, 3) | t2, t3, t3b; t2, t3 | PASS | 0 | PASS; D5 MK II quiet, MK III cover + lamp clear | `<A>p1/rows/D5-servo.png` |
+| spire-wave (standingWave, 5) | t2-t5 | PASS (G2 waived, method D) | 0 / 88.0 = MK I | PASS (s13, s16) | `<A>stages/1920x1080/s16-z05.png` |
+| exciter-feed (gridExciter, 3) | t2, t3, t3b | PASS | 0 / 92.1 vs 94.0 | PASS | `<A>stages/1920x1080/s16-z1.png` |
+| backfeed-terminal (mainsBackfeed, 3) | t2, t3, t3b | PASS | 0 | PASS | same |
+| steam-lance (steamLance, 3) | t2, t3, t3b | PASS | 0 / 96.6 | PASS; D6 MK III collar + 2 px lamp quiet, heartbeat helps | `<A>p1/rows/D6-lance.png` |
+| rings / siphons / anchor glows (containmentRing, resonantSiphon, graviticAnchor) | staged only | n/a | n/a | PASS at s15 / s16; ring 1 bead see F3 | `<A>ring/sheet-ring.png` |
+
+### Verdicts
+- **Ghost: ACCEPT plain `setTintFill(#c98552)`; REJECT the 2x2 checker.** Mock-up on the real frame (`<A>beat/ghost-mock-plain-vs-checker-x3.png`):
+  the checker turns the expanding shell into a screen-door mesh at t176-t256 (dither noise, against ART_BRIEF "hard clusters, no dithering
+  noise"; 4 px squares at zoom 2). The live plain ghost reads as a hot shell lifting off, but at alpha 0.8 it hides the new art for the
+  whole reveal (t128-t256 is a flat orange blob: `<A>beat/motor-full/motor-full-t0128.png`, `-t0176.png`). At 0.55 the MK II patches and bands
+  read through it from t128 and the halo still reads (`<A>beat/ghost-mock-a080-vs-a055-x3.png`) → F4. No TierBeatFx checker work.
+- **Beat timing: PASS** (motor 4 → 5, full motion, `<A>beat/sheet-motor-full-x2.png`; frames `<A>beat/motor-full/motor-full-t0000.png` anticipation,
+  `-t0064` flash step 2 (#ffd27a 0.6), `-t0128` swapped + ghost, `-t0256` ghost 0.36 / x1.065 + rust flakes, `-t0352` first bolt crown, `-t0448`,
+  `-t0608` settle, `-t0704` shine band, `-t0800`, `-t0896` at rest; `tierBeatsActive` 1 through t896, 0 after 900). Every event within one frame
+  (16 ms) of PART_TIER_FX. Gear 5 → 6 (rot host, `<A>beat/sheet-gear-full-x2.png`) and flywheel 3 → 4 (`<A>beat/sheet-flywheel-full-x2.png`) same
+  timeline. Settle shake and bell are not visible in stills (tiers.mjs and audio tests cover them).
+- **Reduced motion: PASS with F1 / F2 / F6.** `<A>beat/sheet-motor-reduced-x2.png`, `-gear-`, `-flywheel-`: swap at t0 under a 250 ms crossfade,
+  4 static #ffd27a glints to t400, beat over by t448 (tiers.mjs D_short 453 / 476 ms); no flash, ghost, shake, debris or shine; heartbeat stays.
+  Defects: the crossfade image draws over front parts (flywheel t64-t128: the old pedestal bearing block over the hub pulley) → F1; the glints
+  float in air beside the motor plinth and below the gear → F2; on a rotating host the static old frame double-exposes the turning teeth for
+  250 ms (`<A>beat/gear-reduced/gear-reduced-t0128.png`) → F6 (optional).
+- **Burst: PASS** (case C pattern, 4 beats + 2 instant, `<A>beat/sheet-burst-full.png`, `<A>beat/burst-full/log.json`): gear t64, pedestal t128,
+  motor t256, pistons t368 (120 ms stagger, track order reads as a left-to-right cascade), retrofit kit and transformer swap at once with debris,
+  peak `tierBeatsActive` 4, quiet by t1408; reduced burst over by t800. Not spam. Same F1 layering (pedestal flash over the wheel hub t128,
+  piston flash over the frame girder t368).
+- **Heartbeat: PASS.** Era I-II MK V set (motor, pistons, retrofit kit, transformer, pedestal t3): 28 samples, 0 mixed, half-periods
+  1056-1358 ms (`<A>tracks/1280x720/heartbeat.json`). Postgame, all 13 pulse hosts, sampled once per animation frame for 6 s: 34 frames, 0 mixed,
+  half-periods 1105 / 1309 / 1126 / 1302 ms, mean 1.21 s vs 1.2 s (jitter = 6 fps headless) (`<A>heartbeat/heartbeat-postgame.json`). Lamp frames
+  `<A>tracks/1280x720/e2-15-heartbeat-low.png` / `-high.png`.
+- **Decals vs belts: PASS.** Main hub: the belt loop and the piston rod draw over the gear-rim brass ring; flywheel hub MK II / MK III and
+  postgame: every belt crosses over rim 2 / rim 3 (`<A>crops/decals-hubs-z2.png`, `<A>crops/decals-belt-crossings-x3.png`, zoom 2 and x3).
+  Fly-ins: `buyPerk('muscleMemory')` after a new cycle, gearLarge lands at MK I in 700 ms with no rim decal at any frame, no beat
+  (`<A>flyin-perk/sheet-perk.png`; the yellow ring is the WP20 crank prompt). Demo teaser: opens on the built era II machine, so era I-II
+  hosts (and their decals) appear at once at top tier (gear rim, flywheel inlay, MK V piston caps and lamp:
+  `<A>flyin-teaser/teaser-t0-base-x2.png`); plate stays redacted `RES?OR?` (`<A>flyin-teaser/teaser-plate-x8.png`); end frame
+  `<A>flyin-teaser/teaser-end.png` (era V, top tiers, masked caption).
+- **Brass vs rust at zoom 0.5 on the Era I backdrop (risk 2): PASS.** Motor MK IV / V hoops, gear rim and flywheel inlay read as clean brass
+  bands, MK I rust reads as mottled patches (`<A>tracks/rows/track-motorTuning.png`, `<A>tracks/1280x720/e1-08-motor5-pist5-z05.png`).
+- **Stages: PASS** at 1280x720 UI 100 and 1920x1080, zoom 1 / 0.75 / 0.5, errors [] (`<A>stages/1280x720/`, `<A>stages/1920x1080/`:
+  `s2`, `s4`, `s7`, `s9`, `s11`, `s13`, `s15`, `s16` postgame, `s16-photo-z05` / `-z1` photo mode). Tiers per stage as expected (s16: every
+  track at its top). No tier part breaks a silhouette, socket or belt path.
+- **TECH INDEX detail at UI 150: PASS by eye.** `LV 24/25 · MK IV — MK V AT LV 25` on one line, 9 px inside the panel edge
+  (`.../WP22/val/tiers/tiers-H-ui150.png`); the clipped cost row under it is the existing scrolling panel (WP16b-2 N2 / N3).
+- **Ring bead overlap: ACCEPT during the finalAlignment hold; FIX after it (F3).** During align + hold both ring-1 beads sit at beadPhiDeg 90:
+  one bead, reads as the alignment beat (Director call stands). But `MachineAnimator.placeBead` (`:538-545`) leaves `orbitAngles` = 90 for
+  both, and ring1Bead / ring1Bead2 share ring, dir, speed and speedScale (`machineComponents.ts:977`, `:1014`), so after the hold they orbit
+  stacked for the rest of the session (finale, postgame, store shots) until reload or reset: the containment MK II part disappears.
+  Code-deterministic; the pixel probe (`<A>ring/`) is inconclusive because beads pass behind the core.
+
+### Fix list (owner = worker via T14, unless noted)
+- **F1 (S1, code + data) beat overlays above front parts.** `src/game/entities/TierBeatFx.ts`: flash, ghost and shine use the fixed depth
+  `MACHINE_LAYER_DEPTH.front + 3`, so the overlay of a back / mid host covers pulleys, belts and front parts (flywheelPedestal depth 21 → its
+  flash, ghost, shine and reduced crossfade cover flywheelPulley 23 and the belts; gearLarge 20 → covers pulleyMain 22 and the belt loop;
+  pistonArray 1 → covers the frame girder). Fix: in `play()` set `flash`, `ghost` and the slot's shine image depth to
+  `host.depth + PART_TIER_FX.overlayDepthBias`, then `parts.sort('depth')` once (keep the `parts` reference from the constructor);
+  `src/game/entities/TierShine.ts`: add `setDepth(slot: number, depth: number)` (or a depth argument on `show`). `src/data/machineTiers.ts`
+  `PART_TIER_FX` += `overlayDepthBias: 0.05` (new key, with a comment). The particle pool (debris, crowns, glints, torque sparks) stays at
+  `front + 4`. Verify: re-run `<A>tools/beat.mjs` flywheel / gear full + reduced: pulley and belts crisp over the flash at t64 / t128 / t608.
+- **F2 (S1, data) bolt-down points float.** 14 of 18 primary hosts use the default box-corner mounts, which land on transparent pixels
+  (`<A>tools/mounts.py`): crowns, torque sparks and reduced glints spark in mid air (motor: beside the plinth). `src/data/machineTiers.ts`
+  `PART_TIERS` add `mounts` (art px from the host origin; every point checked opaque on MK I and every tier, inside the host box):
+  gearRatio `{ gearLarge: [{x:-4,y:0},{x:4,y:0}] }` (hub set screws, over the pulley) · motorTuning `{ wornMotor: [{x:-10,y:15},{x:8,y:15}] }`
+  (foot flanges) · copperWinding `{ coilStage1: [{x:-14,y:4},{x:19,y:4}] }` · motorRetrofit `{ motorRetrofitKit: [{x:-7,y:6},{x:4,y:6}] }` ·
+  transformer `{ transformer: [{x:-17,y:-1},{x:20,y:-1}] }` · firebox `{ fireboxGlow1: [{x:-2,y:-1},{x:2,y:-1}] }` (flame roots) ·
+  inductionHeater `{ inductionHeater: [{x:-15,y:-4},{x:16,y:-4}] }` · condenser `{ condenser: [{x:-22,y:-1},{x:21,y:-1}] }` (outer saddles) ·
+  bellowsDrive `{ bellows: [{x:-19,y:-1},{x:5,y:-1}] }` (legs) · pressureResonator `{ calliope: [{x:-28,y:-1},{x:27,y:-1}] }` ·
+  standingWave `{ spireWave: [{x:0,y:-2},{x:0,y:-268}] }` (rod ends = fixed nodes) · gridExciter `{ exciterFeed: [{x:2,y:-1},{x:6,y:-1}] }` ·
+  mainsBackfeed `{ backfeedTerminal: [{x:-3,y:1},{x:3,y:1}] }` · steamLance `{ steamLance: [{x:-4,y:1},{x:4,y:1}] }` (top brackets).
+  Defaults already on the art (keep): flywheelPedestal, pistonArray, servoBase, coilRing1. `machineTiers.test.ts` in-box test covers them.
+- **F3 (S1, code + data) ring1Bead2 stacks on ring1Bead after the alignment.** `src/data/machineComponents.ts`: orbit animation type +=
+  optional `alignOffsetDeg?: number`; `ring1Bead2` `alignOffsetDeg: 180`. `src/game/entities/MachineAnimator.ts` `placeBead`: align target and
+  hold = `EXOTIC_MILESTONE_FX.beadPhiDeg + (anim.alignOffsetDeg ?? 0)` (bead 2 aligns to 270, behind the core, so the hold still reads as one
+  front column; after the hold the two beads stay 180 deg apart). `machineComponents.test.ts`: ring1Bead2 contract `alignOffsetDeg: 180`.
+  Verify: `<A>tools/ring.mjs`, two ring-1 beads 180 deg apart at +6 s / +15 s after the purchase.
+- **F4 (S2, data + test) ghost alpha.** `src/data/machineTiers.ts` `PART_TIER_FX.ghostAlpha` 0.8 → 0.55; `src/game/math/tierBeat.test.ts`
+  t120 alpha 0.8 → 0.55 (title too), t250 alpha 0.384 → 0.264. (AD-owned number, but the pinned test is not AD-owned: one worker lands both.)
+- **F5 (S2, smoke) tiers.mjs B_input race.** `scripts/smoke/tiers.mjs` case B: move `await snap(0);` below the `c.check('B_input', ...)` line
+  (click first, then the four shots); shot names unchanged, achieved offsets still recorded in `B_played`.
+- **F6 (S3, optional, code) reduced crossfade on rotating hosts.** `src/game/entities/TierBeatFx.ts` `drawReduced`: when
+  `isRotating(beat.primary)`, keep the crossfade image hidden (swap at t0 + glints only); a static old frame over a turning gear double-exposes
+  the teeth for 250 ms.
+
+### Notes (accepted, no fix)
+- N1 D1 condenser MK II, D2 bellows MK II, D4 coil ring 1 MK II, D5 servo arm, D6 lance MK III are quiet steps at zoom 0.5; each passes G1
+  and its per-host spec, the beat (debris, crowns) carries the moment, the next step is strong. Optional post-WP22 polish: bellows-t2 strap
+  lit edge to #7d8286.
+- N2 This box renders the headless page at about 6 fps in postgame and screenshots take 0.55-1.4 s while sibling smokes run; real-time
+  frame grabs are unreliable here (hence the fake clock, and F5).
+- N3 No PNG, manifest, PART_TIER_FX or ASSET_GUIDE change in this round (nothing to regenerate). Round 2 after T14: re-run `beat.mjs`
+  (all strips), `ring.mjs`, `tiers.mjs` on both builds and look at the F1 / F2 / F3 frames.
+
+### Round 2 (AD5r2)
+
+Art Director round 2 on the T14 build, 2026-10-24. Verdict: **FIXES REQUIRED**. F1 did not land (only its data key); F3 passes for the
+finalAlignment hold and after it, but the second ring-1 bead is not opposite the first after the containmentRing MK II purchase (new F9);
+the copper-winding MK V beat crowns on the default corners and one lands in the sky (new F7). F2, F4, F5 and the new level-line text pass.
+No PNG, manifest, ASSET_GUIDE or PART_TIER_FX number change.
+
+Evidence root `<A2>` = `C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP22/ad/audit2/`
+(tools in `<A2>tools/`: round 1 `beat.mjs`, `kit.mjs`, `sheet.py`; new `beatdbg.mjs` (beat.mjs plus a per-frame TierBeatFx log), `glints.mjs`,
+`glintsheet.py`, `glintzoom.py` (one reduced beat per mount host, glint frame t48 vs t480), `ring2.mjs` (bead angles solved from the sprite
+positions through a read-only `Sprite.prototype.setPosition` probe on `window.Phaser`), `mounts2.py`, `mounts2s.py`, `mounts3.py`
+(mount pixels vs alpha per tier file and per tier step), `layout2.ts` (layout, tiers, mounts and PART_TIER_FX dump)).
+
+Start: worktree quiet for 4 min (no edit after 20:42) before the build. Build under audit: typecheck clean; `npx vitest run` 126 files,
+3717 pass / 16 skipped. `npm run build` (dist 20:50:22): app js 434.3 / 460 KB, css 40.0 (<= 40.1), public 1724.0 KB, bundle budget PASS.
+`npm run build:demo` (dist-demo 20:50:38): app js 436.3 KB, css 42.8 (<= 42.9), PASS. Ports: :4175 existing preview of this dist (serves
+`index-BNYJD84C.js`, not started or stopped); :4176 demo preview started by the AD (netstat empty before), stopped after
+(`taskkill //PID 21496 //T //F`, netstat empty); 4173 / 4174 / 4177 untouched.
+
+| item | status | evidence |
+|---|---|---|
+| F1 beat overlays above front parts | **FAIL: code not landed** | `<A2>f1/flywheel-full-hub-x3.png`, `<A2>f1/gear-full-hub-x3.png`, `<A2>f1/burst-pistons-girder-x3.png`, `<A2>f1/flywheel-reduced-hub-x3.png` |
+| F2 bolt crowns, torque sparks, reduced glints on the 14 hosts | PASS 14 / 14 (spire 1 px wobble accepted) | `<A2>f2/zoom-p1-reduced.png`, `-p2-`, `-p3-`; `<A2>f2/motor-crowns-glints-r1-vs-r2-x3.png`, `<A2>f2/gear-crowns-glints-r1-vs-r2-x3.png`; `<A2>mounts/mounts2.json` |
+| F2 scope: MK V primaries coilStage3 / fireboxGlow3 | FAIL coilStage3 (new F7) | `<A2>f2/zoom-p1-reduced.png` tile `coil3-mk5 @(20,73)`; `<A2>mounts/mounts3.json` |
+| F3 finalAlignment hold: one front column, bead 2 behind the core | PASS | `<A2>ring-hold/ring-hold-core-x5.png` (B-fa-04500), `<A2>ring-hold/ring-log.json` |
+| F3 after the hold: beads 180 deg apart at +6 / +15 s | PASS (177 / 178; 171 at +12 s) | `<A2>ring-hold/ring-log.json` |
+| F3 after the containmentRing MK II purchase: 180 deg apart at +6 / +15 s | **FAIL: 93 / 81 deg** (new F9) | `<A2>ring/ring-A-mk2-core-x5.png`, `<A2>ring/ring-log.json` |
+| F4 ghost alpha 0.55 | PASS | `<A2>f4/motor-ghost-r1-vs-r2-x3.png`, `<A2>beat/sheet-motor-full-x2.png` |
+| F5 tiers.mjs, both builds | PASS: fail [], errors [] | `<A2>tiers-full.json`, `<A2>tiersB2.json`, `<A2>tiersB3.json`, `<A2>tiers-demo.json` |
+| Level line `LV 19/25 · MK III — MK IV AT 20` at UI 150 | PASS | `<A2>tiers-full/tiers-H19-ui150.png` |
+
+- F1: `PART_TIER_FX.overlayDepthBias: 0.05` and its machineTiers.test bounds landed, the code half did not: `TierBeatFx.ts` (mtime 18:40,
+  before the round 1 audit) still builds the flash and ghost pools at `MACHINE_LAYER_DEPTH.front + 3` and never re-depths them, `TierShine.ts`
+  has no per-slot depth, and nothing in `src/` reads `overlayDepthBias`. Frames are the round 1 defect unchanged: flywheel full t64 flash and
+  t128 ghost over flywheelPulley and both belts, gear full t64 / t128 over pulleyMain and the belt loop, burst t368 piston flash over the
+  girder top edge, reduced flywheel t64 / t128 old pedestal bearing block over the hub pulley. Re-issued below.
+- F2: one reduced beat per declared host in game (`glints.mjs` p1 / p2 / p3), glint frame t48 against t480: kit bracket, coil-1 bobbin feet,
+  transformer tank feet, heater, firebox flame roots, bellows legs, condenser saddles, calliope feet, spire rod ends, exciter box, backfeed
+  bar, lance bracket: every glint on opaque art. Motor feet and gear hub crowns (full t352 / t448) and glints (reduced t64) now sit on the
+  foot flanges and hub set screws; round 1 had them on the floor and under the gear. Static check (`mounts2.py`, every frame of every
+  tier file): 0 misses except the empty padding cells 140-143 of the gear rotation sheets and the spire rod wobble. Crowns and torque sparks
+  share `mountPoints`, so the reduced glints place all three.
+- F2 scope gap (round 1 listed swaps[0] only): the beat primary is the first swap host whose key changes (`tierRelease.primaryOf`), so
+  copperWinding 4 → 5 plays on coilStage3 and firebox 4 → 5 on fireboxGlow3, both on default bottom corners. coilStage3 (64x40, the MK V
+  art has empty bottom corners): the left crown / glint lands on the sky beside the base, the right one on the base edge. fireboxGlow3:
+  the corners land on the firebox housing (boiler art), reads as bolting the grate, no float. Fix F7.
+- F3: round 1's `ring.mjs` never saw the hold: finalAlignment is a milestone that unlocks itself once skyAperture, inversionCrank and
+  the lifetime XF are met, so the S15 setup fired it unseen. `ring2.mjs` holds skyAperture back and buys it under the frozen clock. Hold
+  frame: ring1Bead phi 90 depth 30 (front), ring1Bead2 phi 269 depth 26 (behind the core), ring 2 / ring 4 beads at 90-91: one front
+  column. After the hold: 177 / 171 / 178 deg at +6 / +12 / +15 s. Phase A (S14, containmentRing 3 → 4): ring1Bead2 starts at its absolute
+  phi0 180 while ring1Bead is wherever its orbit is: 77 / 93 / 79 / 87 / 81 deg apart at +3 / +6 / +9 / +12 / +15 s, both beads on the
+  front arc at +6 s. The pair stays unbalanced until the finalAlignment hold or a reload (both restart from phi0 0 / 180). Fix F9.
+- F4: at 0.55 the MK V cowl, hoops and panel lines read through the ghost from t128; round 1 at 0.8 was a flat orange blob to t256. Gear
+  t128: the new teeth read through it. Halo still reads.
+- F5: :4175 full run all checks true (A-H, F_restored 34); B_input 3 / 3 (full run, then ONLY=B twice): clicks 45 → 46, activeAtClick 1,
+  with the B shots landing 1.2-7.8 s late. :4176: fail [], errors [], FG_skipped_demo.
+- Level line: `LV 19/25 · MK III — MK IV AT 20` on one line at UI 150, NOW +19 ME/S and NEXT +20 ME/S visible; H19_fit_100 / H19_fit_150
+  true (span 19 / 29 = one line box), LV 24 line `LV 24/25 · MK IV — MK V AT 25` the same, demo the same. The cost row under NEXT is the
+  scrolling panel clip (round 1, WP16b-2 N2 / N3).
+- Beat timing unchanged vs round 1 (`<A2>beat/sheet-*-x2.png`, `<A2>beat/sheet-burst-full.png`): full beats 900 ms, reduced over by
+  t432-t448, burst full quiet by t1408, reduced by t800. F6 (optional) not done: reduced gear t64 still double-exposes the teeth
+  (`<A2>beat/gear-reduced/gear-reduced-t0064.png`).
+
+#### Fix list, round 2 (owner = worker, unless noted)
+- **F1 (S1, code) re-issue, code half only.** `src/game/entities/TierShine.ts`: add `setDepth(slot: number, depth: number): void`
+  (`this.images[slot]?.setDepth(depth)`). `src/game/entities/TierBeatFx.ts`: keep the constructor `parts` as `private readonly parts`; in
+  `play()`, once `flash` and `ghost` are known: `const depth = host.depth + PART_TIER_FX.overlayDepthBias; flash.setDepth(depth);
+  ghost.setDepth(depth); this.shine.setDepth(slot, depth); this.parts.sort('depth');`. The particle pool stays at `front + 4`. Component
+  depths are integers and the decals sit at host + 0.5 / 0.6, so host + 0.05 is above the host and below every part in front of it.
+  Verify: `<A2>tools/beatdbg.mjs` flywheel / gear full + reduced and burst full: pulleys and belts crisp at t64 / t128, girder over the
+  piston flash at t368, pedestal crossfade under the hub pulley.
+- **F7 (S2, data) MK V beat mounts.** `src/data/machineTiers.ts` `PART_TIERS`: copperWinding `mounts` += `coilStage3: [{ x: -14, y: 4 },
+  { x: 19, y: 4 }]`; firebox `mounts` += `fireboxGlow3: [{ x: -2, y: -1 }, { x: 2, y: -1 }]` (the stage-1 points; same attachment; opaque
+  on coils-3, coils-3-t5 and every frame of firebox-3-t5, and on the stage-1 art under them). The existing in-box test covers them.
+  Verify: `<A2>tools/glints.mjs` p1 / p2 reduced, `coil3-mk5` and `firebox3-mk5` glints on the bobbin feet and flame roots.
+- **F9 (S2, code + data) ring1Bead2 opposite ring1Bead when it comes in.** `src/data/machineComponents.ts`: orbit animation type +=
+  optional `phaseOf?: MachineComponentId` (lead bead: on its first placement this bead starts at the lead's current angle +
+  (phi0Deg - lead phi0Deg)); `ring1Bead2` `phaseOf: 'ring1Bead'`. `src/game/math/animation.ts`: `followPhase(leadDeg, phi0Deg, leadPhi0Deg)`
+  wrapped to [0, 360) (+ test: 141, 180, 0 → 321; 300, 180, 0 → 120). `src/game/entities/MachineAnimator.ts`: one start-angle helper used
+  by `placeBead` (`from`) and by the exotic milestone handler (`exoticFrom`): the recorded angle, else `followPhase` of the lead's recorded
+  angle when `phaseOf` is set and recorded, else `phi0Deg`. ring1Bead is placed before ring1Bead2 in every frame (id order), so after a
+  reload the pair still starts at 0 / 180. `machineComponents.test.ts`: ring1Bead2 contract `phaseOf: 'ring1Bead'`, no other orbit part
+  sets it. Verify: `<A2>tools/ring2.mjs` phase A: 180 ± 12 deg (solver quantization) at +3 to +15 s after the MK II purchase.
+- **F8 (S3, optional, code) spark pixel origin.** `src/game/entities/TierSparks.ts` constructor: pool images `.setOrigin(0)`. A 1x1 image
+  at origin 0.5 on an integer point is centred on a pixel corner, so the rasterizer picks one of four pixels: measured 0-1 px left / up of
+  the authored mount, varying by run and zoom. All 14 hosts were on art in this run, but at a (-1, -1) landing the firebox flame-root
+  glints, the heater MK I-III left glint and the backfeed / lance glint pixels miss by 1 px (`<A2>mounts/mounts2-rendered.json`). Origin 0
+  puts a spark exactly on the authored pixel, which `mounts2.py` checks (0 misses), and puts debris on the art grid.
+- **F6 (S3, optional)** carried from round 1, unchanged.
+
+#### Notes, round 2 (no fix)
+- N-r2-1 Harness: under the paused fake clock the Phaser loop sometimes stops getting frames (`game.loop.frame` constant, beat time
+  frozen): flywheel reduced (2 runs), burst reduced (1 run), one glint host and the first 2.5 s of the ring hold run. Reruns with the
+  per-frame log (`beatdbg.mjs`) and a freeze guard (`glints.mjs`) pass; a real-time probe shows the same flywheel reduced beat swapping and
+  ending. Not a game defect. Stuck runs kept in `<A2>beat/flywheel-reduced-run1-stuck/`, `-run2-stuck/`, `<A2>beat/burst-reduced-run1-stuck/`.
+- N-r2-2 A purchase through `session.purchase` snaps the camera to the default framing (zoom 0.5-1), so the F2 / F3 in-game captures are
+  at default zoom (1-2 screen px per art px) and are read at x5-x10.
+- Round 3 after F1 / F7 / F9: `beatdbg.mjs` flywheel / gear full + reduced and burst full, `glints.mjs` p1 / p2 reduced, `ring2.mjs`
+  (phase A and hold), `tiers.mjs` on both builds.
+
+### Round 3 (AD5r3)
+
+Art Director round 3 on the F1 / F7 / F9 / F10 build, 2026-10-24. Verdict: **RELEASE-READY**. F1, F7 and F9 pass in game on both
+motion settings; F10 holds (tiers.mjs clean on both builds, double purchases end at the higher tier). F2 / F4 / F5 still hold. F6 / F8 stay
+deferred (optional). No PNG, manifest, ASSET_GUIDE or PART_TIER_FX number change.
+
+Evidence root `<A3>` = `C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP22/ad/audit3/`
+(tools in `<A3>tools/`: round 2 `kit.mjs`, `layout.json`, `glints.mjs`, `glintsheet.py`, `glintzoom.py`, `sheet.py`; `beatdbg.mjs` now with the
+freeze guard (retry until `game.loop.frame` steps, `freezeTries` logged) and `BEAT_TARGETS` / `BEAT_SUFFIX`; new `ring3.mjs` (ring2.mjs plus the
+freeze guard, both ring-1 beads read by id from `MachineView.sprites` and solved on ring 1 only), `f10.mjs` (double-purchase key trace),
+`rowcmp.py` (round 2 vs round 3 crops of the same box)).
+
+Start: the four fixes are in source (`TierBeatFx.play` sets flash / ghost / shine depth to `host.depth + PART_TIER_FX.overlayDepthBias` and
+re-sorts `parts`; `TierShine.setDepth`; `PART_TIERS` mounts `coilStage3` / `fireboxGlow3`; `ring1Bead2.phaseOf: 'ring1Bead'` with
+`MachineAnimator.startAngle` / `followPhase`; `MachineView` swap hook `Math.max(change.to, this.trackTier(techId))`). dist / dist-demo (21:47 /
+21:48) were older than the newest fix edit (22:44:20), so the AD rebuilt: `npm run build` (dist 22:45:24): app js 435.0 KB, css 40.0 KB;
+`npm run build:demo` (dist-demo 22:45:37): app js 437.0 KB, css 40.0 + 2.8 KB. Typecheck clean; `npx vitest run` 126 files, 3723 pass /
+16 skipped. Ports: :4175 existing preview of this dist (serves `index-DjtunAym.js`; not started or stopped); :4176 demo preview started by the
+AD (netstat empty before; served `index-Bj96sfD3.js`), stopped after (`taskkill //PID 23792 //T //F`, netstat empty); 4173 / 4174 / 4177 untouched.
+
+| item | status | evidence |
+|---|---|---|
+| F1 flywheel full: flywheelPulley and both belts over the pedestal flash (t64) and ghost (t128) | PASS (r2: pulley and belts under the flash) | `<A3>f1/flywheel-full-hub-r2-vs-r3-x3.png` |
+| F1 flywheel full: shine under the hub pulley and the lower belt | PASS: dense t560-t800, band on the pedestal legs t624-t768, never on the pulley or a belt | `<A3>f1/flywheel-full-shine-dense-x2.png`, `-dense2-x2.png`, `<A3>f1/flywheel-full-shine-hub-x5.png`, `<A3>f1/flywheel-full-shine-r2-vs-r3-x2.png` |
+| F1 gear full: pulleyMain and the belt loop over the gearLarge flash (t64) and ghost (t128) | PASS | `<A3>f1/gear-full-hub-r2-vs-r3-x3.png` |
+| F1 reduced: pedestal crossfade under the hub pulley (t64 / t128); gear crossfade under pulleyMain | PASS | `<A3>f1/flywheel-reduced-hub-r2-vs-r3-x3.png`, `<A3>f1/gear-reduced-hub-r2-vs-r3-x3.png` |
+| F1 burst full: girder top edge over the piston flash (t368); crank rod over the flash (t368) and ghost (t608) | PASS (r2: rod tinted at the rail crossing) | `<A3>f1/burst-pistons-girder-r2-vs-r3-x3.png`, `<A3>f1/burst-pistons-rail-rod-r2-vs-r3-x8.png` |
+| F1 no new defect: overlays on their own host, ghost 0.55 hot shell, timing | PASS: full beats end t912, reduced t400, burst full t1264 (4th beat 360 + 900), reduced burst t768, peak 4 | `<A3>beat/sheet-*-x2.png`, `<A3>beat/sheet-burst-*.png`, `<A3>beat/*/log.json`, `<A3>beat/run.log` |
+| F7 coilStage3 MK V (coil3-mk5, reduced): glints on the bobbin feet | PASS (r2: left glint in the sky, right on the base edge) | `<A3>f7/coil3-mk5-glints-r2-vs-r3-x6.png`, `<A3>f7/zoom-p1-reduced.png` |
+| F7 fireboxGlow3 MK V (firebox3-mk5, reduced): glints on the flame roots | PASS (N-r3-1) | `<A3>f7/firebox3-mk5-glints-r2-vs-r3-x10.png`, `<A3>f7/zoom-p2-reduced.png` |
+| F7 the other hosts unchanged | PASS: 11 / 12 glint hosts (p1-p3) same art offsets as r2; kit moved with its sprite (motor vibration phase), still on the bracket ends; reduced gear glints on the hub set screws (t64), reduced motor glints on the foot flanges (f10 case B t48) | `<A3>f7/sheet-p1-reduced.json`, `-p2-`, `-p3-`, `<A3>f7/kit-glints-r2-vs-r3-x6.png`, `<A3>f7/zoom-p3-reduced.png`, `<A3>f1/gear-reduced-hub-r2-vs-r3-x3.png`, `<A3>f10/f10-B-motor-glints-x6.png` |
+| F9 phase A (S14, containmentRing 3 → 4): ring-1 beads 180 ± 12 deg apart | PASS: 176 / 180 / 177 / 178 / 178 / 175 / 178 at +1 / +2 / +3 / +6 / +9 / +12 / +15 s (r2: 77-93) | `<A3>f9/ring3/ring-log.json`, `<A3>f9/ring3.log`, `<A3>f9/ring-A-mk2-core-x5.png` |
+| F9 finalAlignment hold: one front column, bead 2 behind the core | PASS: t1500-t3400 ring1Bead phi 90 depth 30, ring1Bead2 phi 269 depth 26 | `<A3>f9/ring-B-hold-core-x5.png`, `<A3>f9/ring3/ring-log.json` |
+| F9 after the hold | PASS: 179 / 176 / 170 / 175 / 175 at +4.5 / +6 / +9 / +12 / +15 s | `<A3>f9/ring3/ring-log.json` |
+| F10 `tiers.mjs` :4175 full | PASS: fail [], errors [] (all A-H true, B_input clicks 45 → 46 activeAtClick 1, F_restored 34, D_short 454) | `<A3>tiers-full.json`, `<A3>tiers-full/` |
+| F10 `tiers.mjs` :4176 demo | PASS: fail [], errors [], FG_skipped_demo | `<A3>tiers-demo.json`, `<A3>tiers-demo/` |
+| F10 quick double purchase ends at the higher tier | PASS (cases A, B, C below) | `<A3>f10/f10-sheet-x2.png`, `<A3>f10/f10-A/log.json`, `-B/`, `-C/` |
+| F2 / F6 / F8 notes; no PNG, manifest or PART_TIER_FX number change | PASS: `public/assets` no file newer than 18:00, `manifest.ts` / `ASSET_GUIDE.md` 17:23, `TierSparks.ts` 17:28; PART_TIER_FX equal to the r2 dump (`<A3>tools/layout.json` fx) | this table, `git status` |
+
+- F1 burst detail: at the piston block the flash rows are the block's own base rail (pistonArray bottom row y -111 sits on the supportFrame top
+  row y -110; the boxes do not overlap), identical in r2 and r3, so the flash on it is correct and the frame's top edge carries no flash pixel.
+  What F1 changes in that frame is everything drawn between the host and `front`: the crank rod now crosses the flash and the t608 ghost crisp.
+  The shine skips rotating hosts by design (`isRotating`), so the gear has none.
+- F10 cases (`f10.mjs`, fake clock): A full, tree closed: motorTuning 4 → 5, then → 10 48 ms later: keys `machine.motor` → `#t2` at t48 (the
+  first beat is cancelled and swaps) → `#t3` at t176 (second beat swap), never back; B reduced: `#t2` t16 → `#t3` t64. C: a held release of
+  4 beats (copperWinding 4 → 5 is the 4th, staggered 360 ms on coilStage1), then copperWinding → 25 at t48 with the tree closed: coilStage1
+  `#t2` and coilStage3 `#t5` at once; the staggered MK II beat still plays (t360-t1264) and its swap at t480 leaves the track at MK V (the
+  pre-F10 hook would have set it back to tier 2). All three end at the higher tier.
+- Harness (N-r2-1 again): the first flywheel / gear full runs froze (`loop.frame` stuck at 134, `tMs` 0): kept in
+  `<A3>beat/flywheel-full-run1-stuck/`, `<A3>beat/gear-full-run1-stuck/`; with the guard every rerun stepped (`freezeTries` 1-2). The
+  unguarded `ring2.mjs` rerun (`<A3>f9/ring/`) froze for the first second and its ring guess put ring-1 beads on rings 2-4 in 5 of 8 phase A
+  samples; `ring3.mjs` fixes both. Not a game defect.
+
+#### Notes, round 3 (no fix)
+- N-r3-1 Reduced motion, firebox MK V: the glints sit on the flame roots as specified, but they are #ffd27a on #ffd27a / #f0a848 flame, so
+  they barely show at zoom 0.5. The taller, brighter MK V flame carries the beat. Accepted.
+- N-r3-2 ring1Bead2 lands with the generic fly-in dust puff (`MachineView` puffs on every landing): a beige smear across the core at +1 s
+  (`<A3>f9/ring-A-mk2-landing-r2-vs-r3-x5.png`; the same in r2). It predates F9. Optional post-WP22 polish: no landing puff for orbit parts.
+- N-r3-3 The coil3 MK V glint frames also show a faint ambient smoke wisp drifting over the coil base (x 88 → 93 from t48 to t480, fading).
+  It is world ambience, not a tier overlay.
+- F6 and F8 stay optional and deferred, unchanged: reduced gear t64 / t128 still double-exposes the teeth; reduced glints land 0-1 px
+  left of the authored mount, all on art.
+
+Round 3 verdict: **RELEASE-READY** (no F-list; F6 / F8 optional, deferred).
+
+### Round 4 (AD5r4)
+
+Art Director round 4, 2026-10-25: in-game verification at the DEFAULT camera (the game's own framing, never zoomed by the tool),
+era by era, 1920x1080 and 1280x720, UI 100 and 150, full and reduced motion. Verdict: **FIXES REQUIRED** (F11 must land).
+At UI 100 a player clearly sees every track evolve in both editions; at UI 150 the Era II default framing puts the piston array
+(and its MK II / MK III beats) under the HUD panel (F11, camera code, worker). One quiet demo step was repaired by the AD in this
+round (F12, piston MK II art, done and verified in game).
+
+Evidence root `<A4>` = `C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP22/ad4/`
+(tools in `<A4>tools/`: `eras.mjs` (one playthrough per config, 22 releases e1a-e5f that cross all 66 tier steps of the 21 tracks
+inside the TECH INDEX; shots before / in-tree / t256 / t608 / t1600 under the fake clock with the round 3 freeze guard; sidecar JSON
+with crank point, camera, canvas rect, tiers, keys, levels), `pairs.py` (per release and track: host-box crops at 1:1 screen px,
+before | t256 | t608 | after, no resampling; x2 / x3 nearest copies), `montage.py`, `crophost.py`, `assetstep.py` (per-step pixel
+stats on the shipped PNGs), `rot.mjs` (rotating hosts across a swap), round 1 `hb.mjs` / `flyins.mjs`, `layout.json` regenerated
+from the current source).
+
+Build under audit: worktree `C:/Users/sanan/wedtmd-art` (branch `claude/tiers-wp22`). Start: dist 23:17:21 / dist-demo 23:17:33,
+newer than the last source edit (`machineTiers.ts` 23:16:32, comment only: the bundles are the round 3 ones, `index-DjtunAym.js` /
+`index-Bj96sfD3.js`). After F12 the AD rebuilt both (dist 00:28:21, dist-demo 00:28:30; same JS hashes, only
+`piston-block-t2.png` differs): app js 435.0 / 437.0 KB, css 40.0 / 42.8 KB, public 1724.2 KB, bundle budget PASS both;
+`npx vitest run src/assets` 8 files / 167 pass. Ports: :4175 existing preview (PID 16736, not started or stopped); :4176 demo
+preview started by the AD (netstat empty before), stopped after (`taskkill //PID 4528 //T //F`, netstat empty); 4173 / 4174 / 4177
+untouched.
+
+| item | status | evidence |
+|---|---|---|
+| `tiers.mjs` :4175 full, before and after the rebuild | PASS: fail [], errors [] (A-H, B_input activeAtClick 1, C_cap 4, C_machine_ms 0.60, D_short 461 / 459, F_restored 34, G silent) | `<A4>tiers-full.json`, `<A4>tiers-full-r.json` |
+| `tiers.mjs` :4176 demo, before and after the rebuild | PASS: fail [], errors [], FG_skipped_demo, D_short 450 | `<A4>tiers-demo.json`, `<A4>tiers-demo-r.json` |
+| every tier step in game, 1280x720 and 1920x1080 UI 100 | 66 / 66 tier-ups reached (partTiers before -> after per release), 0 failed buys, errors []; default zoom Era I 1, Era II 0.75, Era III-V 0.5 | `<A4>eras/1280x720-ui100-full/`, `<A4>eras/1920x1080-ui100-full/`, logs `<A4>eras-1280-100.log`, `<A4>eras-1920-100.log` |
+| each step reads at true size | PASS at UI 100 with the quiet steps in N-r4-1 (the beat carries them, the next step is strong); piston MK II was quiet and is fixed (F12) | strips `<A4>pairs/1280x720-ui100/*-x1.png` (x2 / x3 copies), montages `<A4>mont/e2b-x1.png`, `e2c-x1.png`, `e3b-x2.png`, `e4b-x2.png`, `e4c-x2.png`, `e4d-x2.png`, `e4e-x2.png` |
+| mid-beat frames at the default camera | PASS: flash / ghost silhouettes and debris read at zoom 1, 0.75 and 0.5; 4-beat releases cascade left to right | `<A4>eras/1280x720-ui100-full/e1a-1mid256.png`, `<A4>eras/1920x1080-ui100-full/e4c-1mid256.png` |
+| UI 150, 1280x720 and 1920x1080 (e1a, e2b, e3b, e4c, e5c; + e1b, e2c) | **FAIL (F11)**: Era II at UI 150 the HUD panel (VIEW y <= 365) covers the piston array and the girder top at the default framing (zoom 0.75); the e2c pistons MK II -> III beat plays entirely under it. Eras I and III-V: every tier host outside the panel (Era V left anchor top collar touches the panel edge, N-r4-3) | `<A4>evidence/F11-ui100-vs-ui150-e2c-t256.png`, `<A4>eras-ui150b/1280x720-ui150-full/e2c-1mid256.png`, `<A4>eras/1920x1080-ui150-full/e2b-1mid256.png` |
+| palette lock (G1-G3) | PASS: `check_gates.py` 91 files, failures 0, before (518,591 B) and after F12 (518,742 B) | `<A4>gates-ad4.md`, `<A4>gates-ad4-after.md` |
+| rotating hosts (rot sheets) | PASS: 2.5 s per-frame samples before / after: 0 keys without `#rot` (6 hosts), 23-33 distinct frames each; gear and flywheel MK II -> III swap at t128 (one frame after swapAtMs), rotation frame continuous across the swap (104, 104, 103); crops t64-t256: no blank, static or wrong frame | `<A4>rot/log.json`, `<A4>rot/gear-swap5.png`, `<A4>rot/fly-swap5.png` |
+| MK V heartbeat | PASS: postgame, 13 pulse hosts, 36 samples, 0 mixed, half-periods 1096-1281 ms | `<A4>heartbeat/heartbeat-postgame.json` |
+| beat never blocks input | PASS (tiers.mjs B_input, both builds, twice) | as above |
+| reduced motion (e1a, e2b, e3b, e4c, e5c) | PASS: swap under the crossfade, glints on the mounts, no flash / ghost / shake / debris / shine; releases quiet by 640 ms (3 beats) and 768 ms (4 beats); errors [] | `<A4>mont/red-e1a-motor-x2.png`, `<A4>mont/red-e4c-x2.png`, `<A4>eras/1280x720-ui100-reduced/` |
+| decals | PASS: gear rim and flywheel rims sit under the belts in every era frame; no decal at MK I; showcase / teaser / finale show them with their hosts | `<A4>eras/1280x720-ui100-full/e1b-2after.png`, `<A4>flyin-teaser/teaser-t00000.png` |
+| showcase / finale / teaser tiers | PASS: `showcase.mjs` errors [], every track at its top at k41.5 / k45.2 / k56 / C / D2 / C2, restored 34; `finale.mjs` errors [], restoredSwapped 34 at k41.5 / end; teaser t0 = era I-II at top tiers, end = era V at top tiers, plate `RES?OR?` | `<A4>showcase.json`, `<A4>mont/sc-postgame-machine-crop.png`, `<A4>finale/finale-k41_5.png`, `<A4>flyin-teaser/teaser-end.png` |
+| demo shows eras I-II only | PASS: e1a-e2c on :4176, `partTiers()` holds the 7 era I-II tracks only, visible hosts era I-II only, errors [] | `<A4>eras-demo/1280x720-ui100-full/e2c-2after.png` |
+| text | PASS: in-tree compact toast `GEAR RATIO — LV 15 · MK III`; UI 150 toast `MOTOR RETROFIT — LV 3 → 7 · MK II` wraps to 2 lines inside its box | `<A4>eras/1280x720-ui100-full/e1b-0tree.png`, `<A4>eras/1280x720-ui150-full/e2b-0before.png` |
+
+#### Fixes, round 4
+- **F11 (S2, code, worker) HUD inset does not grow with the UI scale.** `CAMERA.hudTopInsetPx` (240 VIEW px) was measured at UI 100;
+  the DOM HUD scales with `uiZoom` (canvas fit x uiScale / 100), so at UI 150 its panel reaches VIEW y 365 in Era II and the fitted
+  machine top (240) sits under it. Fix: `src/game/math/camera.ts` new pure `hudTopInsetAt(basePx, uiScale)` =
+  `Math.round(basePx * s + 16 * max(0, s - 1))`, s = uiScale / 100 (invalid -> 1): 240 / 304 / 368 at 100 / 125 / 150;
+  `src/game/rendering/CameraController.ts` `target()` passes `hudTopInsetAt(CAMERA.hudTopInsetPx, session.settings.uiScale)` and a
+  `'settings'` subscription refocuses once when the UI scale changes (not while overridden, not in the choice / postgame portrait);
+  `src/game/math/camera.test.ts` covers both. Expected: Era II at UI 150, top at VIEW y 368 (panel bottom 365), base about 620, above
+  the button row (640). UI 100 framing, store shots and the showcase portrait unchanged. Verify (round 5): `eras.mjs` UI 150 e2b / e2c
+  at 1280x720 and 1920x1080, piston array fully below the panel through the beat; `tiers.mjs` both builds.
+- **F12 (S2, art, AD, DONE) piston MK II did not read at zoom 1.** MK I has almost no rust, so the gland nuts and the pipe clamp
+  (70 px) were the whole step. `scripts/art/tiers/piston_tiers.py`: one riveted 5x5 patch plate per barrel at staggered heights
+  (lit top / left edge, 4 rivets, 1 px drop shadow), written to `piston-block-t2.png` only; MK III-V are built from the plate-less
+  grid and are byte-identical (md5 unchanged). G1-G3 PASS; G4 lint 0 errors, score 96.0 vs MK I 95.9; tierCoverage green.
+  PART_TIERS §2.3 MK II cell updated. In game (rebuilt dist): three light plates read at true size in Era I.
+  Evidence `<A4>evidence/F12-pistons-mk2-r3-vs-r4.png`, `<A4>eras-r/1280x720-ui100-full/e1b-2after.png`, `<A4>eras-r/1920x1080-ui100-full/e1b-2after.png`.
+
+#### Notes, round 4 (no fix)
+- N-r4-1 Quiet steps at the default camera (true size), each with its full beat, each followed by a strong step: motor MK II
+  (patch plates, moderate), copper winding MK II (tape ends; the generator gauge glow dominates the coil), motor retrofit MK II
+  (8 px on a 32x16 accessory), transformer MK II (rust off the tank base), firebox MK II (flame +2 px), condenser MK II, bellows MK II,
+  coil ring 1 MK II, servo MK II, steam lance MK III, containment ring MK II (one 5 px bead; reads in motion as a second orbiting
+  bead), gravitic anchor MK II / III (the shipped era V collar glow, a 1 px pulsing line; staged). Accepted. Optional post-WP22
+  polish: retrofit kit MK II lid edge, condenser MK II patch plates.
+- N-r4-2 At zoom 0.5 (Eras III-V) one art px is one canvas px; small-host steps are found by the beat flash, then read on a zoom-in.
+  The wheel zoom (0.5-2) is the designed way to inspect parts.
+- N-r4-3 Era V UI 150: the left gravitic anchor's top collar (glow 3) sits at the HUD panel's bottom edge; visible. F11 does not
+  change the min-zoom framing (fullView branch). Accepted.
+- N-r4-4 Harness: the freeze guard needed 1-2 tries per release; every release stepped. Not a game defect.
+- F6 / F8 stay optional and deferred.
+
+Round 4 verdict: **FIXES REQUIRED** (F11). F12 done.
+
+### Round 5 (Director, F11 closed)
+- **F11 DONE.** `hudTopInsetAt(base, uiScale, pad)` in `src/game/math/camera.ts` (240 / 304 / 368 at UI 100 / 125 / 150, pad
+  `CAMERA.hudTopInsetPadPx` 16); `CameraController.target()` uses it and a `'settings'` subscription refocuses once on a UI scale
+  change (not while overridden, not in the choice / postgame portrait). Second cause found in game: the WP20 release nudge
+  (`nudgeToward`) panned the fitted Era II view back down (centre y 1333 -> 1438) after the TECH INDEX closed. New pure
+  `hudSafeCenterY` clamps the nudge so the machine top stays below the inset at fitted zooms (min zoom fullView unchanged).
+- Verify: `eras.mjs` e2b / e2c at 1280x720 and 1920x1080 UI 150: centre y holds 1333 through both releases, piston array
+  fully below the panel (top VIEW y 368, ground 620, above the button row). UI 100: centre 1504 unchanged. tiers.mjs full + demo,
+  ux.mjs, resolutions.mjs, stages.mjs, store-shots SIZES=1080: fail [] errors []. vitest 126 files / 3731 pass.
+- Evidence: `<scratchpad>/WP22/f11/eras2/1280x720-ui150-full/e2c-1mid256.png` (after) vs
+  `<A4>eras-ui150b/1280x720-ui150-full/e2c-1mid256.png` (before).
+
+- Opus review of the fix: one blocker (the clamp also fired when the player had zoomed in, so a release nudge could not reach a part).
+  Fixed: the clamp applies only when the whole machine fits between the inset and the bottom margin at the current zoom; test added.
+  Re-verified: UI 150 centre 1333 holds, UI 100 1504 unchanged, tiers.mjs clean.
+
+Round 5 verdict: **RELEASE-READY** (WP22).
+
 ## WP23a — living world audit (Art Director AD2, 2026-10-24)
 
 Verdict: **FIX LIST** (not RELEASE-READY). 15 F items: 1 S1 (girl mini hidden, her lines point at the motor), 7 S2, 7 S3.

@@ -4,6 +4,8 @@
 // Uses the WP14 debug hook (prestige, cycleState, finaleState, skipFinale, componentState, modalCount, systemMenuOpen,
 // session.updateSettings) and the WP18b fields restoredTextures and textureKey; missing hook fields resolve to null, never throw.
 // WP18b: RUN B records restoredSwapped / coreKey and pushes a mismatch into errors.
+// WP22: restoredSwapped want 34 (D5 option A). RUN B also checks partTiers(): every TOP_TIERS track at its top tier at the postgame,
+// every value MK I after the new cycle (settled within 3 s); a mismatch goes into errors, the list into tiersMiss.
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PW_PATH);
@@ -11,6 +13,12 @@ const [url, out] = process.argv.slice(2);
 const errors = [], res = {};
 const ok = (k, v) => { res[k] = v; };
 const failedBuys = r => r.filter(x => !x.endsWith(':true'));
+// WP22 top tier per repeatable track (PART_TIERS.md), compared with partTiers() in RUN B.
+const TOP_TIERS = {
+  gearRatio: 3, flywheel: 3, motorTuning: 5, improvedPistons: 5, copperWinding: 5, motorRetrofit: 5, transformer: 5,
+  firebox: 5, inductionHeater: 5, condenser: 5, bellowsDrive: 3, harmonicCoil: 5, pressureResonator: 5, crankServo: 3,
+  standingWave: 5, gridExciter: 3, containmentRing: 5, resonantSiphon: 3, graviticAnchor: 3, mainsBackfeed: 3, steamLance: 3,
+};
 
 // buy list up to the era V stage before primaryFunction (mirrors finale.mjs / stages.mjs S15)
 const S7 = ['wornMotor', 'gearRatio','gearRatio','gearRatio','reinforcedCrank','motorTuning','motorTuning','motorTuning','motorTuning','motorTuning','flywheel','pistonArray','improvedPistons'];
@@ -69,6 +77,12 @@ const menuOpen = () => page.evaluate(() => window.__wedtmd.systemMenuOpen());
 const totalClicks = () => page.evaluate(() => window.__wedtmd.session.state.totalClicks);
 const restoredSwapped = () => page.evaluate(() => window.__wedtmd?.restoredTextures?.()?.swapped?.length ?? null);
 const coreKey = () => page.evaluate(() => window.__wedtmd?.textureKey?.('nullCore') ?? null);
+const tiersNow = () => page.evaluate(() => window.__wedtmd?.partTiers?.() ?? null);
+// partTiers() mismatches: topMiss = every TOP_TIERS track at its top (a missing track counts); oneMiss = every value at MK I (absent tracks accepted).
+const topMiss = t => t === null ? ['partTiers null'] : Object.entries(TOP_TIERS).filter(([id, top]) => t[id] !== top).map(([id, top]) => `${id}:${t[id] ?? null}/${top}`);
+const oneMiss = t => t === null ? ['partTiers null'] : Object.entries(t).filter(([, v]) => v !== 1).map(([id, v]) => `${id}:${v}/1`);
+// polls partTiers() up to 3 s until miss is empty (a tier beat may still be in flight); returns the last list
+const tiersSettled = async miss => { let m = miss(await tiersNow()); for (let i = 0; i < 30 && m.length > 0; i++) { await page.waitForTimeout(100); m = miss(await tiersNow()); } return m; };
 const hudCycle = () => page.evaluate(() => {
   const el = document.getElementById('hud-cycle');
   return el ? { text: (el.textContent || '').trim(), visible: !el.hidden && el.getClientRects().length > 0 } : null;
@@ -203,8 +217,10 @@ try {
   const pg = await toPostgame();
   await page.waitForTimeout(300);
   const pgSwapped = await restoredSwapped(), pgCore = await coreKey();
-  ok('prestige_3_postgame', { phase: pg, modals: await modals(), restoredSwapped: pgSwapped, coreKey: pgCore });
-  if (pgSwapped !== 33) errors.push(`prestige_3_postgame restoredSwapped ${pgSwapped} want 33`);
+  const pgTiers = await tiersSettled(topMiss);
+  ok('prestige_3_postgame', { phase: pg, modals: await modals(), restoredSwapped: pgSwapped, coreKey: pgCore, tiersMiss: pgTiers });
+  if (pgSwapped !== 34) errors.push(`prestige_3_postgame restoredSwapped ${pgSwapped} want 34`);
+  if (pgTiers.length > 0) errors.push(`prestige_3_postgame tiers top mismatch: ${pgTiers.join(', ')}`);
   if (pgCore !== 'machine.nullCore#restored#rot') errors.push(`prestige_3_postgame coreKey ${pgCore} want machine.nullCore#restored#rot`);
   await page.keyboard.press('Escape'); await page.waitForTimeout(250);
   await page.click('#sys-tab-system'); await page.waitForTimeout(150);
@@ -219,9 +235,11 @@ try {
   const tr3 = await runTransition();
   await page.waitForTimeout(300);
   const afterSwapped = await restoredSwapped(), afterCore = await coreKey();
-  ok('prestige_3_after', { transition: tr3, prestige: await prestige(), hud: await hudCycle(), modals: await modals(), menuOpen: await menuOpen(), restoredSwapped: afterSwapped, coreKey: afterCore });
+  const afterTiers = await tiersSettled(oneMiss);
+  ok('prestige_3_after', { transition: tr3, prestige: await prestige(), hud: await hudCycle(), modals: await modals(), menuOpen: await menuOpen(), restoredSwapped: afterSwapped, coreKey: afterCore, tiersMiss: afterTiers });
   if (afterSwapped !== 0) errors.push(`prestige_3_after restoredSwapped ${afterSwapped} want 0 (new cycle swaps back)`);
   if (afterCore !== 'machine.nullCore#rot') errors.push(`prestige_3_after coreKey ${afterCore} want machine.nullCore#rot`);
+  if (afterTiers.length > 0) errors.push(`prestige_3_after tiers not MK I: ${afterTiers.join(', ')}`);
   await shot('3-postgame-cycle2');
 
   // ---------- RUN C: (4) SETTINGS confirm OFF -> begin starts the transition directly ----------

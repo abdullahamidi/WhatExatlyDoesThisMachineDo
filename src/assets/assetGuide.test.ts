@@ -5,6 +5,9 @@ import type { AssetId } from './assetIds';
 import { ASSET_MANIFEST } from './manifest';
 import type { AssetEntry } from './manifest';
 import { MACHINE_COMPONENTS, MACHINE_LAYER_DEPTH } from '../data/machineComponents';
+import type { MachineComponentDefinition } from '../data/machineComponents';
+import { PART_TIERS } from '../data/machineTiers';
+import type { TierDecal } from '../data/machineTiers';
 import { PARALLAX_LAYERS, GROUND_LAYER } from '../data/world';
 import { TECHNOLOGIES } from '../data/technologies';
 
@@ -113,10 +116,19 @@ function machineComponentsFor(id: AssetId) {
   return Object.values(MACHINE_COMPONENTS).filter((c) => c.assetId === id);
 }
 
+/** PART_TIERS static decals that draw the asset (no machine component uses these ids), with their host component. */
+function tierDecalsFor(id: AssetId): { decal: TierDecal; host: MachineComponentDefinition }[] {
+  return PART_TIERS.flatMap((track) => track.decals ?? [])
+    .filter((decal) => decal.assetId === id)
+    .map((decal) => ({ decal, host: MACHINE_COMPONENTS[decal.host] }));
+}
+
 function machineEra(id: AssetId): number {
-  const eras = machineComponentsFor(id).map((c) => TECHNOLOGIES[c.techId].era);
-  if (eras.length === 0) throw new Error(`no machine component uses ${id}`);
-  return Math.min(...eras);
+  const components = machineComponentsFor(id);
+  if (components.length > 0) return Math.min(...components.map((c) => TECHNOLOGIES[c.techId].era));
+  const decals = tierDecalsFor(id);
+  if (decals.length === 0) throw new Error(`no machine component or tier decal uses ${id}`);
+  return Math.min(...decals.map(({ host }) => TECHNOLOGIES[host.techId].era));
 }
 
 function fileCell(entry: AssetEntry): string {
@@ -125,6 +137,14 @@ function fileCell(entry: AssetEntry): string {
   if (entry.restored) {
     const rotation = entry.restored.rotationFile ? `, \`${entry.restored.rotationFile}\`` : '';
     cell += ` (restored \`${entry.restored.file}\`${rotation})`;
+  }
+  if (entry.tiers !== undefined && entry.tiers.length > 0) {
+    const tiers = entry.tiers.map((tier) => {
+      const rotation = tier.rotationFile !== undefined ? ` + rot \`${tier.rotationFile}\`` : '';
+      const pulse = tier.pulseFile !== undefined ? ` + pulse \`${tier.pulseFile}\`` : '';
+      return `t${tier.from} \`${tier.file}\`${rotation}${pulse}`;
+    });
+    cell += ` (tiers ${tiers.join(', ')})`;
   }
   return cell;
 }
@@ -147,14 +167,15 @@ function framesCell(entry: AssetEntry): string {
 
 function layerCell(id: AssetId): string {
   if (id.startsWith('machine.')) {
-    const parts = [
-      ...new Set(
-        machineComponentsFor(id).map(
-          (c) => `machine layer \`${c.layer}\`, depth ${MACHINE_LAYER_DEPTH[c.layer] + (c.depthBias ?? 0)}`,
-        ),
-      ),
-    ];
-    if (parts.length === 0) throw new Error(`no machine component uses ${id}`);
+    const components = machineComponentsFor(id).map(
+      (c) => `machine layer \`${c.layer}\`, depth ${MACHINE_LAYER_DEPTH[c.layer] + (c.depthBias ?? 0)}`,
+    );
+    const decals = tierDecalsFor(id).map(
+      ({ decal, host }) =>
+        `machine layer \`${host.layer}\`, depth ${MACHINE_LAYER_DEPTH[host.layer] + (host.depthBias ?? 0) + decal.depthBias}`,
+    );
+    const parts = [...new Set(components.length > 0 ? components : decals)];
+    if (parts.length === 0) throw new Error(`no machine component or tier decal uses ${id}`);
     return parts.join('; ');
   }
   const parallax = PARALLAX_LAYERS.filter((layer) => layer.assetId === id).map(
@@ -227,6 +248,28 @@ describe.skipIf(guide === null)('docs/ASSET_GUIDE.md', () => {
         if (!row.file.startsWith('none')) mismatches.push(`${id}: file cell "${row.file}", expected none`);
       } else if (!row.file.includes(`\`${entry.file}\``)) {
         mismatches.push(`${id}: file cell "${row.file}", expected \`${entry.file}\``);
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+
+  it('file cell lists every tier file, rotationFile and pulseFile of a tiered id', () => {
+    const rows = parseGuideRows(md);
+    const mismatches: string[] = [];
+    for (const id of ASSET_IDS) {
+      const entry = ASSET_MANIFEST[id];
+      if (entry.tiers === undefined) continue;
+      const [row] = guideRow(rows, id);
+      if (!row) {
+        mismatches.push(`${id}: no row`);
+        continue;
+      }
+      for (const tier of entry.tiers) {
+        for (const file of [tier.file, tier.rotationFile, tier.pulseFile]) {
+          if (file !== undefined && !row.file.includes(`\`${file}\``)) {
+            mismatches.push(`${id}: file cell "${row.file}", expected tier file \`${file}\``);
+          }
+        }
       }
     }
     expect(mismatches).toEqual([]);

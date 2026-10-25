@@ -214,6 +214,12 @@ export function orbitStep(phiDeg: number, dir: 1 | -1, degPerSec: number, dt: nu
   return mod360(phiDeg + (Number.isFinite(step) ? step : 0));
 }
 
+/** Start angle of a bead that follows a lead bead: mod360(leadDeg + (phi0Deg - leadPhi0Deg)) in [0, 360); non-finite lead gives 0. */
+export function followPhase(leadDeg: number, phi0Deg: number, leadPhi0Deg: number): number {
+  if (!Number.isFinite(leadDeg)) return 0;
+  return mod360(leadDeg + (phi0Deg - leadPhi0Deg)); // lead angle plus the phi0 gap, wrapped
+}
+
 /**
  * Move from phi along dir to the next angle equal to targetDeg (mod 360). t01 is clamped to 0..1 linearly;
  * t01 >= 1 lands on the target exactly. Starting on the target returns the target for every t01.

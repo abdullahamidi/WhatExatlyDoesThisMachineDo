@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ASSET_IDS } from './assetIds';
 import type { AssetId } from './assetIds';
-import { ASSET_MANIFEST, planAssetLoads, resolveAssetUrl, missingTextureIds, sheetFrameRects, restoredTextureKey, ROT_SUFFIX, RESTORED_SUFFIX } from './manifest';
+import { ASSET_MANIFEST, planAssetLoads, resolveAssetUrl, missingTextureIds, sheetFrameRects, restoredTextureKey, tierTextureKey, ROT_SUFFIX, RESTORED_SUFFIX, TIER_SUFFIX } from './manifest';
 import type { AssetEntry } from './manifest';
 import { MACHINE_COMPONENT_IDS, MACHINE_COMPONENTS } from '../data/machineComponents';
 
@@ -359,7 +359,8 @@ describe('WP6c rotation sheets and sky', () => {
   });
 
   it('plans one #rot spritesheet per rotation entry with the entry frame size and frame count', () => {
-    const rotLoads = planAssetLoads().filter((l) => l.key.endsWith('#rot') && !l.key.includes('#restored'));
+    // Original rotation loads only: `${id}#rot` has one '#'; restored (`#restored#rot`) and tier (`#t<n>#rot`) keys have more.
+    const rotLoads = planAssetLoads().filter((l) => l.key.endsWith('#rot') && l.key.split('#').length === 2);
     expect(rotLoads.map((l) => l.key).sort()).toEqual(ROTATION_IDS.map((id) => id + '#rot').sort());
     for (const id of ROTATION_IDS) {
       const entry = ASSET_MANIFEST[id];
@@ -550,7 +551,7 @@ const WP13_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; he
 
 describe('WP13 restored world, finale fx and UI assets', () => {
   it('appends the 14 WP13 ids after the era V ids, in contract order (ids 98..111; WP17 ids follow)', () => {
-    expect(ASSET_IDS.length).toBe(142);
+    expect(ASSET_IDS.length).toBe(145);
     expect(ASSET_IDS.slice(98, 112)).toEqual(WP13_ENTRIES.map((e) => e.id));
     expect(ASSET_IDS.slice(112, 117)).toEqual(WP17_ENTRIES.map((e) => e.id));
   });
@@ -720,8 +721,8 @@ const WP17_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; he
 ];
 
 describe('WP17 legacy feed assets', () => {
-  it('appends the 5 WP17 ids after the WP13 ids, in contract order (ids 112..116; WP23a ids follow)', () => {
-    expect(ASSET_IDS.length).toBe(142);
+  it('appends the 5 WP17 ids after the WP13 ids, in contract order (ids 112..116; the WP22 decal ids and the WP23a ids follow)', () => {
+    expect(ASSET_IDS.length).toBe(145);
     expect(ASSET_IDS.slice(112, 117)).toEqual(WP17_ENTRIES.map((e) => e.id));
   });
 
@@ -926,6 +927,172 @@ describe('A17 restored variants (WP18b)', () => {
   });
 });
 
+describe('WP22 decal ids', () => {
+  const DECALS: ReadonlyArray<{ id: AssetId; width: number; height: number }> = [
+    { id: 'machine.gearRim', width: 64, height: 64 },
+    { id: 'machine.flywheelRim2', width: 96, height: 96 },
+    { id: 'machine.flywheelRim3', width: 96, height: 96 },
+  ];
+
+  it('appends the 3 decal ids at the tail of ASSET_IDS, in contract order (117 -> 120)', () => {
+    expect(ASSET_IDS.slice(117, 120)).toEqual(['machine.gearRim', 'machine.flywheelRim2', 'machine.flywheelRim3']);
+  });
+
+  it('gives each decal its contract size, origin 0.5 / 0.5, tileable none and a description', () => {
+    for (const want of DECALS) {
+      const entry = ASSET_MANIFEST[want.id];
+      expect(entry.width, want.id).toBe(want.width);
+      expect(entry.height, want.id).toBe(want.height);
+      expect(entry.origin, want.id).toEqual({ x: 0.5, y: 0.5 });
+      expect(entry.tileable, want.id).toBe('none');
+      expect(entry.description.trim().length, want.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps each decal procedural (file null) or under machine/tiers/decals/', () => {
+    for (const want of DECALS) {
+      const file = ASSET_MANIFEST[want.id].file;
+      expect(file === null || file.startsWith('machine/tiers/decals/'), want.id).toBe(true);
+    }
+  });
+});
+
+/** Copy of an entry without its rotation sheet, restored variant or tiers. */
+function plainEntry(entry: AssetEntry): AssetEntry {
+  const { rotation: _rotation, restored: _restored, tiers: _tiers, ...rest } = entry;
+  return rest;
+}
+
+/** Every entry procedural and plain, then `overrides`: only the overridden entries plan loads. */
+function tierFixture(overrides: Partial<Record<AssetId, AssetEntry>>): Record<AssetId, AssetEntry> {
+  const base = Object.fromEntries(ASSET_IDS.map((id) => [id, { ...plainEntry(ASSET_MANIFEST[id]), file: null }])) as Record<AssetId, AssetEntry>;
+  return { ...base, ...overrides } as Record<AssetId, AssetEntry>;
+}
+
+describe('part evolution tiers (WP22)', () => {
+  it('names the three tier texture forms and throws for rot together with pulse', () => {
+    expect(TIER_SUFFIX).toBe('#t');
+    expect(tierTextureKey('machine.motor', 5)).toBe('machine.motor#t5');
+    expect(tierTextureKey('machine.motor', 5, { pulse: true })).toBe('machine.motor#t5b');
+    expect(tierTextureKey('machine.gearSmall', 2, { rot: true })).toBe('machine.gearSmall#t2#rot');
+    expect(() => tierTextureKey('machine.motor', 5, { rot: true, pulse: true })).toThrow(RangeError);
+  });
+
+  it('plans a static entry with sparse tiers as own, #t2, #t5, #t5b, all images without a frame', () => {
+    const motor: AssetEntry = {
+      ...plainEntry(ASSET_MANIFEST['machine.motor']),
+      file: 'machine/worn-motor.png',
+      tiers: [
+        { from: 2, file: 'machine/tiers/motor-t2.png' },
+        { from: 5, file: 'machine/tiers/motor-t5.png', pulseFile: 'machine/tiers/motor-t5b.png' },
+      ],
+    };
+    const loads = planAssetLoads(tierFixture({ 'machine.motor': motor }));
+    expect(loads).toEqual([
+      { key: 'machine.motor', url: 'assets/machine/worn-motor.png', kind: 'image' },
+      { key: 'machine.motor#t2', url: 'assets/machine/tiers/motor-t2.png', kind: 'image' },
+      { key: 'machine.motor#t5', url: 'assets/machine/tiers/motor-t5.png', kind: 'image' },
+      { key: 'machine.motor#t5b', url: 'assets/machine/tiers/motor-t5b.png', kind: 'image' },
+    ]);
+    expect(loads.slice(1).every((l) => !('frame' in l))).toBe(true);
+  });
+
+  it('keeps the spritesheet kind and the entry frame on the #tN and #tNb loads', () => {
+    const bellows: AssetEntry = {
+      ...ASSET_MANIFEST['machine.bellows'],
+      tiers: [
+        { from: 2, file: 'machine/tiers/bellows-t2.png' },
+        { from: 5, file: 'machine/tiers/bellows-t5.png', pulseFile: 'machine/tiers/bellows-t5b.png' },
+      ],
+    };
+    const frame = { width: 60, height: 28, count: 4 };
+    const loads = planAssetLoads(tierFixture({ 'machine.bellows': bellows }));
+    expect(loads).toEqual([
+      { key: 'machine.bellows', url: 'assets/machine/legacy/bellows.png', kind: 'spritesheet', frame },
+      { key: 'machine.bellows#t2', url: 'assets/machine/tiers/bellows-t2.png', kind: 'spritesheet', frame },
+      { key: 'machine.bellows#t5', url: 'assets/machine/tiers/bellows-t5.png', kind: 'spritesheet', frame },
+      { key: 'machine.bellows#t5b', url: 'assets/machine/tiers/bellows-t5b.png', kind: 'spritesheet', frame },
+    ]);
+  });
+
+  it('plans a rotation entry as own, #rot, #t2, #t2#rot, with the entry frame size and the rotation frame count', () => {
+    const gear: AssetEntry = {
+      ...ASSET_MANIFEST['machine.gearSmall'],
+      tiers: [{ from: 2, file: 'machine/tiers/gear-small-t2.png', rotationFile: 'machine/tiers/rot/gear-small-t2-rot.png' }],
+    };
+    const frame = { width: 40, height: 40, count: 80 };
+    expect(planAssetLoads(tierFixture({ 'machine.gearSmall': gear }))).toEqual([
+      { key: 'machine.gearSmall', url: 'assets/machine/gear-small.png', kind: 'image' },
+      { key: 'machine.gearSmall#rot', url: 'assets/machine/rot/gear-small-rot.png', kind: 'spritesheet', frame },
+      { key: 'machine.gearSmall#t2', url: 'assets/machine/tiers/gear-small-t2.png', kind: 'image' },
+      { key: 'machine.gearSmall#t2#rot', url: 'assets/machine/tiers/rot/gear-small-t2-rot.png', kind: 'spritesheet', frame },
+    ]);
+  });
+
+  it('plans no tier loads for a procedural entry, even when it declares tiers', () => {
+    const rim: AssetEntry = { ...ASSET_MANIFEST['machine.gearRim'], file: null, tiers: [{ from: 3, file: 'machine/tiers/decals/gear-rim-t3.png' }] };
+    expect(planAssetLoads(tierFixture({ 'machine.gearRim': rim }))).toEqual([]);
+  });
+
+  it('leaves an entry without tiers unchanged', () => {
+    const motor: AssetEntry = { ...plainEntry(ASSET_MANIFEST['machine.motor']), file: 'machine/worn-motor.png' };
+    expect(planAssetLoads(tierFixture({ 'machine.motor': motor }))).toEqual([
+      { key: 'machine.motor', url: 'assets/machine/worn-motor.png', kind: 'image' },
+    ]);
+  });
+
+  it('gives no real entry both tiers and restored (vacuous until tier art is wired)', () => {
+    const both = ASSET_IDS.filter((id) => ASSET_MANIFEST[id].tiers !== undefined && ASSET_MANIFEST[id].restored !== undefined);
+    expect(both).toEqual([]);
+  });
+
+  it('keeps every tier from as an integer in 2..5, strictly ascending', () => {
+    for (const id of ASSET_IDS) {
+      const froms = (ASSET_MANIFEST[id].tiers ?? []).map((t) => t.from);
+      for (const from of froms) expect(Number.isInteger(from) && from >= 2 && from <= 5, id).toBe(true);
+      expect(froms, id).toEqual([...froms].sort((a, b) => a - b));
+      expect(new Set(froms).size, id).toBe(froms.length);
+    }
+  });
+
+  it('gives rotationFile exactly to the tiers of rotation entries, and no pulseFile on a rotation entry', () => {
+    for (const id of ASSET_IDS) {
+      const entry = ASSET_MANIFEST[id];
+      for (const tier of entry.tiers ?? []) {
+        expect(tier.rotationFile !== undefined, id).toBe(entry.rotation !== undefined);
+        if (entry.rotation !== undefined) expect(tier.pulseFile, id).toBeUndefined();
+      }
+    }
+  });
+
+  it('names every tier file under machine/tiers/ and has a disk PNG for it', () => {
+    const files = Object.keys(import.meta.glob('/public/assets/**/*.png'));
+    for (const id of ASSET_IDS) {
+      for (const tier of ASSET_MANIFEST[id].tiers ?? []) {
+        for (const path of [tier.file, tier.rotationFile, tier.pulseFile]) {
+          if (path === undefined) continue;
+          expect(path.startsWith('machine/tiers/'), path).toBe(true);
+          expect(files, path).toContain(`/public/assets/${path}`);
+        }
+      }
+    }
+  });
+
+  it('keeps every tier PNG at the pixel size of its entry (a rotationFile at the size of entry.rotation.file)', async () => {
+    for (const id of ASSET_IDS) {
+      const entry = ASSET_MANIFEST[id];
+      for (const tier of entry.tiers ?? []) {
+        const size = { width: entry.width, height: entry.height };
+        expect(await pngSize(tier.file), id).toEqual(size);
+        if (tier.pulseFile !== undefined) expect(await pngSize(tier.pulseFile), id).toEqual(size);
+        if (tier.rotationFile !== undefined && entry.rotation !== undefined) {
+          expect(await pngSize(tier.rotationFile), id).toEqual(await pngSize(entry.rotation.file));
+        }
+      }
+    }
+  });
+});
+
 /** WP23a living-world assets (DENIZEN_ART 5.1): id, size, origin, tileable, frame and era rows. file is null until the Art Director delivers the PNGs. */
 const WP23A_ENTRIES: ReadonlyArray<{ id: AssetId; width: number; height: number; origin: { x: number; y: number };
   tileable: 'none' | 'x' | 'xy'; frame?: { width: number; height: number; count: number }; eraRows?: number }> = [
@@ -957,9 +1124,9 @@ const WP23A_ENTRIES: ReadonlyArray<{ id: AssetId; width: number; height: number;
 ];
 
 describe('WP23a world assets', () => {
-  it('appends the 25 WP23a ids after the WP17 ids, in contract order (ids 117..141; 142 total)', () => {
-    expect(ASSET_IDS.length).toBe(142);
-    expect(ASSET_IDS.slice(117)).toEqual(WP23A_ENTRIES.map((e) => e.id));
+  it('appends the 25 WP23a ids after the WP22 decal ids, in contract order (ids 120..144; 145 total)', () => {
+    expect(ASSET_IDS.length).toBe(145);
+    expect(ASSET_IDS.slice(120)).toEqual(WP23A_ENTRIES.map((e) => e.id));
   });
 
   it('has the contract size, origin, tileable, frame and era rows for each id', () => {
