@@ -34,7 +34,10 @@ Left for the user: Steam app/depot ids, capsule art, trailer, SteamPipe upload (
 | WP16 | Release verification for the Steam demo (sign-off, e2e, a11y, soak, art audit, docs, store shots) | ✅ done (WP16a · WP16b-1 store polish · WP16b-2 docs + a11y/UX · WP16b-3 soak/GPU perf/final AD audit) |
 | WP22 | Part evolution tiers (3/5 visual MK tiers per repeatable part, tier-up beat; user directive 2026-10-24) | ✅ done (merged e5b97c4; Opus review APPROVE, EM PASS, AD round 5 RELEASE-READY after F11 HUD-inset fix) |
 | WP23a | Living world: denizens, environment arc, world voice bubbles, eras I–II + demo cut | ✅ done (merged f1065df; AD2f RELEASE-READY; X1 tier port wired) |
-| WP23b | Living world eras III–V, finale, postgame, cycle 2+; then §R release refresh | ✅ done (merged f8a5d94; AD4 round 5 RELEASE-READY); §R next |
+| WP23b | Living world eras III–V, finale, postgame, cycle 2+; then §R release refresh | ✅ done (merged f8a5d94; AD4 round 5 RELEASE-READY); §R checkpoint 6245240, re-run after WP24/WP25 |
+| WP25 | Passive-first economy: machine carries progression, click = optional bonus (user playtest 2026-10-25) | planned (docs/plan/WP25.md; worktree wedtmd-art, claude/eco-wp25) |
+| WP24 | Living world v2: varied continuous behaviour, recorded-Tuesday day clock, gradual transitions (user playtest 2026-10-25) | planned (docs/plan/WP24.md; worktree wedtmd-shell, claude/world-wp24; merges after WP25) |
+| WP25b | Surge: click = very serious income (playtest reading R2), capped burst on top of WP25 | follow-up, only if the user asks |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -181,11 +184,16 @@ Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era 
 ## Next recommended task
 User directive 2026-10-24 (after v0.9.0 demo release-ready): parts must visibly evolve as they level (3/5 phases), and the lonely scene gets a
 living world whose denizens change per era and break the fourth wall (docs/plan/STORY_BIBLE.md, PART_TIERS.md, DENIZEN_ART.md, WP22.md, WP23.md;
-GAME_SPEC §18.2). WP22 (e5b97c4), WP23a + X1 (f1065df) and WP23b (f8a5d94) are merged. Next: §R joint release refresh
-(docs/plan/WP23.md §R): store shots 1080 + 2160 with the AD set approval, STEAM_RELEASE §15 evidence re-run, packaged demo + full
-desktop smoke, CHANGELOG 0.10.0 (Director call), README budget numbers. Timing-sensitive rows (GPU perf median of 3, 60 min soak,
-world.mjs G_cost) need a quiet PC: run them when the user is away. wp-exec2 (workflows/scripts) now orders waves by depends_on,
-lets AD verify run (EM marks the AD gate N/A) and only skips a task whose dependency landed no files.
+GAME_SPEC §18.2). WP22 (e5b97c4), WP23a + X1 (f1065df) and WP23b (f8a5d94) are merged; §R checkpoint 6245240 (v0.10.0 docs,
+packaged exes pass, store-shots F1-F3) is superseded by the user's 2026-10-25 playtest:
+(1) the world is too static / repeats the same motion, wants continuous varied actions and a felt flow of time, no instant changes;
+(2) passive income too weak, clicking mandatory; clicking should become an extra action (or very serious income).
+Next: WP25 (passive-first economy, docs/plan/WP25.md) and WP24 (living world v2, docs/plan/WP24.md), designed from measured
+audits (scratchpad WP24-25/eco, world audit) and revised against an Opus critic; run in parallel worktrees (WP25 wedtmd-art
+claude/eco-wp25, WP24 wedtmd-shell claude/world-wp24), WP25 merges first, WP24 rebases at X0. Then a full §R re-run (store shots,
+STEAM_RELEASE §15 incl. GPU perf + 60 min soak on a quiet PC, packaged exes, CHANGELOG). WP25b Surge (click = very serious income)
+is a recorded follow-up, only if the user picks that reading. wp-exec2 (workflows/scripts) orders waves by depends_on, lets AD
+verify run (EM marks the AD gate N/A) and only skips a task whose dependency landed no files.
 Still user-owned for the Steam upload: real app/depot ids, capsule art, trailer, SteamPipe upload (STEAM_RELEASE sections 4, 10, 12).
 
 ### Previous (v0.9.0 demo)
