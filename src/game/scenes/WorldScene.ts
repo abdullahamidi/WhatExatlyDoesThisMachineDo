@@ -29,6 +29,7 @@ import { portraitPose } from '../math/showcase';
 import { PHOTO_MODE } from '../../data/photoMode';
 import { motionPolicy } from '../../simulation';
 import { cappedPlaqueLevels, plateFrameCap } from '../math/plateCap';
+import type { WorldFinalePort } from '../math/worldScript';
 import type { OfflineReport, TechId } from '../../data/types';
 import type { Edition } from '../../data/edition';
 import type { EraCards } from '../../ui/eraCard';
@@ -40,6 +41,11 @@ const CYCLE_MODAL_ID = 'cycle';
 
 /** Frames kept for the uiStats probe (debug hook). */
 const UI_STATS_FRAMES = 120;
+
+/** WP23b: true when the living world director implements the finale port (applyFinale). A type guard, so no cast is needed. */
+function isWorldFinalePort(d: unknown): d is WorldFinalePort {
+  return typeof d === 'object' && d !== null && 'applyFinale' in d && typeof d.applyFinale === 'function';
+}
 
 /** Ring of the last UI_STATS_FRAMES frame timings (ms). Preallocated: recording a frame allocates nothing. */
 class FrameTimings {
@@ -174,6 +180,8 @@ export class WorldScene extends Phaser.Scene {
         teaserOn: () => worldRoot.classList.contains('demo-teaser-on'),
         demoCardOpen: () => this.ui.modals.has('demo-end'),
         tabHidden: () => document.hidden,
+        // WP23b: the cycle transition is running (LAST FRAME of the finale film reads it).
+        cycleTransitionActive: () => this.cycleTransition?.isActive() === true,
       };
       // Set by the disposable below: a chunk that resolves after teardown builds nothing.
       let worldTornDown = false;
@@ -245,6 +253,8 @@ export class WorldScene extends Phaser.Scene {
       steamFx,
       machine,
       camera,
+      // WP23b: the living world film port; null until the lazy director exists and implements applyFinale (T19).
+      world: () => (isWorldFinalePort(this.worldDirector) ? this.worldDirector : null),
       emitBeat: (beat) => this.ctx.feedback.finaleBeat.emit(beat),
     });
     this.finale = finale;

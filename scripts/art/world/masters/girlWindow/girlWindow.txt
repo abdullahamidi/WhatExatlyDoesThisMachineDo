@@ -3,8 +3,11 @@
 # rule, ART_BRIEF). Rust only (sheets.py `only`): never warm yellow before the finale (DENIZEN_ART 1.5).
 # flickerA = bright: #ad6236 pane, #c98552 2x3 core held low (her lantern; bg.windowLit centres a 2x4 core);
 # flickerB = the dip: #8c4a2a pane, #ad6236 2x2 core; dark = #6e3a22 = the skyline's own dim window (era II on);
-# restored = copy of dark until WP23b draws the 2x4 figure at the curtain (PLACEHOLDER CELL).
 # Build: python -I scripts/art/world/build_sheet.py girlWindow   Gate: python -I scripts/art/world/check_sheet.py girlWindow
+# WP23b AD3b: restored (LAST LOOK 59.83 s and the postgame) = her window lit warm like the restored skyline's lit
+# windows (#f0a848 pane, #ffd27a lamp glow; sheets.py only_frames lets the accent ramp into this frame only), rust
+# curtains e at both sides (d at the sill), and the girl as a 2x4 silhouette at the curtain (#6e3a22, x 1-2 rows 2-5:
+# 1 px head, 2 px shoulders and body), no face, no outline. She stands beside the lamp light, looking down.
 
 @frame flickerA
 eeee
@@ -30,4 +33,11 @@ cccc
 cccc
 cccc
 
-@copy restored dark
+
+@frame restored
+eBBe
+eBCe
+ecCe
+ecce
+ecce
+dccd

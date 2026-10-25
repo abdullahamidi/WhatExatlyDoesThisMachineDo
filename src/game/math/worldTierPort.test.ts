@@ -102,14 +102,16 @@ describe('heartbeatLow', () => {
 });
 
 describe('createTierTracker over WP22_TIER_PORT', () => {
-  it('offers DOG-04 at improvedPistons 10 on the TECH INDEX close, and nothing at 9', () => {
+  it('offers DOG-04 at improvedPistons 10 on each close until DOG-04 is seen, and nothing at 9', () => {
     expect(createTierTracker(WP22_TIER_PORT).onIndexClose(levelsWith('improvedPistons', 9), 0).offers).toEqual([]);
     const t = createTierTracker(WP22_TIER_PORT);
     expect(t.onIndexClose(levelsWith('improvedPistons', 10), 0).offers).toEqual([{ kind: 'tier', techId: 'improvedPistons', tier: 3 }]);
-    expect(t.onIndexClose(levelsWith('improvedPistons', 10), 100).offers).toEqual([]);
+    expect(t.onIndexClose(levelsWith('improvedPistons', 10), 100).offers).toEqual([{ kind: 'tier', techId: 'improvedPistons', tier: 3 }]);
+    const seen = createTierTracker(WP22_TIER_PORT, undefined, (id) => id === 'DOG-04');
+    expect(seen.onIndexClose(levelsWith('improvedPistons', 10), 100).offers).toEqual([]);
   });
 
-  it('offers the first top tier on the close at motorTuning 25 and turns the heartbeat on', () => {
+  it('offers the first top tier on each close at motorTuning 25 until INS-13 is seen, and turns the heartbeat on', () => {
     const t = createTierTracker(WP22_TIER_PORT);
     expect(t.heartbeat()).toBe(false);
     expect(t.onIndexClose(levelsWith('motorTuning', 24), 0).offers).toEqual([]);
@@ -117,7 +119,9 @@ describe('createTierTracker over WP22_TIER_PORT', () => {
     expect(top.offers).toEqual([{ kind: 'tier', firstTop: true }]);
     expect(top.heartbeat).toBe(true);
     expect(t.heartbeat()).toBe(true);
-    expect(t.onIndexClose(levelsWith('motorTuning', 25), 100).offers).toEqual([]);
+    expect(t.onIndexClose(levelsWith('motorTuning', 25), 100).offers).toEqual([{ kind: 'tier', firstTop: true }]);
+    const seen = createTierTracker(WP22_TIER_PORT, undefined, (id) => id === 'INS-13');
+    expect(seen.onIndexClose(levelsWith('motorTuning', 25), 100).offers).toEqual([]);
   });
 
   it('offers nothing through the stub, so the binding is what offers them', () => {

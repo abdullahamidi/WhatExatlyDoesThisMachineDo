@@ -1,22 +1,26 @@
-// Living world data tests (WP23a): the 31 WP23a lines against bible §5.2, App. B and §7 (verbatim text, text rules, you slots,
-// plaque letters, cadence config, era caps, glance gaps), placements against DENIZEN_ART §3, trigger and chain wiring, and sprite
-// frames against the asset manifest. Why: every number and line of the living world lives in src/data/livingWorld.ts, and these
-// tests keep that data honest against the design docs. Pure data tests (node environment, no Phaser).
+// Living world data tests (WP23a, WP23b): the 63 lines (31 WP23a, 32 WP23b) against bible §5.2, App. B and §7 (verbatim text, text
+// rules, you slots, plaque letters, cadence config, era caps, glance gaps), placements against DENIZEN_ART §3, trigger and chain
+// wiring, and sprite frames against the asset manifest. Why: every number and line of the living world lives in
+// src/data/livingWorld.ts, and these tests keep that data honest against the design docs. Pure data tests (node environment, no Phaser).
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { TECH_IDS } from './types';
 import { SYSTEM_LOGS } from './systemLogs';
 import { AUDIO } from './audio';
+import { EDITIONS } from './edition';
 import { ASSET_MANIFEST } from '../assets/manifest';
 import type { AssetEntry } from '../assets/manifest';
+import { PALETTE } from './palette';
 import {
-  DEFAULT_WORLD_SAVE, LIVING_WORLD, WORLD_BEATS, WORLD_CHAINS, WORLD_ENV, WORLD_ERA_CAPS, WORLD_ERA_ROW, WORLD_ERA_ROW_SHEETS,
-  WORLD_FRAMES, WORLD_GLANCE, WORLD_KNOWN_IDS, WORLD_LINES, WORLD_LOOPS, WORLD_PLACEMENTS, WORLD_PLAYBACK, WORLD_SHEET_KEYS,
-  WORLD_LAYOUT, WORLD_SWEEP, WORLD_TIER_PROPS, WORLD_VOICE_CONFIG,
+  DEFAULT_WORLD_SAVE, LIVING_WORLD, WORLD_BEATS, WORLD_CHAIN_STARTS, WORLD_CHAINS, WORLD_DEPTH_OFFSETS, WORLD_ENV, WORLD_ERA_CAPS, WORLD_ERA_ROW,
+  WORLD_ERA_ROW_SHEETS, WORLD_FAR_PLANES, WORLD_FRAMES, WORLD_GIRL_PLACEMENTS, WORLD_GLANCE, WORLD_KNOWN_IDS, WORLD_LINES, WORLD_LOOPS,
+  WORLD_MARKS, WORLD_PLACEMENTS, WORLD_PLAYBACK, WORLD_RIPPLES, WORLD_SHADOWS, WORLD_SHEET_KEYS, WORLD_LAYOUT, WORLD_SWEEP,
+  WORLD_TIER_PROPS, WORLD_UNISON, WORLD_VOICE_CONFIG, seenKeyOf,
 } from './livingWorld';
 import type { ChainId, FramingKey, GroundId, LoopFrame, WorldLine, WorldLoopId, WorldPlacement, WorldSheetId } from './livingWorld';
 
 const BIBLE = readFileSync(new URL('../../docs/plan/STORY_BIBLE.md', import.meta.url), 'utf8');
+const LIVING_SRC = readFileSync(new URL('./livingWorld.ts', import.meta.url), 'utf8');
 
 // App. B text rules. PRE_BAN and YOU are copied verbatim from the bible validator (scratchpad bible/final/validate.mjs).
 const PRE_BAN = /restor|prior|rewind|undo|\bheal|repair|as it was|back the way|record|hold.{0,24}run|while it runs|running|keep it|\becho|memory|\bcycle\b|wishlist|\bsteam\b|full game|trailer|tutorial/i;
@@ -30,24 +34,47 @@ const byId = (id: string): WorldLine => {
 const idsOf = (lines: readonly WorldLine[]): string[] => lines.map((l) => l.id);
 // Pre-finale lines: not flagged post or cyc (validate.mjs `pre`).
 const preFinale = WORLD_LINES.filter((l) => !l.post && !l.cyc);
-// Demo-reachable lines: not postgame or cycle 2+, and every era sits inside the demo gate.
-const demoReachable = WORLD_LINES.filter((l) => !l.post && !l.cyc && l.eras.every((e) => e <= LIVING_WORLD.maxEra));
+// Demo-reachable lines: not postgame or cycle 2+, and listed for an era inside the demo cap (the edition, not LIVING_WORLD).
+const demoMaxEra = EDITIONS.demo.maxEra;
+const demoReachable = WORLD_LINES.filter((l) => !l.post && !l.cyc && demoMaxEra !== null && l.eras.some((e) => e <= demoMaxEra));
 
 describe('WORLD_LINES counts (bible §5.2, §7.2, §8.1)', () => {
-  it('holds 31 lines with unique ids', () => {
-    expect(WORLD_LINES).toHaveLength(31);
-    expect(new Set(idsOf(WORLD_LINES)).size).toBe(31);
+  it('holds 63 lines (31 WP23a, 32 WP23b) with unique ids', () => {
+    expect(WORLD_LINES).toHaveLength(63);
+    expect(new Set(idsOf(WORLD_LINES)).size).toBe(63);
   });
 
-  it('has the per-speaker counts', () => {
+  it('has the per-speaker counts (bible §5.2 counts)', () => {
     const counts: Record<string, number> = {};
     for (const l of WORLD_LINES) counts[l.speaker] = (counts[l.speaker] ?? 0) + 1;
-    expect(counts).toEqual({ inspector: 8, dog: 8, crow: 4, girl: 6, payphone: 5 });
+    expect(counts).toEqual({ inspector: 15, dog: 13, crow: 9, girl: 12, payphone: 14 });
   });
 
-  it('keeps every line in era I or II, with no post or cyc flag', () => {
-    expect(idsOf(WORLD_LINES.filter((l) => l.eras.some((e) => e !== 1 && e !== 2)))).toEqual([]);
-    expect(idsOf(WORLD_LINES.filter((l) => l.post || l.cyc))).toEqual([]);
+  it('keeps every line inside eras I-V', () => {
+    expect(idsOf(WORLD_LINES.filter((l) => l.eras.some((e) => e < 1 || e > 5)))).toEqual([]);
+  });
+
+  it('flags the postgame, cycle 2+ and scripted lines exactly as the bible lists them (§5.2)', () => {
+    expect(idsOf(WORLD_LINES.filter((l) => l.post)).sort()).toEqual(['INS-PG', 'PAY-12']);
+    expect(idsOf(WORLD_LINES.filter((l) => l.cyc)).sort()).toEqual(['CRW-09', 'DOG-13', 'GRL-12', 'INS-14', 'PAY-13', 'PAY-14']);
+    expect(idsOf(WORLD_LINES.filter((l) => l.scripted))).toEqual(['INS-PG']);
+  });
+
+  it('points every replaces at a real non-cyc line, and the replacing line is cyc', () => {
+    const replacing = WORLD_LINES.filter((l) => l.replaces !== undefined);
+    expect(idsOf(replacing).sort()).toEqual(['CRW-09', 'DOG-13', 'GRL-12', 'INS-14']);
+    for (const l of replacing) {
+      const target = WORLD_LINES.find((t) => t.id === l.replaces);
+      expect(target, `target of ${l.id}`).toBeDefined();
+      expect(target?.cyc, `${l.id} replaces a non-cyc line`).not.toBe(true);
+      expect(l.cyc, `${l.id} is cyc`).toBe(true);
+    }
+    expect(replacing.map((l) => l.replaces)).toEqual(['INS-01', 'DOG-01', 'CRW-05', 'GRL-01']);
+  });
+
+  it('marks DOG-02 as a per-era repeater and no other line', () => {
+    expect(idsOf(WORLD_LINES.filter((l) => l.perEra === true))).toEqual(['DOG-02']);
+    expect(byId('DOG-02').eras).toEqual([1, 3]);
   });
 
   it('has exactly three demo-only lines, each core and once', () => {
@@ -64,8 +91,9 @@ describe('WORLD_LINES counts (bible §5.2, §7.2, §8.1)', () => {
     const chain = (Object.keys(WORLD_CHAINS) as ChainId[]).find((c) => c !== 'postCap' && WORLD_CHAINS[c].includes(id));
     return chain ?? id;
   };
+  // Cycle variants, postgame and demo lines have their own rules (cycle 2+, postgame, post-cap), so they are not era core moments.
   const coreMoments = (era: number): string[] => [
-    ...new Set(WORLD_LINES.filter((l) => l.core && !l.demo && l.eras.includes(era)).map((l) => momentKey(l.id))),
+    ...new Set(WORLD_LINES.filter((l) => l.core && !l.demo && !l.cyc && !l.post && l.eras.includes(era)).map((l) => momentKey(l.id))),
   ].sort();
 
   it('has era I core moments INS-01, INS-04, GRL-01 (cap 3)', () => {
@@ -76,6 +104,31 @@ describe('WORLD_LINES counts (bible §5.2, §7.2, §8.1)', () => {
   it('has era II core moments: CROSSED LINES once, PAY-02, DOG-06, GRL-05, INS-07 (cap 5)', () => {
     expect(coreMoments(2)).toEqual(['DOG-06', 'GRL-05', 'INS-07', 'PAY-02', 'crossedLines']);
     expect(coreMoments(2)).toHaveLength(WORLD_ERA_CAPS[2].core);
+  });
+
+  it('has era III core moments PAY-06, GRL-07, PAY-07, INS-09 (cap 4)', () => {
+    expect(coreMoments(3)).toEqual(['GRL-07', 'INS-09', 'PAY-06', 'PAY-07']);
+    expect(coreMoments(3)).toHaveLength(WORLD_ERA_CAPS[3].core);
+  });
+
+  it('has era IV core moments: SYNCHRONIZATION once, PAY-08, ONE OBSERVER once, GRL-10, INS-11 (cap 5)', () => {
+    expect(coreMoments(4)).toEqual(['GRL-10', 'INS-11', 'PAY-08', 'oneObserver', 'synchronization']);
+    expect(coreMoments(4)).toHaveLength(WORLD_ERA_CAPS[4].core);
+  });
+
+  it('has era V core moments PAY-11, CRW-08 (cap 2)', () => {
+    expect(coreMoments(5)).toEqual(['CRW-08', 'PAY-11']);
+    expect(coreMoments(5)).toHaveLength(WORLD_ERA_CAPS[5].core);
+  });
+
+  it('has the bible totals per era (core + non-core): 6 / 7 / 6 / 6 / 4 (§7.2)', () => {
+    const total = (era: 1 | 2 | 3 | 4 | 5): number => WORLD_ERA_CAPS[era].core + WORLD_ERA_CAPS[era].nonCore;
+    expect([total(1), total(2), total(3), total(4), total(5)]).toEqual([6, 7, 6, 6, 4]);
+  });
+
+  it('has the postgame cap of one core moment (PAY-12) and no non-core', () => {
+    expect(WORLD_ERA_CAPS.postgame).toEqual({ core: 1, nonCore: 0 });
+    expect(idsOf(WORLD_LINES.filter((l) => l.post && l.core))).toEqual(['PAY-12']);
   });
 
   it('has the post-cap arc as four core moments with no non-core', () => {
@@ -140,12 +193,12 @@ describe('you slots (A3, bible §2.5)', () => {
   const extraYou = (era: number): WorldLine[] => youLines.filter((l) => !l.core && l.eras.includes(era));
 
   it('has at most one core you line per era', () => {
-    const over = [1, 2].filter((era) => coreYou(era).length > 1).map((era) => `era ${era}: ${idsOf(coreYou(era)).join(',')}`);
+    const over = [1, 2, 3, 4, 5].filter((era) => coreYou(era).length > 1).map((era) => `era ${era}: ${idsOf(coreYou(era)).join(',')}`);
     expect(over).toEqual([]);
   });
 
   it('gives non-core you lines only to an era with no core you line', () => {
-    const clash = [1, 2].filter((era) => extraYou(era).length > 0 && coreYou(era).length > 0).map((era) => `era ${era}`);
+    const clash = [1, 2, 3, 4, 5].filter((era) => extraYou(era).length > 0 && coreYou(era).length > 0).map((era) => `era ${era}`);
     expect(clash).toEqual([]);
   });
 
@@ -154,6 +207,13 @@ describe('you slots (A3, bible §2.5)', () => {
     expect(idsOf(extraYou(1))).toEqual([]);
     expect(idsOf(coreYou(2))).toEqual([]);
     expect(idsOf(extraYou(2))).toEqual(['GRL-02', 'GRL-04']);
+  });
+
+  it('gives the later core you slots to PAY-07 (III), GRL-10 (IV) and CRW-08 (V), with no non-core you line there', () => {
+    expect(idsOf(coreYou(3))).toEqual(['PAY-07']);
+    expect(idsOf(coreYou(4))).toEqual(['GRL-10']);
+    expect(idsOf(coreYou(5))).toEqual(['CRW-08']);
+    expect([3, 4, 5].flatMap((era) => idsOf(extraYou(era)))).toEqual([]);
   });
 });
 
@@ -190,6 +250,8 @@ describe('cadence config (bible §7.1)', () => {
     dialToneMaxMs: 2000, rippleOutsideGapMs: 4000, placeWaitMs: 10000, placeBlockLimit: 2, ladderRecheckMs: 250, viewInsetPx: 16,
     // No design row names these. Pinned here so a change shows up in review.
     crossedLinesPrelude: { dialToneMs: 1200, ringMs: 1000 }, ringGapMs: 300000, tickClampMs: 250,
+    // WP23b timings (bible §7.1 era entry and opener; §6.1 SYNCHRONIZATION unison hold and cap).
+    eraEntryAfterCardMs: 3000, openerAfterPurchaseMs: 60000, unisonHoldMs: 4800, unisonCapMs: 12000,
   };
 
   it('equals the bible table values and the named timings', () => {
@@ -201,22 +263,36 @@ describe('cadence config (bible §7.1)', () => {
     expect(Math.min(c.bubbleMaxMs, Math.max(c.bubbleMinMs, c.bubbleBaseMs + c.bubblePerCharMs * 52))).toBe(5460);
   });
 
-  it('has era caps 6 / 7 / 4 with the bible core and non-core counts (§7.2)', () => {
-    expect(WORLD_ERA_CAPS).toEqual({ 1: { core: 3, nonCore: 3 }, 2: { core: 5, nonCore: 2 }, postCap: { core: 4, nonCore: 0 } });
-    const total = (k: 1 | 2 | 'postCap'): number => WORLD_ERA_CAPS[k].core + WORLD_ERA_CAPS[k].nonCore;
-    expect([total(1), total(2), total('postCap')]).toEqual([6, 7, 4]);
+  it('has era caps for eras I-V, the post-cap arc and the postgame, with the bible core and non-core counts (§7.2)', () => {
+    expect(WORLD_ERA_CAPS).toEqual({
+      1: { core: 3, nonCore: 3 }, 2: { core: 5, nonCore: 2 }, 3: { core: 4, nonCore: 2 }, 4: { core: 5, nonCore: 1 },
+      5: { core: 2, nonCore: 2 }, postCap: { core: 4, nonCore: 0 }, postgame: { core: 1, nonCore: 0 },
+    });
+    const total = (k: 1 | 2 | 3 | 4 | 5 | 'postCap'): number => WORLD_ERA_CAPS[k].core + WORLD_ERA_CAPS[k].nonCore;
+    expect([total(1), total(2), total(3), total(4), total(5), total('postCap')]).toEqual([6, 7, 6, 6, 4, 4]);
   });
 
-  it('has glance gaps of 6-9 min in era I and 5-8 min in era II (§7.6)', () => {
-    expect(WORLD_GLANCE).toEqual({ 1: { minMs: 360000, maxMs: 540000 }, 2: { minMs: 300000, maxMs: 480000 } });
+  it('has glance gaps for eras I-IV: 6-9, 5-8, 4-7 and 3-5 min (§7.6); era V has none (the stare)', () => {
+    expect(WORLD_GLANCE).toEqual({
+      1: { minMs: 360000, maxMs: 540000 }, 2: { minMs: 300000, maxMs: 480000 },
+      3: { minMs: 240000, maxMs: 420000 }, 4: { minMs: 180000, maxMs: 300000 },
+    });
+    for (const era of [1, 2, 3, 4] as const) expect(WORLD_GLANCE[era].minMs).toBeLessThanOrEqual(WORLD_GLANCE[era].maxMs);
+  });
+
+  it('has the ripple lists for eras I-V (§10): one per tier-up release, era III to V added', () => {
+    expect(WORLD_RIPPLES).toEqual({
+      1: ['pebbles', 'receiverStep', 'crowTip'], 2: ['lampBright', 'dogBristle'], 3: ['gust'], 4: ['sway', 'puddleRing'],
+      5: ['shadowFlick', 'doubleExposure'],
+    });
   });
 });
 
 describe('placements (DENIZEN_ART §3, rows e1 / s8 / s9)', () => {
-  const FRAMINGS: FramingKey[] = ['e1', 's8', 's9'];
+  const FRAMINGS: readonly ('e1' | 's8' | 's9')[] = ['e1', 's8', 's9'];
   // Expected tables written from DENIZEN_ART §3 (feet x in world px). Stake = dog x - 16; hole = dog x + 30 (front row, §1.4).
   // Sensor 7 and the clock are off-stage at s8. The girl is a window or pylon-foot plane and has no ground placement.
-  const EXPECTED: Record<FramingKey, Partial<Record<GroundId, WorldPlacement>>> = {
+  const EXPECTED: Record<'e1' | 's8' | 's9', Partial<Record<GroundId, WorldPlacement>>> = {
     e1: {
       sensor7: { x: 1384, row: 'back' },
       inspector: { x: 1472, row: 'back', route: [1448, 1496] },
@@ -257,7 +333,30 @@ describe('placements (DENIZEN_ART §3, rows e1 / s8 / s9)', () => {
     expect(WORLD_PLACEMENTS[key]).toEqual(EXPECTED[key]);
   });
 
-  const placed = FRAMINGS.flatMap((f) =>
+  it('has a row for all nine framing keys (WP23b late framings included)', () => {
+    const ALL: FramingKey[] = ['e1', 's8', 's9', 's10', 's11', 's15', 'portrait', 'baseL', 'baseR'];
+    expect(Object.keys(WORLD_PLACEMENTS).sort()).toEqual([...ALL].sort());
+  });
+
+  it('fills the late rows (WP23b R6): the lantern sits at x 965 wherever it stands, the girl only in her framings', () => {
+    expect(WORLD_PLACEMENTS.s10).toEqual({
+      inspector: { x: 1252, row: 'back' }, dog: { x: 2858, row: 'front' }, payphone: { x: 2858, row: 'back' },
+      stakeChain: { x: 2842, row: 'front' }, hole: { x: 2888, row: 'front' },
+    });
+    expect(WORLD_PLACEMENTS.s11.scraps).toEqual({ x: 690, row: 'back', xs: [690, 830, 960] });
+    expect(WORLD_PLACEMENTS.s11.inspector).toEqual({ x: 784, row: 'back', route: [760, 808] });
+    expect(WORLD_PLACEMENTS.portrait.inspector).toEqual({ x: 784, row: 'back' });
+    for (const key of ['s15', 'portrait', 'baseL'] as const) expect(WORLD_PLACEMENTS[key].lantern, key).toEqual({ x: 965, row: 'front', dy: 40, inner: true });
+    expect(WORLD_PLACEMENTS.baseL).not.toHaveProperty('dog');
+    expect(WORLD_PLACEMENTS.baseR.dog).toEqual({ x: 2856, row: 'front', inner: true });
+    expect(WORLD_GIRL_PLACEMENTS.s11).toEqual({ ground: { x: 880, row: 'back' }, era5: { x: 976, row: 'front' } });
+    expect(WORLD_GIRL_PLACEMENTS.s15).toEqual({ era5: { x: 976, row: 'front', inner: true } });
+    expect(WORLD_GIRL_PLACEMENTS.baseL).toBeUndefined();
+  });
+
+  // Every framing with a row, so the route, integer and stake checks cover the late rows too.
+  const ROWED: FramingKey[] = ['e1', 's8', 's9', 's10', 's11', 's15', 'portrait', 'baseL', 'baseR'];
+  const placed = ROWED.flatMap((f) =>
     Object.entries(WORLD_PLACEMENTS[f]).flatMap(([ground, p]) => (p ? [{ where: `${f}.${ground}`, p }] : [])),
   );
 
@@ -270,19 +369,21 @@ describe('placements (DENIZEN_ART §3, rows e1 / s8 / s9)', () => {
 
   it('keeps every route 48 wide and centred on its placement x', () => {
     const routed = placed.filter(({ p }) => p.route !== undefined);
-    expect(routed.map(({ where }) => where)).toEqual(['e1.inspector', 's9.inspector']);
+    expect(routed.map(({ where }) => where)).toEqual(['e1.inspector', 's9.inspector', 's11.inspector', 's15.inspector']);
     const bad = routed
       .filter(({ p }) => p.route !== undefined && (p.route[1] - p.route[0] !== 48 || (p.route[0] + p.route[1]) / 2 !== p.x))
       .map(({ where }) => where);
     expect(bad).toEqual([]);
   });
 
-  it('places the stake 16 px behind the dog and the hole 30 px ahead of it', () => {
-    for (const f of FRAMINGS) {
+  it('places the stake 16 px behind the dog and the hole 30 px ahead of it, in every framing with a dog', () => {
+    const withDog = ROWED.filter((f) => WORLD_PLACEMENTS[f].dog !== undefined);
+    expect(withDog).toEqual(['e1', 's8', 's9', 's10', 's11', 's15', 'portrait', 'baseR']);
+    for (const f of withDog) {
       const dogX = WORLD_PLACEMENTS[f].dog?.x;
       expect(dogX, `dog x in ${f}`).toBeDefined();
-      expect(WORLD_PLACEMENTS[f].stakeChain?.x).toBe((dogX ?? 0) - 16);
-      expect(WORLD_PLACEMENTS[f].hole?.x).toBe((dogX ?? 0) + 30);
+      if (WORLD_PLACEMENTS[f].stakeChain !== undefined) expect(WORLD_PLACEMENTS[f].stakeChain?.x).toBe((dogX ?? 0) - 16);
+      if (WORLD_PLACEMENTS[f].hole !== undefined) expect(WORLD_PLACEMENTS[f].hole?.x).toBe((dogX ?? 0) + 30);
     }
   });
 });
@@ -323,13 +424,43 @@ describe('trigger wiring', () => {
       const t = l.trigger;
       if (t.kind === 'idle' && t.afterLine !== undefined) refs.push(t.afterLine);
     }
-    expect(refs).toEqual(['GRL-01']);
+    expect(refs).toEqual(['GRL-01', 'INS-10']);
     expect(refs.filter((id) => !lineIds.has(id))).toEqual([]);
+  });
+
+  it('plays INS-12 at the era V shadow rule (horizonField 5) and keeps livingWorld.ts free of worldEras (app chunk)', () => {
+    expect(byId('INS-12').trigger).toEqual({ kind: 'buy', techId: WORLD_SHADOWS.offRule.techId, minLevel: WORLD_SHADOWS.offRule.minLevel });
+    expect(byId('INS-12').eras).toEqual([WORLD_SHADOWS.offEra]);
+    expect(LIVING_SRC).not.toMatch(/from\s+['"]\.\/worldEras['"]/);
+  });
+
+  it('names only real tech ids in the WP23b triggers (reliefValves, horizonField, echoCrank and the rest)', () => {
+    const names = ['reliefValves', 'pressureVesselBlueprint', 'harmonicConvergence', 'horizonField', 'echoCrank', 'finalAlignment', 'skyAperture', 'generator'];
+    const techIds = TECH_IDS as readonly string[];
+    expect(names.filter((id) => !techIds.includes(id))).toEqual([]);
+    expect(byId('INS-12').trigger).toEqual({ kind: 'buy', techId: 'horizonField', minLevel: 5 });
+    expect(byId('CRW-07').trigger).toEqual({ kind: 'buy', techId: 'echoCrank' });
+    expect(byId('GRL-11').trigger).toEqual({ kind: 'idle', owned: ['skyAperture'] });
+    expect(byId('INS-09').trigger).toEqual({ kind: 'ms', techId: 'pressureVesselBlueprint' });
+    expect(byId('INS-11').trigger).toEqual({ kind: 'ms', techId: 'harmonicConvergence' });
+    expect(byId('CRW-08').trigger).toEqual({ kind: 'ms', techId: 'finalAlignment' });
+    expect(byId('INS-08').trigger).toEqual({ kind: 'idle', owned: ['reliefValves'] });
+    expect(byId('DOG-08').trigger).toEqual({ kind: 'idle', owned: ['reliefValves'] });
+  });
+
+  it('names only real SYS LOG ids in the WP23b logReply triggers and the chain starts', () => {
+    const logIds = new Set(SYSTEM_LOGS.map((l) => l.id));
+    for (const id of ['steam-rain', 'signal-below', 'operator-located']) expect(logIds.has(id), id).toBe(true);
+    expect(byId('GRL-07').trigger).toEqual({ kind: 'logReply', logId: 'steam-rain' });
+    expect(byId('PAY-08').trigger).toEqual({ kind: 'logReply', logId: 'signal-below' });
+    expect(byId('PAY-11').trigger).toEqual({ kind: 'logReply', logId: 'operator-located' });
   });
 
   it('keeps the chains in step order with matching triggers', () => {
     expect(WORLD_CHAINS).toEqual({
       crossedLines: ['PAY-01', 'CRW-04', 'INS-05'],
+      synchronization: ['DOG-09', 'CRW-06', 'PAY-09'],
+      oneObserver: ['INS-10', 'GRL-09'],
       postCap: ['PAY-05', 'INS-07', 'GRL-06', 'DOG-12'],
     });
     WORLD_CHAINS.crossedLines.forEach((id, i) => {
@@ -339,6 +470,25 @@ describe('trigger wiring', () => {
       if (id === 'INS-07') expect(byId(id).trigger, id).toEqual({ kind: 'ms', techId: 'substationBlueprint' });
       else expect(byId(id).trigger, id).toEqual({ kind: 'postCap', step: i + 1 });
     });
+    // SYNCHRONIZATION: DOG-09 and CRW-06 are step 1 (one frame, the unison pair); PAY-09 is step 2.
+    expect(byId('DOG-09').trigger).toEqual({ kind: 'chain', chainId: 'synchronization', step: 1 });
+    expect(byId('CRW-06').trigger).toEqual({ kind: 'chain', chainId: 'synchronization', step: 1 });
+    expect(byId('PAY-09').trigger).toEqual({ kind: 'chain', chainId: 'synchronization', step: 2 });
+    // ONE OBSERVER: INS-10 is step 1, GRL-09 is step 2.
+    expect(byId('INS-10').trigger).toEqual({ kind: 'chain', chainId: 'oneObserver', step: 1 });
+    expect(byId('GRL-09').trigger).toEqual({ kind: 'chain', chainId: 'oneObserver', step: 2 });
+  });
+
+  it('pairs the unison members and starts the two new chains from real triggers', () => {
+    expect(WORLD_UNISON).toEqual([['DOG-09', 'CRW-06']]);
+    expect(Object.keys(WORLD_CHAIN_STARTS).sort()).toEqual(['crossedLines', 'oneObserver', 'synchronization']);
+    expect(WORLD_CHAIN_STARTS.crossedLines).toEqual({ kind: 'buy', techId: 'generator' });
+    expect(WORLD_CHAIN_STARTS.synchronization).toEqual({ kind: 'logReply', logId: 'sync-success' });
+    expect(WORLD_CHAIN_STARTS.oneObserver).toEqual({ kind: 'logReply', logId: 'observer-one' });
+    const logIds = new Set(SYSTEM_LOGS.map((l) => l.id));
+    const starts = Object.values(WORLD_CHAIN_STARTS);
+    expect(starts.filter((s) => s.kind === 'logReply' && !logIds.has(s.logId))).toEqual([]);
+    expect(starts.filter((s) => s.kind === 'buy' && !(TECH_IDS as readonly string[]).includes(s.techId))).toEqual([]);
   });
 });
 
@@ -350,9 +500,30 @@ describe('sprite frames and loops (DENIZEN_ART §5.1)', () => {
   // Asset registry lookup by key. The manifest is typed by AssetId, so index it as plain strings.
   const manifestEntry = (key: string): AssetEntry | undefined => (ASSET_MANIFEST as Record<string, AssetEntry | undefined>)[key];
 
-  it('has 17 sheets and era rows I-V plus whole', () => {
-    expect(SHEETS).toHaveLength(17);
+  it('has 24 sheets (17 WP23a, 7 WP23b) and era rows I-V plus whole', () => {
+    expect(SHEETS).toHaveLength(24);
     expect(Object.keys(WORLD_ERA_ROW)).toHaveLength(6);
+    // Era rows stay on the seven cast and booth sheets; the WP23b ids are single-row sheets.
+    expect(WORLD_ERA_ROW_SHEETS).toHaveLength(7);
+    expect(WORLD_ERA_ROW_SHEETS.some((s) => ['puddle', 'sprout', 'lantern', 'redBall', 'clipboardPages', 'page', 'virga'].includes(s))).toBe(false);
+  });
+
+  it('lays the WP23b sheet ids (R7) out as their manifest cells: frames x cell size, virga stacked', () => {
+    const NEW: WorldSheetId[] = ['puddle', 'sprout', 'lantern', 'redBall', 'clipboardPages', 'page', 'virga'];
+    expect(WORLD_FRAMES.puddle).toEqual(['size1Grey', 'size1Ring', 'size1Black', 'size2Grey', 'size2Ring', 'size2Black', 'size3Grey', 'size3Ring', 'size3Black', 'whole']);
+    expect(WORLD_FRAMES.virga).toEqual(['fall', 'frozen']);
+    expect(WORLD_SHEET_KEYS.virga).toBe('bg.virga');
+    for (const sheet of NEW) {
+      const entry = manifestEntry(WORLD_SHEET_KEYS[sheet]);
+      expect(entry, sheet).toBeDefined();
+      if (entry === undefined) continue;
+      const cw = entry.frame?.width ?? entry.width;
+      const ch = entry.frame?.height ?? entry.height;
+      expect(entry.width % cw, `${sheet} width`).toBe(0);
+      expect(entry.height % ch, `${sheet} height`).toBe(0);
+      expect((entry.width / cw) * (entry.height / ch), sheet).toBe(WORLD_FRAMES[sheet].length);
+      expect(entry.frame?.count ?? 1, sheet).toBe(WORLD_FRAMES[sheet].length);
+    }
   });
 
   it('names only frames that exist on the loop sheet', () => {
@@ -371,9 +542,11 @@ describe('sprite frames and loops (DENIZEN_ART §5.1)', () => {
     expect(steps.filter((s) => s.dx < -24 || s.dx > 24)).toEqual([]);
   });
 
-  it.each(SHEETS)('%s frame count equals the manifest (x6 era rows where stacked)', (sheet) => {
+  it.each(SHEETS)('%s frame count equals the manifest (x6 era rows where stacked; one frame when the entry has no frame grid)', (sheet) => {
     const rows = WORLD_ERA_ROW_SHEETS.includes(sheet) ? Object.keys(WORLD_ERA_ROW).length : 1;
-    expect(manifestEntry(WORLD_SHEET_KEYS[sheet])?.frame?.count).toBe(WORLD_FRAMES[sheet].length * rows);
+    const entry = manifestEntry(WORLD_SHEET_KEYS[sheet]);
+    expect(entry, WORLD_SHEET_KEYS[sheet]).toBeDefined();
+    expect(entry?.frame?.count ?? 1).toBe(WORLD_FRAMES[sheet].length * rows);
   });
 });
 
@@ -382,19 +555,67 @@ describe('save defaults and known ids (A5, D9)', () => {
     expect(DEFAULT_WORLD_SAVE).toEqual({ seen: [], seenEver: [], eraMoments: [0, 0, 0, 0, 0], youEras: 0 });
   });
 
-  it('keeps the two wordless beats', () => {
-    expect(WORLD_BEATS).toEqual(['beat.tapeFreeze', 'beat.failedSync']);
+  it('keeps the three wordless beats (WP23b adds the sensor turn)', () => {
+    expect(WORLD_BEATS).toEqual(['beat.tapeFreeze', 'beat.failedSync', 'beat.sensorTurn']);
   });
 
-  it('knows every line id and both beats, and nothing else', () => {
-    const expected = [...idsOf(WORLD_LINES), ...WORLD_BEATS].sort();
+  it('knows every non-scripted line id, the per-era key of DOG-02, and the beats, and nothing else', () => {
+    const expected = [...idsOf(WORLD_LINES.filter((l) => l.scripted !== true)), 'DOG-02@3', ...WORLD_BEATS].sort();
     expect(Array.from(WORLD_KNOWN_IDS).sort()).toEqual(expected);
+  });
+
+  it('knows DOG-02@3 and beat.sensorTurn, never INS-PG, and keeps the plain DOG-02 (WP23a saves)', () => {
+    expect(WORLD_KNOWN_IDS.has('DOG-02@3')).toBe(true);
+    expect(WORLD_KNOWN_IDS.has('DOG-02')).toBe(true);
+    expect(WORLD_KNOWN_IDS.has('beat.sensorTurn')).toBe(true);
+    expect(WORLD_KNOWN_IDS.has('INS-PG')).toBe(false);
+    // 63 lines minus the scripted INS-PG, plus DOG-02@3, plus the 3 beats.
+    expect(WORLD_KNOWN_IDS.size).toBe(66);
+  });
+});
+
+describe('per-era seen keys (bible §7.8, DOG-02 once in each listed era)', () => {
+  const dog02 = byId('DOG-02');
+  const cyc = byId('INS-14');
+
+  it('keeps the plain id in the first listed era and suffixes the later eras', () => {
+    expect(seenKeyOf(dog02, 1)).toBe('DOG-02');
+    expect(seenKeyOf(dog02, 3)).toBe('DOG-02@3');
+  });
+
+  it('keeps the plain id for a line that is not per era, in any era', () => {
+    expect(seenKeyOf(cyc, 1)).toBe('INS-14');
+    expect(seenKeyOf(byId('DOG-03'), 3)).toBe('DOG-03');
+  });
+
+});
+
+describe('postgame and opener triggers (bible §5.1, §9.2, §7.1)', () => {
+  it('carries the postgame minimums: INS-PG at 0 s (scripted), PAY-12 at 600 s', () => {
+    expect(byId('INS-PG').trigger).toEqual({ kind: 'postgame', minS: 0 });
+    expect(byId('PAY-12').trigger).toEqual({ kind: 'postgame', minS: 600 });
+  });
+
+  it('carries the cycle openers: PAY-13 at cycle 2 only, PAY-14 from cycle 3', () => {
+    expect(byId('PAY-13').trigger).toEqual({ kind: 'opener', fromCycle: 2, toCycle: 2 });
+    expect(byId('PAY-14').trigger).toEqual({ kind: 'opener', fromCycle: 3 });
+  });
+
+  it('places PAY-06 on era III entry and PAY-07 after 900 s of era III', () => {
+    expect(byId('PAY-06').trigger).toEqual({ kind: 'eraEntry', era: 3 });
+    expect(byId('PAY-07').trigger).toEqual({ kind: 'idle', minEraS: 900 });
+  });
+});
+
+describe('LIVING_WORLD layer ceiling (WP23b)', () => {
+  it('is era 5 (the layer runs through eras I-V)', () => {
+    expect(LIVING_WORLD.maxEra).toBe(5);
   });
 });
 
 describe('text sweep feed (A3, Appendix B)', () => {
-  it('sweeps the 31 line texts', () => {
-    expect(WORLD_SWEEP).toHaveLength(31);
+  it('sweeps the 63 line texts', () => {
+    expect(WORLD_SWEEP).toHaveLength(63);
     expect(WORLD_SWEEP.map((e) => e.text)).toEqual(WORLD_LINES.map((l) => l.text));
   });
 });
@@ -407,12 +628,25 @@ describe('WP23a layout, environment and audio pins (W1-C)', () => {
     expect(WORLD_LAYOUT.wingClearPx).toBe(24);
   });
 
-  it('pins the framing reference poses (e1, s8, s9) with unique keys', () => {
+  it('pins the nine framing reference poses (WP23b R6) with unique keys', () => {
     expect(WORLD_LAYOUT.framingPoses).toEqual([
       { key: 'e1', zoom: 1, centerX: 1920 }, { key: 's8', zoom: 1, centerX: 2064 }, { key: 's9', zoom: 0.75, centerX: 2192 },
+      { key: 's10', zoom: 0.75, centerX: 2055 }, { key: 's11', zoom: 0.5, centerX: 1922 }, { key: 's15', zoom: 0.5, centerX: 1920 },
+      { key: 'portrait', zoom: 0.5, centerX: 1920 }, { key: 'baseL', zoom: 1, centerX: 1320 }, { key: 'baseR', zoom: 1, centerX: 2520 },
     ]);
     const keys: FramingKey[] = WORLD_LAYOUT.framingPoses.map((p) => p.key);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('pins the inner gap (anchor 64 + wing clearance 24) and the WP23b data keys (R6, Z11)', () => {
+    expect(WORLD_LAYOUT.innerClearPx).toBe(88);
+    expect(WORLD_LAYOUT.innerClearPx).toBe(64 + WORLD_LAYOUT.wingClearPx);
+    expect(WORLD_FAR_PLANES.girlMiniNear).toEqual({ tileOriginX: 64, footArtX: 146, footArtY: 157 });
+    expect(WORLD_ENV.sensor7.ledColors.green).toBe(PALETTE.green2);
+    expect(WORLD_ENV.motes.fallArtPx).toBe(24);
+    expect(WORLD_ENV.receiverOnHookArt).toEqual({ x: 13, y: -34 });
+    expect(WORLD_MARKS.fogColor).toBe(0xddc9a3);
+    expect(WORLD_GIRL_PLACEMENTS.e1?.ground).toEqual({ x: 1538, row: 'back' });
   });
 
   it('pins the head reserve values and their shape', () => {
@@ -447,6 +681,17 @@ describe('WP23a layout, environment and audio pins (W1-C)', () => {
 
   it('pins the blip cap to 8 on the audio data', () => {
     expect(AUDIO.world.maxBlips).toBe(8);
+  });
+
+  it('keeps the visitor depth above every shadow and below the residents, and every other resident offset at or above the row (WP23b FX6)', () => {
+    expect(WORLD_DEPTH_OFFSETS.shadow).toBeLessThan(WORLD_DEPTH_OFFSETS.visitor);
+    expect(WORLD_DEPTH_OFFSETS.visitor).toBeLessThan(WORLD_DEPTH_OFFSETS.cast);
+    expect(WORLD_DEPTH_OFFSETS.visitor).toBeLessThan(0);
+    const exempt: string[] = ['shadow', 'scraps', 'hole', 'visitor'];
+    for (const [kind, offset] of Object.entries(WORLD_DEPTH_OFFSETS)) {
+      if (exempt.includes(kind)) continue;
+      expect(offset, kind).toBeGreaterThanOrEqual(0);
+    }
   });
 });
 

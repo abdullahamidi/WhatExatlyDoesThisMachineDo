@@ -1520,3 +1520,137 @@ Deck and asserts box left / top within 4 px over 700 ms after `.wv.on`) was not 
 
 No tuning this round; no art defect found (no PNG touched). Order for the Director: WP23a may merge on the AD side. Keep green into
 WP23b: F17-F23, Q6, font, RARE / OFF, reduced motion, POST-CAP arc + hold, budgets, placeholders, palette, A13 art gates.
+
+## WP23b — living world audit (Art Director AD4, round 4, 2026-10-25)
+
+Verdict: **FIXES REQUIRED** (not RELEASE-READY). 1 S1, 6 S2, 1 S3 smoke gap, 6 accepted notes. Every code fix is prototyped on a
+scratch build and proved in a new screenshot (`after*/`); none is in the repo code yet (workers, B10). One asset is fixed here (F4).
+The arc reads: eras get stranger (umbrella under a dry sky, virga, white sprout, the girl on the ground, readout `1`, violet rims,
+reverse walks, black puddle, dead lamp), the wave restores every denizen (rows 4 -> 5 at the derived times), the postgame holds the
+same day (pat, mark 42, PAY-12, Sensor 7 turn), cycle 2 shows marks 42, the red ball, the crow frozen high, readout `1`, the
+clipboard, INS-14 / PAY-13. It breaks at two story beats: **LAST LOOK has no girl at her window and the postgame window is empty**
+(F1), and **the pat hides the dog** (F5).
+
+Build under audit: `dist` 16:10:23 and `dist-demo` 16:10:42 (no `src` / `public` / `scripts` file newer: step 0). :4174 served
+`dist`; :4177 was not started (demo judged from the EM gate `<O>/val4/world-demo` and `<O>/val4/demo`, both fail [] errors [], plus
+the era-row diff below). After F4 AD4 ran `npm run build`: dist now carries the new `world/lantern.png` (app 483.2 KB, lazy world
+chunk 116.1 KB, code unchanged). One Playwright browser at a time. Evidence root `<O>/ad4/` (`<O>` =
+`C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP23b`):
+`cap/` (states, bubbles, Chladni; PNG + probe JSON), `fin/` (finale keys, choice, reduced motion), `pg/` (postgame on the KEEP clock,
+PAY-12, Sensor 7 turn), `cyc/` (cycles 2 and 3), `crops/` (1:1 to 10x nearest crops, boards, before / after pairs), `after/`,
+`after2/`, `after3/` (the same captures on the prototype build), `tools/` (`lib.mjs` with a route-intercepted `http://ad4.test/`
+base for scratch builds, `states.mjs`, `bubbles.mjs`, `finale.mjs`, `chladni.mjs`, `cycle2.mjs`, `regress.py`, `board.py`,
+`crop.py`), `proto/` (scratch copy of `src` + `public` with the F1-F3 and F5-F7 edits; `dist-proto/`), `proto-fixes.diff` (the
+exact prototype lines), `head/` (the b96599c world PNGs).
+
+### Captures
+| set | files (`<O>/ad4/`) |
+|---|---|
+| eras, default camera, quiet | `cap/state-{s9,s10,s11,s12,s13,s14,s15}-1080.png`; `cap/state-{s10,s11,s13,s15}-{720,720u150,1080u150}.png` |
+| bubbles eras III-V (18 lines x 4 configs) | `cap/bub-{s10,s11,s13,s15}-{720,720u150,1080,1080u150}-<LINE>.png`; boards `crops/board-bub-720u150.png`, `crops/board-bub-1080u150-s13s15.png` |
+| finale film 1080 / 720u150 | `fin/fin-{1080,720u150}-k{13_1,19_6,24_3,30_9,31_1,32,33,37_5,38,41_3,45_3,48_5,59_85}.png`, `-choice.png`; board `crops/board-fin-1080.png` |
+| reduced motion film | `fin/fin-rm-1080-k{15,24_4,31_7,36,38_5,41_3,45_3,49_5,59_9}.png`; board `crops/board-fin-rm.png` |
+| postgame (KEEP clock) | `pg/pg-{1080,720u150}-keep{0_6,2_5,3_6,4_3,6,7_5,9_5,14,24,26,28_5,33}.png`, `-PAY-12.png`, `-sensorTurn.png` |
+| cycles 2 / 3, era I | `cyc/cyc{2,3}-e1-{1080,720}.png`, `cyc/cyc2-{INS-14,PAY-13}-{1080,720}.png` |
+| Chladni by tier | `cap/chladni-s13-sw{3,8,20}.png`, `cap/chladni-s15-sw20.png` |
+
+### Gates
+| gate | result | evidence |
+|---|---|---|
+| placements s10 / s11 / s13 / s15 (A1 rule) | PASS. Wings only, clear of the machine and the hub. s10 booth 2858 at the right edge; at UI 150 the SYSTEM button covers the s10 dog and the booth feet (accepted, the DENIZEN_ART fix 6 logic). Era V girl front row 976, dy 40 after 5 steps, clear of the left anchor | `cap/state-*.png`, `crops/s15-1080-left-x4.png` |
+| bubble ladder III-V | PASS. 72 / 72 forced lines shown and verbatim (CRW-05 = `Zero-zero-four-two. Zero-zero-four-two.` in cycle 1); tails on the girl mini, the girl on the ground and the receiver; none on the HUD panel, buttons or toasts. `below` at s13 UI 150 (INS-10, GRL-10, DOG-10) and `side` for the payphone, as DENIZEN_ART 4.2 predicts. Overlaps machine art only (allowed) | `crops/board-bub-*.png`, `cap/bub-*.json` |
+| palette lock | PASS. `npx vitest run src/assets/worldSheets.test.ts` 29 / 29; F4 lantern `check_sheet` CLEAN, workbench score 91.0, lint 0 / 0 (upload `65011c4e-c064-4b8a-b170-c4a3bd931629`) | — |
+| no denizen faces the machine | PASS. Era V reverse walks face the machine only while moving, head down (the WP23a walk grammar); rest poses face away | `crops/s15-ins-x10.png` |
+| readability floors | PASS at zoom .5 / .75 / 1 (sheet sizes unchanged since AD3d). Era V girl lantern merges with her rim (N2) | `crops/s15-1080-left-x4.png` |
+| flicker <= 3 Hz | PASS by data: downbeat accents on `TIER_HEARTBEAT` 2.4 s (0.42 Hz), era V crow stutter 4-frame loop at 8 fps (2 Hz), double exposure 1 per 30-60 s for 120 ms, girl window 1.5-4 s. Reduced motion: no double exposure (world.mjs `I_double_exposure`), no breathing, static crow | world.mjs val4 |
+| no spoiler before the finale | PASS. The 18 era III-V texts + INS-14 / PAY-13 / PAY-12 / INS-PG are verbatim to bible 5.2; no `/restor/i`; virga, puddles and sprout stay grey / white; green only in whole cells (sprout bloom, puddle whole, Sensor 7 LED) | `cap/bub-*.json`, `cyc/*.json` |
+| finale (B-A5) | PASS except F1. Shields show as the camera comes back (16-19.3 s; 13 s is the crown shot, no denizen in frame by canon camera). lanternDrop at 31.8 s, she runs left 32-34 s with her back to us. Crow lead from 38.4 s, back on the perch by 49.4 s. LAST LOOK flips at the derived time, every on-screen denizen front (inspector front, dog head, crow head, Sensor 7 headC); the choice holds the stare. Survey holds: baseL Sensor 7 headUp with the green LED, the Inspector, the bloom, the sky puddle; baseR dog unchained, clock, booth marks readable at zoom 1, empty lamp | `crops/board-fin-1080.png`, `crops/fin-1080-baseR-right-x3.png`, `crops/fin-1080-baseL-sensor-x8.png` |
+| reduced motion film | PASS. Whole row at 24.4 s, the girl gone, the fallen lantern from 24.4 s, crow cut 38.5-49.3 s, LAST LOOK instant at 59.9 s | `crops/board-fin-rm.png`, `fin/fin-rm-*.json` |
+| postgame (B-A6) | PASS except F1, F2, F5. LAST LOOK poses at KEEP +0.6 s, all turned away at +2.6 s, the crow pecks mark 42 on the booth roof at +3.65 s, the dog fades at home and re-enters on the left wing (chase 639 -> sleep 732), pat + in-world `Good boy.` (loopS 14.5-20), watch, wave, PAY-12, Sensor 7 headC turn | `pg/*.png`, `crops/pg-1080-peck-x4.png` |
+| PAY-12 at UI 150 | PASS (`above`, tail on the hood, clear of the buttons) | `pg/pg-720u150-PAY-12.png` |
+| cycle 2+ (B-A7) | PASS except F6. Marks 42 / 43, red ball beside the paws, crow frozen in `fly2` above the lamp, readout `1`, clipboard thin / medium, girl mini (cycle 2) / ground (cycle 3), INS-14 and PAY-13 verbatim | `cyc/*.png`, `crops/cyc2-1080-right-x3.png`, `crops/cyc3-1080-left-x4.png` |
+| demo regression (eras I-II unchanged) | PASS. In every era-row sheet the row I and II cells of every frame the demo uses are pixel-identical to b96599c (`tools/regress.py`; the changed cells are only frames of eras III+, the finale and the postgame: inspector shield / pat / wave / watch / umbrella, dog shake / flat / sleep / chase / wag, crow perch / peck / fly, girl ground frames, booth fog / restored, receiver onHook, Sensor 7 fog, lamp warm / restored, glow warm, clock restored, mote moth, stake fallen, girl window restored); demo + world-demo smokes green at val4 | `crops/demo-keep-wp23a-vs-wp23b.png` |
+
+### Q6 (each era entry adds a background-scale change seen at the default camera, 1920x1080)
+| entry | change | result |
+|---|---|---|
+| II -> III | virga curtains across the whole sky band above the ridge (sf .15, alpha .55 reads: AD3d H5, keep .55), warm lamp + glow, puddle, white sprout | **PASS** `crops/q6-II-III-band.png`, `crops/s11-1080-virga-x3.png` |
+| III -> IV | shipped: the virga freezes into beads (subtle) and the girl comes down to the ground; the Chladni rings need standingWave MK III (level 8) and the smoke path buys 3, so **no rings**; after a reload in era IV the virga even falls again (F3) | **FAIL as shipped** `crops/q6-III-IV-band.png`, `crops/virga-sequence.png`. With F3 + F7 (rings from standingWave MK I, alpha 1): dashed sand rings in the ground band in front of the machine + frozen beads: **PASS (marginal)** `crops/Q6-chladni-s13-before-after-x1.png`, `crops/Q6-III-IV-after-band.png` |
+| IV -> V | the six windows go dark by stage, the virga fades out, black puddle, tall bent sprout, dead lamp | **PASS** `crops/q6-IV-V-band.png` |
+
+### F-list
+| F | sev | defect | evidence (`<O>/ad4/`) | owner | exact change |
+|---|---|---|---|---|---|
+| F1 | S1 | The girl's restored window is invisible at LAST LOOK and in the whole postgame. `WorldProps.paintDynamic` sets the girl window alpha to `WORLD_ENV.windowAlpha * windowsAlpha`, and the script's `windowsAlpha` is `1 - skyline track` = 0 from 37.3 s and 0 in the postgame. "The girl appears at her restored window", "the girl at her curtain" and the Inspector's wave up at her have no picture | `crops/F1-girlwindow-lastlook-before-after-x8.png` (1080p screen x 1227-1233, y 588-597 at the full pose) | worker FX2 | `this.girlWindow.setAlpha(clamp01(WORLD_ENV.windowAlpha * (this.propScript?.girlWindow === 'restored' ? 1 : wa)))`; probe reports the restored window (FX2 d) |
+| F2 | S2 | The PAY-12 bubble covers its own booth at UI 100 (1080p). The script anchor of the payphone is the booth top for head **and** feet; the crow's head reserve blocks the centred `above`, and the centred `below` then lands on the booth body (marks and clock hidden). B-A6 wants it above the hood | `crops/F2-pay12-1080-before-after-x2.png`, `pg/pg-1080-PAY-12.png` | worker FX2 | `WorldProps.anchor('payphone')`, script branch: `return { head: top, feet: screenOfWorld({ x: b.x, y: b.y }, 1, cam) }` (feet = booth feet). Proto: `above`, slid left, tail on the hood, crow and booth clear; UI 150 unchanged (`above`) |
+| F3 | S2 | The virga keeps falling in era IV / V after a load or any jump into era IV. `WorldAtmos` builds the tile sprite on frame `fall` but starts `virgaFrame = 'frozen'`, so the first apply in era IV skips `setFrame`. Every reload in era IV shows rain falling ("virga hangs frozen" lost) | `crops/F3-virga-reload-eraIV-before-after-x3.png`, `crops/virga-sequence.png` | worker FX1 | `private virgaFrame: 'fall' \| 'frozen' = 'fall';` and the probe reads the drawn frame |
+| F4 | S2 | The fallen lantern is unreadable: an all-dark 6x3 capsule (ink + `#2b2e31` glass) that vanishes on the dark base of the restored bush and reads as a stone in the postgame grass | `crops/F4-lantern-postgame-before-after-x5.png` | **AD, fixed** | `masters/lantern/lantern.txt` frame `fallen` redrawn: on its side, ink cage, warm glass `B` / `C`, rust base `d` (`..KKK.` / `.KKBdK` / `.KKCdK` / `..KKK.`); `public/assets/world/lantern.png` rebuilt, check_sheet CLEAN, score 91.0, lint 0 / 0, worldSheets 29 / 29 |
+| F5 | S2 | The pat hides the dog. In the postgame the Inspector is re-parented into the front row (Z7) after the dog at the same depth, so he draws over the sitting dog's head; the beat reads as a man with a brown lump at his feet | `crops/F5-pat-before-after-x8.png`, `crops/pat-mock-x8.png` | worker FX3 | Z7 pick: the resident draws on top. `LivingWorld.placeInRow`: body and blend depth = `WORLD_DEPTH_OFFSETS.cast` in the walker's home row, `cast - 0.02` in a visited row, then `sortWorldRows`. Proto: the dog sits in front of his legs, head and ear clear |
+| F6 | S2 | Cycle 2+ era I (framing e1): the girl mini (pylon plane, game x 164) stands inside the Inspector's route (body 152-232 game px) and shows as a dark blob behind his legs. At e1 the pylon-plane foot sits on the ground line, and the scraps at 1420 / 1530 cover every spot between Sensor 7 and the pylon (tried art x 132 and 186) | `crops/F6-cyc2-girlmini-before-after-x4.png`, `crops/F6-cyc2-mini-132-vs-186-x2.png`, `crops/F6-cyc2-mini-before-after-x2.png` | worker FX2 | `WORLD_FAR_PLANES.girlMini.footArtXE1: 100` (e1 only: game x 72, between scrap 1330 (game 50) and Sensor 7 (88-120), 64 px from the view edge, clear of the HUD at UI 150); WorldProps sets the mini x from the framing on every apply (s8 / s9 keep footArtX 146: 85 / 171) |
+| F7 | S2 (Q6) | III -> IV background change too weak (see Q6) | as Q6 | worker FX4 | `WORLD_CHLADNI.intensityByTier` `[{ minTier: 3, intensity: 2 }, { minTier: 1, intensity: 1 }]`, `alpha` 0.8 -> 1 (Director Q6 lets the AD scale it; bible §10 MK III / V becomes MK I / III) + the 4 tests that pin the old mapping |
+| F8 | S3 | The smokes cannot see F1-F3 (J_drawn / K_drawn assume no girl entry after 31.5 s, K_pay12 checks only the UI 150 buttons, the virga probe reported the field and not the drawn frame) | — | worker FX5 | `scripts/smoke/world.mjs` J_drawn / K_drawn / K_pay12 / new K_pay12_ui100 / J_girl_window / I_virga_frozen + README |
+
+### Notes (accepted, no fix)
+- N1 The baseL hold does not show the lantern: it lies at the girl's era V feet (front row + 40 = world y 1752) and the baseL view
+  ends at y 1740 (canon camera; the survey keys must not move). It shows at the full pose from 31.7 s, at LAST LOOK, at the choice and
+  in the whole postgame (after F4: a warm lantern in the grass). Doc follow-up: bible 9.1 / DENIZEN_ART 3 baseL row.
+- N2 Era V girl: the violet rim runs over her lantern, so the "violet lantern" is not a separate light at zoom .5.
+- N3 The crow leads the 38 s flock at its own 20x14 size; the canon flock birds are far smaller: it reads as a near bird ahead of a
+  far flock.
+- N4 AD3d H6: era V `lit 4` shows 3 windows at s15 (pane (318, 146) behind the machine). The steps still read.
+- N5 The restored regrowth bushes stand around the left-wing figures in the finale and the postgame (behind them by depth).
+- N6 The double-exposure frame (120 ms) was not caught on a still; schedule, counter and reduced-motion off are proved by world.mjs
+  `I_double_exposure`.
+
+### finale.mjs frame baselines
+**Not re-approved this round.** `finale-world-k59_83.png` and `finale-world-postgame.png` change with F1 (window) and F4 (lantern).
+The keys 13, 24.3, 31.1, 38, 41 and 45 are approved as they are in `<O>/val4/finale/`; re-approve 59.83 and the postgame on the
+first finale.mjs run after B10.
+
+### Re-check list (next round)
+F1 (LAST LOOK + postgame window, 1080 and 720), F2 (PAY-12 at UI 100, 1080 and 720; UI 150 unchanged), F3 (era IV after a reload:
+beads), F4 (postgame lantern, 1080 and 720), F5 (pat crop), F6 (cycle 2 e1 at 1080 and 720u150), F7 (Q6 III -> IV pair on the
+smoke stage list), world.mjs and finale.mjs green, finale baselines.
+
+### WP23b round 5 (Art Director AD4r5, 2026-10-25)
+
+Verdict: **RELEASE-READY.** F1-F7 closed in game, F8 green in the EM gate (val6 / val7), no S1 / S2 open. N7 (postgame dog facing)
+accepted, N8 (pat bubble tail) recorded. finale.mjs frame baselines re-approved (B-A10). The arc reads end to end: era III umbrella
+under the dry virga, era IV frozen beads + sand rings + the girl on the ground, era V violet rims, dark windows, black puddle, dead
+lamp, reverse dog walk; the wave restores every denizen; LAST LOOK lands with the girl at her lit window; the postgame holds the same
+day (pat, wave at the window, mark 42, PAY-12, Sensor 7 turn); cycle 2 shows marks 42, the red ball, the crow frozen high, readout
+`1`, the clipboard and the girl mini, cycle 3 the girl on the ground.
+
+Build under audit: `dist` 19:08:42, `dist-demo` 19:08:55; no `src` / `public` / `scripts/art` file newer (only `scripts/smoke`
+perf-budget.json, README.md, world.mjs). :4174 served `dist`; :4177 not started (demo judged from sheets + the EM val7 demo frames).
+No rebuild, no source or asset change this round. One Playwright browser at a time; vitest `--maxWorkers=2`.
+Evidence root `<R>` = `<O>/ad4r5/` (`<O>` as round 4): `fin/`, `pg/`, `cap/`, `cyc/`, `facing/`, `demo/`, `crops/`; tools in
+`<R>/tools/` (finale.mjs, states-reload.mjs, cycle2.mjs, bubbles.mjs, era4-facing.mjs, crop.py, board.py, imgdiff.py; they reuse
+`<O>/ad4/tools/lib.mjs`). Keyed postgame stills land 0-2 s after their label at 1080 (screenshot time); the JSON beside each still is
+read just before the shot.
+
+| check | result | evidence (`<R>/`) |
+|---|---|---|
+| F1 girl window, LAST LOOK 59.83 s + postgame (1080, 720, 720u150, 1080u150) | **PASS.** Lit restored window with the girl at her curtain at 59.83 s and through the postgame (wave beat included); probe `girl window-restored visible` at every key | `crops/F1-girlwindow-k59_83-r4-vs-r5-x8.png`, `crops/F1-girlwindow-pg-wave-r4-vs-r5-x8.png`, `crops/F1-girlwindow-720-k59_83-vs-pgwave-x10.png`, `crops/F1-girlwindow-720u150-k59_83-r4-vs-r5-x10.png`, `crops/F1-girlwindow-720u150-pgwave-r4-vs-r5-x10.png` |
+| F2 PAY-12 (UI 100 and 150) | **PASS.** `above` in all 4 configs, tail on the booth hood, booth marks and clock clear, clear of the buttons (1080: box b 891 vs buttons t 999; 720u150: 587 vs 639); text `Thank you for holding.` | `crops/F2-pay12-1080-r4-vs-r5-x2.png`, `crops/F2-pay12-720-r5-x3.png`, `crops/F2-pay12-720u150-r5-x3.png`, `crops/F2-pay12-1080u150-r5-x2.png` |
+| F3 virga after reload (era IV / V) | **PASS.** s13 save + reload: drawn frame `frozen` on the first probe and 3 s later, beads only, never streaks; s15 reload: strip hidden (era V fade), no fall | `crops/F3-virga-eraIV-before-vs-after-reload-x3.png`, `crops/F3-virga-eraIII-fall-vs-eraIV-reload-x3.png`, `cap/state-s1{3,5}-1080-reload*.{png,json}` |
+| F4 fallen lantern | **PASS.** Warm capsule in the postgame grass at 1080 and 720 (was a dark stone) | `crops/F4-lantern-pg-1080-r4-vs-r5-x10.png`, `crops/pg-720-keep24-left-x5.png` |
+| F5 pat order | **PASS.** Dog sits in front of the Inspector's legs, head and ear clear, hand on the shoulder, in-world `Good boy.` | `crops/F5-pat-1080-r4-vs-r5-x4.png`, `pg/pg-720-keep26.png` |
+| F6 cycle 2 girl mini (e1) | **PASS.** Stands between the scrap and Sensor 7, clear of the Inspector route, 1080 and 720u150. Cycle traces: marks 42 / 43, red ball, crow `fly2` high, readout `one`, clipboard thin / medium, girl mini / ground; INS-14, PAY-13 verbatim | `crops/F6-cyc2-girlmini-1080-r4-vs-r5-x4.png`, `crops/F6-cyc2-girlmini-720u150-r5-x5.png`, `cyc/*.png` |
+| F7 Q6 III -> IV | **PASS (marginal, as R4).** Era IV entry (s12, resonatorSpire): virga freezes to beads, the girl comes down; standingWave MK I-III (s13, `rings-3`, alpha 1) adds dashed sand rings in the ground band | `crops/F7-chladni-s13-r4-vs-r5-x2.png`, `crops/Q6-III-IV-s11-vs-s13-band-x1.png` |
+| F8 smokes | PASS by the EM gate: val6 (a11y, ux, resolutions, e2e, finale, showcase, perf, prestige, store1080) and val7 (world-demo, demo, finale-perf, soak) fail [] errors [] | `<O>/val6/progress.txt`, `<O>/val7/progress.txt` |
+| finale film keys 1080 (13, 19.6, 24.3, 31.1, 32, 38, 41, 45, 59.83, 60.5) | PASS. Shield, wave restore, girl run with her back to us, crow lead, survey holds, LAST LOOK (inspector `front`, dog `head`, crow `head`, Sensor 7 `headC`, girl window) | `crops/board-fin-1080.png`, `crops/lastlook-1080-{left,right}-x4.png` |
+| finale.mjs frame baselines (B-A10) | **RE-APPROVED.** `finale-world-k59_83.png` (window lit, typing `Y`) and `finale-world-postgame.png` (window, warm lantern, dog asleep by its ball). Keys 13 / 24.3 / 31.1 / 38 / 41 / 45 differ from the val4 set only by animation phase (machine, sound arcs, flock, crow wing; 9k-234k px), same composition: approved | `<O>/val6/finale/finale-world-*.png`, `crops/baseline-k{24_3,38}-val4-vs-val6.png`, `crops/smoke-k59_83-girlwindow-x8.png`, `crops/smoke-postgame-{left,right}-x5.png` |
+| reduced-motion finale | PASS. Whole row at 24.4 s, girl gone, crow cut, LAST LOOK poses with `lastLook` true at 59.9 s, no blink (world.mjs `J_reduced` in the gate) | `crops/board-fin-rm-1080.png`, `fin/fin-rm-1080-k59_9.{png,json}` |
+| postgame beats | PASS. Turn away by +2.5 s, crow hop / `peck0` at the booth (+3.0 / +3.87 s), tally 42, dog re-entry on the left wing, pat, wave at the window, write, PAY-12, Sensor 7 `headC` turn (4 configs) | `crops/board-pg-720-wings.png`, `crops/pg-peck-720-vs-720u150-x5.png`, `pg/pg-*-sensorTurn.png` |
+| regression eras III / IV / V, 1080 UI 100 | PASS. Palette: `worldSheets.test.ts` 29 / 29. Faces: rest poses face away (left wing left, right wing right); the Inspector's rightward patrol leg faces the machine head down on the clipboard (WP23a walk grammar; 96 timed samples in era IV); era V stare is camera-front. Bubbles: 6 / 6 (INS-08, DOG-08, GRL-10, INS-10, PAY-11, GRL-11) clear of the HUD panel and the buttons, tails on the speakers | `cap/state-s{9..15}-1080.png`, `crops/s11-1080-{left-x5,right-x4}.png`, `crops/s13-1080-cast-left-x8.png`, `crops/s15-1080-{left-x5,right-x4}.png`, `facing/strip2-x6.png`, `crops/board-bub-1080-eras.png` |
+| demo eras I-II unchanged | PASS. World PNGs untouched since R4 (all 12:13 except `lantern.png` 17:40, not used by the demo); `regress.py` vs b96599c shows the same cells as R4 (III+ / finale / postgame frame columns only); val7 world-demo vs val4: animation phase only | `demo/demo-s9-150-val4-vs-val7.png` |
+
+Notes (accepted, no fix):
+- N7 Postgame dog facing (`src/data/worldEnding.ts` `WORLD_POSTGAME_LOOP.dog`, flip false on sleep / wake / calm / sleep2): kept. At
+  x 732 the dog faces right toward the Inspector (784 / 742) and its red ball (754), the two targets of the postgame beats; the
+  machine is far past them. `patted` must stay flip false (the pat contact test), so a flip on wake / calm would add a turn at
+  14 s and 20 s, and sleep / sleep2 must match each other across the 90 s wrap; flipping them would make the dog sleep with its back
+  to its ball. The DENIZEN_ART 1.4 facing rule targets the pre-finale rest poses; in the postgame the dog looks at its people.
+- N8 `Good boy.` at 1080 UI 100 uses the `side` box right of Sensor 7's head; its tail sits ~35 screen px right of the Inspector's
+  head (same as R4). The Inspector is the only speaker in the beat; it reads.

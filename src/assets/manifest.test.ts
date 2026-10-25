@@ -1142,17 +1142,15 @@ describe('WP23a world assets', () => {
     }
   });
 
-  it('file is null only for the 8 later-wave ids and the procedural shadow', () => {
-    // Seven of these wait for a later art wave; world.shadow stays procedural forever.
-    const FILE_NULL = new Set<AssetId>([
-      'world.clipboardPages', 'world.redBall', 'world.lantern', 'world.puddle', 'world.sprout', 'world.page', 'world.shadow', 'bg.virga',
-    ]);
+  it('file is null only for the procedural shadow', () => {
+    // WP23b AD3c wired the last four sheets (puddle, sprout, page, virga); world.shadow stays procedural forever.
+    const FILE_NULL = new Set<AssetId>(['world.shadow']);
     for (const want of WP23A_ENTRIES) {
       const file = ASSET_MANIFEST[want.id].file;
       if (FILE_NULL.has(want.id)) expect(file, want.id).toBeNull();
       else expect(file, want.id).toMatch(/^(world|bg)\/[a-z0-9-]+\.png$/);
     }
-    expect(WP23A_ENTRIES.filter((w) => ASSET_MANIFEST[w.id].file !== null).length).toBe(17);
+    expect(WP23A_ENTRIES.filter((w) => ASSET_MANIFEST[w.id].file !== null).length).toBe(24);
   });
 
   it('keeps the era-row arithmetic: height = frame.height * eraRows and frame.count = columns * eraRows', () => {

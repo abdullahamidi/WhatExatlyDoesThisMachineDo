@@ -1,0 +1,81 @@
+# Puddles (WP23b AD3c, Art Director). Cell 32x5 art px, pivot (0.5, 1): the near bank on row 4. Back row, depth
+# WORLD_DEPTH_OFFSETS.scraps (-0.2). A shallow pool on the ground seen at a low angle: far bank (row above the water),
+# water rows, near bank (row 4) on the ground line. RIGHT-ANCHORED: every size ends at cell x 30 (world: placement x
+# + 30), so the sprout at placement x + 36 stands at the edge of every size; sizes grow to the left (away from the
+# machine). Sizes: 1 = x16..30 rows 1-4 (15 art px = 30 world px), 2 = x9..30 rows 0-4 (22 = 44), 3 = x1..30 rows
+# 0-4 (30 = 60). Each size contains the smaller ones (sheets.py `grow`: puddles never dry).
+# Looks: grey = the pale grey cloud that is not in this sky (#b8a98f) on the bright #d2bf9c water (the haze it reflects),
+# wet earth banks #8a7a64 all round, never blue; ring = the same pool, the cloud scattered, ONE 1 px #9c9182
+# ripple trough ring centred on the water (era IV downbeat); black = era V, ink water that reflects nothing, banks kept;
+# whole = finale / postgame, size-3 pool with the restored sky (skyClear) and grass banks (green): the only cell
+# with restored colours (sheets.py restored_frames; worldSheets.test.ts allow-list). Selective outline, no ink ring.
+
+@frame size1Grey
+................................
+....................ttttttttt...
+.................txxrrrxxxxxxxt.
+................txxxrrrrxxxxxxt.
+..................ttttttttttt...
+
+@frame size1Ring
+................................
+....................ttttttttt...
+.................txxxxqqqqxxxxt.
+................txxqqxxxxxxqqxt.
+..................ttttttttttt...
+
+@frame size1Black
+................................
+....................ttttttttt...
+.................tKKKKKKKKKKKKt.
+................tKKKKKKKKKKKKKt.
+..................ttttttttttt...
+
+@frame size2Grey
+................ttttttttttt.....
+............txxxrrrrxxxxxxxxxt..
+.........txxrrrrrrxxxxxxxxxxxxt.
+.........txxxxrrrxxxxxxxxxxxxxt.
+...........tttttttttttttttttt...
+
+@frame size2Ring
+................ttttttttttt.....
+............txxxxqqqqqqxxxxxxt..
+.........txxxqqxxxxxxxxxxqqxxxt.
+.........txxxxxxxqqqqqqxxxxxxxt.
+...........tttttttttttttttttt...
+
+@frame size2Black
+................ttttttttttt.....
+............tKKKKKKKKKKKKKKKKt..
+.........tKKKKKKKKKKKKKKKKKKKKt.
+.........tKKKKKKKKKKKKKKKKKKKKt.
+...........tttttttttttttttttt...
+
+@frame size3Grey
+.......tttttttttttttttttttt.....
+...ttxxxxrrrrxxxxxxxxxxxxxxxtt..
+.txxxxrrrrrrrrxxxxxxxxxxxxxxxxt.
+.txxxxxxrrrrrxxxxxxxxxxxxxxxxxt.
+....ttttttttttttttttttttttttt...
+
+@frame size3Ring
+.......tttttttttttttttttttt.....
+...ttxxxxxxqqqqqqqqqqxxxxxxxtt..
+.txxxxxxqqqxxxxxxxxxxqqqxxxxxxt.
+.txxxxxxxxxqqqqqqqqqqxxxxxxxxxt.
+....ttttttttttttttttttttttttt...
+
+@frame size3Black
+.......tttttttttttttttttttt.....
+...ttKKKKKKKKKKKKKKKKKKKKKKKtt..
+.tKKKKKKKKKKKKKKKKKKKKKKKKKKKKt.
+.tKKKKKKKKKKKKKKKKKKKKKKKKKKKKt.
+....ttttttttttttttttttttttttt...
+
+@frame whole
+.......gggggggggggggggggggg.....
+...hhnnnnoooonnnnnnnnnnnnnnnhh..
+.hnnnnoooooooonnnnnnnnnnnnmnnnh.
+.hnnnnnnooooonnnnnnnnnnnnnnnnnh.
+....hhhhhhhhhhhhhhhhhhhhhhhhh...

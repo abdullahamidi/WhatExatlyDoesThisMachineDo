@@ -1,12 +1,14 @@
 // Tests for the world-voice scheduler rules (WP23a): every rule R1-R12 as a table, boundary values, the cycle 2+ policy,
 // the INS-04 / GRL-02 / GRL-04 cases, a permissive pass over the real line bank, and no input mutation.
+// WP23b (T6): eras III-V caps, the postgame phase and scripted lines, the opener window, per-era repeats (DOG-02), the
+// era-entry / opener / postgame gates, minEraS and the postgame minutes, each as a table with its boundary values.
 import { describe, it, expect } from 'vitest';
 import {
-  countedSeen, hourCapOf, idleReady, lineEligible, momentGate, newMomentLog, noteMomentStart,
+  countedSeen, hourCapOf, idleReady, lineEligible, lineSettledId, momentGate, newMomentLog, noteMomentStart,
   priorityOf, triggerGate, ttlOf,
 } from './worldVoiceRules';
 import type { OfferKind, WorldMomentLog, WorldRuleConfig, WorldSchedulerCtx } from './worldVoiceRules';
-import { WORLD_LINES, WORLD_VOICE_CONFIG } from '../../data/livingWorld';
+import { WORLD_LINES, WORLD_VOICE_CONFIG, seenKeyOf } from '../../data/livingWorld';
 import type { WorldLine, WorldSaveState } from '../../data/livingWorld';
 import { TECH_IDS } from '../../data/types';
 import type { TechId } from '../../data/types';
@@ -95,10 +97,10 @@ describe('R3 era', () => {
     expect(lineEligible(line('INS-01'), 1, makeCtx({ era: 1 }), WORLD_LINES)).toBe(true);
   });
 
-  it('an era past the layer (offer 3, or ctx era 3) is never eligible', () => {
-    const era3 = synth({ id: 'E3-01', eras: [3] });
-    expect(lineEligible(era3, 3, makeCtx({ era: 3 }), [era3])).toBe(false);
-    expect(lineEligible(line('INS-02'), 1, makeCtx({ era: 3 }), WORLD_LINES)).toBe(false);
+  it('an era past the layer (offer 6, or ctx era 6) is never eligible', () => {
+    const era6 = synth({ id: 'E6-01', eras: [6] });
+    expect(lineEligible(era6, 6, makeCtx({ era: 6 }), [era6])).toBe(false);
+    expect(lineEligible(line('INS-02'), 1, makeCtx({ era: 6 }), WORLD_LINES)).toBe(false);
   });
 
   it('a non-ms pending entry may not start after its offer era', () => {
@@ -114,11 +116,12 @@ describe('R3 era', () => {
     expect(ttlOf(ins04, 'ms', 1, T0, CFG).eraLimit).toBe(2);
   });
 
-  it('INS-07 (ms, era II) has eraLimit 3 but no line starts in era III (layer gate)', () => {
+  it('INS-07 (ms, era II) has eraLimit 3: it starts in era III, not in era IV (WP23b)', () => {
     const ins07 = line('INS-07');
     expect(ttlOf(ins07, 'ms', 2, T0, CFG).eraLimit).toBe(3);
     expect(lineEligible(ins07, 2, makeCtx({ era: 2 }), WORLD_LINES)).toBe(true);
-    expect(lineEligible(ins07, 2, makeCtx({ era: 3 }), WORLD_LINES)).toBe(false);
+    expect(lineEligible(ins07, 2, makeCtx({ era: 3 }), WORLD_LINES)).toBe(true);
+    expect(lineEligible(ins07, 2, makeCtx({ era: 4 }), WORLD_LINES)).toBe(false);
   });
 });
 
@@ -146,7 +149,13 @@ describe('R4 repeat policy', () => {
 
   it('a core line replays at cycle 2 even when it is in seenEver', () => {
     const ins01 = line('INS-01');
-    expect(lineEligible(ins01, 1, makeCtx({ cycle: 2, world: freshWorld({ seenEver: ['INS-01'] }) }), WORLD_LINES)).toBe(true);
+    // WP23b: INS-14 replaces INS-01 from cycle 2, so this check uses a bank without the replacement (see the next test).
+    expect(lineEligible(ins01, 1, makeCtx({ cycle: 2, world: freshWorld({ seenEver: ['INS-01'] }) }), [ins01])).toBe(true);
+  });
+
+  it('a base line is refused from cycle 2 while its cycle variant is in the bank (INS-14 replaces INS-01, WP23b)', () => {
+    expect(lineEligible(line('INS-01'), 1, makeCtx({ cycle: 2 }), WORLD_LINES)).toBe(false);
+    expect(lineEligible(line('INS-14'), 1, makeCtx({ cycle: 2 }), WORLD_LINES)).toBe(true);
   });
 
   it('cyc lines need cycle 2 and a base line is ineligible at cycle 2 when another line replaces it', () => {
@@ -433,7 +442,7 @@ describe('idleReady', () => {
   it('every idle and demoNear line of the bank is ready when all its conditions hold', () => {
     const levels = Object.fromEntries(TECH_IDS.map((id) => [id, 1])) as Record<TechId, number>;
     const ready = makeCtx({
-      playMs: 10_000_000, levels, localHour: 2, lifetimeEe: 10_000_000,
+      playMs: 10_000_000, eraAgeMs: 900_000, levels, localHour: 2, lifetimeEe: 10_000_000,
       logsSeen: new Set(['observer-count', 'chamber-seal', 'idle-cycle', 'unlabeled-part', 'copper-memory', 'load-beneath']),
       world: freshWorld({ seen: WORLD_LINES.map((l) => l.id) }),
     });
@@ -608,19 +617,325 @@ describe('cfg injection', () => {
 });
 
 describe('WORLD_LINES in a permissive context', () => {
+  // WP23b: cycle variants need cycle 2 (and a base line is refused from cycle 2 when its variant replaces it), and an opener
+  // line needs its own cycle window (PAY-14 from cycle 3), so each line is checked at the cycle it belongs to. Postgame lines
+  // are excluded here: they are eligible only in phase postgame (see the WP23b postgame table).
+  const cycleOf = (l: WorldLine): number => (l.trigger.kind === 'opener' ? l.trigger.fromCycle : l.cyc === true ? 2 : 1);
+  const ctxOf = (l: WorldLine, era: number, edition: 'full' | 'demo') => makeCtx({ era, edition, cycle: cycleOf(l) });
+
   it('every line is eligible at each of its eras in the demo edition', () => {
-    for (const l of WORLD_LINES) {
+    for (const l of WORLD_LINES.filter((x) => x.post !== true)) {
       for (const era of l.eras) {
-        expect(lineEligible(l, era, makeCtx({ era, edition: 'demo' }), WORLD_LINES), `${l.id} era ${era}`).toBe(true);
+        expect(lineEligible(l, era, ctxOf(l, era, 'demo'), WORLD_LINES), `${l.id} era ${era}`).toBe(true);
       }
     }
   });
 
-  it('in the full edition only the demo-only lines are refused', () => {
+  it('in the full edition only the demo-only and the postgame lines are refused', () => {
     for (const l of WORLD_LINES) {
       for (const era of l.eras) {
-        const ok = lineEligible(l, era, makeCtx({ era, edition: 'full' }), WORLD_LINES);
-        expect(ok, `${l.id} era ${era}`).toBe(l.demo !== true);
+        const ok = lineEligible(l, era, ctxOf(l, era, 'full'), WORLD_LINES);
+        expect(ok, `${l.id} era ${era}`).toBe(l.demo !== true && l.post !== true);
+      }
+    }
+  });
+});
+
+// WP23b (T6) ------------------------------------------------------------------------------------------------------------
+
+// Moments per era: `n` non-core moments in `era`, the other eras zero.
+function momentsAt(era: number, n: number): WorldSaveState['eraMoments'] {
+  const moments: [number, number, number, number, number] = [0, 0, 0, 0, 0];
+  moments[era - 1] = n;
+  return moments;
+}
+
+describe('WP23b era caps III-V (bible 7.2: III 2, IV 1, V 2)', () => {
+  const log = newMomentLog();
+  const CAPS: readonly (readonly [number, number])[] = [[1, 3], [2, 2], [3, 2], [4, 1], [5, 2]];
+
+  it('a non-core start is allowed below the era cap and refused at it, for eras I-V', () => {
+    for (const [era, cap] of CAPS) {
+      const plain = synth({ id: `CAP-${era}`, eras: [era] });
+      const below = makeCtx({ era, world: freshWorld({ eraMoments: momentsAt(era, cap - 1) }) });
+      const atCap = makeCtx({ era, world: freshWorld({ eraMoments: momentsAt(era, cap) }) });
+      expect(momentGate(plain, 'idle', log, below, CFG, era), `era ${era} below cap`).toBe(true);
+      expect(momentGate(plain, 'idle', log, atCap, CFG, era), `era ${era} at cap`).toBe(false);
+    }
+  });
+
+  it('era III counts its own moments only: era II moments do not use up the era III cap', () => {
+    const plain = synth({ id: 'CAP-3', eras: [3] });
+    expect(momentGate(plain, 'idle', log, makeCtx({ era: 3, world: freshWorld({ eraMoments: [0, 5, 0, 0, 0] }) }), CFG, 3)).toBe(true);
+  });
+
+  it('core lines bypass the III-V caps (PAY-06 is core in era III)', () => {
+    const ctx = makeCtx({ era: 3, world: freshWorld({ eraMoments: momentsAt(3, 9) }) });
+    expect(momentGate(line('PAY-06'), 'eraEntry', log, ctx, CFG, 3)).toBe(true);
+  });
+
+  it('era VI and beyond allow no non-core starts', () => {
+    expect(momentGate(synth({ id: 'CAP-6', eras: [6] }), 'idle', log, makeCtx({ era: 6 }), CFG, 6)).toBe(false);
+  });
+
+  it('a non-core start in era III counts into index 2 of eraMoments', () => {
+    const next = countedSeen(line('CRW-05'), 3, makeCtx({ era: 3 }));
+    expect(next.eraMoments).toEqual([0, 0, 1, 0, 0]);
+    expect(next.seen).toEqual(['CRW-05']);
+  });
+});
+
+describe('WP23b postgame phase (post lines only in postgame; scripted lines never)', () => {
+  const pay12 = line('PAY-12');
+  const pg = (over: Partial<WorldSchedulerCtx> = {}): WorldSchedulerCtx => makeCtx({ era: 5, phase: 'postgame', ...over });
+
+  it('a post line is eligible only in phase postgame', () => {
+    expect(lineEligible(pay12, 5, pg(), WORLD_LINES)).toBe(true);
+    for (const phase of ['none', 'sequence', 'choice'] as const) {
+      expect(lineEligible(pay12, 5, makeCtx({ era: 5, phase }), WORLD_LINES), phase).toBe(false);
+    }
+    expect(lineEligible(pay12, 5, makeCtx({ era: 5 }), WORLD_LINES), 'no phase').toBe(false);
+  });
+
+  it('phase postgame plays only post lines: every ordinary line is ineligible there', () => {
+    for (const l of WORLD_LINES.filter((x) => x.post !== true)) {
+      for (const era of l.eras) {
+        expect(lineEligible(l, era, makeCtx({ era, phase: 'postgame' }), WORLD_LINES), `${l.id} era ${era}`).toBe(false);
+      }
+    }
+  });
+
+  it('the postgame phase keeps the setting gate: OFF refuses PAY-12, RARE keeps it (core)', () => {
+    expect(lineEligible(pay12, 5, pg({ setting: 'off' }), WORLD_LINES)).toBe(false);
+    expect(lineEligible(pay12, 5, pg({ setting: 'rare' }), WORLD_LINES)).toBe(true);
+  });
+
+  it('INS-PG is scripted: never eligible, in any phase and edition', () => {
+    const insPg = line('INS-PG');
+    expect(insPg.scripted).toBe(true);
+    expect(lineEligible(insPg, 5, makeCtx({ era: 5 }), WORLD_LINES)).toBe(false);
+    expect(lineEligible(insPg, 5, pg(), WORLD_LINES)).toBe(false);
+    expect(lineEligible(insPg, 5, pg({ edition: 'demo' }), WORLD_LINES)).toBe(false);
+  });
+
+  it('PAY-12 is once per cycle: seen blocks it, and cycle 2 plays it again when only seenEver holds it', () => {
+    expect(lineEligible(pay12, 5, pg({ world: freshWorld({ seen: ['PAY-12'], seenEver: ['PAY-12'] }) }), WORLD_LINES)).toBe(false);
+    expect(lineEligible(pay12, 5, pg({ cycle: 2, world: freshWorld({ seenEver: ['PAY-12'] }) }), WORLD_LINES)).toBe(true);
+  });
+
+  it('counting PAY-12 keeps its id and leaves the era counter alone (core)', () => {
+    const next = countedSeen(pay12, 5, pg());
+    expect(next.seen).toEqual(['PAY-12']);
+    expect(next.eraMoments).toEqual([0, 0, 0, 0, 0]);
+  });
+});
+
+describe('WP23b postgame gates (PAY-12: 10 min, idle 20 s, quiet 30 s after a toast)', () => {
+  const pay12 = line('PAY-12');
+
+  it('idleReady: postgame play time must reach minS (600 s) exactly; absent counts 0', () => {
+    expect(idleReady(pay12, makeCtx({ postgameMs: 599_999 }))).toBe(false);
+    expect(idleReady(pay12, makeCtx({ postgameMs: 600_000 }))).toBe(true);
+    expect(idleReady(pay12, makeCtx())).toBe(false);
+  });
+
+  it('triggerGate postgame is the idle gate: core waits 20 s of input silence, non-core 45 s', () => {
+    expect(triggerGate('postgame', true, makeCtx({ lastInputMs: T0 - 19_999 }), CFG)).toBe(false);
+    expect(triggerGate('postgame', true, makeCtx({ lastInputMs: T0 - 20_000 }), CFG)).toBe(true);
+    expect(triggerGate('postgame', false, makeCtx({ lastInputMs: T0 - 44_999 }), CFG)).toBe(false);
+    expect(triggerGate('postgame', false, makeCtx({ lastInputMs: T0 - 45_000 }), CFG)).toBe(true);
+  });
+
+  it('triggerGate postgame waits 30 s after a toast clears and never runs under a toast', () => {
+    expect(triggerGate('postgame', true, makeCtx({ toastClearedAtMs: T0 - 29_999 }), CFG)).toBe(false);
+    expect(triggerGate('postgame', true, makeCtx({ toastClearedAtMs: T0 - 30_000 }), CFG)).toBe(true);
+    expect(triggerGate('postgame', true, makeCtx({ toastUp: true }), CFG)).toBe(false);
+  });
+
+  it('priority: postgame is idle priority (4), core or not', () => {
+    expect(priorityOf('postgame', true)).toBe(4);
+    expect(priorityOf('postgame', false)).toBe(4);
+  });
+
+  it('TTL: PAY-12 is core, so it has no expiry and waits for era 5', () => {
+    expect(ttlOf(pay12, 'postgame', 5, T0, CFG)).toEqual({ expiresAtMs: null, eraLimit: 5 });
+  });
+});
+
+describe('WP23b minEraS (PAY-07: era III at least 15 min old)', () => {
+  const pay07 = line('PAY-07');
+
+  it('idleReady: era age must reach 900 s exactly; an absent age counts as 0', () => {
+    expect(idleReady(pay07, makeCtx({ era: 3 }))).toBe(false);
+    expect(idleReady(pay07, makeCtx({ era: 3, eraAgeMs: 899_999 }))).toBe(false);
+    expect(idleReady(pay07, makeCtx({ era: 3, eraAgeMs: 900_000 }))).toBe(true);
+  });
+
+  it('eraAgeMs does not gate a line without minEraS', () => {
+    expect(idleReady(line('DOG-02'), makeCtx({ eraAgeMs: 0 }))).toBe(true);
+  });
+
+  it('PAY-07 is core: its idle gate is 20 s of input silence', () => {
+    expect(triggerGate('idle', pay07.core === true, makeCtx({ lastInputMs: T0 - 19_999 }), CFG)).toBe(false);
+    expect(triggerGate('idle', pay07.core === true, makeCtx({ lastInputMs: T0 - 20_000 }), CFG)).toBe(true);
+  });
+});
+
+describe('WP23b era entry (PAY-06: 3 s after the era card closes)', () => {
+  const pay06 = line('PAY-06');
+
+  it('triggerGate eraEntry needs a closed era card, and 3 s after it (inclusive)', () => {
+    expect(CFG.eraEntryAfterCardMs).toBe(3000);
+    expect(triggerGate('eraEntry', true, makeCtx(), CFG)).toBe(false);
+    expect(triggerGate('eraEntry', true, makeCtx({ eraCardClosedAtMs: null }), CFG)).toBe(false);
+    expect(triggerGate('eraEntry', true, makeCtx({ eraCardClosedAtMs: T0 - 2_999 }), CFG)).toBe(false);
+    expect(triggerGate('eraEntry', true, makeCtx({ eraCardClosedAtMs: T0 - 3_000 }), CFG)).toBe(true);
+    expect(triggerGate('eraEntry', true, makeCtx({ eraCardClosedAtMs: T0 - 60_000 }), CFG)).toBe(true);
+  });
+
+  it('the delay is config: a shortened eraEntryAfterCardMs lets the entry through at once', () => {
+    const cfg: WorldRuleConfig = { ...CFG, eraEntryAfterCardMs: 0 };
+    expect(triggerGate('eraEntry', true, makeCtx({ eraCardClosedAtMs: T0 }), CFG)).toBe(false);
+    expect(triggerGate('eraEntry', true, makeCtx({ eraCardClosedAtMs: T0 }), cfg)).toBe(true);
+  });
+
+  it('a toast up blocks the era entry, core or not', () => {
+    expect(triggerGate('eraEntry', true, makeCtx({ eraCardClosedAtMs: T0 - 60_000, toastUp: true }), CFG)).toBe(false);
+    expect(triggerGate('eraEntry', false, makeCtx({ eraCardClosedAtMs: T0 - 60_000, toastUp: true }), CFG)).toBe(false);
+  });
+
+  it('PAY-06 is eligible in era III only, has no TTL, and its era limit is its offer era', () => {
+    expect(lineEligible(pay06, 3, makeCtx({ era: 3 }), WORLD_LINES)).toBe(true);
+    expect(lineEligible(pay06, 3, makeCtx({ era: 4 }), WORLD_LINES)).toBe(false);
+    expect(ttlOf(pay06, 'eraEntry', 3, T0, CFG)).toEqual({ expiresAtMs: null, eraLimit: 3 });
+    expect(priorityOf('eraEntry', true)).toBe(1);
+  });
+});
+
+describe('WP23b opener (PAY-13 cycle 2, PAY-14 cycle 3+)', () => {
+  const pay13 = line('PAY-13');
+  const pay14 = line('PAY-14');
+
+  it('the cycle window: PAY-13 only at cycle 2, PAY-14 from cycle 3 on', () => {
+    const rows: readonly (readonly [number, boolean, boolean])[] = [[1, false, false], [2, true, false], [3, false, true], [4, false, true]];
+    for (const [cycle, p13, p14] of rows) {
+      expect(lineEligible(pay13, 1, makeCtx({ cycle }), WORLD_LINES), `PAY-13 cycle ${cycle}`).toBe(p13);
+      expect(lineEligible(pay14, 1, makeCtx({ cycle }), WORLD_LINES), `PAY-14 cycle ${cycle}`).toBe(p14);
+    }
+  });
+
+  it('an opener line is not repeated in its cycle (seen), and replays in a later cycle (core)', () => {
+    expect(lineEligible(pay14, 1, makeCtx({ cycle: 3, world: freshWorld({ seen: ['PAY-14'] }) }), WORLD_LINES)).toBe(false);
+    expect(lineEligible(pay14, 1, makeCtx({ cycle: 4, world: freshWorld({ seenEver: ['PAY-14'] }) }), WORLD_LINES)).toBe(true);
+  });
+
+  it('the window is a plain check: a fromCycle / toCycle synthetic line follows its bounds', () => {
+    const windowed = synth({ id: 'OPN-01', eras: [1], trigger: { kind: 'opener', fromCycle: 2, toCycle: 3 }, core: true });
+    const check = (cycle: number): boolean => lineEligible(windowed, 1, makeCtx({ cycle }), [windowed]);
+    expect([check(1), check(2), check(3), check(4)]).toEqual([false, true, true, false]);
+  });
+
+  it('the opener gate is the toast gate only: a toast blocks it, a closed index or card does not', () => {
+    expect(triggerGate('opener', true, makeCtx({ toastUp: true }), CFG)).toBe(false);
+    expect(triggerGate('opener', true, makeCtx({ indexClosedAtMs: T0, eraCardClosedAtMs: T0 }), CFG)).toBe(true);
+  });
+
+  it('priority, TTL and era limit: core opener is 1, no expiry, era limit = offer era', () => {
+    expect(priorityOf('opener', true)).toBe(1);
+    expect(ttlOf(pay13, 'opener', 1, T0, CFG)).toEqual({ expiresAtMs: null, eraLimit: 1 });
+    expect(ttlOf(pay14, 'opener', 2, T0, CFG)).toEqual({ expiresAtMs: null, eraLimit: 2 });
+  });
+});
+
+describe('WP23b per-era repeat (DOG-02 once in era I and once in era III)', () => {
+  const dog02 = line('DOG-02');
+
+  it('the era III key is DOG-02@3; era I keeps the plain id', () => {
+    expect(seenKeyOf(dog02, 1)).toBe('DOG-02');
+    expect(seenKeyOf(dog02, 3)).toBe('DOG-02@3');
+  });
+
+  it('era I plays once, then era III plays once under its own key, then neither repeats', () => {
+    const ctx1 = makeCtx({ era: 1 });
+    expect(lineEligible(dog02, 1, ctx1, WORLD_LINES)).toBe(true);
+    const afterI = countedSeen(dog02, 1, ctx1);
+    expect(afterI.seen).toEqual(['DOG-02']);
+    expect(lineEligible(dog02, 1, makeCtx({ era: 1, world: afterI }), WORLD_LINES)).toBe(false);
+
+    const ctx3 = makeCtx({ era: 3, world: afterI });
+    expect(lineEligible(dog02, 3, ctx3, WORLD_LINES)).toBe(true);
+    const afterIII = countedSeen(dog02, 3, ctx3);
+    expect(afterIII.seen).toEqual(['DOG-02', 'DOG-02@3']);
+    expect(afterIII.seenEver).toEqual(['DOG-02', 'DOG-02@3']);
+    expect(lineEligible(dog02, 3, makeCtx({ era: 3, world: afterIII }), WORLD_LINES)).toBe(false);
+  });
+
+  it('the era III key alone does not block era I, and the plain id alone does not block era III', () => {
+    expect(lineEligible(dog02, 1, makeCtx({ era: 1, world: freshWorld({ seen: ['DOG-02@3'] }) }), WORLD_LINES)).toBe(true);
+    expect(lineEligible(dog02, 3, makeCtx({ era: 3, world: freshWorld({ seen: ['DOG-02'] }) }), WORLD_LINES)).toBe(true);
+  });
+
+  it('cycle 2: DOG-02 (non-core) plays in neither era once both keys are in seenEver', () => {
+    const heard = freshWorld({ seenEver: ['DOG-02', 'DOG-02@3'] });
+    expect(lineEligible(dog02, 1, makeCtx({ cycle: 2, era: 1, world: heard }), WORLD_LINES)).toBe(false);
+    expect(lineEligible(dog02, 3, makeCtx({ cycle: 2, era: 3, world: heard }), WORLD_LINES)).toBe(false);
+  });
+});
+
+describe('WP23b cycle 2+ INS-14 replaces INS-01', () => {
+  const ins01 = line('INS-01');
+  const ins14 = line('INS-14');
+
+  it('INS-14 plays from cycle 2 and INS-01 is refused from cycle 2 on', () => {
+    const rows: readonly (readonly [number, boolean, boolean])[] = [[1, true, false], [2, false, true], [3, false, true]];
+    for (const [cycle, p01, p14] of rows) {
+      expect(lineEligible(ins01, 1, makeCtx({ cycle }), WORLD_LINES), `INS-01 cycle ${cycle}`).toBe(p01);
+      expect(lineEligible(ins14, 1, makeCtx({ cycle }), WORLD_LINES), `INS-14 cycle ${cycle}`).toBe(p14);
+    }
+  });
+
+  it('INS-14 is once per save: heard at cycle 2, it is refused at cycle 3 and INS-01 stays replaced', () => {
+    const heard = freshWorld({ seenEver: ['INS-14'] });
+    expect(lineEligible(ins14, 1, makeCtx({ cycle: 3, world: heard }), WORLD_LINES)).toBe(false);
+    expect(lineEligible(ins01, 1, makeCtx({ cycle: 3, world: heard }), WORLD_LINES)).toBe(false);
+  });
+});
+
+// Z6: the tier tracker asks whether a line is settled (the scheduler will refuse it for the rest of the cycle).
+describe('Z6 lineSettledId', () => {
+  // [line id, world, cycle, settled]
+  const rows: readonly (readonly [string, Partial<WorldSaveState>, number, boolean])[] = [
+    ['INS-01', { seen: ['INS-01'] }, 1, true],
+    ['INS-02', { seen: ['INS-02'] }, 2, true],
+    ['INS-02', { seenEver: ['INS-02'] }, 1, false],
+    ['INS-02', { seenEver: ['INS-02'] }, 2, true],
+    ['INS-01', { seenEver: ['INS-01'] }, 2, false],
+    ['GRL-02', { seenEver: ['GRL-02'] }, 1, true],
+    ['DOG-12', { seenEver: ['DOG-12'] }, 1, true],
+    ['NO-SUCH-LINE', { seen: ['NO-SUCH-LINE'] }, 1, false],
+  ];
+
+  for (const [id, over, cycle, settled] of rows) {
+    it(`${id} with ${JSON.stringify(over)} at cycle ${cycle} is ${settled ? 'settled' : 'not settled'}`, () => {
+      expect(lineSettledId(id, freshWorld(over), cycle)).toBe(settled);
+    });
+  }
+
+  it('a perEra line is settled under its first era key only (DOG-02 plain, not DOG-02@3)', () => {
+    expect(lineSettledId('DOG-02', freshWorld({ seen: ['DOG-02'] }), 1)).toBe(true);
+    expect(lineSettledId('DOG-02', freshWorld({ seen: ['DOG-02@3'] }), 1)).toBe(false);
+  });
+
+  it('every line the scheduler refuses as settled is refused by lineEligible too', () => {
+    const ids = WORLD_LINES.map((l) => l.id);
+    for (const cycle of [1, 2, 3]) {
+      for (const world of [freshWorld({ seen: ids }), freshWorld({ seenEver: ids })]) {
+        for (const l of WORLD_LINES) {
+          const era = l.eras[0] ?? 1;
+          if (lineSettledId(l.id, world, cycle)) {
+            expect(lineEligible(l, era, makeCtx({ cycle, era, world }), WORLD_LINES), `${l.id} cycle ${cycle}`).toBe(false);
+          }
+        }
       }
     }
   });

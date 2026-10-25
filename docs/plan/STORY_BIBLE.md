@@ -581,7 +581,7 @@ Counts:
 | token | value | cycle 1 | cycle 2 | longest output |
 |---|---|---|---|---|
 | `{cycle}` | `cycleLabel` digits (41 + cycle, 4 digits) | 0042 | 0043 | GRL-12, 40 chars |
-| `{cycleWords}` | label digits as words, hyphenated, first word capitalized | Zero-zero-four-two | Zero-zero-four-three | CRW-05, ≤ 41 chars |
+| `{cycleWords}` | label digits as words, hyphenated, first word capitalized | Zero-zero-four-two | Zero-zero-four-three | CRW-05, ≤ 45 chars |
 | `{savedWords}` | cycle − 1 as a word up to nine, then digits | — | (PAY-13 says "one") | PAY-14, ≤ 46 chars |
 
 ### 5.4 Optional machine logs (machine voice; at most 2; recommended)
@@ -601,7 +601,9 @@ in table order. They follow the same rules as every other log:
 **Evidence:**
 - **Method.** `scratchpad/bible/logsim.ts` drives `runGreedy` in 5 s / 30 s chunks and replays the log scheduler (table
   order, 120 s gap).
-- **Delay.** Every existing log fires with **0 s delay**, with or without the two new entries, in all three profiles.
+- **Delay.** The eight key logs (`copper-memory`, `steam-rain`, `sync-success`, `signal-below`, `observer-one`, `units-unknown`,
+  `cycle-0041`, `operator-located`) fire with **0 s delay**, with or without the two new entries, in all three profiles. Early
+  logs share the 120 s start gap with or without the two new entries, so the other existing logs may wait a gap behind them.
 - **Order.** The key logs still land before their milestones:
 
   | profile | observer-one → convergence | operator-located → finalAlignment |
@@ -1050,7 +1052,7 @@ while the TECH INDEX is open and play on close.
 | condenser MK I / MK III / MK V | puddles 1 / 2 / 3 (size) |
 | firebox MK III / MK IV / MK V | paper scraps 3 → 2 → 1 → 0 ("Fuel source not on the manifest. Burning anyway.") |
 | motorRetrofit MK III / MK IV / MK V (once `load-beneath` has fired) | the dog's hole, stages 2 / 3 / 4 (stage 1 when digging starts). The hole never refills. |
-| standingWave MK III / MK V | Chladni rings, intensity 1 / 2 |
+| standingWave MK I / MK III | Chladni rings, intensity 1 / 2 (AD4 F7, Q6 scale-up; was MK III / MK V) |
 | copperWinding or transformer, any tier-up | lamp flicker (the era II ripple), even after era II |
 | first AS BUILT part of the cycle | Sensor 7's LED joins `TIER_HEARTBEAT` (2.4 s); INS-13 |
 
@@ -1235,7 +1237,7 @@ All sprites are side view plus one camera-facing frame.
 
 ## Appendix D. Open decisions for the Director
 
-1. **The 2 optional machine logs (§5.4).** Recommendation: include them. Zero measured delay to every existing log.
+1. **The 2 optional machine logs (§5.4).** Recommendation: include them. Zero measured delay to the eight key logs (§5.4); the two new logs move no existing log (same second and delay).
 2. **`cssKb` 44 → 45 at WP start.** Recommendation: yes.
 3. **Art Director:** the girl as an approaching, camera-facing child (tone check), and people in the restored world
    (§18.2 sign-off).

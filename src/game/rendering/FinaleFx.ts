@@ -1,15 +1,22 @@
 import Phaser from 'phaser';
 import type { AssetId } from '../../assets/assetIds';
+import { ASSET_MANIFEST } from '../../assets/manifest';
 import { FINALE_BIRDS, FINALE_SEEDS } from '../../data/finale';
 import type { FinaleBeat } from '../../data/finale';
+import { WORLD_SHEET_KEYS } from '../../data/livingWorld';
 import { MACHINE_MOTION } from '../../data/machineComponents';
 import type { Vec2 } from '../../data/machineComponents';
 import { CAMERA, DEPTH, DUST, MACHINE_ANCHOR, PIXEL_SCALE, VIEW, WORLD } from '../../data/world';
 import { effectiveMinZoom } from '../math/camera';
 import { birdPose, flockSchedule } from '../math/finale';
 import type { FinaleFrame } from '../math/finale';
+import { sheetFrameIndex } from '../math/worldPlayback';
+import type { CrowLead } from '../math/worldScript';
 
 const MOTE_TEXTURE: AssetId = 'fx.dust';
+// The crow lead (WP23b) draws the crow sheet with the sheet's own texture and origin, so it reads like the world crow.
+const CROW_TEXTURE = WORLD_SHEET_KEYS.crow;
+const CROW_ORIGIN = ASSET_MANIFEST[WORLD_SHEET_KEYS.crow as AssetId].origin;
 // Screen layer: birds and the white / cut rect sit above every world object (DEPTH.floatingText is the top world layer); DOM is above the canvas.
 const BIRD_DEPTH = DEPTH.floatingText + 1;
 const SCREEN_DEPTH = DEPTH.floatingText + 2;
@@ -35,6 +42,7 @@ function seedFrames(): number[] {
 // restored-world seed motes, the bird flocks over the restored sky and the dust burst at the name plate.
 // Birds: 'finale' spawns one flock at FINALE_BIRDS.firstAtS on the finale clock (frame.t); 'postgame' loops flocks on
 // its own clock (frame delta), each gap from flockSchedule. Bird sprites are a fixed pool of FINALE_BIRDS.size max.
+// The crow lead (setLead, WP23b) turns the first pooled bird into the whole crow frame while the world crow is out of view.
 export class FinaleFx {
   private readonly scene: Phaser.Scene;
   private readonly onBeat: (beat: FinaleBeat) => void;
@@ -42,6 +50,10 @@ export class FinaleFx {
   private readonly seeds: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly plate: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly birds: Phaser.GameObjects.Image[] = [];
+  /** The crow lead (WP23b), null = none. The first bird draws it while the flock is on screen. */
+  private lead: CrowLead | null = null;
+  /** True while the first bird shows the crow sheet (its texture and origin swap on that change only). */
+  private leadOnFirst = false;
   private overlayColor = NaN;
   private overlayAlpha = NaN;
   private seedMode: FinaleFrame['seeds'] = 'off';
@@ -115,6 +127,12 @@ export class FinaleFx {
   plateDust(world: Vec2, count: number): void {
     if (this.destroyed || !Number.isFinite(count) || count < 1) return;
     this.plate.explode(Math.floor(count), world.x, world.y);
+  }
+
+  /** Sets the crow lead (WP23b, null = none): the first bird draws that crow frame while the flock is on screen. No new objects. */
+  setLead(lead: CrowLead | null): void {
+    if (this.destroyed) return;
+    this.lead = lead;
   }
 
   destroy(): void {
@@ -212,11 +230,29 @@ export class FinaleFx {
         bird.setVisible(false);
         return;
       }
+      this.paintFrame(bird, i === 0, pose.frame);
       bird
-        .setFrame(pose.frame)
         .setPosition(VIEW.width / 2 + (pose.x - VIEW.width / 2) / zoom, VIEW.height / 2 + (pose.y - VIEW.height / 2) / zoom)
         .setScale(PIXEL_SCALE / zoom)
         .setVisible(true);
     });
+  }
+
+  // The bird's frame. The first bird shows the crow lead while one is set (the crow sheet, frame by name and row); texture and
+  // origin swap only when that changes, so the pool keeps the same sprites and no bird is created.
+  private paintFrame(bird: Phaser.GameObjects.Image, first: boolean, frame: 0 | 1): void {
+    const lead = first ? this.lead : null;
+    if (lead !== null) {
+      if (!this.leadOnFirst) {
+        this.leadOnFirst = true;
+        bird.setTexture(CROW_TEXTURE).setOrigin(CROW_ORIGIN.x, CROW_ORIGIN.y);
+      }
+      bird.setFrame(sheetFrameIndex('crow', lead.frame, lead.row));
+    } else if (first && this.leadOnFirst) {
+      this.leadOnFirst = false;
+      bird.setTexture(FINALE_BIRDS.assetId, frame).setOrigin(0, 0);
+    } else {
+      bird.setFrame(frame);
+    }
   }
 }

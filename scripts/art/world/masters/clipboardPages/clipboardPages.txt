@@ -1,0 +1,19 @@
+# Clipboard pages (WP23b AD3a, Art Director). Cell 6x3 art px, pivot (0.5, 1); one step thicker per finished cycle
+# (cycle trace, bible 9.3). Paper edges seen from the side: sheets w (#ddc9a3) with a v shade line between them, ink
+# ends K at both sides so the stack separates from any sky. thin = 1 sheet edge, medium = 2, thick = 3; all sit on the
+# bottom row so the stack grows upward off the board. Single row, not an era sheet.
+
+@frame thin
+......
+......
+KwwwwK
+
+@frame medium
+......
+KwwwwK
+KvvvvK
+
+@frame thick
+KwwwwK
+KvvvvK
+KwwwwK

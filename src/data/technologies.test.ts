@@ -501,9 +501,10 @@ describe('era III technology table', () => {
     }
   });
 
-  it('appends the two pressure logs before the era IV and era V logs', () => {
-    expect(SYSTEM_LOGS.slice(-8, -6)).toEqual([
+  it('appends pressure-rising, perimeter-umbrella and steam-rain before the era IV and era V logs', () => {
+    expect(SYSTEM_LOGS.slice(-10, -7)).toEqual([
       { id: 'pressure-rising', text: 'Pressure rising. Safe limit field left blank.', trigger: { kind: 'lifetime', res: 'pr', atLeast: 1000 } },
+      { id: 'perimeter-umbrella', text: 'Umbrella detected. Precipitation: none.', trigger: { kind: 'lifetime', res: 'pr', atLeast: 100000 } },
       { id: 'steam-rain', text: 'Steam tastes of rain. Logged as error.', trigger: { kind: 'lifetime', res: 'pr', atLeast: 1000000 } },
     ]);
   });
@@ -660,14 +661,15 @@ describe('era IV technology table', () => {
     expect(INSTALL_LINES.harmonicConvergence).toBe(TECHNOLOGIES.harmonicConvergence.flavor);
   });
 
-  it('appends the three signal logs before the era V logs, with increasing rs thresholds', () => {
-    expect(SYSTEM_LOGS.slice(-6, -3)).toEqual([
+  it('appends the sync, signal and perimeter logs before observer-one and the era V logs, with increasing rs thresholds', () => {
+    expect(SYSTEM_LOGS.slice(-7, -3)).toEqual([
       { id: 'sync-success', text: 'Synchronization successful.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 1000 } },
       { id: 'signal-below', text: 'Frequency matches a signal from below the ground.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 1000000 } },
+      { id: 'perimeter-phase', text: 'Perimeter moving in phase. Not counted.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 5000000 } },
       { id: 'observer-one', text: 'Observer count: 1.', trigger: { kind: 'lifetime', res: 'rs', atLeast: 20000000 } },
     ]);
     const rsThresholds = SYSTEM_LOGS.flatMap((e) => (e.trigger.kind === 'lifetime' && e.trigger.res === 'rs' ? [e.trigger.atLeast] : []));
-    expect(rsThresholds).toEqual([1000, 1000000, 20000000]);
+    expect(rsThresholds).toEqual([1000, 1000000, 5000000, 20000000]);
   });
 
   it('plaque line for the convergence milestone is the last milestone line (the ending row follows)', () => {

@@ -1,8 +1,8 @@
-// Tests for worldTierRules (WP23a): the stub port values, the 4 s ripple gap, the Inspector and Sensor 7 notices on every beat,
-// the lamp flicker techs, the DOG-04 offer only at improvedPistons tier 3 (a 2 -> 4 jump offers it once), DOG-04 and INS-13
-// once per cycle from a partEvolved event and from a TECH INDEX close, at most one tier offer per event or close (INS-13 first;
-// the dog line waits for the next close), the heartbeat state, the 10 s ear-flick gap, reset, injected gaps, and a purity check
-// (no Phaser). Pure maths, no Phaser.
+// Tests for worldTierRules (WP23a, WP23b): the stub port values, the 4 s ripple gap, the Inspector and Sensor 7 notices on every
+// beat, the lamp flicker techs, the DOG-04 offer at improvedPistons tier 3 or more (a 2 -> 4 jump offers it once), INS-13 and
+// DOG-04 from a partEvolved event and from a TECH INDEX close, claimed by seen (no latch: an offer repeats until its line is in
+// seen), at most one tier offer per event or close (INS-13 first), the heartbeat that does not depend on offers, the 10 s
+// ear-flick gap, reset, injected gaps and a purity check (no Phaser). Pure maths, no Phaser.
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { createTierTracker, STUB_TIER_PORT } from './worldTierRules';
@@ -34,6 +34,15 @@ function portWithTop(top: () => boolean): TierPort {
 function portWithDogTier(tier: () => number, top: () => boolean = () => false): TierPort {
   return { ...STUB_TIER_PORT, anyTop: () => top(), tierOf: (id) => (id === 'improvedPistons' ? tier() : 1) };
 }
+
+// A seen set the test controls: isSeen reads it, so a line counts as seen once the test adds its id (as world.seen does).
+function seenSet(): { seen: Set<string>; isSeen: (id: string) => boolean } {
+  const seen = new Set<string>();
+  return { seen, isSeen: (id) => seen.has(id) };
+}
+
+const FIRST_TOP = { kind: 'tier', firstTop: true };
+const DOG = { kind: 'tier', techId: 'improvedPistons', tier: 3 };
 
 describe('STUB_TIER_PORT', () => {
   it('reports tier 1, top 5, never any top, LED never low', () => {
@@ -94,10 +103,18 @@ describe('onEvolved DOG-04 offer', () => {
     expect(fx.offers).toEqual([{ kind: 'tier', techId: 'improvedPistons', tier: 3 }]);
   });
 
-  it('offers nothing below or past tier 3', () => {
+  it('offers nothing below tier 3', () => {
     const t = createTierTracker(STUB_TIER_PORT);
     expect(t.onEvolved(evo({ techId: 'improvedPistons', fromTier: 1, toTier: 2 }), 0).offers).toEqual([]);
-    expect(t.onEvolved(evo({ techId: 'improvedPistons', fromTier: 3, toTier: 4 }), 10000).offers).toEqual([]);
+  });
+
+  it('offers again on every later event at tier 3 or more until DOG-04 is seen', () => {
+    const { seen, isSeen } = seenSet();
+    const t = createTierTracker(STUB_TIER_PORT, undefined, isSeen);
+    expect(t.onEvolved(evo({ techId: 'improvedPistons', fromTier: 2, toTier: 3 }), 0).offers).toEqual([DOG]);
+    expect(t.onEvolved(evo({ techId: 'improvedPistons', fromTier: 3, toTier: 4 }), 10000).offers).toEqual([DOG]);
+    seen.add('DOG-04');
+    expect(t.onEvolved(evo({ techId: 'improvedPistons', fromTier: 3, toTier: 4 }), 20000).offers).toEqual([]);
   });
 
   it('offers tier 3 once for a 2 -> 4 jump', () => {
@@ -113,12 +130,15 @@ describe('onEvolved DOG-04 offer', () => {
 });
 
 describe('onEvolved first top tier (INS-13)', () => {
-  it('offers firstTop once per cycle from a top-tier event', () => {
-    const t = createTierTracker(STUB_TIER_PORT);
+  it('offers firstTop from a top-tier event, again on each later event, until INS-13 is seen', () => {
+    const { seen, isSeen } = seenSet();
+    const t = createTierTracker(STUB_TIER_PORT, undefined, isSeen);
     const first = t.onEvolved(evo({ fromTier: 4, toTier: 5, topTier: 5 }), 0);
-    expect(first.offers).toEqual([{ kind: 'tier', firstTop: true }]);
+    expect(first.offers).toEqual([FIRST_TOP]);
     const second = t.onEvolved(evo({ techId: 'powerLines', fromTier: 4, toTier: 5, topTier: 5 }), 10000);
-    expect(second.offers).toEqual([]);
+    expect(second.offers).toEqual([FIRST_TOP]);
+    seen.add('INS-13');
+    expect(t.onEvolved(evo({ techId: 'powerLines', fromTier: 4, toTier: 5, topTier: 5 }), 20000).offers).toEqual([]);
   });
 
   it('offers nothing before the top tier', () => {
@@ -152,15 +172,18 @@ describe('onIndexClose first top tier', () => {
     expect(t.heartbeat()).toBe(false);
   });
 
-  it('offers firstTop once when a part is at top after an over-cap swap', () => {
+  it('offers firstTop on each close once a part is at top after an over-cap swap, until INS-13 is seen', () => {
     let top = false;
-    const t = createTierTracker(portWithTop(() => top));
+    const { seen, isSeen } = seenSet();
+    const t = createTierTracker(portWithTop(() => top), undefined, isSeen);
     expect(t.onIndexClose(levelsOf(), 0).offers).toEqual([]);
     top = true;
     const fx = t.onIndexClose(levelsOf({ gearRatio: 80 }), 2500);
-    expect(fx.offers).toEqual([{ kind: 'tier', firstTop: true }]);
+    expect(fx.offers).toEqual([FIRST_TOP]);
     expect(fx.heartbeat).toBe(true);
-    expect(t.onIndexClose(levelsOf({ gearRatio: 80 }), 5000).offers).toEqual([]);
+    expect(t.onIndexClose(levelsOf({ gearRatio: 80 }), 5000).offers).toEqual([FIRST_TOP]);
+    seen.add('INS-13');
+    expect(t.onIndexClose(levelsOf({ gearRatio: 80 }), 7500).offers).toEqual([]);
   });
 
   it('keeps every one-shot effect false', () => {
@@ -180,12 +203,16 @@ describe('onIndexClose first top tier', () => {
     expect(seen).toBe(levels);
   });
 
-  it('does not offer again after an event already claimed firstTop', () => {
-    const t = createTierTracker(portWithTop(() => true));
-    expect(t.onEvolved(evo({ fromTier: 4, toTier: 5, topTier: 5 }), 0).offers).toEqual([{ kind: 'tier', firstTop: true }]);
+  it('keeps offering firstTop on the close after an event offered it, until INS-13 is seen', () => {
+    const { seen, isSeen } = seenSet();
+    const t = createTierTracker(portWithTop(() => true), undefined, isSeen);
+    expect(t.onEvolved(evo({ fromTier: 4, toTier: 5, topTier: 5 }), 0).offers).toEqual([FIRST_TOP]);
     const fx = t.onIndexClose(levelsOf(), 3000);
-    expect(fx.offers).toEqual([]);
+    expect(fx.offers).toEqual([FIRST_TOP]);
     expect(fx.heartbeat).toBe(true);
+    seen.add('INS-13');
+    expect(t.onIndexClose(levelsOf(), 5500).offers).toEqual([]);
+    expect(t.heartbeat()).toBe(true);
   });
 
   it('does not record a ripple, so the next beat still ripples', () => {
@@ -196,18 +223,24 @@ describe('onIndexClose first top tier', () => {
 });
 
 describe('onIndexClose DOG-04 offer', () => {
-  it('offers the dog line once when improvedPistons is at tier 3 on a close', () => {
+  it('offers the dog line on every close at tier 3 or more until DOG-04 is seen', () => {
     let tier = 3;
-    const t = createTierTracker(portWithDogTier(() => tier));
-    expect(t.onIndexClose(levelsOf({ improvedPistons: 30 }), 0).offers).toEqual([{ kind: 'tier', techId: 'improvedPistons', tier: 3 }]);
+    const { seen, isSeen } = seenSet();
+    const t = createTierTracker(portWithDogTier(() => tier), undefined, isSeen);
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 30 }), 0).offers).toEqual([DOG]);
     tier = 4;
-    expect(t.onIndexClose(levelsOf({ improvedPistons: 40 }), 2500).offers).toEqual([]);
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 40 }), 2500).offers).toEqual([DOG]);
+    seen.add('DOG-04');
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 40 }), 5000).offers).toEqual([]);
   });
 
-  it('does not offer the dog line again after onEvolved already offered it', () => {
-    const t = createTierTracker(portWithDogTier(() => 3));
-    expect(t.onEvolved(evo({ techId: 'improvedPistons', fromTier: 2, toTier: 3 }), 0).offers).toEqual([{ kind: 'tier', techId: 'improvedPistons', tier: 3 }]);
-    expect(t.onIndexClose(levelsOf({ improvedPistons: 30 }), 2500).offers).toEqual([]);
+  it('keeps the close offer of the dog line after onEvolved offered it, until DOG-04 is seen', () => {
+    const { seen, isSeen } = seenSet();
+    const t = createTierTracker(portWithDogTier(() => 3), undefined, isSeen);
+    expect(t.onEvolved(evo({ techId: 'improvedPistons', fromTier: 2, toTier: 3 }), 0).offers).toEqual([DOG]);
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 30 }), 2500).offers).toEqual([DOG]);
+    seen.add('DOG-04');
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 30 }), 5000).offers).toEqual([]);
   });
 
   it('offers the dog line again after reset, whichever path offered it first', () => {
@@ -226,27 +259,44 @@ describe('onIndexClose DOG-04 offer', () => {
     expect(t.onIndexClose(levelsOf({ improvedPistons: 20 }), 2500).offers).toEqual([]);
   });
 
-  it('offers INS-13 alone on a close where a part is at top and improvedPistons is at tier 3, then DOG-04 on the next close', () => {
-    const t = createTierTracker(portWithDogTier(() => 3, () => true));
-    expect(t.onIndexClose(levelsOf({ improvedPistons: 30 }), 0).offers).toEqual([{ kind: 'tier', firstTop: true }]);
-    expect(t.onIndexClose(levelsOf({ improvedPistons: 30 }), 2500).offers).toEqual([{ kind: 'tier', techId: 'improvedPistons', tier: 3 }]);
+  it('offers INS-13 alone on a close where a part is at top and improvedPistons is at tier 3, then DOG-04 once INS-13 is seen', () => {
+    const { seen, isSeen } = seenSet();
+    const t = createTierTracker(portWithDogTier(() => 3, () => true), undefined, isSeen);
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 30 }), 0).offers).toEqual([FIRST_TOP]);
+    seen.add('INS-13');
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 30 }), 2500).offers).toEqual([DOG]);
+    seen.add('DOG-04');
     expect(t.onIndexClose(levelsOf({ improvedPistons: 30 }), 5000).offers).toEqual([]);
   });
 });
 
 describe('one tier offer per event or close', () => {
-  it('offers INS-13 alone on an event that crosses the dog tier and the top tier, and DOG-04 on the next close', () => {
-    const t = createTierTracker(portWithDogTier(() => 5, () => true));
+  it('offers INS-13 alone on an event that crosses the dog tier and the top tier, and DOG-04 on the next close once INS-13 is seen', () => {
+    const { seen, isSeen } = seenSet();
+    const t = createTierTracker(portWithDogTier(() => 5, () => true), undefined, isSeen);
     const fx = t.onEvolved(evo({ techId: 'improvedPistons', fromTier: 2, toTier: 5, topTier: 5 }), 0);
-    expect(fx.offers).toEqual([{ kind: 'tier', firstTop: true }]);
-    expect(t.onIndexClose(levelsOf({ improvedPistons: 25 }), 2500).offers).toEqual([{ kind: 'tier', techId: 'improvedPistons', tier: 3 }]);
+    expect(fx.offers).toEqual([FIRST_TOP]);
+    seen.add('INS-13');
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 25 }), 2500).offers).toEqual([DOG]);
+    seen.add('DOG-04');
     expect(t.onIndexClose(levelsOf({ improvedPistons: 25 }), 5000).offers).toEqual([]);
   });
 
-  it('offers the dog line from an event once INS-13 is already claimed', () => {
-    const t = createTierTracker(portWithDogTier(() => 3, () => true));
-    expect(t.onEvolved(evo({ fromTier: 4, toTier: 5, topTier: 5 }), 0).offers).toEqual([{ kind: 'tier', firstTop: true }]);
-    expect(t.onEvolved(evo({ techId: 'improvedPistons', fromTier: 2, toTier: 3 }), 10000).offers).toEqual([{ kind: 'tier', techId: 'improvedPistons', tier: 3 }]);
+  it('offers the dog line from an event once INS-13 is seen', () => {
+    const { seen, isSeen } = seenSet();
+    const t = createTierTracker(portWithDogTier(() => 3, () => true), undefined, isSeen);
+    expect(t.onEvolved(evo({ fromTier: 4, toTier: 5, topTier: 5 }), 0).offers).toEqual([FIRST_TOP]);
+    seen.add('INS-13');
+    expect(t.onEvolved(evo({ techId: 'improvedPistons', fromTier: 2, toTier: 3 }), 10000).offers).toEqual([DOG]);
+  });
+
+  it('puts INS-13 before DOG-04 in one call, and DOG-04 waits until INS-13 is seen', () => {
+    const { seen, isSeen } = seenSet();
+    const t = createTierTracker(portWithDogTier(() => 3, () => true), undefined, isSeen);
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 30 }), 0).offers).toEqual([FIRST_TOP]);
+    expect(t.onEvolved(evo({ techId: 'improvedPistons', fromTier: 2, toTier: 3 }), 2500).offers).toEqual([FIRST_TOP]);
+    seen.add('INS-13');
+    expect(t.onEvolved(evo({ techId: 'improvedPistons', fromTier: 2, toTier: 3 }), 5000).offers).toEqual([DOG]);
   });
 
   it('never offers two tier lines from one close, whatever the port says', () => {
@@ -291,6 +341,79 @@ describe('heartbeat and reset', () => {
     expect(fx.offers).toEqual([{ kind: 'tier', firstTop: true }]);
     expect(fx.ripple).toBe(true);
     expect(t.onTorqued(torque(), 1100).earFlick).toBe(true);
+  });
+});
+
+describe('tier offers claim by seen, heartbeat without offers', () => {
+  it('repeats the INS-13 offer on every event and close until INS-13 is seen, then stays quiet', () => {
+    const { seen, isSeen } = seenSet();
+    const t = createTierTracker(STUB_TIER_PORT, undefined, isSeen);
+    expect(t.onEvolved(evo({ fromTier: 4, toTier: 5, topTier: 5 }), 0).offers).toEqual([FIRST_TOP]);
+    expect(t.onEvolved(evo({ fromTier: 4, toTier: 5, topTier: 5 }), 4000).offers).toEqual([FIRST_TOP]);
+    expect(t.onIndexClose(levelsOf(), 6500).offers).toEqual([FIRST_TOP]);
+    seen.add('INS-13');
+    expect(t.onEvolved(evo({ fromTier: 4, toTier: 5, topTier: 5 }), 10000).offers).toEqual([]);
+    expect(t.onIndexClose(levelsOf(), 12500).offers).toEqual([]);
+  });
+
+  it('keeps the heartbeat on with no offers once both lines are seen', () => {
+    const t = createTierTracker(STUB_TIER_PORT, undefined, () => true);
+    const top = t.onEvolved(evo({ fromTier: 4, toTier: 5, topTier: 5 }), 0);
+    expect(top.offers).toEqual([]);
+    expect(top.heartbeat).toBe(true);
+    const dog = t.onEvolved(evo({ techId: 'improvedPistons', fromTier: 2, toTier: 3 }), 10000);
+    expect(dog.offers).toEqual([]);
+    expect(dog.heartbeat).toBe(true);
+    expect(t.heartbeat()).toBe(true);
+  });
+
+  it('turns the heartbeat on from a close that sees a top part, with no offer when INS-13 is seen', () => {
+    const t = createTierTracker(portWithTop(() => true), undefined, () => true);
+    const fx = t.onIndexClose(levelsOf(), 0);
+    expect(fx.offers).toEqual([]);
+    expect(fx.heartbeat).toBe(true);
+    expect(t.heartbeat()).toBe(true);
+  });
+
+  it('clears topObserved on reset from a close too, so the heartbeat is off until a top tier shows again', () => {
+    let top = true;
+    const t = createTierTracker(portWithTop(() => top));
+    t.onIndexClose(levelsOf(), 0);
+    expect(t.heartbeat()).toBe(true);
+    top = false;
+    t.reset();
+    expect(t.heartbeat()).toBe(false);
+    const fx = t.onIndexClose(levelsOf(), 2500);
+    expect(fx.heartbeat).toBe(false);
+    expect(fx.offers).toEqual([]);
+  });
+
+  it('follows the seen set across reset, since the tracker keeps no offer state of its own', () => {
+    const { seen, isSeen } = seenSet();
+    const t = createTierTracker(STUB_TIER_PORT, undefined, isSeen);
+    t.onEvolved(evo({ fromTier: 4, toTier: 5, topTier: 5 }), 0);
+    seen.add('INS-13');
+    t.reset();
+    expect(t.onEvolved(evo({ fromTier: 4, toTier: 5, topTier: 5 }), 100).offers).toEqual([]);
+    seen.clear();
+    expect(t.onEvolved(evo({ fromTier: 4, toTier: 5, topTier: 5 }), 200).offers).toEqual([FIRST_TOP]);
+  });
+});
+
+// Z6: the director passes lineSettledId as isSeen. A settled INS-13 (seen, or refused by the cycle 2+ repeat policy) must not
+// starve DOG-04 while a part is at top; both settled means the close is quiet.
+describe('settled INS-13 never starves DOG-04 (Z6)', () => {
+  it('offers DOG-04 on a close with a top part once INS-13 is settled and DOG-04 is not', () => {
+    const t = createTierTracker(portWithDogTier(() => 3, () => true), undefined, (id) => id === 'INS-13');
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 10 }), 0).offers).toEqual([DOG]);
+    expect(t.onIndexClose(levelsOf({ improvedPistons: 10 }), 2500).offers).toEqual([DOG]);
+  });
+
+  it('offers nothing on the close once INS-13 and DOG-04 are both settled, and the heartbeat stays on', () => {
+    const t = createTierTracker(portWithDogTier(() => 3, () => true), undefined, (id) => id === 'INS-13' || id === 'DOG-04');
+    const fx = t.onIndexClose(levelsOf({ improvedPistons: 10 }), 0);
+    expect(fx.offers).toEqual([]);
+    expect(fx.heartbeat).toBe(true);
   });
 });
 

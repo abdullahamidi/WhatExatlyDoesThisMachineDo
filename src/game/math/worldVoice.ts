@@ -6,7 +6,8 @@
 // blocks, then given up: it stays unseen and no arc or chain retries it forever.
 // Pure: no Phaser, no DOM, no Date or Math.random. Time comes from ctx.nowMs only; numbers come from WORLD_VOICE_CONFIG.
 import type { ChainId, SpeakerId, WorldLine, WorldOffer, WorldSaveState } from '../../data/livingWorld';
-import { LIVING_WORLD, WORLD_CHAINS, WORLD_LINES, WORLD_VOICE_CONFIG } from '../../data/livingWorld';
+import { LIVING_WORLD, WORLD_CHAINS, WORLD_LINES, WORLD_UNISON, WORLD_VOICE_CONFIG } from '../../data/livingWorld';
+import type { TechId } from '../../data/types';
 import {
   countedSeen, idleReady, lineEligible, momentGate, newMomentLog, noteMomentStart, priorityOf, triggerGate, ttlOf,
 } from './worldVoiceRules';
@@ -36,8 +37,12 @@ export interface WorldScheduler {
   state(): WorldSchedulerState;
 }
 
-/** Config keys the scheduler reads beyond the rule keys. WORLD_VOICE_CONFIG satisfies it; tests may override one key. */
-export type WorldSchedulerConfig = WorldRuleConfig & Readonly<Record<'chainStepAfterMs' | 'chainMaxBubbles' | 'seenFraction' | 'postCapFirstMs' | 'placeBlockLimit', number>>;
+/**
+ * Config keys the scheduler reads beyond the rule keys. WORLD_VOICE_CONFIG satisfies it; tests may override one key.
+ * unisonCapMs is optional (absent = WORLD_VOICE_CONFIG.unisonCapMs): a SYNCHRONIZATION start waits this long for the unison edge.
+ */
+export type WorldSchedulerConfig = WorldRuleConfig & Readonly<Record<'chainStepAfterMs' | 'chainMaxBubbles' | 'seenFraction' | 'postCapFirstMs' | 'placeBlockLimit', number>>
+  & Readonly<Partial<Record<'unisonCapMs', number>>>;
 
 // Wordless POST-CAP beat (STORY_BIBLE §8.2 step 1): once per save, tracked in seenEver.
 const TAPE_FREEZE = 'beat.tapeFreeze';
@@ -54,6 +59,14 @@ interface PendingEntry {
   chainId: ChainId | null;   // a chain start: starting it opens the chain run
 }
 
+// The members of one chain step as cued together. Each member reports once through shown(); the step decides when the last one has.
+interface ChainGroup {
+  ids: string[];             // the members cued on this tick (eligible ones only)
+  open: number;              // members not yet reported
+  counted: number;           // members counted seen
+  gaveUp: boolean;           // a member was given up (blocked twice)
+}
+
 // A cue handed to the director and not yet shown(): counted, requeued or dropped when shown() reports the fraction.
 interface InFlight {
   id: string;
@@ -61,11 +74,12 @@ interface InFlight {
   kind: OfferKind;
   offerEra: number;
   core: boolean;
-  chainId: ChainId | null;   // the CROSSED LINES run a member belongs to
-  chainStep: number;         // 1-based position of the member in that run; 0 when the line is not a chain member
+  chainId: ChainId | null;   // the chain run a member belongs to
+  chainStep: number;         // 1-based number of the member's step in that run; 0 when the line is not a chain member
+  group?: ChainGroup;        // the step the member was cued in (chain members only)
 }
 
-// The CROSSED LINES run. step = members consumed so far (1-based number of the last one).
+// A chain run. step = steps consumed so far (1-based number of the last one; a unison pair is one step).
 interface ChainRun {
   chainId: ChainId;
   step: number;
@@ -100,10 +114,39 @@ function freshPost(): PostRun {
   return { started: false, active: false, cursor: 0, nextAtMs: null, freezeIssued: false, done: false };
 }
 
-// The offer kind a line gates by. Era entry gates like a buy (TECH INDEX closed); no WP23a line uses it.
+// A first-top tier line (INS-13): it fires on the first top tier of the cycle and takes the tier slot from a pending DOG-04 (WP23b).
+function isFirstTop(line: WorldLine | undefined): boolean {
+  return line !== undefined && line.trigger.kind === 'tier' && line.trigger.firstTop === true;
+}
+
+// The offer kind a line gates by: its trigger kind (eraEntry gates on the era card, WP23b).
 function kindOfLine(line: WorldLine): OfferKind {
-  const kind = line.trigger.kind;
-  return kind === 'eraEntry' ? 'buy' : kind;
+  return line.trigger.kind;
+}
+
+// Level gate of a buy line (INS-12 plays at horizonField 5): the bought level reaches minLevel (default 1) and equals level when set.
+function levelGateOk(trig: { techId: TechId; minLevel?: number; level?: number }, ctx: WorldSchedulerCtx): boolean {
+  const level = ctx.levels[trig.techId] ?? 0;
+  return level >= (trig.minLevel ?? 1) && (trig.level === undefined || level === trig.level);
+}
+
+// Chain steps (WP23b): consecutive members that form a WORLD_UNISON pair are one step; every other member is one step.
+function stepsOf(members: readonly string[], unison: readonly (readonly [string, string])[]): string[][] {
+  const steps: string[][] = [];
+  let i = 0;
+  while (i < members.length) {
+    const a = members[i];
+    const b = members[i + 1];
+    if (a === undefined) break;
+    if (b !== undefined && unison.some(([x, y]) => (x === a && y === b) || (x === b && y === a))) {
+      steps.push([a, b]);
+      i += 2;
+    } else {
+      steps.push([a]);
+      i += 1;
+    }
+  }
+  return steps;
 }
 
 // Lower priority number first, then table-scan after pending, then the oldest offer.
@@ -130,11 +173,13 @@ export function createWorldScheduler(
   cfg: WorldSchedulerConfig = WORLD_VOICE_CONFIG,
   lines: readonly WorldLine[] = WORLD_LINES,
   chains: Readonly<Record<ChainId, readonly string[]>> = WORLD_CHAINS,
+  unison: readonly (readonly [string, string])[] = WORLD_UNISON,
 ): WorldScheduler {
   const byId = new Map<string, WorldLine>(lines.map((line): [string, WorldLine] => [line.id, line]));
   const postList = chains.postCap;
   const postIds = new Set<string>(postList);
   const lastPostId = postList[postList.length - 1];
+  const unisonCap = cfg.unisonCapMs ?? WORLD_VOICE_CONFIG.unisonCapMs;
   const inFlight = new Map<string, InFlight>();
   // Blocks per line id (shown with blocked); a counted line or a give-up clears its count.
   const blocks = new Map<string, number>();
@@ -163,7 +208,9 @@ export function createWorldScheduler(
     const trig = line.trigger;
     switch (offer.kind) {
       case 'logReply': return trig.kind === 'logReply' && trig.logId === offer.logId;
-      case 'buy': return trig.kind === 'buy' && trig.techId === offer.techId;
+      case 'buy': return trig.kind === 'buy' && trig.techId === offer.techId && levelGateOk(trig, ctx);
+      case 'eraEntry': return trig.kind === 'eraEntry' && trig.era === offer.era;
+      case 'opener': return trig.kind === 'opener';   // the cycle window is checked by lineEligible
       case 'ms': return trig.kind === 'ms' && trig.techId === offer.techId && !(ctx.edition === 'demo' && postIds.has(line.id));
       case 'tier':
         return trig.kind === 'tier' && ((offer.firstTop === true && trig.firstTop === true)
@@ -174,12 +221,20 @@ export function createWorldScheduler(
     }
   }
 
-  // Queues one line. Keeps ONE tier entry and ONE non-core reactive entry (a newer offer replaces the older).
+  // Queues one line. Keeps ONE non-core reactive entry (a newer offer replaces the older). The tier slot holds ONE entry too:
+  // the first-top line (INS-13) replaces a pending non-first-top tier entry (DOG-04, WP23b follow-up a); any other second tier
+  // offer is REFUSED while one is pending. A refused or replaced DOG-04 is re-offered by the tier tracker until it is seen.
   function queueLine(line: WorldLine, kind: OfferKind, ctx: WorldSchedulerCtx): void {
     if (!lineEligible(line, ctx.era, ctx, lines) || isHeld(line.id)) return;
     const core = line.core === true;
-    if (kind === 'tier') pending = pending.filter((e) => e.kind !== 'tier');
-    else if (!core) pending = pending.filter((e) => e.core || e.kind === 'tier');
+    if (kind === 'tier') {
+      const held = pending.find((e) => e.kind === 'tier');
+      if (held !== undefined) {
+        if (!isFirstTop(line) || isFirstTop(byId.get(held.id))) return;
+        pending = pending.filter((e) => e !== held);
+      }
+    }
+    if (kind !== 'tier' && !core) pending = pending.filter((e) => e.core || e.kind === 'tier');
     const ttl = ttlOf(line, kind, ctx.era, ctx.nowMs, cfg);
     pending.push({
       id: line.id, kind, offerEra: ctx.era, eraLimit: ttl.eraLimit, core, readyAtMs: ctx.nowMs,
@@ -256,32 +311,53 @@ export function createWorldScheduler(
     return null;
   }
 
-  // The active CROSSED LINES run: the next member once the last bubble has shown chainStepAfterMs (no bubble on screen means
-  // that wait is over, but only when no member is waiting: chainMemberWaiting holds the run through a prelude or a placement
-  // wait), at most chainMaxBubbles on screen, and afterIndexCloseMs after a TECH INDEX close, so a resumed step lands after
-  // the index. A member that is off-screen, seen or ineligible is skipped (stays unseen). The run ends after its last member.
-  function chainTick(ctx: WorldSchedulerCtx): WorldCue | null {
+  // A unison pair holds the run until both members have reported (counted, cut or given up): the step is decided once.
+  const unisonOpen = (): boolean =>
+    [...inFlight.values()].some((rec) => rec.group !== undefined && rec.group.ids.length > 1 && rec.group.open > 0);
+
+  // Cues the next chain step: its eligible members start on this tick together (WP23b unison). A step that does not fit the free
+  // bubble slots waits with the run unchanged; a step with no eligible member is skipped; the run ends after its last step.
+  function cueChainStep(ctx: WorldSchedulerCtx, slots: number): WorldCue | null {
     const run = chain;
     if (run === null) return null;
-    if (ctx.chainMemberWaiting === true) return null;
-    if (ctx.toastUp) return null;
-    if (ctx.bubblesVisible >= cfg.chainMaxBubbles) return null;
-    if (ctx.bubblesVisible !== 0 && ctx.bubbleVisibleMs < cfg.chainStepAfterMs) return null;
-    if (ctx.indexClosedAtMs !== null && ctx.nowMs < ctx.indexClosedAtMs + cfg.afterIndexCloseMs) return null;
-    const members = chains[run.chainId];
-    let consumed = run.step;
-    while (consumed < members.length) {
-      const id = members[consumed];
-      consumed += 1;
-      const line = id === undefined ? undefined : byId.get(id);
-      if (id === undefined || line === undefined || !lineEligible(line, run.offerEra, ctx, lines)) continue;
-      log = { ...log, bySpeaker: { ...log.bySpeaker, [line.speaker]: ctx.nowMs } };
-      inFlight.set(id, { id, line, kind: 'chain', offerEra: run.offerEra, core: true, chainId: run.chainId, chainStep: consumed });
-      chain = consumed < members.length ? { ...run, step: consumed } : null;
-      return { kind: 'chainStep', ids: [id], speakers: [line.speaker], chainId: run.chainId, step: consumed };
+    const steps = stepsOf(chains[run.chainId], unison);
+    for (let index = run.step; index < steps.length; index += 1) {
+      const found: WorldLine[] = [];
+      for (const id of steps[index] ?? []) {
+        const line = byId.get(id);
+        if (line !== undefined && lineEligible(line, run.offerEra, ctx, lines)) found.push(line);
+      }
+      if (found.length === 0) continue;
+      if (found.length > slots) return null;
+      const done = index + 1;
+      const group: ChainGroup = { ids: found.map((l) => l.id), open: found.length, counted: 0, gaveUp: false };
+      for (const line of found) {
+        log = { ...log, bySpeaker: { ...log.bySpeaker, [line.speaker]: ctx.nowMs } };
+        inFlight.set(line.id, {
+          id: line.id, line, kind: 'chain', offerEra: run.offerEra, core: true, chainId: run.chainId, chainStep: done, group,
+        });
+      }
+      chain = done < steps.length ? { ...run, step: done } : null;
+      return { kind: 'chainStep', ids: group.ids, speakers: found.map((l) => l.speaker), chainId: run.chainId, step: done };
     }
     chain = null;
     return null;
+  }
+
+  // The active chain run (CROSSED LINES, SYNCHRONIZATION, ONE OBSERVER): the next step once the last bubble has shown
+  // chainStepAfterMs (no bubble on screen means that wait is over, but only when no member is waiting: chainMemberWaiting holds
+  // the run through a prelude or a placement wait), at most chainMaxBubbles on screen, and afterIndexCloseMs after a TECH INDEX
+  // close, so a resumed step lands after the index. A member that is off-screen, seen or ineligible is skipped (stays unseen).
+  // The run ends after its last step.
+  function chainTick(ctx: WorldSchedulerCtx): WorldCue | null {
+    if (chain === null) return null;
+    if (ctx.chainMemberWaiting === true) return null;
+    if (ctx.toastUp) return null;
+    if (unisonOpen()) return null;
+    if (ctx.bubblesVisible >= cfg.chainMaxBubbles) return null;
+    if (ctx.bubblesVisible !== 0 && ctx.bubbleVisibleMs < cfg.chainStepAfterMs) return null;
+    if (ctx.indexClosedAtMs !== null && ctx.nowMs < ctx.indexClosedAtMs + cfg.afterIndexCloseMs) return null;
+    return cueChainStep(ctx, cfg.chainMaxBubbles - ctx.bubblesVisible);
   }
 
   // The normal pick: pending entries (their gates re-checked now) and the idle / demoNear table lines, lowest priority
@@ -293,6 +369,8 @@ export function createWorldScheduler(
     for (const entry of pending) {
       if (now < entry.readyAtMs) continue;
       if (beatsOnly && entry.kind !== 'beat') continue;
+      // A SYNCHRONIZATION start waits for the unison edge, or for the cap counted from when it was queued (WP23b).
+      if (entry.chainId === 'synchronization' && ctx.unisonEdge !== true && now < entry.readyAtMs + unisonCap) continue;
       const line = byId.get(entry.id) ?? null;
       if (entry.kind === 'beat') {
         if (!triggerGate('beat', true, ctx, cfg)) continue;
@@ -305,11 +383,11 @@ export function createWorldScheduler(
         offerEra: entry.offerEra, core: entry.core, chainId: entry.chainId, pendingSeq: entry.seq,
       });
     }
-    // The table scan (idle, demoNear) is skipped under OFF: it could only find lines the setting refuses.
+    // The table scan (idle, demoNear, postgame) is skipped under OFF: it could only find lines the setting refuses.
     if (!beatsOnly) {
       for (const [order, line] of lines.entries()) {
         const kind = line.trigger.kind;
-        if (kind !== 'idle' && kind !== 'demoNear') continue;
+        if (kind !== 'idle' && kind !== 'demoNear' && kind !== 'postgame') continue;
         if (isHeld(line.id)) continue;
         const core = line.core === true;
         if (!lineEligible(line, ctx.era, ctx, lines) || !idleReady(line, ctx)) continue;
@@ -331,16 +409,13 @@ export function createWorldScheduler(
       return { kind: 'beat', ids: [pick.id], speakers: [] };
     }
     const line = pick.line;
-    // A chain start is step 1 of its run; any other pick is not a chain member.
-    inFlight.set(pick.id, {
-      id: pick.id, line, kind: pick.kind, offerEra: pick.offerEra, core: pick.core, chainId: pick.chainId,
-      chainStep: pick.chainId === null ? 0 : 1,
-    });
     log = noteMomentStart(log, line, pick.offerEra, ctx.nowMs, cfg);
     if (pick.chainId !== null) {
-      chain = { chainId: pick.chainId, step: 1, offerEra: pick.offerEra };
-      return { kind: 'chainStep', ids: [pick.id], speakers: [line.speaker], chainId: pick.chainId, step: 1 };
+      // A chain start opens its run and cues its first step (a unison pair starts on this tick).
+      chain = { chainId: pick.chainId, step: 0, offerEra: pick.offerEra };
+      return cueChainStep(ctx, cfg.chainMaxBubbles - ctx.bubblesVisible);
     }
+    inFlight.set(pick.id, { id: pick.id, line, kind: pick.kind, offerEra: pick.offerEra, core: pick.core, chainId: null, chainStep: 0 });
     return { kind: 'line', ids: [pick.id], speakers: [line.speaker] };
   }
 
@@ -361,8 +436,8 @@ export function createWorldScheduler(
         queueChain(offer.chainId, offer.step, ctx);
         return;
       }
-      // idle and demoNear are found by the table scan in tick(); eraEntry has no WP23a line.
-      if (offer.kind === 'idle' || offer.kind === 'demoNear' || offer.kind === 'eraEntry') return;
+      // idle, demoNear and postgame lines are found by the table scan in tick(); they are never offered.
+      if (offer.kind === 'idle' || offer.kind === 'demoNear' || offer.kind === 'postgame') return;
       for (const line of lines) {
         if (matchesOffer(line, offer, ctx)) queueLine(line, offer.kind, ctx);
       }
@@ -388,9 +463,14 @@ export function createWorldScheduler(
       const now = ctx.nowMs;
       const line = rec.line;
       if (line === null) return markBeatSeen(ctx.world, id);
+      const group = rec.group;
       if (fraction >= cfg.seenFraction) {
         blocks.delete(id);
         if (id === lastPostId) post.done = true;
+        if (group !== undefined) {
+          group.open -= 1;
+          group.counted += 1;
+        }
         return countedSeen(line, rec.offerEra, ctx);
       }
       // A blocked line (no bubble ever, placeWait expired) counts one block; at placeBlockLimit blocks it is given up: it stays
@@ -412,27 +492,32 @@ export function createWorldScheduler(
         }
         return null;
       }
-      // A cut CROSSED LINES member: the run is paused, not dropped. A later member becomes the next step again. The first
-      // member goes back to the queue as a chain start, so picking it opens the run again. If the run already moved past it
-      // (a later bubble is up), it stays unseen and the run goes on. POST-CAP owns the voice once started, so nothing resumes.
+      // A cut chain member: the run is paused, not dropped. A later step is set back so it plays again. A first step is decided
+      // once all its members have reported: a counted member keeps the run going (the others stay unseen); with none counted, a
+      // given-up member ends the run and cut members go back to the queue as a chain start, so picking it opens the run again.
+      // If the run already moved past it (a later bubble is up), it stays unseen and the run goes on. POST-CAP owns the voice
+      // once started, so nothing resumes.
       if (rec.chainId !== null) {
-        if (postActive(ctx)) return null;
-        if (giveUp) {
-          // A member given up is consumed, not set back: the run goes on. A chain start given up ends its run (not requeued).
-          if (rec.chainStep === 1 && chain !== null && chain.step === 1) chain = null;
-          return null;
+        if (group !== undefined) {
+          group.open -= 1;
+          if (giveUp) group.gaveUp = true;
         }
+        if (postActive(ctx) || group === undefined) return null;
         if (rec.chainStep > 1) {
-          if (chain === null || rec.chainStep - 1 < chain.step) {
+          // A member given up is consumed, not set back: the run goes on.
+          if (!giveUp && (chain === null || rec.chainStep - 1 < chain.step)) {
             chain = { chainId: rec.chainId, step: rec.chainStep - 1, offerEra: rec.offerEra };
           }
           return null;
         }
-        if (chain === null || chain.step !== 1) return null;
+        if (group.open > 0 || group.counted > 0 || chain === null || chain.step !== 1) return null;
         chain = null;
-        const ttl = ttlOf(line, 'chain', rec.offerEra, now, cfg);
+        const firstId = group.ids[0];
+        const firstLine = firstId === undefined ? undefined : byId.get(firstId);
+        if (group.gaveUp || firstId === undefined || firstLine === undefined) return null;
+        const ttl = ttlOf(firstLine, 'chain', rec.offerEra, now, cfg);
         pending.push({
-          id, kind: 'chain', offerEra: rec.offerEra, eraLimit: ttl.eraLimit, core: true, readyAtMs: now,
+          id: firstId, kind: 'chain', offerEra: rec.offerEra, eraLimit: ttl.eraLimit, core: true, readyAtMs: now,
           expiresAtMs: ttl.expiresAtMs, seq: seq++, chainId: rec.chainId,
         });
         return null;

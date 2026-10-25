@@ -1,7 +1,7 @@
 // World playback maths (WP23a): the playback ladder per era (mode, fps, cast alpha, shadow scale), the tape clock that steps the
-// loops (crank or fps, with freeze), loop frame and sheet column lookups, the window flicker hold, the mote orbit, the Sensor 7
-// head, and the tally marks on the booth pane. Why: the renderers draw these; the tape grammar is one tested rule
-// (bible §3.0, DENIZEN_ART §1.6 and §5), and every number comes from src/data/livingWorld.ts.
+// loops (crank or fps, with freeze), loop frame (seam, reverse) and sheet column lookups, the window flicker hold, the mote
+// orbit, the Sensor 7 head and downbeat edge, and the tally marks on the booth pane. Why: the renderers draw these; the tape
+// grammar is one tested rule (bible §3.0, DENIZEN_ART §1.6 and §5), and every number comes from src/data/livingWorld.ts.
 // Pure: no Phaser, no DOM. Art px unless a name says world px.
 import type { TechId } from '../../data/types';
 import { WORLD_ENV, WORLD_ERA_ROW, WORLD_ERA_ROW_SHEETS, WORLD_FRAMES, WORLD_MARKS, WORLD_PLAYBACK } from '../../data/livingWorld';
@@ -108,14 +108,21 @@ export function createTapeClock(): TapeClock {
 }
 
 // Loop frame at a tick (floored, clamped to 0). With seam, one frame is skipped at each wrap: index = (t + floor(t / len)) % len.
-export function loopFrameAt(loop: readonly LoopFrame[], tick: number, seam: boolean): LoopFrame {
+// With reverse the index is mirrored inside the loop (len - 1 - index, after the seam), so the loop retraces its path (era V).
+export function loopFrameAt(loop: readonly LoopFrame[], tick: number, seam: boolean, reverse = false): LoopFrame {
   const len = loop.length;
   if (len === 0) throw new Error('loopFrameAt: empty loop');
   const t = Number.isFinite(tick) ? Math.max(0, Math.floor(tick)) : 0;
-  const index = seam ? (t + Math.floor(t / len)) % len : t % len;
+  const forward = seam ? (t + Math.floor(t / len)) % len : t % len;
+  const index = reverse ? len - 1 - forward : forward;
   const frame = loop[index];
   if (frame === undefined) throw new Error(`loopFrameAt: no frame at ${index}`);
   return frame;
+}
+
+// Downbeat edge of a low flag (the Sensor 7 LED or a heartbeat): true on the step from low to high, i.e. was low and is not now.
+export function isDownbeat(prevLow: boolean, low: boolean): boolean {
+  return prevLow && !low;
 }
 
 // Index of a named frame in a sheet: row × frames per row + column. Era-row sheets take eraRow (floored, clamped to 0..5);

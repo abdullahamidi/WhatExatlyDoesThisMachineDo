@@ -1,10 +1,10 @@
-// Tests for worldPlayback (WP23a): the playback ladder (mode, fps, cast alpha, shadow scale), the tape clock (crank and fps modes,
-// fractions, freeze, reset), loop frames with the seam skip, sheet frame indices (era rows and fixed sheets), the window flicker,
-// the mote orbit, the Sensor 7 head and the tally marks. Pure maths, no Phaser.
+// Tests for worldPlayback (WP23a, WP23b): the playback ladder (mode, fps, cast alpha, shadow scale), the tape clock (crank and fps
+// modes, fractions, freeze, reset), loop frames with the seam skip and the reverse mirror (WP23b), sheet frame indices (era rows and
+// fixed sheets), the window flicker, the mote orbit, the Sensor 7 head, the downbeat edge (WP23b) and the tally marks. Pure maths, no Phaser.
 import { describe, it, expect } from 'vitest';
 import {
   playbackMode, playbackFps, castAlpha, shadowScale, createTapeClock, loopFrameAt, sheetFrameIndex, windowFlicker,
-  moteOrbit, sensorHead, tallyRects,
+  moteOrbit, sensorHead, isDownbeat, tallyRects,
 } from './worldPlayback';
 import type { Rect } from './worldPlacement';
 import { WORLD_ENV, WORLD_ERA_ROW_SHEETS, WORLD_FRAMES, WORLD_LOOPS, WORLD_MARKS } from '../../data/livingWorld';
@@ -189,6 +189,64 @@ describe('loopFrameAt', () => {
   });
 });
 
+describe('loopFrameAt reverse', () => {
+  const loop: LoopFrame[] = [
+    { frame: 'a', dx: 0 }, { frame: 'b', dx: 0 }, { frame: 'c', dx: 0 }, { frame: 'd', dx: 0 },
+  ];
+  const names = (seam: boolean, ticks: readonly number[]): string[] => ticks.map((t) => loopFrameAt(loop, t, seam, true).frame);
+  const ticks0to11 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+
+  it('without the seam retraces the loop backwards (len 4, ticks 0..11)', () => {
+    expect(names(false, ticks0to11)).toEqual(['d', 'c', 'b', 'a', 'd', 'c', 'b', 'a', 'd', 'c', 'b', 'a']);
+  });
+
+  it('with the seam mirrors the seamed index after the skip (len 4, ticks 0..11)', () => {
+    expect(names(true, ticks0to11)).toEqual(['d', 'c', 'b', 'a', 'c', 'b', 'a', 'd', 'b', 'a', 'd', 'c']);
+  });
+
+  it('is the forward frame of the reversed loop at every tick, seam or not', () => {
+    const reversed = [...loop].reverse();
+    for (let t = 0; t < 60; t++) {
+      for (const seam of [false, true]) {
+        expect(loopFrameAt(loop, t, seam, true)).toBe(loopFrameAt(reversed, t, seam));
+      }
+    }
+  });
+
+  it('is the forward loop when reverse is false or left out', () => {
+    for (let t = 0; t < 12; t++) {
+      expect(loopFrameAt(loop, t, true, false)).toBe(loopFrameAt(loop, t, true));
+      expect(loopFrameAt(loop, t, false, false)).toBe(loopFrameAt(loop, t, false));
+    }
+  });
+
+  it('clamps a negative tick to the first frame, then mirrors it to the last', () => {
+    expect(loopFrameAt(loop, -3, false, true).frame).toBe('d');
+    expect(loopFrameAt(loop, -3, true, true).frame).toBe('d');
+  });
+
+  it('a one-frame loop is that frame whatever the tick, seam or direction', () => {
+    const one: LoopFrame[] = [{ frame: 'solo', dx: 0 }];
+    for (const t of [0, 1, 7, 100]) {
+      for (const seam of [false, true]) {
+        for (const reverse of [false, true]) {
+          expect(loopFrameAt(one, t, seam, reverse)).toBe(one[0]);
+        }
+      }
+    }
+  });
+
+  it('every real loop gives one of its own frames backwards too', () => {
+    for (const [id, frames] of Object.entries(WORLD_LOOPS)) {
+      for (let t = 0; t < 60; t++) {
+        for (const seam of [false, true]) {
+          expect(frames, id).toContain(loopFrameAt(frames, t, seam, true));
+        }
+      }
+    }
+  });
+});
+
 describe('sheetFrameIndex', () => {
   it('reads row 0 of an era-row sheet as the column', () => {
     expect(sheetFrameIndex('inspector', 'idleA', 0)).toBe(0);
@@ -234,6 +292,29 @@ describe('sheetFrameIndex', () => {
     expect(() => sheetFrameIndex('lamp', 'idleA', 0)).toThrow();
   });
 
+});
+
+describe('isDownbeat', () => {
+  it('is true only on the step from low to high (was low, is not low now)', () => {
+    expect(isDownbeat(true, false)).toBe(true);
+  });
+
+  it('is false while low holds, while high holds, and on the step into low', () => {
+    expect(isDownbeat(true, true)).toBe(false);
+    expect(isDownbeat(false, false)).toBe(false);
+    expect(isDownbeat(false, true)).toBe(false);
+  });
+
+  it('fires once per low spell, on the step out of it', () => {
+    const lowFlags = [false, true, true, false, false, true, false, true, true];
+    const fired: number[] = [];
+    let prevLow = false;
+    lowFlags.forEach((low, i) => {
+      if (isDownbeat(prevLow, low)) fired.push(i);
+      prevLow = low;
+    });
+    expect(fired).toEqual([3, 6]);
+  });
 });
 
 describe('windowFlicker', () => {

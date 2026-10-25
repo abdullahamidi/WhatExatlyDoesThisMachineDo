@@ -1,13 +1,15 @@
-// WP23a PNG gate for the living world: every manifest entry with a file (world.* and bg.windowLit) must be an 8-bit RGBA,
-// non-interlaced PNG at the manifest size, with alpha 0 or 255 only and opaque pixels from the Rust Wasteland palette
-// (ART_BRIEF, 25 colours) plus violetLight 0x9a6ad0. The gate is vacuous while every entry is file: null; the parser and
-// the checks are covered by a synthetic PNG round trip, so the gate itself is tested now. Node fs and zlib only, no Phaser.
+// WP23a PNG gate for the living world: every manifest entry with a file (world.*, bg.windowLit and, since WP23b AD3c,
+// bg.virga) must be an 8-bit RGBA, non-interlaced PNG at the manifest size, with alpha 0 or 255 only and opaque pixels from
+// the Rust Wasteland palette (ART_BRIEF, 25 colours) plus violetLight 0x9a6ad0. WP23b AD3c: the restored-world colours
+// (PALETTE green0-3, skyClear0-3) are allowed only inside the two finale cells of the per-id allow-list (puddle whole,
+// sprout bloom). The parser and the checks are covered by a synthetic PNG round trip. Node fs and zlib only, no Phaser.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { deflateSync, inflateSync } from 'node:zlib';
 import { ASSET_IDS } from './assetIds';
 import type { AssetId } from './assetIds';
 import { ASSET_MANIFEST } from './manifest';
+import { PALETTE } from '../data/palette';
 
 // docs/plan/ART_BRIEF.md palette "Rust Wasteland" (25 colours) plus the era V rim colour violetLight.
 const RUST_WASTELAND = [
@@ -19,6 +21,32 @@ const RUST_WASTELAND = [
   0xd9822b, 0xf0a848, 0xffd27a,
 ];
 const ALLOWED = new Set<number>([...RUST_WASTELAND, 0x9a6ad0]);
+
+// WP23b AD3c per-id allow-list: the restored-world colours, only in these frames (index into the manifest frame grid,
+// row-major): world.puddle 9 = whole (the restored sky in the water), world.sprout 4 = bloom. Nothing else may use them.
+const RESTORED_COLOURS: ReadonlySet<number> = new Set<number>([
+  PALETTE.green0, PALETTE.green1, PALETTE.green2, PALETTE.green3,
+  PALETTE.skyClear0, PALETTE.skyClear1, PALETTE.skyClear2, PALETTE.skyClear3,
+]);
+const RESTORED_CELLS: Partial<Record<AssetId, readonly number[]>> = { 'world.puddle': [9], 'world.sprout': [4] };
+
+interface AllowRect { x: number; y: number; width: number; height: number; colours: ReadonlySet<number> }
+
+/** The allow-listed cells of one id as sheet rects (empty for every id outside RESTORED_CELLS). */
+function restoredRects(id: AssetId): AllowRect[] {
+  const entry = ASSET_MANIFEST[id];
+  const fw = entry.frame?.width ?? entry.width;
+  const fh = entry.frame?.height ?? entry.height;
+  const columns = Math.max(1, Math.floor(entry.width / fw));
+  return (RESTORED_CELLS[id] ?? []).map((i) => ({
+    x: (i % columns) * fw, y: Math.floor(i / columns) * fh, width: fw, height: fh, colours: RESTORED_COLOURS,
+  }));
+}
+
+function allowedAt(rgb: number, x: number, y: number, allow: readonly AllowRect[]): boolean {
+  if (ALLOWED.has(rgb)) return true;
+  return allow.some((r) => x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height && r.colours.has(rgb));
+}
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 interface Decoded { width: number; height: number; rgba: Buffer }
@@ -95,8 +123,8 @@ function decodePng(buf: Buffer): Decoded {
   return { width: header.width, height: header.height, rgba: out };
 }
 
-/** Problems with a decoded sheet against the manifest size (empty = pass). */
-function sheetProblems(img: Decoded, width: number, height: number): string[] {
+/** Problems with a decoded sheet against the manifest size (empty = pass); `allow` widens the palette per cell rect. */
+function sheetProblems(img: Decoded, width: number, height: number, allow: readonly AllowRect[] = []): string[] {
   const problems: string[] = [];
   if (img.width !== width || img.height !== height) {
     problems.push(`size ${img.width}x${img.height}, manifest ${width}x${height}`);
@@ -109,7 +137,8 @@ function sheetProblems(img: Decoded, width: number, height: number): string[] {
       partialAlpha++;
     } else if (alpha === 255) {
       const rgb = ((img.rgba[i] ?? 0) << 16) | ((img.rgba[i + 1] ?? 0) << 8) | (img.rgba[i + 2] ?? 0);
-      if (!ALLOWED.has(rgb)) offPalette.add(`#${rgb.toString(16).padStart(6, '0')}`);
+      const p = i / 4;
+      if (!allowedAt(rgb, p % img.width, Math.floor(p / img.width), allow)) offPalette.add(`#${rgb.toString(16).padStart(6, '0')}`);
     }
   }
   if (partialAlpha > 0) problems.push(`${partialAlpha} pixels with alpha other than 0 or 255`);
@@ -189,6 +218,19 @@ describe('living-world PNG decoder and checks (synthetic PNGs)', () => {
     expect(sheetProblems(decodePng(encodePng(width, height, offColour, [0])), width, height)[0]).toMatch(/#123456/);
   });
 
+  it('accepts a restored-world colour only inside an allow-listed cell rect', () => {
+    const green = Buffer.from(pixels);
+    green[4] = PALETTE.green2 >> 16;             // pixel (1, 0)
+    green[5] = (PALETTE.green2 >> 8) & 0xff;
+    green[6] = PALETTE.green2 & 0xff;
+    green[7] = 255;
+    const img = decodePng(encodePng(width, height, green, [0]));
+    const cell: AllowRect = { x: 0, y: 0, width: 2, height: 2, colours: RESTORED_COLOURS };
+    expect(sheetProblems(img, width, height, [cell])).toEqual([]);
+    expect(sheetProblems(img, width, height, [{ ...cell, x: 2 }])[0]).toMatch(/off-palette/);
+    expect(sheetProblems(img, width, height)[0]).toMatch(/off-palette/);
+  });
+
   it('refuses a PNG that is not 8-bit RGBA (colour type 2 here)', () => {
     const png = Buffer.from(encodePng(width, height, pixels, [0]));
     // IHDR colour type sits at byte 8 (signature) + 8 (length, type) + 9 (width, height, bit depth) = 25.
@@ -197,9 +239,9 @@ describe('living-world PNG decoder and checks (synthetic PNGs)', () => {
   });
 });
 
-// Every living-world entry that already has a file (none at WP23a T7; the Art Director sets them with each PNG).
+// Every living-world entry that has a file (the Art Director sets them with each PNG; all but world.shadow since AD3c).
 const GATED: AssetId[] = ASSET_IDS.filter(
-  (id) => (id.startsWith('world.') || id === 'bg.windowLit') && ASSET_MANIFEST[id].file !== null,
+  (id) => (id.startsWith('world.') || id === 'bg.windowLit' || id === 'bg.virga') && ASSET_MANIFEST[id].file !== null,
 );
 
 describe('living-world PNG gate (WP23a)', () => {
@@ -208,7 +250,29 @@ describe('living-world PNG gate (WP23a)', () => {
       const entry = ASSET_MANIFEST[id];
       const url = new URL(`../../public/assets/${entry.file ?? ''}`, import.meta.url);
       const img = decodePng(readFileSync(url));
-      expect(sheetProblems(img, entry.width, entry.height), id).toEqual([]);
+      expect(sheetProblems(img, entry.width, entry.height, restoredRects(id)), id).toEqual([]);
     });
   }
+
+  it('maps the allow-list to the finale cells: puddle whole and sprout bloom do use restored colours', () => {
+    expect(GATED).toEqual(expect.arrayContaining(['world.puddle', 'world.sprout', 'bg.virga']));
+    for (const id of ['world.puddle', 'world.sprout'] as const) {
+      const entry = ASSET_MANIFEST[id];
+      const img = decodePng(readFileSync(new URL(`../../public/assets/${entry.file ?? ''}`, import.meta.url)));
+      const [cell] = restoredRects(id);
+      expect(cell, id).toBeDefined();
+      if (cell === undefined) continue;
+      let restored = 0;
+      for (let y = cell.y; y < cell.y + cell.height; y++) {
+        for (let x = cell.x; x < cell.x + cell.width; x++) {
+          const i = (y * img.width + x) * 4;
+          const rgb = ((img.rgba[i] ?? 0) << 16) | ((img.rgba[i + 1] ?? 0) << 8) | (img.rgba[i + 2] ?? 0);
+          if ((img.rgba[i + 3] ?? 0) === 255 && RESTORED_COLOURS.has(rgb)) restored++;
+        }
+      }
+      expect(restored, id).toBeGreaterThan(0);
+      // without the allow-list the same sheet fails: the restored colours are confined to that cell
+      expect(sheetProblems(img, entry.width, entry.height), id).not.toEqual([]);
+    }
+  });
 });
