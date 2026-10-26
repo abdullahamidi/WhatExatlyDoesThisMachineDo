@@ -64,19 +64,19 @@ describe('nextGoal', () => {
     expect(nextGoal(s, RATES)).toEqual({
       id: 'generatorBlueprint',
       title: 'NEXT: GENERATOR BLUEPRINT',
-      detail: '68K / 200K LIFETIME ME · ~22m',
+      detail: '68K / 240K LIFETIME ME · ~28m 40s',
       ready: false,
-      progress: 0.34,
+      progress: 68000 / 240000,
     });
   });
 
   it('drops the ETA when no per-second rate feeds the resource', () => {
     const s = stateOf(owned(['pistonArray', 'flywheel']), { me: 68000 }, { me: 68000 });
-    expect(nextGoal(s, { ...RATES, perSecond: emptyResourceMap() })?.detail).toBe('68K / 200K LIFETIME ME');
+    expect(nextGoal(s, { ...RATES, perSecond: emptyResourceMap() })?.detail).toBe('68K / 240K LIFETIME ME');
   });
 
   it('reads READY once the generator is affordable', () => {
-    const s = stateOf(owned(['generatorBlueprint']), { me: 25000 }, { me: 25000 });
+    const s = stateOf(owned(['generatorBlueprint']), { me: 25500 }, { me: 25500 });
     expect(nextGoal(s, RATES)).toEqual({
       id: 'generator',
       title: 'NEXT: GENERATOR',
@@ -91,9 +91,9 @@ describe('nextGoal', () => {
     expect(nextGoal(s, { ...RATES, perSecond: { ...emptyResourceMap(), me: 50 } })).toEqual({
       id: 'generator',
       title: 'NEXT: GENERATOR',
-      detail: '5K / 25K ME · ~6m 40s',
+      detail: '5K / 25.5K ME · ~6m 50s',
       ready: false,
-      progress: 0.2,
+      progress: 5000 / 25500,
     });
   });
 

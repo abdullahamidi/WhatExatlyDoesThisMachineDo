@@ -12,7 +12,9 @@ import type { GreedyOptions, GreedyResult } from './sim/greedy';
 
 // WP21 demo cap timing guard. Greedy players must reach the demo cap tech inside fixed windows, the
 // era gate must not move that time, and nothing above the cap may leak in, also after a long offline
-// credit. Windows are the sign-off values: a failing window is a balance finding, so do not widen them.
+// credit. Windows: A and B are the WP21 sign-off values; N and C are re-set for WP25 (user playtest 2026-10-25
+// supersedes the WP21 N / C values, passive-first seed); P1d is the WP25 passive-first player. A failing window is
+// a balance finding, so do not widen them.
 // One run per profile in beforeAll; the tests only assert. Re-run: npx vitest run src/simulation/demoCap.sim.test.ts
 
 const MINUTE = 60;
@@ -34,7 +36,7 @@ const MAX_ERA: number = demoValue(EDITIONS.demo.maxEra, 'maxEra');
 const ABOVE_CAP_TECHS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era > MAX_ERA);
 const ABOVE_CAP_RESOURCES = RESOURCE_IDS.filter((id) => RESOURCES[id].era > MAX_ERA);
 
-type ProfileId = 'A' | 'B' | 'N' | 'C';
+type ProfileId = 'A' | 'B' | 'N' | 'C' | 'P1d';
 
 interface Profile {
   readonly id: ProfileId;
@@ -44,14 +46,27 @@ interface Profile {
   readonly seconds: number; // active budget; the run stops at the cap tech before it
   readonly lo: number; // window for reaching the cap tech, active seconds
   readonly hi: number;
+  // WP25: clicks per second read from the state each step; replaces clicksPerSecond when set.
+  readonly clickRate?: (state: Readonly<GameState>) => number;
 }
 
 const PROFILE_A: Profile = { id: 'A', name: 'A (4 clicks/s, buys every 1 s)', clicksPerSecond: 4, buyIntervalSeconds: 1, seconds: 17400, lo: 55 * MINUTE, hi: 66 * MINUTE };
 const PROFILE_B: Profile = { id: 'B', name: 'B (4 clicks/s, buys every 30 s)', clicksPerSecond: 4, buyIntervalSeconds: 30, seconds: 18000, lo: 66 * MINUTE, hi: 80 * MINUTE };
 // New player: slower clicks and buys than B, so it lands after B and before the 1 cps player.
-const PROFILE_N: Profile = { id: 'N', name: 'N new player (2 clicks/s, buys every 10 s)', clicksPerSecond: 2, buyIntervalSeconds: 10, seconds: 18000, lo: 90 * MINUTE, hi: 108 * MINUTE };
-const PROFILE_C: Profile = { id: 'C', name: 'C (1 click/s, buys every 30 s)', clicksPerSecond: 1, buyIntervalSeconds: 30, seconds: 28800, lo: 135 * MINUTE, hi: 163 * MINUTE };
-const PROFILES: readonly Profile[] = [PROFILE_A, PROFILE_B, PROFILE_N, PROFILE_C];
+const PROFILE_N: Profile = { id: 'N', name: 'N new player (2 clicks/s, buys every 10 s)', clicksPerSecond: 2, buyIntervalSeconds: 10, seconds: 18000, lo: 66 * MINUTE, hi: 90 * MINUTE };
+const PROFILE_C: Profile = { id: 'C', name: 'C (1 click/s, buys every 30 s)', clicksPerSecond: 1, buyIntervalSeconds: 30, seconds: 28800, lo: 80 * MINUTE, hi: 120 * MINUTE };
+// WP25 passive-first player: 4 clicks/s until the Generator is owned, then 0.5. clicksPerSecond is unused (the type needs it).
+const PROFILE_P1D: Profile = {
+  id: 'P1d',
+  name: 'P1d (4 clicks/s until Generator, then 0.5; buys every 10 s)',
+  clicksPerSecond: 4,
+  buyIntervalSeconds: 10,
+  seconds: 18000,
+  lo: 62 * MINUTE,
+  hi: 85 * MINUTE,
+  clickRate: (state) => (state.techLevels.generator >= 1 ? 0.5 : 4),
+};
+const PROFILES: readonly Profile[] = [PROFILE_A, PROFILE_B, PROFILE_N, PROFILE_C, PROFILE_P1D];
 
 function greedyOptions(p: Profile, gated: boolean): GreedyOptions {
   return {
@@ -61,6 +76,7 @@ function greedyOptions(p: Profile, gated: boolean): GreedyOptions {
     buyIntervalSeconds: p.buyIntervalSeconds,
     stopAt: CAP_TECH,
     ...(gated ? { maxEra: MAX_ERA } : {}),
+    ...(p.clickRate !== undefined ? { clickRate: p.clickRate } : {}),
   };
 }
 
@@ -132,11 +148,16 @@ describe('demo cap timing (WP21)', () => {
     });
   }
 
-  it('order: A < B < N < C', () => {
+  it('P1d is at most 1.30 x A', () => {
+    expect(firstAtCap(gated, 'P1d')).toBeLessThanOrEqual(1.3 * firstAtCap(gated, 'A'));
+  });
+
+  it('order: A < B < N < C and A < P1d', () => {
     const t = (id: ProfileId): number => firstAtCap(gated, id);
     expect(t('A')).toBeLessThan(t('B'));
     expect(t('B')).toBeLessThan(t('N'));
     expect(t('N')).toBeLessThan(t('C'));
+    expect(t('A')).toBeLessThan(t('P1d'));
   });
 
   describe('after the cap: era gate holds in the 4 h run and after 8 h offline', () => {

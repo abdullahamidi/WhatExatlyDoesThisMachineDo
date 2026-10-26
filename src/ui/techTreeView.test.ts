@@ -6,6 +6,7 @@ import {
   buildTechTreeView,
   defaultSelection,
   edgePath,
+  edgePathAround,
   eraHeaderText,
   graphFitScale,
   nodeAriaLabel,
@@ -16,6 +17,7 @@ import {
   revealScroll,
   techNodePosition,
 } from './techTreeView';
+import type { TechNodeView } from './techTreeView';
 import { getAllTechViews, getTechView, createInitialState, emptyResourceMap } from '../simulation';
 import { TECHNOLOGIES } from '../data/technologies';
 import { DEMO_TEXT } from '../data/demo';
@@ -361,6 +363,82 @@ describe('techTreeView', () => {
       const res: ResourceMap = { ...emptyResourceMap(), ee: 1200 };
       const view = buildTechTreeView(eraTwoViews, res, null, 2);
       expect(view.headerText).toBe('0 ME · 1.2K EE');
+    });
+  });
+
+  describe('edge routing around nodes (WP25 AD1 F2)', () => {
+    /** Tree view of one era built from the real techs, as the overlay builds it. */
+    function realEraView(era: number) {
+      const views = getAllTechViews(createInitialState(0)).filter((v) => v.def.era === era);
+      return buildTechTreeView(views, emptyResourceMap(), null, era);
+    }
+
+    // Edges whose straight line ran behind a node of their row before WP25 AD1 F2.
+    const DETOURED = ['condenser->pressureVesselBlueprint', 'motorRetrofit->powerLines'];
+
+    /** Node at (x, y) with the default node size; edge routing reads only the geometry and the id. */
+    function nodeAt(id: TechId, x: number, y: number): TechNodeView {
+      return {
+        id, name: id, status: 'available', kindLabel: 'UNLOCK', milestone: false, levelText: '', costText: null,
+        ariaLabel: id, affordable: false, selected: false, x, y,
+        width: TECH_TREE_LAYOUT.nodeWidth, height: TECH_TREE_LAYOUT.nodeHeight,
+      };
+    }
+
+    it('routes Motor Retrofit -> Power Lines above Crank Servo in era II', () => {
+      const view = buildTechTreeView(viewsOf(createInitialState(0)).filter((v) => v.def.era === 2), emptyResourceMap(), null, 2);
+      const edge = view.edges.find((e) => e.key === 'motorRetrofit->powerLines');
+      expect(edge?.d).toBe('M 320 244 C 327 244, 327 196, 334 196 L 636 196 C 643 196, 643 244, 650 244');
+    });
+
+    it('routes Condenser -> Vessel Blueprint above Turbine in era III', () => {
+      const view = buildTechTreeView(viewsOf(createInitialState(0)).filter((v) => v.def.era === 3), emptyResourceMap(), null, 3);
+      const edge = view.edges.find((e) => e.key === 'condenser->pressureVesselBlueprint');
+      expect(edge?.d).toBe('M 636 148 C 643 148, 643 100, 650 100 L 952 100 C 959 100, 959 148, 966 148');
+    });
+
+    it.each([1, 2, 3, 4, 5])('era %i: every edge is the straight path unless it is detoured', (era) => {
+      const view = realEraView(era);
+      for (const edge of view.edges) {
+        const from = view.nodes.find((n) => n.id === edge.from);
+        const to = view.nodes.find((n) => n.id === edge.to);
+        if (!from || !to) throw new Error(`missing node for ${edge.key}`);
+        if (DETOURED.includes(edge.key)) {
+          expect(edge.d).not.toBe(edgePath(from, to));
+        } else {
+          expect(edge.d).toBe(edgePath(from, to));
+        }
+      }
+    });
+
+    it('detours exactly the two same-row edges that pass a node across eras I-V', () => {
+      const detoured: string[] = [];
+      for (const era of [1, 2, 3, 4, 5]) {
+        const view = realEraView(era);
+        for (const edge of view.edges) {
+          const from = view.nodes.find((n) => n.id === edge.from);
+          const to = view.nodes.find((n) => n.id === edge.to);
+          if (from && to && edge.d !== edgePath(from, to)) detoured.push(edge.key);
+        }
+      }
+      expect(detoured.sort()).toEqual(DETOURED);
+    });
+
+    it('detours a blocked edge on the top row through the gap below', () => {
+      const from = nodeAt('handCrank', 18, 18);
+      const mid = nodeAt('gearRatio', 176, 18);
+      const to = nodeAt('wornMotor', 334, 18);
+      expect(edgePathAround(from, to, [from, mid, to])).toBe(
+        'M 162 52 C 169 52, 169 100, 176 100 L 320 100 C 327 100, 327 52, 334 52',
+      );
+    });
+
+    it('keeps the straight path when no node of the row lies strictly between the ends', () => {
+      const from = nodeAt('handCrank', 18, 18);
+      const to = nodeAt('gearRatio', 176, 18);
+      const beyond = nodeAt('wornMotor', 334, 18);
+      const otherRow = nodeAt('motorTuning', 176, 114);
+      expect(edgePathAround(from, to, [from, to, beyond, otherRow])).toBe(edgePath(from, to));
     });
   });
 

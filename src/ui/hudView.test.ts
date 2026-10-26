@@ -1,11 +1,12 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { HUD_ROW_IDS, buildHudView, clickGainLines, cycleLine, hudTitle, plaqueText } from './hudView';
+import { HUD_ROW_IDS, buildHudView, clickGainLines, cycleLine, formatWorth, hudTitle, plaqueText } from './hudView';
 import type { GainLine, HudResourceRow, HudView } from './hudView';
 import { setRevealed } from './revealRules';
 import { createInitialState, emptyResourceMap } from '../simulation';
 import { RESOURCE_IDS } from '../data/types';
 import type { EndingPhase, GameState, ProductionRates, ResourceId, ResourceMap, TechDefinition, TechId } from '../data/types';
 import { TECHNOLOGIES } from '../data/technologies';
+import { HUD_TEXT } from '../data/hud';
 
 type HudState = Pick<GameState, 'res' | 'lifetime' | 'techLevels' | 'ending'>;
 
@@ -67,7 +68,7 @@ describe('buildHudView', () => {
     expect(rowOf(view, 'me')).toEqual({ id: 'me', label: 'ME', value: '0', rate: '0/s', feeds: null, visible: true, frontier: true });
     expect(view.rows.filter((r) => r.id !== 'me').every((r) => r.visible === false)).toBe(true);
     expect(view.rows.filter((r) => r.frontier)).toHaveLength(1);
-    expect(view.click).toEqual({ primary: '+1 ME', secondary: null });
+    expect(view.click).toEqual({ primary: '+1 ME', secondary: null, title: null });
     expect(view.autoCrank).toBeNull();
   });
 
@@ -85,17 +86,17 @@ describe('buildHudView', () => {
     expect(ee.frontier).toBe(true);
     expect(ee.rate).toBe('3.2/s');
     expect(view.rows.filter((r) => r.frontier).map((r) => r.id)).toEqual(['ee']);
-    expect(view.click).toEqual({ primary: '+12 ME', secondary: null });
+    expect(view.click).toEqual({ primary: '+12 ME · 0.96s', secondary: null, title: 'One turn of the crank = 0.96 s of machine output' });
   });
 
   it('click line names the frontier resource when its per-click gain is positive', () => {
     const view = buildHudView(hudState({ levels: { generator: 1 } }), ratesOf({ me: 12, ee: 26900 }, { me: 12.5 }));
-    expect(view.click).toEqual({ primary: '+26.9K EE', secondary: '+12 ME' });
+    expect(view.click).toEqual({ primary: '+26.9K EE', secondary: '+12 ME', title: null });
   });
 
   it('click line falls back to ME when the frontier per-click gain is not finite', () => {
     const view = buildHudView(hudState({ levels: { generator: 1 } }), ratesOf({ me: 12, ee: Number.NaN }));
-    expect(view.click).toEqual({ primary: '+12 ME', secondary: null });
+    expect(view.click).toEqual({ primary: '+12 ME', secondary: null, title: null });
   });
 
   it('feeds name the fed resource only while that row is visible', () => {
@@ -107,7 +108,7 @@ describe('buildHudView', () => {
 
   it('shows AUTO-CRANK clicks per second from crankServo', () => {
     const view = buildHudView(hudState({ levels: { crankServo: 3 } }), ratesOf({ me: 1 }));
-    expect(view.autoCrank).toBe('AUTO-CRANK 3/s');
+    expect(view.autoCrank).toBe('AUTO-CRANK 3/s · +3 ME/s');
   });
 
   it('takes the tech table for AUTO-CRANK from the caller', () => {
@@ -116,7 +117,7 @@ describe('buildHudView', () => {
       crankServo: { ...TECHNOLOGIES.crankServo, effects: [{ type: 'autoClick', perSecond: 2 }] },
     };
     const view = buildHudView(hudState({ levels: { crankServo: 3 } }), ratesOf({ me: 1 }), undefined, techs);
-    expect(view.autoCrank).toBe('AUTO-CRANK 6/s');
+    expect(view.autoCrank).toBe('AUTO-CRANK 6/s · +6 ME/s');
   });
 
   it('formats stock as whole units below 1000 and with a suffix from 1000', () => {
@@ -196,7 +197,7 @@ describe('era V and the finale title', () => {
     expect(view.title).toBe('ERA V · RESTORATION FLUX');
     expect(rowOf(view, 'rs').feeds).toBe('›RF');
     expect(rowOf(view, 'xf').label).toBe('RF');
-    expect(view.click).toEqual({ primary: '+3 RF', secondary: '+1 ME' });
+    expect(view.click).toEqual({ primary: '+3 RF', secondary: '+1 ME', title: null });
   });
 
   it('shows RESTORATION ENGINE in the choice and postgame phases, in any era', () => {
@@ -221,7 +222,7 @@ describe('buildHudView plaque', () => {
     expect(withPlaque.plaque).toBe('PRIMARY FUNCTION: R?S????');
     expect({ ...withPlaque, plaque: base.plaque }).toEqual(base);
     expect(rowOf(base, 'me').value).toBe('1.5K');
-    expect(base.click).toEqual({ primary: '+12 ME', secondary: null });
+    expect(base.click).toEqual({ primary: '+12 ME · 0.96s', secondary: null, title: 'One turn of the crank = 0.96 s of machine output' });
   });
 });
 
@@ -327,5 +328,100 @@ describe('cycle line (WP14 T8a)', () => {
     const base = buildHudView(hudState({ res: { me: 1500 } }), ratesOf({ me: 12 }, { me: 12.5 }));
     const cycled = buildHudView(hudState({ res: { me: 1500 } }), ratesOf({ me: 12 }, { me: 12.5 }), { cycle: 2 });
     expect({ ...cycled, cycle: null }).toEqual(base);
+  });
+});
+
+describe('click worth suffix (WP25 C4)', () => {
+  const WORTH_TITLE = (s: string): string => `One turn of the crank = ${s} s of machine output`;
+
+  it('shows no suffix and no title in era I before Worn Motor (perSecond 0)', () => {
+    const view = buildHudView(hudState(), ratesOf({ me: 1 }));
+    expect(view.click).toEqual({ primary: '+1 ME', secondary: null, title: null });
+  });
+
+  it('shows the worth in era I after Worn Motor', () => {
+    const view = buildHudView(hudState(), ratesOf({ me: 2 }, { me: 20 }));
+    expect(view.click).toEqual({ primary: '+2 ME · 0.1s', secondary: null, title: WORTH_TITLE('0.1') });
+  });
+
+  it('shows a fractional click with no worth when perSecond is 0 (R1)', () => {
+    expect(buildHudView(hudState(), ratesOf({ me: 1.5 })).click).toEqual({ primary: '+1.5 ME', secondary: null, title: null });
+  });
+
+  it('shows a fractional click with its worth when perSecond is positive (R1)', () => {
+    expect(buildHudView(hudState(), ratesOf({ me: 1.5 }, { me: 3 })).click).toEqual({
+      primary: '+1.5 ME · 0.5s',
+      secondary: null,
+      title: WORTH_TITLE('0.5'),
+    });
+  });
+
+  it('shows the frontier worth and the servo auto-crank output in era II', () => {
+    const view = buildHudView(hudState({ levels: { generator: 1, crankServo: 4 } }), ratesOf({ me: 10, ee: 100 }, { me: 50, ee: 400 }));
+    expect(view.click).toEqual({ primary: '+100 EE · 0.25s', secondary: '+10 ME', title: WORTH_TITLE('0.25') });
+    expect(view.autoCrank).toBe('AUTO-CRANK 4/s · +400 EE/s');
+  });
+
+  it('shows the small R1 worth of a servo-era click (0.07 s)', () => {
+    const view = buildHudView(hudState({ levels: { generator: 1 } }), ratesOf({ me: 10, ee: 0.25 }, { me: 50, ee: 3.5 }));
+    expect(view.click.primary).toBe('+0.2 EE · 0.07s');
+  });
+
+  it('shows a large worth in whole seconds, with the frontier secondary line kept', () => {
+    const view = buildHudView(hudState({ levels: { generator: 1 } }), ratesOf({ me: 12, ee: 26900 }, { ee: 4 }));
+    expect(view.click).toEqual({ primary: '+26.9K EE · 6725s', secondary: '+12 ME', title: WORTH_TITLE('6725') });
+  });
+
+  it('falls back to ME with its own worth when the frontier per-click gain is NaN', () => {
+    const view = buildHudView(hudState({ levels: { generator: 1 } }), ratesOf({ me: 12, ee: Number.NaN }, { me: 24 }));
+    expect(view.click).toEqual({ primary: '+12 ME · 0.5s', secondary: null, title: WORTH_TITLE('0.5') });
+  });
+
+  it('shows no suffix when perSecond of the click resource is 0', () => {
+    expect(buildHudView(hudState(), ratesOf({ me: 2 })).click).toEqual({ primary: '+2 ME', secondary: null, title: null });
+  });
+
+  it('shows no suffix when perSecond of the click resource is NaN', () => {
+    expect(buildHudView(hudState(), ratesOf({ me: 2 }, { me: Number.NaN })).click).toEqual({ primary: '+2 ME', secondary: null, title: null });
+  });
+
+  it('leaves the AUTO-CRANK text plain when its output is not finite', () => {
+    expect(buildHudView(hudState({ levels: { crankServo: 3 } }), ratesOf({ me: Number.NaN }, { me: 10 })).autoCrank).toBe('AUTO-CRANK 3/s');
+  });
+
+  it('leaves the AUTO-CRANK text plain when its output rounds to 0', () => {
+    expect(buildHudView(hudState({ levels: { crankServo: 3 } }), ratesOf({ me: 0.01 })).autoCrank).toBe('AUTO-CRANK 3/s');
+  });
+});
+
+describe('formatWorth (WP25 C4)', () => {
+  it('shows whole seconds from 10', () => {
+    expect(formatWorth(12)).toBe('12');
+    expect(formatWorth(12.4)).toBe('12');
+    expect(formatWorth(10)).toBe('10');
+  });
+
+  it('shows one decimal from 1 and trims a zero decimal', () => {
+    expect(formatWorth(2.5)).toBe('2.5');
+    expect(formatWorth(2)).toBe('2');
+    expect(formatWorth(9.96)).toBe('10');
+  });
+
+  it('shows two decimals below 1 and trims trailing zeros', () => {
+    expect(formatWorth(0.25)).toBe('0.25');
+    expect(formatWorth(0.5)).toBe('0.5');
+    expect(formatWorth(0.1)).toBe('0.1');
+    expect(formatWorth(0.07)).toBe('0.07');
+    expect(formatWorth(0.01)).toBe('0.01');
+  });
+
+  it('shows <0.01 below 0.01, at 0, for negative and for non-finite values', () => {
+    expect(formatWorth(0.004)).toBe('<0.01');
+    expect(formatWorth(0.0099)).toBe('<0.01');
+    expect(formatWorth(0)).toBe('<0.01');
+    expect(formatWorth(-1)).toBe('<0.01');
+    expect(formatWorth(Number.NaN)).toBe('<0.01');
+    expect(formatWorth(Number.POSITIVE_INFINITY)).toBe('<0.01');
+    expect(formatWorth(0.001)).toBe(HUD_TEXT.worthFloor);
   });
 });

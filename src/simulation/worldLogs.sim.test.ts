@@ -3,7 +3,8 @@ import { EDITIONS } from '../data/edition';
 import type { EraCap } from './progression/edition';
 import { SYSTEM_LOGS, SYSTEM_LOG_CONFIG } from '../data/systemLogs';
 import type { SystemLogEntry, SystemLogTrigger } from '../data/systemLogs';
-import type { GameState, ResourceMap, TechId } from '../data/types';
+import type { GameState, ResourceId, ResourceMap, TechId } from '../data/types';
+import { TECHNOLOGIES } from '../data/technologies';
 import { runGreedy } from './sim/greedy';
 
 // WP23b optional machine logs schedule guard (bible §5.4): a vitest port of the logsim replay.
@@ -18,14 +19,19 @@ const TIMEOUT_MS = 120000;
 const TAIL_SECONDS = 600;
 const GAP_SECONDS = SYSTEM_LOG_CONFIG.minGapMs / 1000;
 const NEW_IDS: readonly string[] = ['perimeter-umbrella', 'perimeter-phase'];
-const WITH_NEW: readonly SystemLogEntry[] = SYSTEM_LOGS;
-const WITHOUT_NEW: readonly SystemLogEntry[] = SYSTEM_LOGS.filter((log) => !NEW_IDS.includes(log.id));
+// WP25 entry (D11). Kept out of the WP23b sets so the existing tests keep their meaning; WITH_ALL holds it too.
+const MANUAL_OPTIONAL = 'manual-optional';
+const WP25_IDS: readonly string[] = [MANUAL_OPTIONAL];
+const WITH_NEW: readonly SystemLogEntry[] = SYSTEM_LOGS.filter((log) => !WP25_IDS.includes(log.id));
+const WITHOUT_NEW: readonly SystemLogEntry[] = SYSTEM_LOGS.filter((log) => !NEW_IDS.includes(log.id) && !WP25_IDS.includes(log.id));
+const WITH_ALL: readonly SystemLogEntry[] = SYSTEM_LOGS;
 const EXISTING_IDS: readonly string[] = WITHOUT_NEW.map((log) => log.id);
 // Key logs held to 0 s delay (bible §5.4, corrected in r2-Q-A). The other existing logs share the 120 s start gap with the early
 // logs, so they can wait a gap behind an earlier log with or without the new entries; only these eight are pinned to 0 s.
 const LOGSIM_KEY_IDS: readonly string[] = ['copper-memory', 'steam-rain', 'sync-success', 'signal-below', 'observer-one', 'units-unknown', 'cycle-0041', 'operator-located'];
-// Milestones the key-log order is checked against (bible §5.4 order table).
-const MILESTONES: readonly TechId[] = ['harmonicConvergence', 'finalAlignment'];
+// Milestones the key-log order is checked against (bible §5.4 order table). WP25 adds the Crank Servo and the
+// substation blueprint: the manual-optional window runs from the first crank to the substation.
+const MILESTONES: readonly TechId[] = ['harmonicConvergence', 'finalAlignment', 'crankServo', 'substationBlueprint'];
 
 type Mode = 'full' | 'demo';
 
@@ -136,6 +142,7 @@ interface Outcome {
   run: Run;
   without: Replay;
   with: Replay;
+  all: Replay; // WITH_ALL: the WP23b table plus manual-optional
 }
 
 const outcomes = new Map<string, Outcome>();
@@ -164,7 +171,12 @@ beforeAll(() => {
   for (const mode of ['full', 'demo'] as const) {
     for (const p of PROFILES) {
       const run = simulate(p, mode);
-      outcomes.set(`${mode}/${p.name}`, { run, without: replay(run.samples, WITHOUT_NEW), with: replay(run.samples, WITH_NEW) });
+      outcomes.set(`${mode}/${p.name}`, {
+        run,
+        without: replay(run.samples, WITHOUT_NEW),
+        with: replay(run.samples, WITH_NEW),
+        all: replay(run.samples, WITH_ALL),
+      });
     }
   }
 }, TIMEOUT_MS);
@@ -223,6 +235,70 @@ describe('WP23b machine logs: demo edition (bible §5.4)', () => {
       const o = outcomeOf('demo', p.name);
       expect(o.without.fire['copper-memory']).toBeDefined();
       expect(o.with.fire['copper-memory']).toEqual(o.without.fire['copper-memory']);
+    }, TIMEOUT_MS);
+  }
+});
+
+// WP25 helpers. The substation's lifetime-EE requirement is read from the tech table, never retyped here.
+function lifetimeRequirement(id: TechId, res: ResourceId): number {
+  const req = TECHNOLOGIES[id].requires.find((r) => r.type === 'lifetime' && r.res === res);
+  if (req === undefined || req.type !== 'lifetime') throw new Error(`${id} has no lifetime ${res} requirement`);
+  return req.amount;
+}
+
+function entryOf(id: string): SystemLogEntry {
+  const entry = SYSTEM_LOGS.find((log) => log.id === id);
+  if (entry === undefined) throw new Error(`no SYS LOG entry ${id}`);
+  return entry;
+}
+
+describe('WP25 manual-optional log (bible section 5.4, D11)', () => {
+  it('the table has 23 entries: 20 existing, 2 WP23b, 1 WP25', () => {
+    expect(EXISTING_IDS).toHaveLength(20);
+    expect(WITH_ALL).toHaveLength(EXISTING_IDS.length + NEW_IDS.length + WP25_IDS.length);
+    expect(WITH_ALL).toHaveLength(23);
+  });
+
+  it('manual-optional is a lifetime EE trigger below the substationBlueprint EE requirement', () => {
+    const trigger = entryOf(MANUAL_OPTIONAL).trigger;
+    expect(trigger).toMatchObject({ kind: 'lifetime', res: 'ee' });
+    const atLeast = trigger.kind === 'lifetime' ? trigger.atLeast : Infinity;
+    expect(atLeast).toBeLessThan(lifetimeRequirement('substationBlueprint', 'ee'));
+  });
+
+  for (const mode of ['full', 'demo'] as const) {
+    for (const p of PROFILES) {
+      it(`${mode} profile ${p.name}: manual-optional is eligible and fires`, () => {
+        const o = outcomeOf(mode, p.name);
+        expect(o.all.eligibleAt[MANUAL_OPTIONAL]).toBeDefined();
+        expect(o.all.fire[MANUAL_OPTIONAL]).toBeDefined();
+      }, TIMEOUT_MS);
+
+      it(`${mode} profile ${p.name}: manual-optional is eligible only after the first crankServo and fires before substationBlueprint`, () => {
+        const o = outcomeOf(mode, p.name);
+        const crank = o.run.milestone.crankServo;
+        const substation = o.run.milestone.substationBlueprint;
+        expect(crank).toBeDefined();
+        expect(substation).toBeDefined();
+        expect(o.all.eligibleAt[MANUAL_OPTIONAL] ?? -Infinity).toBeGreaterThanOrEqual(crank ?? Infinity);
+        expect(o.all.fire[MANUAL_OPTIONAL]?.t ?? Infinity).toBeLessThan(substation ?? -Infinity);
+      }, TIMEOUT_MS);
+    }
+  }
+
+  for (const p of PROFILES) {
+    it(`full profile ${p.name}: every key log keeps 0 s delay and no key log moves with manual-optional`, () => {
+      const o = outcomeOf('full', p.name);
+      for (const id of LOGSIM_KEY_IDS) {
+        expect(o.all.fire[id]?.delay, `${id} delay`).toBe(0);
+        expect(o.all.fire[id], `${id} moved`).toEqual(o.with.fire[id]);
+      }
+    }, TIMEOUT_MS);
+
+    it(`demo profile ${p.name}: copper-memory fires at the same second with and without manual-optional`, () => {
+      const o = outcomeOf('demo', p.name);
+      expect(o.with.fire['copper-memory']).toBeDefined();
+      expect(o.all.fire['copper-memory']).toEqual(o.with.fire['copper-memory']);
     }, TIMEOUT_MS);
   }
 });

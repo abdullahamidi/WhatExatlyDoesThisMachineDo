@@ -63,6 +63,29 @@ export function edgePath(from: TechNodeView, to: TechNodeView): string {
   return `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
 }
 
+/**
+ * Edge path that avoids nodes on its row (WP25 AD1 F2): edgePath, unless from and to share a row and another node
+ * of that row lies strictly between them. Then the line leaves from's right-middle, climbs into the row gap above
+ * (the top row uses the gap below), runs along it and drops into to's left-middle, so no node is crossed.
+ */
+export function edgePathAround(
+  from: TechNodeView,
+  to: TechNodeView,
+  nodes: readonly TechNodeView[],
+  layout: typeof TECH_TREE_LAYOUT = TECH_TREE_LAYOUT,
+): string {
+  const blocked = from.y === to.y
+    && nodes.some((n) => n.id !== from.id && n.id !== to.id && n.y === from.y && n.x > from.x && n.x < to.x);
+  if (!blocked) return edgePath(from, to);
+  const x1 = from.x + from.width;
+  const y1 = from.y + from.height / 2;
+  const x2 = to.x;
+  const y2 = to.y + to.height / 2;
+  const g = layout.colGap / 2;
+  const yc = from.y > layout.padding ? from.y - layout.rowGap / 2 : from.y + from.height + layout.rowGap / 2;
+  return `M ${x1} ${y1} C ${x1 + g} ${y1}, ${x1 + g} ${yc}, ${x1 + 2 * g} ${yc} L ${x2 - 2 * g} ${yc} C ${x2 - g} ${yc}, ${x2 - g} ${y2}, ${x2} ${y2}`;
+}
+
 /** WP20: primaryFunction when open, else the first open era keystone (table order). Open = available and not installed. Null when none. */
 export function priorityTech(views: readonly TechView[]): TechId | null {
   const open = (id: TechId): boolean =>
@@ -358,7 +381,7 @@ export function buildTechTreeView(
         from: requirement.req.id,
         to: view.id,
         met: requirement.met,
-        d: edgePath(fromNode, toNode),
+        d: edgePathAround(fromNode, toNode, nodes, layout),
       });
     }
   }

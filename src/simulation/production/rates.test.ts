@@ -30,27 +30,27 @@ describe('computeRates', () => {
   });
 
   it('manual additive techs stack with Hand Crank', () => {
-    expect(computeRates(withLevels({ gearRatio: 3 })).perClick.me).toBeCloseTo(4, 9);
+    expect(computeRates(withLevels({ gearRatio: 3 })).perClick.me).toBeCloseTo(2.5, 9);
   });
 
-  it('Reinforced Crank doubles manual production', () => {
-    expect(computeRates(withLevels({ gearRatio: 3, reinforcedCrank: 1 })).perClick.me).toBeCloseTo(8, 9);
+  it('Reinforced Crank multiplies manual production by 1.5', () => {
+    expect(computeRates(withLevels({ gearRatio: 3, reinforcedCrank: 1 })).perClick.me).toBeCloseTo(3.75, 9);
   });
 
   it('automation additive techs', () => {
-    expect(computeRates(withLevels({ wornMotor: 1, motorTuning: 5 })).perSecond.me).toBeCloseTo(6, 9);
+    expect(computeRates(withLevels({ wornMotor: 1, motorTuning: 5 })).perSecond.me).toBeCloseTo(33.5, 9);
   });
 
   it('automation accumulates across Piston Array and Improved Pistons', () => {
     const base = { wornMotor: 1, motorTuning: 5 } as const;
-    expect(computeRates(withLevels({ ...base, pistonArray: 1 })).perSecond.me).toBeCloseTo(11, 9);
+    expect(computeRates(withLevels({ ...base, pistonArray: 1 })).perSecond.me).toBeCloseTo(50.5, 9);
     expect(computeRates(withLevels({ ...base, pistonArray: 1, improvedPistons: 2 })).perSecond.me).toBeCloseTo(
-      15,
+      63.9,
       9,
     );
     expect(
       computeRates(withLevels({ ...base, pistonArray: 1, improvedPistons: 2, flywheel: 2 })).perSecond.me,
-    ).toBeCloseTo(18, 9);
+    ).toBeCloseTo(76.68, 9);
   });
 
   it('Flywheel alone does nothing without an automation source', () => {
@@ -58,11 +58,11 @@ describe('computeRates', () => {
   });
 
   it('Flywheel multiplies automation by 1 + 10%', () => {
-    expect(computeRates(withLevels({ flywheel: 1, wornMotor: 1 })).perSecond.me).toBeCloseTo(1.1, 9);
+    expect(computeRates(withLevels({ flywheel: 1, wornMotor: 1 })).perSecond.me).toBeCloseTo(18.7, 9);
   });
 
-  it('Reinforced Crank alone doubles Hand Crank', () => {
-    expect(computeRates(withLevels({ reinforcedCrank: 1 })).perClick.me).toBeCloseTo(2, 9);
+  it('Reinforced Crank alone multiplies Hand Crank by 1.5', () => {
+    expect(computeRates(withLevels({ reinforcedCrank: 1 })).perClick.me).toBeCloseTo(1.5, 9);
   });
 
   it('Flywheel does not change perClick', () => {
@@ -220,7 +220,7 @@ describe('computeRates', () => {
       ],
     });
     const r = computeRates(withLevels({ wornMotor: 1, gearRatio: 1, reinforcedCrank: 1 }), techs);
-    expect(r.perClick.me).toBeCloseTo(2, 9);
+    expect(r.perClick.me).toBeCloseTo(1.5, 9);
     expect(r.perClick.ee).toBeCloseTo(2, 9);
   });
 

@@ -2,8 +2,8 @@ import { beforeAll, describe, it, expect } from 'vitest';
 import { RESOURCE_IDS, TECH_IDS } from '../../data/types';
 import type { GameState, ResourceId, TechDefinition, TechId, TechView } from '../../data/types';
 import { TECHNOLOGIES } from '../../data/technologies';
-import { runGreedy, maxPurchaseGap, purchaseLedger, deadMinutes, spendShare } from './greedy';
-import type { GreedyOptions, GreedyResult, LedgerEntry } from './greedy';
+import { runGreedy, maxPurchaseGap, purchaseLedger, deadMinutes, spendShare, manualShare } from './greedy';
+import type { GreedyOptions, GreedyResult, IncomeSplit, LedgerEntry } from './greedy';
 import { applyClick, advance, offlineCapSeconds } from '../production/tick';
 import { computeRates } from '../production/rates';
 import { getAllTechViews } from '../progression/status';
@@ -11,6 +11,8 @@ import { purchase } from '../progression/purchase';
 import { evaluateMilestones } from '../progression/milestones';
 import { createInitialState } from '../state';
 import { costAt } from '../economy/cost';
+import { emptyResourceMap } from '../resources';
+import type { EraNumber } from '../../data/eras';
 
 const CLICKS_PER_SECOND = 4;
 
@@ -111,7 +113,7 @@ describe('runGreedy', () => {
 
   it('keeps the era-I wornMotor time on the default table (600 s run)', () => {
     const run = runGreedy(options(600));
-    expect(run.firstAt.wornMotor).toBe(13);
+    expect(run.firstAt.wornMotor).toBe(18);
   });
 
   it('a cheaper blueprint table reaches generatorBlueprint sooner than the default table', () => {
@@ -161,13 +163,13 @@ describe('runGreedy', () => {
   it('era I exact first-purchase times hold on the optimised harness', () => {
     const run = runGreedy(options(1500));
     expect(run.firstAt.gearRatio).toBe(4);
-    expect(run.firstAt.wornMotor).toBe(13);
-    expect(run.firstAt.motorTuning).toBe(20);
-    expect(run.firstAt.reinforcedCrank).toBe(196);
-    expect(run.firstAt.flywheel).toBe(289);
-    expect(run.firstAt.pistonArray).toBe(722);
-    expect(run.firstAt.improvedPistons).toBe(758);
-    expect(run.firstAt.generatorBlueprint).toBe(1326);
+    expect(run.firstAt.wornMotor).toBe(18);
+    expect(run.firstAt.motorTuning).toBe(23);
+    expect(run.firstAt.reinforcedCrank).toBe(205);
+    expect(run.firstAt.flywheel).toBe(297);
+    expect(run.firstAt.pistonArray).toBe(730);
+    expect(run.firstAt.improvedPistons).toBe(761);
+    expect(run.firstAt.generatorBlueprint).toBe(1327);
   });
 });
 
@@ -270,7 +272,7 @@ describe('measurement helpers (WP17)', () => {
     expect(ledger.length).toBe(run.purchases.length);
     expect(ledger[0]).toEqual({ t: 4, id: 'gearRatio', res: 'me', level: 1, cost: 15 });
     expect(ledger.find((e) => e.id === 'wornMotor')).toEqual({
-      t: 13,
+      t: 18,
       id: 'wornMotor',
       res: TECHNOLOGIES.wornMotor.costRes,
       level: 1,
@@ -437,5 +439,163 @@ describe('runGreedy schedule (profile D offline blocks)', () => {
     expect(() =>
       runGreedy({ ...options(20), stepSeconds: 2, schedule: { activeSeconds: 5, offlineSeconds: 10 } }),
     ).toThrow(RangeError);
+  });
+});
+
+// WP25 (T2): click-rate overrides and the manual / passive income split. Profile A = 4 cps, buy every 1 s.
+describe('runGreedy clickRate and income tracking (WP25)', () => {
+  const ERAS: readonly EraNumber[] = [1, 2, 3, 4, 5];
+
+  // Every resource: sum over eras of (manual + passive) equals the final lifetime (rel 1e-9; abs 1e-9 at 0).
+  function expectConserved(run: GreedyResult): void {
+    const income = run.income;
+    if (income === undefined) throw new Error('expected income');
+    for (const res of RESOURCE_IDS) {
+      const sum = ERAS.reduce((acc, era) => acc + income[era].manual[res] + income[era].passive[res], 0);
+      const expected = run.final.lifetime[res];
+      if (expected === 0) expect(Math.abs(sum)).toBeLessThanOrEqual(1e-9);
+      else expect(Math.abs(sum - expected) / Math.abs(expected)).toBeLessThanOrEqual(1e-9);
+    }
+  }
+
+  it('a constant clickRate of 4 equals clicksPerSecond 4 (600 s)', () => {
+    const plain = runGreedy(options(600));
+    const constant = runGreedy({ ...options(600), clickRate: () => 4 });
+    expect(constant.firstAt).toEqual(plain.firstAt);
+    expect(constant.purchases).toEqual(plain.purchases);
+  });
+
+  it('a switch at Worn Motor changes only later clicks', () => {
+    const plain = runGreedy(options(100));
+    const w = plain.firstAt.wornMotor;
+    if (!Number.isFinite(w)) throw new Error('expected Worn Motor within 100 s');
+    const switched = runGreedy({
+      ...options(100),
+      clickRate: (state) => (state.techLevels.wornMotor >= 1 ? 0.5 : 4),
+    });
+    expect(switched.firstAt.handCrank).toBe(plain.firstAt.handCrank);
+    expect(switched.firstAt.gearRatio).toBe(plain.firstAt.gearRatio);
+    expect(switched.firstAt.wornMotor).toBe(w);
+    expect(switched.purchases.filter((p) => p.t <= w)).toEqual(plain.purchases.filter((p) => p.t <= w));
+    // Steps 1..w click at 4/s; the later steps click at 0.5/s from zero debt, so one click every second step.
+    expect(switched.final.totalClicks).toBe(4 * w + Math.floor((100 - w) / 2));
+  });
+
+  // WP25 (P1 Generator rule): the rate is read at the start of each step, before its clicks and buys. The buy that
+  // owns the Generator happens after step tGen's clicks, so step tGen still clicks at 4/s and step tGen + 1 reads the
+  // owned Generator. No one-step adjustment is needed: steps 1..tGen give 4 x tGen clicks, and steps tGen + 1..T click at
+  // 0.5/s from zero debt, one click every second step, floor((T - tGen) / 2) clicks.
+  it('a Generator switch changes only the clicks after the Generator is owned (2000 s)', () => {
+    const plain = runGreedy(options(2000));
+    const tGen = plain.firstAt.generator;
+    if (!Number.isFinite(tGen)) throw new Error('expected the Generator within 2000 s');
+    const switched = runGreedy({
+      ...options(2000),
+      clickRate: (state) => (state.techLevels.generator >= 1 ? 0.5 : 4),
+    });
+    expect(switched.firstAt.generator).toBe(tGen);
+    expect(switched.purchases.filter((p) => p.t <= tGen)).toEqual(plain.purchases.filter((p) => p.t <= tGen));
+    expect(switched.final.totalClicks).toBe(4 * tGen + Math.floor((2000 - tGen) / 2));
+  });
+
+  it('0.5 cps is one click per 2 s', () => {
+    const clicksIn = (seconds: number): number =>
+      runGreedy({ ...options(seconds), clickRate: () => 0.5 }).final.totalClicks;
+    expect(clicksIn(10)).toBe(5);
+    expect(clicksIn(11)).toBe(5);
+    expect(clicksIn(12)).toBe(6);
+  });
+
+  it('a clickRate that is NaN, negative or infinite throws RangeError', () => {
+    for (const bad of [Number.NaN, -1, Number.POSITIVE_INFINITY]) {
+      expect(() => runGreedy({ ...options(5), clickRate: () => bad })).toThrow(RangeError);
+      expect(() => runGreedy({ ...options(5), clickRate: () => bad })).toThrow(/^runGreedy: clickRate/);
+    }
+  });
+
+  it('a clickRate of 0 is valid and gives no clicks', () => {
+    expect(runGreedy({ ...options(5), clickRate: () => 0 }).final.totalClicks).toBe(0);
+  });
+
+  it('state-based switch (P1e rule): each step reads motorTuning at its start, so the change lands the step after the buy', () => {
+    const calls: Array<{ t: number; level: number; rate: number }> = [];
+    const run = runGreedy({
+      ...options(600),
+      clickRate: (state, t) => {
+        const level = state.techLevels.motorTuning;
+        const rate = level >= 5 ? 0.5 : 4;
+        calls.push({ t, level, rate });
+        return rate;
+      },
+    });
+    const fifth = run.purchases.filter((p) => p.id === 'motorTuning')[4];
+    if (fifth === undefined) throw new Error('expected a 5th motorTuning purchase within 600 s');
+    const p = fifth.t;
+    expect(calls.length).toBe(600);
+    for (const c of calls) {
+      if (c.t <= p) {
+        expect(c.level).toBeLessThan(5);
+        expect(c.rate).toBe(4);
+      } else {
+        expect(c.level).toBeGreaterThanOrEqual(5);
+        expect(c.rate).toBe(0.5);
+      }
+    }
+    const next = calls.find((c) => c.t === p + 1);
+    if (next === undefined) throw new Error('expected a call at p + 1');
+    expect(next.level).toBeGreaterThanOrEqual(5);
+    expect(next.rate).toBe(0.5);
+  });
+
+  it('trackIncome leaves firstAt, purchases and final identical (600 s)', () => {
+    const plain = runGreedy(options(600));
+    const tracked = runGreedy({ ...options(600), trackIncome: true });
+    expect(tracked.firstAt).toEqual(plain.firstAt);
+    expect(tracked.purchases).toEqual(plain.purchases);
+    expect(tracked.final).toEqual(plain.final);
+  });
+
+  it('conservation: profile A (2000 s) income sums to the final lifetime per resource', () => {
+    const run = runGreedy({ ...options(2000), trackIncome: true });
+    expect(run.final.lifetime.ee).toBeGreaterThan(0);
+    expectConserved(run);
+  });
+
+  it('conservation holds with an offline schedule (100 s active / 3600 s offline, 600 s)', () => {
+    const run = runGreedy({
+      ...options(600),
+      trackIncome: true,
+      schedule: { activeSeconds: 100, offlineSeconds: 3600 },
+    });
+    expectConserved(run);
+  });
+
+  it('income is absent without trackIncome; with it all five eras exist; era-I manual ME share is in (0, 1)', () => {
+    expect(runGreedy(options(600)).income).toBeUndefined();
+    expect('income' in runGreedy(options(600))).toBe(false);
+    const income = runGreedy({ ...options(2000), trackIncome: true }).income;
+    if (income === undefined) throw new Error('expected income');
+    expect(Object.keys(income).sort()).toEqual(['1', '2', '3', '4', '5']);
+    const share = manualShare(income, 1, 'me');
+    expect(share).toBeGreaterThan(0);
+    expect(share).toBeLessThan(1);
+  });
+
+  it('manualShare: manual / (manual + passive) for the era and resource; 0 for an empty or non-finite total', () => {
+    const split = (manual: number, passive: number): IncomeSplit => ({
+      manual: { ...emptyResourceMap(), me: manual },
+      passive: { ...emptyResourceMap(), me: passive },
+    });
+    const income: Record<EraNumber, IncomeSplit> = {
+      1: split(25, 75),
+      2: split(0, 0),
+      3: split(Number.POSITIVE_INFINITY, 1),
+      4: split(0, 0),
+      5: split(0, 0),
+    };
+    expect(manualShare(income, 1, 'me')).toBe(0.25);
+    expect(manualShare(income, 2, 'me')).toBe(0);
+    expect(manualShare(income, 1, 'ee')).toBe(0);
+    expect(manualShare(income, 3, 'me')).toBe(0);
   });
 });

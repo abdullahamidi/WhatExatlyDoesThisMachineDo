@@ -56,7 +56,7 @@ const buyList = buys => page.evaluate((buys) => {
     }
     if (s.state.techLevels.wornMotor) jump();
     let r = s.purchase(id);
-    for (let k = 0; k < 6 && !r.ok; k++) { jump(); r = s.purchase(id); }
+    for (let k = 0; k < 64 && !r.ok; k++) { jump(); r = s.purchase(id); }
     o.push(id + ':' + r.ok);
   }
   return o;

@@ -27,6 +27,7 @@ export const SYSTEM_LOGS: readonly SystemLogEntry[] = [
   { id: 'idle-cycle', text: 'Idle cycle logged. Cycle has no beginning.', trigger: { kind: 'playSeconds', atLeast: 2400 } },
   { id: 'grid-handshake', text: 'Grid handshake sent. No grid answered.', trigger: { kind: 'lifetime', res: 'ee', atLeast: 1000 } },
   { id: 'load-beneath', text: 'Load detected 4 km beneath the surface.', trigger: { kind: 'lifetime', res: 'ee', atLeast: 100000 } },
+  { id: 'manual-optional', text: 'Manual operation no longer required. Still detected.', trigger: { kind: 'lifetime', res: 'ee', atLeast: 500000 } },
   { id: 'copper-memory', text: 'Copper remembers a current older than the copper.', trigger: { kind: 'lifetime', res: 'ee', atLeast: 1000000 } },
   { id: 'pressure-rising', text: 'Pressure rising. Safe limit field left blank.', trigger: { kind: 'lifetime', res: 'pr', atLeast: 1000 } },
   { id: 'perimeter-umbrella', text: 'Umbrella detected. Precipitation: none.', trigger: { kind: 'lifetime', res: 'pr', atLeast: 100000 } },

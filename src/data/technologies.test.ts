@@ -132,7 +132,17 @@ describe('technology table', () => {
         if (!found) missing.push(`${r}@era${era}`);
       }
     }
-    expect(missing).toEqual([]);
+    // WHY: era IV has no ME repeatable since crankServo moved to era II (WP25). The ME sink there is bellowsDrive
+    // (uncapped, era III, still buyable in era IV). Continuity A (WP25 Balance targets): ME spend 92 %, dead 4.0 min.
+    expect(missing).toEqual(['me@era4']);
+  });
+
+  it('era IV ME sink: bellowsDrive is an uncapped ME repeatable from era III', () => {
+    const def = TECHNOLOGIES.bellowsDrive;
+    expect(def.kind).toBe('repeatable');
+    expect(def.maxLevel).toBeNull();
+    expect(def.costRes).toBe('me');
+    expect(def.era).toBe(3);
   });
 
   it('Legacy Feed names fit the tree node (19 characters or fewer)', () => {
@@ -159,14 +169,14 @@ describe('technology table', () => {
     const expected: Record<TechId, [string, number, number | null, number | null]> = {
       handCrank: ['starting', 0, null, null],
       gearRatio: ['repeatable', 15, 1.3, 15],
-      reinforcedCrank: ['unlock', 2000, null, null],
+      reinforcedCrank: ['unlock', 2500, null, null],
       flywheel: ['repeatable', 4000, 1.35, 10],
       wornMotor: ['unlock', 40, null, null],
       motorTuning: ['repeatable', 60, 1.3, 25],
       pistonArray: ['unlock', 12000, null, null],
       improvedPistons: ['repeatable', 6000, 1.3, 25],
       generatorBlueprint: ['milestone', 0, null, null],
-      generator: ['unlock', 25000, null, null],
+      generator: ['unlock', 25500, null, null],
       copperWinding: ['repeatable', 60, 1.5, 25],
       motorRetrofit: ['repeatable', 20000, 1.35, 20],
       dynamoCrank: ['unlock', 400, null, null],
@@ -187,7 +197,7 @@ describe('technology table', () => {
       resonatorSpire: ['unlock', 1500000, null, null],
       harmonicCoil: ['repeatable', 200, 1.3, 25],
       pressureResonator: ['repeatable', 1000000, 1.35, 20],
-      crankServo: ['repeatable', 300000, 1.5, 10],
+      crankServo: ['repeatable', 30000, 1.5, 10],
       echoCrank: ['unlock', 10000, null, null],
       phaseLock: ['unlock', 50000, null, null],
       standingWave: ['repeatable', 100000, 1.3, 20],
@@ -203,7 +213,7 @@ describe('technology table', () => {
       skyAperture: ['unlock', 10000000, null, null],
       finalAlignment: ['milestone', 0, null, null],
       primaryFunction: ['unlock', 500000000, null, null],
-      bellowsDrive: ['repeatable', 250000, 2.5, null],
+      bellowsDrive: ['repeatable', 300000, 2.5, null],
       gridExciter: ['repeatable', 2000000, 1.4, null],
       mainsBackfeed: ['repeatable', 20000000, 1.4, null],
       steamLance: ['repeatable', 5000000, 1.4, null],
@@ -219,7 +229,7 @@ describe('technology table', () => {
   });
 
   it('reinforcedCrank effects and requirements', () => {
-    expect(TECHNOLOGIES.reinforcedCrank.effects).toEqual([{ type: 'clickMult', factor: 2 }]);
+    expect(TECHNOLOGIES.reinforcedCrank.effects).toEqual([{ type: 'clickMult', factor: 1.5 }]);
     expect(TECHNOLOGIES.reinforcedCrank.requires).toEqual([{ type: 'tech', id: 'gearRatio', minLevel: 3 }]);
   });
 
@@ -234,7 +244,7 @@ describe('technology table', () => {
     expect(gb.requires).toEqual([
       { type: 'tech', id: 'pistonArray', minLevel: 1 },
       { type: 'tech', id: 'flywheel', minLevel: 1 },
-      { type: 'lifetime', res: 'me', amount: 200000 },
+      { type: 'lifetime', res: 'me', amount: 240000 },
     ]);
   });
 
@@ -256,27 +266,27 @@ describe('era II technology table', () => {
   it('matches the C1 table exactly', () => {
     const expected = {
       generator: {
-        id: 'generator', kind: 'unlock', era: 2, costRes: 'me', baseCost: 25000, growth: null, maxLevel: null,
+        id: 'generator', kind: 'unlock', era: 2, costRes: 'me', baseCost: 25500, growth: null, maxLevel: null,
         tree: { col: 0, row: 1 }, branch: 'convergence',
-        effects: [{ type: 'convert', amount: 0.5, res: 'ee' }],
+        effects: [{ type: 'convert', amount: 0.38, res: 'ee' }],
         requires: [{ type: 'tech', id: 'generatorBlueprint', minLevel: 1 }],
       },
       copperWinding: {
         id: 'copperWinding', kind: 'repeatable', era: 2, costRes: 'ee', baseCost: 60, growth: 1.5, maxLevel: 25,
         tree: { col: 1, row: 0 }, branch: 'mechanical',
-        effects: [{ type: 'convert', amount: 0.25, res: 'ee' }],
+        effects: [{ type: 'convert', amount: 0.19, res: 'ee' }],
         requires: [{ type: 'tech', id: 'generator', minLevel: 1 }],
       },
       motorRetrofit: {
         id: 'motorRetrofit', kind: 'repeatable', era: 2, costRes: 'me', baseCost: 20000, growth: 1.35, maxLevel: 20,
         tree: { col: 1, row: 2 }, branch: 'automation',
-        effects: [{ type: 'autoAdd', amount: 15 }],
+        effects: [{ type: 'autoAdd', amount: 50 }],
         requires: [{ type: 'tech', id: 'generator', minLevel: 1 }],
       },
       dynamoCrank: {
         id: 'dynamoCrank', kind: 'unlock', era: 2, costRes: 'ee', baseCost: 400, growth: null, maxLevel: null,
         tree: { col: 2, row: 0 }, branch: 'origin',
-        effects: [{ type: 'clickEcho', seconds: 1, res: 'ee' }],
+        effects: [{ type: 'clickEcho', seconds: 0.25, res: 'ee' }],
         requires: [{ type: 'tech', id: 'copperWinding', minLevel: 3 }],
       },
       capacitorBank: {
@@ -288,7 +298,7 @@ describe('era II technology table', () => {
       sparkGap: {
         id: 'sparkGap', kind: 'unlock', era: 2, costRes: 'ee', baseCost: 10000, growth: null, maxLevel: null,
         tree: { col: 3, row: 0 }, branch: 'origin',
-        effects: [{ type: 'clickMult', factor: 3 }],
+        effects: [{ type: 'clickMult', factor: 1.5 }],
         requires: [{ type: 'tech', id: 'dynamoCrank', minLevel: 1 }],
       },
       transformer: {
@@ -316,10 +326,16 @@ describe('era II technology table', () => {
           { type: 'lifetime', res: 'ee', amount: 4000000 },
         ],
       },
+      crankServo: {
+        id: 'crankServo', kind: 'repeatable', era: 2, costRes: 'me', baseCost: 30000, growth: 1.5, maxLevel: 10,
+        tree: { col: 2, row: 2 }, branch: 'origin',
+        effects: [{ type: 'autoClick', perSecond: 1 }],
+        requires: [{ type: 'tech', id: 'motorRetrofit', minLevel: 1 }],
+      },
     };
     expect(ERA_TWO_IDS).toEqual([
       'generator', 'copperWinding', 'motorRetrofit', 'dynamoCrank', 'capacitorBank',
-      'sparkGap', 'transformer', 'powerLines', 'substationBlueprint',
+      'sparkGap', 'transformer', 'powerLines', 'substationBlueprint', 'crankServo',
     ]);
     for (const id of ERA_TWO_IDS) {
       expect(project(TECHNOLOGIES[id])).toEqual(expected[id as keyof typeof expected]);
@@ -330,10 +346,10 @@ describe('era II technology table', () => {
     expect(TECHNOLOGIES.generator.description).toBe('A coil and a magnet. Converts motion into current.');
     expect(TECHNOLOGIES.generator.flavor).toBe('Current detected. Destination: unlisted.');
     expect(TECHNOLOGIES.copperWinding.description).toBe('Tighter copper turns. More EE from the same motion.');
-    expect(TECHNOLOGIES.motorRetrofit.description).toBe('The old motor, rewired. +15 ME/s per level.');
+    expect(TECHNOLOGIES.motorRetrofit.description).toBe('The old motor, rewired. +50 ME/s per level.');
     expect(TECHNOLOGIES.dynamoCrank.description).toBe('The crank now feeds a dynamo. Clicks echo current.');
     expect(TECHNOLOGIES.capacitorBank.description).toBe('Stores a surge and releases it later. Doubles EE production.');
-    expect(TECHNOLOGIES.sparkGap.description).toBe('A gap that should not conduct. It does. Triples manual production.');
+    expect(TECHNOLOGIES.sparkGap.description).toBe('A gap that should not conduct. It does. ×1.5 manual production.');
     expect(TECHNOLOGIES.transformer.description).toBe('Steps voltage. Nobody specified which way. +15% EE production per level.');
     expect(TECHNOLOGIES.powerLines.description).toBe('Lines run toward nothing. Doubles ME production.');
     expect(TECHNOLOGIES.substationBlueprint.description).toBe('The machine has begun to resemble a grid node.');
@@ -341,15 +357,15 @@ describe('era II technology table', () => {
   });
 
   it('era-II techs without a given flavor have none', () => {
-    for (const id of ['copperWinding', 'motorRetrofit', 'dynamoCrank', 'capacitorBank', 'sparkGap', 'transformer', 'powerLines'] as const) {
+    for (const id of ['copperWinding', 'motorRetrofit', 'dynamoCrank', 'capacitorBank', 'sparkGap', 'transformer', 'powerLines', 'crankServo'] as const) {
       expect(TECHNOLOGIES[id].flavor).toBeUndefined();
     }
   });
 
-  it('era-II costRes: ee except generator and motorRetrofit (me), era I never ee', () => {
+  it('era-II costRes: ee except generator, motorRetrofit and crankServo (me), era I never ee', () => {
     for (const id of ERA_ONE_IDS) expect(TECHNOLOGIES[id].costRes).not.toBe('ee');
-    // generator and motorRetrofit are bought with ME (C1); the rest of era II costs EE.
-    const meCost: readonly TechId[] = ['generator', 'motorRetrofit'];
+    // generator, motorRetrofit and crankServo are bought with ME (crankServo moved here in WP25); the rest of era II costs EE.
+    const meCost: readonly TechId[] = ['generator', 'motorRetrofit', 'crankServo'];
     for (const id of ERA_TWO_IDS) {
       expect(TECHNOLOGIES[id].costRes).toBe(meCost.includes(id) ? 'me' : 'ee');
     }
@@ -366,25 +382,25 @@ describe('era III technology table', () => {
       boiler: {
         id: 'boiler', kind: 'unlock', era: 3, costRes: 'ee', baseCost: 1000000, growth: null, maxLevel: null,
         tree: { col: 0, row: 1 }, branch: 'convergence',
-        effects: [{ type: 'convert', amount: 0.3, res: 'pr' }],
+        effects: [{ type: 'convert', amount: 0.27, res: 'pr' }],
         requires: [{ type: 'tech', id: 'substationBlueprint', minLevel: 1 }],
       },
       firebox: {
         id: 'firebox', kind: 'repeatable', era: 3, costRes: 'pr', baseCost: 1000, growth: 1.3, maxLevel: 25,
         tree: { col: 1, row: 0 }, branch: 'mechanical',
-        effects: [{ type: 'convert', amount: 0.15, res: 'pr' }],
+        effects: [{ type: 'convert', amount: 0.14, res: 'pr' }],
         requires: [{ type: 'tech', id: 'boiler', minLevel: 1 }],
       },
       inductionHeater: {
         id: 'inductionHeater', kind: 'repeatable', era: 3, costRes: 'ee', baseCost: 300000, growth: 1.35, maxLevel: 20,
         tree: { col: 1, row: 2 }, branch: 'automation',
-        effects: [{ type: 'autoAdd', amount: 5, res: 'pr' }],
+        effects: [{ type: 'autoAdd', amount: 4.5, res: 'pr' }],
         requires: [{ type: 'tech', id: 'boiler', minLevel: 1 }],
       },
       steamHammer: {
         id: 'steamHammer', kind: 'unlock', era: 3, costRes: 'pr', baseCost: 10000, growth: null, maxLevel: null,
         tree: { col: 2, row: 0 }, branch: 'origin',
-        effects: [{ type: 'clickEcho', seconds: 1, res: 'pr' }],
+        effects: [{ type: 'clickEcho', seconds: 0.25, res: 'pr' }],
         requires: [{ type: 'tech', id: 'firebox', minLevel: 3 }],
       },
       superheater: {
@@ -425,7 +441,7 @@ describe('era III technology table', () => {
         ],
       },
       bellowsDrive: {
-        id: 'bellowsDrive', kind: 'repeatable', era: 3, costRes: 'me', baseCost: 250000, growth: 2.5, maxLevel: null,
+        id: 'bellowsDrive', kind: 'repeatable', era: 3, costRes: 'me', baseCost: 300000, growth: 2.5, maxLevel: null,
         tree: { col: 2, row: 2 }, branch: 'automation',
         effects: [{ type: 'autoPct', percent: 8, res: 'pr' }],
         requires: [{ type: 'tech', id: 'boiler', minLevel: 1 }],
@@ -444,7 +460,7 @@ describe('era III technology table', () => {
     expect(TECHNOLOGIES.boiler.description).toBe('A sealed drum over a flame. Converts EE into pressure.');
     expect(TECHNOLOGIES.boiler.flavor).toBe('Pressure detected. Vessel rating: unlisted.');
     expect(TECHNOLOGIES.firebox.description).toBe('Fuel the fire. More PR from the same current.');
-    expect(TECHNOLOGIES.inductionHeater.description).toBe('Current turned to heat. +5 PR/s per level.');
+    expect(TECHNOLOGIES.inductionHeater.description).toBe('Current turned to heat. +4.5 PR/s per level.');
     expect(TECHNOLOGIES.steamHammer.description).toBe('A ram on the main shaft. Clicks echo pressure.');
     expect(TECHNOLOGIES.superheater.description).toBe('Steam heated past its rating. Doubles PR production.');
     expect(TECHNOLOGIES.condenser.description).toBe('Returns the water. +15% PR production per level.');
@@ -516,33 +532,27 @@ describe('era IV technology table', () => {
       resonatorSpire: {
         id: 'resonatorSpire', kind: 'unlock', era: 4, costRes: 'pr', baseCost: 1500000, growth: null, maxLevel: null,
         tree: { col: 0, row: 1 }, branch: 'convergence',
-        effects: [{ type: 'convert', amount: 0.2, res: 'rs' }],
+        effects: [{ type: 'convert', amount: 0.35, res: 'rs' }],
         requires: [{ type: 'tech', id: 'pressureVesselBlueprint', minLevel: 1 }],
       },
       harmonicCoil: {
         id: 'harmonicCoil', kind: 'repeatable', era: 4, costRes: 'rs', baseCost: 200, growth: 1.3, maxLevel: 25,
         tree: { col: 1, row: 0 }, branch: 'mechanical',
-        effects: [{ type: 'convert', amount: 0.1, res: 'rs' }],
+        effects: [{ type: 'convert', amount: 0.17, res: 'rs' }],
         requires: [{ type: 'tech', id: 'resonatorSpire', minLevel: 1 }],
       },
       pressureResonator: {
         id: 'pressureResonator', kind: 'repeatable', era: 4, costRes: 'pr', baseCost: 1000000, growth: 1.35, maxLevel: 20,
         tree: { col: 1, row: 2 }, branch: 'automation',
-        effects: [{ type: 'autoAdd', amount: 3, res: 'rs' }],
-        requires: [{ type: 'tech', id: 'resonatorSpire', minLevel: 1 }],
-      },
-      crankServo: {
-        id: 'crankServo', kind: 'repeatable', era: 4, costRes: 'me', baseCost: 300000, growth: 1.5, maxLevel: 10,
-        tree: { col: 2, row: 2 }, branch: 'origin',
-        effects: [{ type: 'autoClick', perSecond: 1 }],
+        effects: [{ type: 'autoAdd', amount: 5.3, res: 'rs' }],
         requires: [{ type: 'tech', id: 'resonatorSpire', minLevel: 1 }],
       },
       echoCrank: {
         id: 'echoCrank', kind: 'unlock', era: 4, costRes: 'rs', baseCost: 10000, growth: null, maxLevel: null,
         tree: { col: 2, row: 0 }, branch: 'origin',
         effects: [
-          { type: 'clickEcho', seconds: 2, res: 'rs' },
-          { type: 'clickMult', factor: 5 },
+          { type: 'clickEcho', seconds: 0.5, res: 'rs' },
+          { type: 'clickMult', factor: 2 },
         ],
         requires: [{ type: 'tech', id: 'harmonicCoil', minLevel: 3 }],
       },
@@ -585,7 +595,7 @@ describe('era IV technology table', () => {
       },
     };
     expect(ERA_FOUR_IDS).toEqual([
-      'resonatorSpire', 'harmonicCoil', 'pressureResonator', 'crankServo', 'echoCrank',
+      'resonatorSpire', 'harmonicCoil', 'pressureResonator', 'echoCrank',
       'phaseLock', 'standingWave', 'crystalLattice', 'harmonicConvergence', 'gridExciter',
     ]);
     for (const id of ERA_FOUR_IDS) {
@@ -597,9 +607,9 @@ describe('era IV technology table', () => {
     expect(TECHNOLOGIES.resonatorSpire.description).toBe('A lattice tower over a steam oscillator. Converts PR into resonance.');
     expect(TECHNOLOGIES.resonatorSpire.flavor).toBe('Tower raised. It was already humming.');
     expect(TECHNOLOGIES.harmonicCoil.description).toBe('Toroidal winding on the tower. More RS from the same pressure.');
-    expect(TECHNOLOGIES.pressureResonator.description).toBe('Steam whistles on the manifold. +3 RS/s per level.');
+    expect(TECHNOLOGIES.pressureResonator.description).toBe('Steam whistles on the manifold. +5.3 RS/s per level.');
     expect(TECHNOLOGIES.crankServo.description).toBe('A gearbox turns the crank for you, offline too. Each auto-crank yields a full click of every energy.');
-    expect(TECHNOLOGIES.echoCrank.description).toBe('A fork rings with every turn. Clicks echo 2s of RS; ×5 manual ME.');
+    expect(TECHNOLOGIES.echoCrank.description).toBe('A fork rings with every turn. Clicks echo 0.5s of RS; ×2 manual ME.');
     expect(TECHNOLOGIES.phaseLock.description).toBe('Twin mirrors broadcast the locked phase. ×1.25 all production.');
     expect(TECHNOLOGIES.standingWave.description).toBe('The rod holds its note. +15% RS production per level.');
     expect(TECHNOLOGIES.crystalLattice.description).toBe('Quartz in the crown. Doubles PR and EE production.');
@@ -610,7 +620,7 @@ describe('era IV technology table', () => {
   });
 
   it('era-IV techs without a given flavor have none', () => {
-    for (const id of ['harmonicCoil', 'pressureResonator', 'crankServo', 'echoCrank', 'phaseLock', 'standingWave', 'crystalLattice', 'gridExciter'] as const) {
+    for (const id of ['harmonicCoil', 'pressureResonator', 'echoCrank', 'phaseLock', 'standingWave', 'crystalLattice', 'gridExciter'] as const) {
       expect(TECHNOLOGIES[id].flavor).toBeUndefined();
     }
   });
@@ -627,13 +637,13 @@ describe('era IV technology table', () => {
     expect(new Set(keys).size).toBe(ERA_FOUR_IDS.length);
   });
 
-  it('costRes: me only on crankServo, ee on gridExciter, pr on resonatorSpire and pressureResonator, rs on the rest', () => {
+  it('costRes: no me in era IV, ee on gridExciter, pr on resonatorSpire and pressureResonator, rs on the rest', () => {
     const prCost: readonly TechId[] = ['resonatorSpire', 'pressureResonator'];
     for (const id of ERA_FOUR_IDS) {
-      const expectedRes = id === 'crankServo' ? 'me' : id === 'gridExciter' ? 'ee' : prCost.includes(id) ? 'pr' : 'rs';
+      const expectedRes = id === 'gridExciter' ? 'ee' : prCost.includes(id) ? 'pr' : 'rs';
       expect(TECHNOLOGIES[id].costRes).toBe(expectedRes);
     }
-    expect(ERA_FOUR_IDS.filter((id) => TECHNOLOGIES[id].costRes === 'me')).toEqual(['crankServo']);
+    expect(ERA_FOUR_IDS.filter((id) => TECHNOLOGIES[id].costRes === 'me')).toEqual([]);
   });
 
   it('autoClick appears exactly once in the table, on crankServo with perSecond 1', () => {
@@ -686,20 +696,20 @@ describe('era V technology table', () => {
       nullChamber: {
         id: 'nullChamber', kind: 'unlock', era: 5, costRes: 'rs', baseCost: 8000000, growth: null, maxLevel: null,
         tree: { col: 0, row: 1 }, branch: 'convergence',
-        effects: [{ type: 'convert', amount: 0.1, res: 'xf' }],
+        effects: [{ type: 'convert', amount: 0.094, res: 'xf' }],
         requires: [{ type: 'tech', id: 'harmonicConvergence', minLevel: 1 }],
       },
       containmentRing: {
         id: 'containmentRing', kind: 'repeatable', era: 5, costRes: 'xf', baseCost: 300, growth: 1.25, maxLevel: 25,
         tree: { col: 1, row: 0 }, branch: 'mechanical',
-        effects: [{ type: 'convert', amount: 0.05, res: 'xf' }],
+        effects: [{ type: 'convert', amount: 0.047, res: 'xf' }],
         requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
       },
       resonantSiphon: {
         id: 'resonantSiphon', kind: 'repeatable', era: 5, costRes: 'rs', baseCost: 10000000, growth: 1.3, maxLevel: 20,
         tree: { col: 1, row: 2 }, branch: 'automation',
         effects: [
-          { type: 'autoAdd', amount: 2, res: 'xf' },
+          { type: 'autoAdd', amount: 1.9, res: 'xf' },
           { type: 'autoPct', percent: 5, res: 'xf' },
         ],
         requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
@@ -713,7 +723,7 @@ describe('era V technology table', () => {
       inversionCrank: {
         id: 'inversionCrank', kind: 'unlock', era: 5, costRes: 'xf', baseCost: 4000, growth: null, maxLevel: null,
         tree: { col: 2, row: 0 }, branch: 'origin',
-        effects: [{ type: 'clickEcho', seconds: 3, res: 'xf' }],
+        effects: [{ type: 'clickEcho', seconds: 0.75, res: 'xf' }],
         requires: [{ type: 'tech', id: 'containmentRing', minLevel: 3 }],
       },
       lensArray: {
@@ -780,9 +790,9 @@ describe('era V technology table', () => {
     expect(TECHNOLOGIES.nullChamber.description).toBe('A lantern on the spire holds a sphere of nothing. Converts RS into ???.');
     expect(TECHNOLOGIES.nullChamber.flavor).toBe('Chamber sealed around nothing. Nothing is rising.');
     expect(TECHNOLOGIES.containmentRing.description).toBe('Another ring around the core. More ??? from the same resonance.');
-    expect(TECHNOLOGIES.resonantSiphon.description).toBe('Glass siphons arc resonance into the core. +2 ???/s and +5% ??? production per level.');
+    expect(TECHNOLOGIES.resonantSiphon.description).toBe('Glass siphons arc resonance into the core. +1.9 ???/s and +5% ??? production per level.');
     expect(TECHNOLOGIES.graviticAnchor.description).toBe('Piles at both ends guy the crown to the ground. ×1.1 all production per level.');
-    expect(TECHNOLOGIES.inversionCrank.description).toBe('Every turn leaves a turn going the other way. Clicks echo 3s of ???.');
+    expect(TECHNOLOGIES.inversionCrank.description).toBe('Every turn leaves a turn going the other way. Clicks echo 0.75s of ???.');
     expect(TECHNOLOGIES.lensArray.description).toBe('Three lenses gather the core into one line. Doubles ??? production.');
     expect(TECHNOLOGIES.horizonField.description).toBe('The horizon glows on every side. +15% ??? production per level.');
     expect(TECHNOLOGIES.skyAperture.description).toBe('The crown opens to the sky. ×3 all production.');
@@ -901,8 +911,8 @@ describe('era V technology table', () => {
   });
 });
 
-describe('era I rows are unchanged', () => {
-  // Copied from the era-I table at HEAD before WP8.
+describe('era I rows match the WP25 literal', () => {
+  // Copied from the era-I table at HEAD before WP8, re-pinned to the WP25 retune (patch.json).
   const ERA_ONE_LITERAL: Record<string, TechDefinition> = {
     handCrank: {
       id: 'handCrank',
@@ -930,9 +940,9 @@ describe('era I rows are unchanged', () => {
       baseCost: 15,
       growth: 1.3,
       maxLevel: 15,
-      effects: [{ type: 'clickAdd', amount: 1 }],
+      effects: [{ type: 'clickAdd', amount: 0.5 }],
       requires: [{ type: 'tech', id: 'handCrank', minLevel: 1 }],
-      description: 'Better-meshed gears. +1 ME per click per level.',
+      description: 'Better-meshed gears. +0.5 ME per click per level.',
       tree: { col: 1, row: 0 },
     },
     reinforcedCrank: {
@@ -942,12 +952,12 @@ describe('era I rows are unchanged', () => {
       branch: 'mechanical',
       era: 1,
       costRes: 'me',
-      baseCost: 2000,
+      baseCost: 2500,
       growth: null,
       maxLevel: null,
-      effects: [{ type: 'clickMult', factor: 2 }],
+      effects: [{ type: 'clickMult', factor: 1.5 }],
       requires: [{ type: 'tech', id: 'gearRatio', minLevel: 3 }],
-      description: 'A sturdier crank arm. Doubles manual production.',
+      description: 'A sturdier crank arm. ×1.5 manual production.',
       flavor: 'This component was not designed to be replaced.',
       tree: { col: 2, row: 0 },
     },
@@ -979,9 +989,9 @@ describe('era I rows are unchanged', () => {
       baseCost: 40,
       growth: null,
       maxLevel: null,
-      effects: [{ type: 'autoAdd', amount: 1 }],
+      effects: [{ type: 'autoAdd', amount: 17 }],
       requires: [{ type: 'tech', id: 'handCrank', minLevel: 1 }],
-      description: 'A salvaged motor that turns by itself. +1 ME/s.',
+      description: 'A salvaged motor that turns by itself. +17 ME/s.',
       flavor: 'Synchronization unsuccessful.',
       tree: { col: 1, row: 2 },
     },
@@ -995,9 +1005,9 @@ describe('era I rows are unchanged', () => {
       baseCost: 60,
       growth: 1.3,
       maxLevel: 25,
-      effects: [{ type: 'autoAdd', amount: 1 }],
+      effects: [{ type: 'autoAdd', amount: 3.3 }],
       requires: [{ type: 'tech', id: 'wornMotor', minLevel: 1 }],
-      description: 'Adjustments to the worn motor. +1 ME/s per level.',
+      description: 'Adjustments to the worn motor. +3.3 ME/s per level.',
       tree: { col: 2, row: 2 },
     },
     pistonArray: {
@@ -1010,9 +1020,9 @@ describe('era I rows are unchanged', () => {
       baseCost: 12000,
       growth: null,
       maxLevel: null,
-      effects: [{ type: 'autoAdd', amount: 5 }],
+      effects: [{ type: 'autoAdd', amount: 17 }],
       requires: [{ type: 'tech', id: 'motorTuning', minLevel: 5 }],
-      description: 'Rows of pistons hammering in sequence. +5 ME/s.',
+      description: 'Rows of pistons hammering in sequence. +17 ME/s.',
       tree: { col: 3, row: 2 },
     },
     improvedPistons: {
@@ -1025,9 +1035,9 @@ describe('era I rows are unchanged', () => {
       baseCost: 6000,
       growth: 1.3,
       maxLevel: 25,
-      effects: [{ type: 'autoAdd', amount: 2 }],
+      effects: [{ type: 'autoAdd', amount: 6.7 }],
       requires: [{ type: 'tech', id: 'pistonArray', minLevel: 1 }],
-      description: 'Tighter tolerances, harder strokes. +2 ME/s per level.',
+      description: 'Tighter tolerances, harder strokes. +6.7 ME/s per level.',
       tree: { col: 4, row: 2 },
     },
     generatorBlueprint: {
@@ -1044,7 +1054,7 @@ describe('era I rows are unchanged', () => {
       requires: [
         { type: 'tech', id: 'pistonArray', minLevel: 1 },
         { type: 'tech', id: 'flywheel', minLevel: 1 },
-        { type: 'lifetime', res: 'me', amount: 200000 },
+        { type: 'lifetime', res: 'me', amount: 240000 },
       ],
       description: 'Something in the machine has begun to resemble a plan.',
       flavor: 'Primary function: UNKNOWN.',
@@ -1052,7 +1062,7 @@ describe('era I rows are unchanged', () => {
     },
   };
 
-  it('every era-I definition deep-equals the HEAD literal', () => {
+  it('every era-I definition deep-equals the WP25 literal', () => {
     expect(Object.keys(ERA_ONE_LITERAL)).toHaveLength(9);
     for (const id of ERA_ONE_IDS) {
       expect(TECHNOLOGIES[id]).toEqual(ERA_ONE_LITERAL[id]);
@@ -1092,5 +1102,49 @@ describe('balance constants', () => {
     expect(AUTOSAVE_INTERVAL_MS).toBe(15000);
     expect(SAVE_KEY).toBe('wedtmd.save');
     expect(SAVE_BACKUP_KEY).toBe('wedtmd.save.corrupt');
+  });
+});
+
+describe('tech descriptions match their effects (WP25)', () => {
+  // A4 guard: every number a description states must be the value of an effect of the same tech, so a retune
+  // cannot leave stale text behind. The multiplication sign is written as \u00d7 so the source stays ASCII.
+  const RATE_RE = /\+(\d+(?:\.\d+)?) (ME|EE|PR|RS|\?\?\?)\/s/g; // "+17 ME/s", "+1.9 ???/s"
+  const PERCENT_RE = /\+(\d+(?:\.\d+)?)%/g; // "+15% EE production"
+  const FACTOR_RE = /\u00d7(\d+(?:\.\d+)?)/g; // "\u00d71.5 manual production"
+  const ECHO_RE = /echo (\d+(?:\.\d+)?)s/g; // "Clicks echo 0.5s of RS"
+  const PER_CLICK_RE = /\+(\d+(?:\.\d+)?) ME per click/g; // "+0.5 ME per click per level"
+
+  // Values carried by the effects of one tech.
+  const autoAddFor = (id: TechId, label: string): number[] =>
+    TECHNOLOGIES[id].effects.flatMap((e) => (e.type === 'autoAdd' && RESOURCES[e.res ?? 'me'].short === label ? [e.amount] : []));
+  const autoPcts = (id: TechId): number[] => TECHNOLOGIES[id].effects.flatMap((e) => (e.type === 'autoPct' ? [e.percent] : []));
+  const factors = (id: TechId): number[] =>
+    TECHNOLOGIES[id].effects.flatMap((e) => (e.type === 'clickMult' || e.type === 'rateMult' ? [e.factor] : []));
+  const echoSeconds = (id: TechId): number[] => TECHNOLOGIES[id].effects.flatMap((e) => (e.type === 'clickEcho' ? [e.seconds] : []));
+  const clickAdds = (id: TechId): number[] => TECHNOLOGIES[id].effects.flatMap((e) => (e.type === 'clickAdd' ? [e.amount] : []));
+
+  // Every claim in the description of `id`; holds is true when one of the tech's effects carries the claimed value.
+  interface Claim { text: string; holds: boolean }
+  const claimsOf = (id: TechId): Claim[] => {
+    const description = TECHNOLOGIES[id].description;
+    const claims: Claim[] = [];
+    for (const m of description.matchAll(RATE_RE)) claims.push({ text: m[0], holds: autoAddFor(id, String(m[2])).includes(Number(m[1])) });
+    for (const m of description.matchAll(PERCENT_RE)) claims.push({ text: m[0], holds: autoPcts(id).includes(Number(m[1])) });
+    for (const m of description.matchAll(FACTOR_RE)) claims.push({ text: m[0], holds: factors(id).includes(Number(m[1])) });
+    for (const m of description.matchAll(ECHO_RE)) claims.push({ text: m[0], holds: echoSeconds(id).includes(Number(m[1])) });
+    for (const m of description.matchAll(PER_CLICK_RE)) claims.push({ text: m[0], holds: clickAdds(id).includes(Number(m[1])) });
+    if (description.includes('Doubles')) claims.push({ text: 'Doubles', holds: factors(id).includes(2) });
+    if (description.includes('Triples')) claims.push({ text: 'Triples', holds: factors(id).includes(3) });
+    return claims;
+  };
+  const numericClaims = (): Claim[] => TECH_IDS.flatMap((id) => claimsOf(id).filter((c) => /\d/.test(c.text)));
+
+  it('every numeric claim in a description is backed by an effect of the same tech', () => {
+    const broken = TECH_IDS.flatMap((id) => claimsOf(id).filter((c) => !c.holds).map((c) => `${id}: ${c.text}`));
+    expect(broken).toEqual([]);
+  });
+
+  it('the guard is not vacuous: at least 25 numeric claims are checked', () => {
+    expect(numericClaims().length).toBeGreaterThanOrEqual(25);
   });
 });

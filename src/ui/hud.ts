@@ -157,6 +157,8 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
   // Write caches: each field touches the DOM only when its value changes.
   const setTitle = cachedWrite<string>(HUD_TEXT.eraTitles[0], (text) => { titleEl.textContent = text; });
   const setPrimary = cachedWrite<string>(INITIAL_CLICK, (text) => { clickValue.textContent = text; });
+  // WP25 C4: the click row's tooltip explains the worth suffix; empty removes the tooltip.
+  const setClickTitle = cachedWrite<string | null>(null, (t) => { clickRow.title = t ?? ''; });
   const setSecondary = cachedWrite<string | null>(null, (text) => {
     clickSub.textContent = text ?? '';
     clickSub.style.display = text === null ? 'none' : '';
@@ -177,6 +179,7 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
       setTitle(view.title);
       for (const rowView of view.rows) resourceRows.get(rowView.id)?.apply(rowView);
       setPrimary(view.click.primary);
+      setClickTitle(view.click.title);
       setSecondary(view.click.secondary);
       setAuto(view.autoCrank);
       setPlaque(view.plaque);
