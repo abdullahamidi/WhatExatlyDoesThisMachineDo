@@ -50,7 +50,7 @@ import { framingKeyOfPose, framingPose, isOnScreen, placeCast, unseenChangeOk, v
 import type { Rect, SpeakerAnchor } from '../math/worldPlacement';
 import { worldFinaleFrame } from '../math/worldFinale';
 import { clampGirlStep } from '../math/worldGirlStep';
-import { deriveWorldState } from '../math/worldState';
+import { deriveWorldState, lifetimeGatesOf } from '../math/worldState';
 import type { GirlStageName, VirgaMode, WorldStateInput, WorldVisualState } from '../math/worldState';
 import type { CrowLead, ScriptCastId, WorldFinalePort, WorldFinalePortInput, WorldFinaleResult, WorldScriptFrame } from '../math/worldScript';
 import { isDownbeat } from '../math/worldPlayback';
@@ -227,6 +227,24 @@ interface Plan {
 
 // The cast placement of the last plan with the inputs it was made from (WP24 r6-F3, placedFor).
 interface PlacedMemo { levels: Readonly<Record<TechId, number>>; cycle: number; ending: boolean; framing: FramingKey; placed: Placements }
+
+// The inputs buildPlan read when its last rebuild changed nothing, and the applied plan it compared with (WP24 F2). techLevels is replaced,
+// never mutated, so its identity is the key. Lifetime EE and PR enter as their gate bits (WP24 F3): raw EE grows every tick and would
+// never hit. Any other rebuild, a commit, a reset, a snap or a destroy drops the memo.
+interface PlanMemo {
+  levels: Readonly<Record<TechId, number>>;
+  edition: WorldStateInput['edition'];
+  gates: number;                // lifetimeGatesOf(ee, pr): the only lifetime inputs deriveWorldState reads
+  cycle: number;
+  dogLies: boolean;
+  motor: number;
+  condenser: number;
+  firebox: number;
+  standingWave: number;
+  observerOne: boolean;
+  phase: EndingPhase;
+  applied: Plan;
+}
 
 // wait: the bubble is not up yet (retried until placeWaitMs); shown: the bubble is up; hidden: it came down, the hold runs to doneAtMs.
 type LinePhase = 'wait' | 'shown' | 'hidden';
@@ -432,6 +450,8 @@ export class LivingWorldDirector implements WorldFinalePort {
   private applied: Plan | null = null;
   private wanted: Plan | null = null;
   private placedMemo: PlacedMemo | null = null;
+  // WP24 F2: the inputs of the last no-change buildPlan (null after any other rebuild, a commit, a reset or a snap).
+  private planMemo: PlanMemo | null = null;
   // The framing of the last built plan, for the debug state only (worldState). Rendering takes Plan.framing.
   private framing: FramingKey = 'e1';
   private timingCount = 0;
@@ -677,21 +697,25 @@ export class LivingWorldDirector implements WorldFinalePort {
   }
 
   // WP24 r5-F3: the clocks and the runners step on every second frame (the 2-frame cadence is structural). A heavy frame is the even one,
-  // or one with a crank click, a MK V downbeat, a pending snap, no ClocksOut yet, a film or the ending; it steps the clocks and the runners
-  // on the dt, crank and downbeat accumulated since the last heavy frame. A light frame draws the last output again at the real frame dt.
+  // or one with a crank click, a MK V downbeat, a pending snap, no ClocksOut yet, a film or the ending, or a frame whose next frame of the
+  // same length would pass cadenceMaxStepMs (WP24 F2: below about 16.7 fps every frame is heavy, so no dt is dropped; 20 fps and up keep
+  // the 2-frame cadence). It steps the clocks and the runners on the dt, crank and downbeat accumulated since the last heavy frame.
+  // A light frame draws the last output again at the real frame dt.
   private stepWorldCadence(step: number, crank: number): void {
     this.cadenceDtMs += step;
     this.cadenceCrank += crank;
     if (this.unisonEdge) this.cadenceBeat = true;
     this.cadenceFrame += 1;
-    const heavy = this.cadenceFrame % 2 === 0 || this.cadenceCrank > 0 || this.cadenceBeat || this.pendingSnap
-      || this.clocksOut === null || this.film !== null || this.session.state.ending.phase !== 'none';
+    // cadenceDtMs already holds this frame's step (above), so the sum is the dt of the next frame of the same length.
+    const heavy = this.cadenceFrame % 2 === 0 || this.cadenceDtMs + step > WORLD_BEHAVIOUR.cadenceMaxStepMs || this.cadenceCrank > 0
+      || this.cadenceBeat || this.pendingSnap || this.clocksOut === null || this.film !== null || this.session.state.ending.phase !== 'none';
     if (!heavy) {
       this.stepWorldClocks(0, 0, false, step, false);
       return;
     }
-    // WP24 r6-F1: the dt is capped at cadenceMaxStepMs (the excess is dropped). A walk tick is 125 ms and V6 allows one 8 px frame per
-    // step, so a long heavy step at a low frame rate must not cross two tick boundaries. The debug advance is not capped (advanceWorld).
+    // WP24 r6-F1: the dt is capped at cadenceMaxStepMs (the excess is dropped). WP24 F2: now a backstop for one frame above the cap (the heavy
+    // rule above takes every frame that would reach it). A walk tick is 125 ms and V6 allows one 8 px frame per step, so a long heavy step
+    // at a low frame rate must not cross two tick boundaries. The debug advance is not capped (advanceWorld).
     const dtAcc = Math.min(this.cadenceDtMs, WORLD_BEHAVIOUR.cadenceMaxStepMs);
     const crankAcc = this.cadenceCrank;
     const downbeatAcc = this.cadenceBeat;
@@ -756,6 +780,7 @@ export class LivingWorldDirector implements WorldFinalePort {
 
   destroy(): void {
     if (this.destroyed) return;
+    this.planMemo = null;
     for (const off of this.subs) off();
     this.subs = [];
     this.endAll(false, 'destroy');
@@ -902,6 +927,7 @@ export class LivingWorldDirector implements WorldFinalePort {
     this.pendingSnap = true;
     this.dirty = true;
     this.forceApply = true;
+    this.planMemo = null;
   }
 
   private onSettings(setting: WorldVoices): void {
@@ -1128,21 +1154,43 @@ export class LivingWorldDirector implements WorldFinalePort {
     const s = this.session.state;
     const levels = s.techLevels;
     const world = this.session.world;
+    const applied = this.applied;
+    // WP24 F2: the inputs are read as primitives first. A rebuild whose inputs all equal the memo (and the same applied plan) changes
+    // nothing: it returns before the derivation and the keys, with no allocation. Any other rebuild drops the memo.
+    const edition = this.edition.id;
+    const ee = s.lifetime.ee;
+    const pr = s.lifetime.pr;
+    // WP24 F3: the lifetime gates are the memo key; the raw ee and pr still feed deriveWorldState on a miss.
+    const gates = lifetimeGatesOf(ee, pr);
+    const cycle = this.session.prestige.cycle;
+    const dogLies = this.edition.demo && world.seenEver.includes('DOG-12');
+    const motor = this.tier.tierOf('motorRetrofit', levels);
+    const condenser = this.tier.tierOf('condenser', levels);
+    const firebox = this.tier.tierOf('firebox', levels);
+    const standingWave = this.tier.tierOf('standingWave', levels);
+    const observerOne = this.logsSeen.has('observer-one');
+    const phase = s.ending.phase;
+    const prior = this.planMemo;
+    if (prior !== null && prior.applied === applied && prior.levels === levels && prior.edition === edition && prior.gates === gates
+      && prior.cycle === cycle && prior.dogLies === dogLies && prior.motor === motor
+      && prior.condenser === condenser && prior.firebox === firebox && prior.standingWave === standingWave
+      && prior.observerOne === observerOne && prior.phase === phase) {
+      this.wanted = null;
+      this.forceApply = false;
+      return;
+    }
+    this.planMemo = null;
     const input: WorldStateInput = {
       levels,
-      lifetimeEe: s.lifetime.ee,
-      lifetimePr: s.lifetime.pr,
-      cycle: this.session.prestige.cycle,
-      edition: this.edition.id,
-      dogLies: this.edition.demo && world.seenEver.includes('DOG-12'),
-      motorRetrofitTier: this.tier.tierOf('motorRetrofit', levels),
-      tiers: {
-        condenser: this.tier.tierOf('condenser', levels),
-        firebox: this.tier.tierOf('firebox', levels),
-        standingWave: this.tier.tierOf('standingWave', levels),
-      },
-      observerOne: this.logsSeen.has('observer-one'),
-      phase: s.ending.phase,
+      lifetimeEe: ee,
+      lifetimePr: pr,
+      cycle,
+      edition,
+      dogLies,
+      motorRetrofitTier: motor,
+      tiers: { condenser, firebox, standingWave },
+      observerOne,
+      phase,
     };
     const state = deriveWorldState(input);
     // Every ending phase frames portrait (WP23b): the film and the postgame never move the placements with the camera.
@@ -1157,10 +1205,13 @@ export class LivingWorldDirector implements WorldFinalePort {
     const placeKey = JSON.stringify([state.visible, placements, framing]);
     // The whole plan: a placement-only change (a machine part that moves the framing) counts as a change too.
     const stateKey = JSON.stringify([state, placements, framing]);
-    const applied = this.applied;
     if (applied !== null && stateKey === applied.stateKey) {
       this.wanted = null;
       this.forceApply = false;
+      // The memo keeps this no-change rebuild unless the girl was clamped (dirty is set again then, so the rest is planned later).
+      if (girl === placed.girl) {
+        this.planMemo = { levels, edition, gates, cycle, dogLies, motor, condenser, firebox, standingWave, observerOne, phase, applied };
+      }
       return;
     }
     const gated = applied !== null && placeKey !== applied.placeKey;
@@ -1172,6 +1223,7 @@ export class LivingWorldDirector implements WorldFinalePort {
 
   private commit(plan: Plan): void {
     this.applied = plan;
+    this.planMemo = null;
     this.wanted = null;
     this.forceApply = false;
     this.applyVisual(plan.state, plan.placements, plan.framing);
@@ -1181,6 +1233,7 @@ export class LivingWorldDirector implements WorldFinalePort {
   private commitPartial(plan: Plan, applied: Plan): void {
     const next: Plan = { ...applied, state: plan.partialState, stateKey: plan.partialKey };
     this.applied = next;
+    this.planMemo = null;
     this.applyVisual(next.state, next.placements, next.framing);
   }
 
@@ -1201,6 +1254,7 @@ export class LivingWorldDirector implements WorldFinalePort {
     if (i === null) return;
     this.clocks.snap(i);
     this.pendingSnap = false;
+    this.planMemo = null;
   }
 
   // ---- time side (WP24 T10a1): the visual clock, the clocks input, the world sub-step and the scenery values ----

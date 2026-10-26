@@ -4,7 +4,7 @@
 // era-entry / opener / postgame gates, minEraS and the postgame minutes, each as a table with its boundary values.
 import { describe, it, expect } from 'vitest';
 import {
-  countedSeen, hourCapOf, idleReady, lineEligible, lineSettledId, momentGate, newMomentLog, noteMomentStart,
+  countedSeen, hourCapOf, idleReady, lineEligible, lineSettledId, momentGate, momentWindowOpen, newMomentLog, noteMomentStart,
   priorityOf, triggerGate, ttlOf,
 } from './worldVoiceRules';
 import type { OfferKind, WorldMomentLog, WorldRuleConfig, WorldSchedulerCtx } from './worldVoiceRules';
@@ -279,6 +279,81 @@ describe('R7 global moment gates', () => {
 
   it('a null lastStartMs is always clear', () => {
     expect(momentGate(line('INS-01'), 'buy', newMomentLog(), makeCtx({ nowMs: T0 }))).toBe(true);
+  });
+});
+
+describe('R7 momentWindowOpen (the global window; momentGate and the table-scan guard both read it)', () => {
+  const log = newMomentLog();
+
+  it('the all-open case: a default context with no start yet is open for idle, logReply and offline', () => {
+    expect(momentWindowOpen('idle', log, makeCtx())).toBe(true);
+    expect(momentWindowOpen('logReply', log, makeCtx())).toBe(true);
+    expect(momentWindowOpen('offline', log, makeCtx())).toBe(true);
+  });
+
+  it('any hard silence reason closes the window', () => {
+    for (const reason of ['quiet', 'tech-index', 'era-card', 'photo']) {
+      expect(momentWindowOpen('idle', log, makeCtx({ silence: reason })), reason).toBe(false);
+    }
+  });
+
+  it('first-moment play time: closed below firstMomentAfterMs, open at it; offline is exempt', () => {
+    expect(momentWindowOpen('idle', log, makeCtx({ playMs: CFG.firstMomentAfterMs - 1 }))).toBe(false);
+    expect(momentWindowOpen('idle', log, makeCtx({ playMs: CFG.firstMomentAfterMs }))).toBe(true);
+    expect(momentWindowOpen('offline', log, makeCtx({ playMs: 0 }))).toBe(true);
+  });
+
+  it('no click and no purchase close the window, offline too', () => {
+    expect(momentWindowOpen('idle', log, makeCtx({ hasClicked: false }))).toBe(false);
+    expect(momentWindowOpen('idle', log, makeCtx({ hasPurchased: false }))).toBe(false);
+    expect(momentWindowOpen('offline', log, makeCtx({ hasClicked: false }))).toBe(false);
+  });
+
+  it('warm-up closes every kind but offline; the warm-up end itself is open', () => {
+    expect(momentWindowOpen('idle', log, makeCtx({ warmupUntilMs: T0 + 1 }))).toBe(false);
+    expect(momentWindowOpen('offline', log, makeCtx({ warmupUntilMs: T0 + 1 }))).toBe(true);
+    expect(momentWindowOpen('idle', log, makeCtx({ warmupUntilMs: T0 }))).toBe(true);
+  });
+
+  it('a visible bubble closes the window', () => {
+    expect(momentWindowOpen('idle', log, makeCtx({ bubblesVisible: 1 }))).toBe(false);
+  });
+
+  it('the start gap: minGapMs for idle, demoNear and postgame (exact), logReplyGapMs for a log reply', () => {
+    const last = noteMomentStart(log, line('INS-02'), 1, T0, CFG);
+    expect(momentWindowOpen('idle', last, makeCtx({ nowMs: T0 + CFG.minGapMs - 1 }))).toBe(false);
+    expect(momentWindowOpen('idle', last, makeCtx({ nowMs: T0 + CFG.minGapMs }))).toBe(true);
+    for (const kind of ['idle', 'demoNear', 'postgame'] as const) {
+      expect(momentWindowOpen(kind, last, makeCtx({ nowMs: T0 + CFG.minGapMs - 1 })), kind).toBe(false);
+    }
+    expect(momentWindowOpen('logReply', last, makeCtx({ nowMs: T0 + CFG.logReplyGapMs - 1 }))).toBe(false);
+    expect(momentWindowOpen('logReply', last, makeCtx({ nowMs: T0 + CFG.logReplyGapMs }))).toBe(true);
+  });
+
+  it('momentGate keeps its answer: a core and a non-core line pass in an open window and fail in each closed one', () => {
+    const core = line('INS-01');
+    const plain = line('INS-02');
+    expect(momentGate(core, 'logReply', log, makeCtx())).toBe(true);
+    expect(momentGate(plain, 'buy', log, makeCtx())).toBe(true);
+    expect(momentGate(core, 'logReply', log, makeCtx({ playMs: 1_000 }))).toBe(false);
+    expect(momentGate(plain, 'buy', log, makeCtx({ playMs: 1_000 }))).toBe(false);
+    const last = noteMomentStart(log, line('INS-02'), 1, T0, CFG);
+    expect(momentGate(core, 'logReply', last, makeCtx({ nowMs: T0 + 1_000 }))).toBe(false);
+    expect(momentGate(core, 'buy', last, makeCtx({ nowMs: T0 + CFG.minGapMs - 1 }))).toBe(false);
+    expect(momentGate(core, 'buy', last, makeCtx({ nowMs: T0 + CFG.minGapMs }))).toBe(true);
+  });
+
+  it('momentGate is false for every line whenever the window is closed', () => {
+    const closed: WorldSchedulerCtx[] = [
+      makeCtx({ silence: 'quiet' }), makeCtx({ playMs: 1_000 }), makeCtx({ hasClicked: false }),
+      makeCtx({ hasPurchased: false }), makeCtx({ warmupUntilMs: T0 + 1 }), makeCtx({ bubblesVisible: 1 }),
+    ];
+    for (const ctx of closed) {
+      expect(momentWindowOpen('idle', log, ctx)).toBe(false);
+      for (const l of WORLD_LINES) {
+        expect(momentGate(l, 'idle', log, ctx), l.id).toBe(false);
+      }
+    }
   });
 });
 

@@ -4,9 +4,10 @@
 // stage, the dog pose, the girl stage and steps, the maxEra and ending gates, the monotone counts, and that inputs are never mutated.
 // Pure maths, no Phaser.
 import { describe, it, expect } from 'vitest';
-import { deriveWorldState, girlStepsOf, ruleMet } from './worldState';
+import { deriveWorldState, girlStepsOf, lifetimeGatesOf, ruleMet } from './worldState';
 import type { WorldStateInput, WorldVisualState } from './worldState';
 import type { TechId } from '../../data/types';
+import { WORLD_HOLE } from '../../data/livingWorld';
 import { WORLD_ERA_RULES, WORLD_PUDDLE, WORLD_VIRGA } from '../../data/worldEras';
 
 // The smoke stage buy lists (scripts/smoke/stages.mjs:6-19), copied as literals.
@@ -662,6 +663,66 @@ describe('deriveWorldState: nothing un-happens along the growth from S9 to S15',
       states.map((s) => s.girl.steps), states.map((s) => 3 - s.props.scraps), states.map((s) => s.girl.stage),
     ]) {
       expect(nonDecreasing(series)).toBe(true);
+    }
+  });
+});
+
+describe('lifetimeGatesOf: the lifetime thresholds (WP24 F3)', () => {
+  it('bit 1 is set at and above WORLD_HOLE.loadBeneathEe, bit 2 at and above WORLD_VIRGA.minLifetimePr, neither below', () => {
+    const EE = WORLD_HOLE.loadBeneathEe;
+    const PR = WORLD_VIRGA.minLifetimePr;
+    expect(lifetimeGatesOf(EE - 1, PR - 1)).toBe(0);
+    expect(lifetimeGatesOf(EE, PR - 1)).toBe(1);
+    expect(lifetimeGatesOf(EE - 1, PR)).toBe(2);
+    expect(lifetimeGatesOf(EE, PR)).toBe(3);
+    expect(lifetimeGatesOf(EE * 10, PR * 10)).toBe(3);
+  });
+
+  it('NaN passes neither gate', () => {
+    expect(lifetimeGatesOf(Number.NaN, Number.NaN)).toBe(0);
+    expect(lifetimeGatesOf(Number.NaN, WORLD_VIRGA.minLifetimePr)).toBe(2);
+    expect(lifetimeGatesOf(WORLD_HOLE.loadBeneathEe, Number.NaN)).toBe(1);
+  });
+
+  it('two EE values on the same side of the load-beneath gate derive the same state', () => {
+    const above = deriveWorldState(input(STAGE_BUYS.s9, { lifetimeEe: 100000, motorRetrofitTier: 3 }));
+    expect(deriveWorldState(input(STAGE_BUYS.s9, { lifetimeEe: 250000, motorRetrofitTier: 3 }))).toEqual(above);
+    const below = deriveWorldState(input(STAGE_BUYS.s9, { lifetimeEe: 0, motorRetrofitTier: 3 }));
+    expect(deriveWorldState(input(STAGE_BUYS.s9, { lifetimeEe: 99999, motorRetrofitTier: 3 }))).toEqual(below);
+  });
+
+  it('EE on opposite sides of the load-beneath gate changes the hole stage', () => {
+    expect(deriveWorldState(input(STAGE_BUYS.s9, { lifetimeEe: 99999, motorRetrofitTier: 3 })).props.holeStage).toBe(0);
+    expect(deriveWorldState(input(STAGE_BUYS.s9, { lifetimeEe: 100000, motorRetrofitTier: 3 })).props.holeStage).toBe(2);
+  });
+
+  it('two PR values on the same side of the virga gate derive the same state', () => {
+    const fall = deriveWorldState(input(S10, { lifetimePr: 1000000 }));
+    expect(deriveWorldState(input(S10, { lifetimePr: 5000000 }))).toEqual(fall);
+    const off = deriveWorldState(input(S10, { lifetimePr: 0 }));
+    expect(deriveWorldState(input(S10, { lifetimePr: 999999 }))).toEqual(off);
+  });
+
+  it('PR on opposite sides of the virga gate changes the virga state', () => {
+    expect(deriveWorldState(input(S10, { lifetimePr: 999999 })).props.virga).toBe('off');
+    expect(deriveWorldState(input(S10, { lifetimePr: 1000000 })).props.virga).toBe('fall');
+  });
+
+  it('the derived state depends only on the gate pair: each EE and PR sample equals its canonical gate values', () => {
+    const eeSamples = [0, 99999, 100000, 250000, Number.NaN];
+    const prSamples = [0, 999999, 1000000, 5000000, Number.NaN];
+    for (const buys of [S9, S12, S14]) {
+      for (const ee of eeSamples) {
+        for (const pr of prSamples) {
+          const gates = lifetimeGatesOf(ee, pr);
+          const canonical = input(buys, {
+            lifetimeEe: (gates & 1) !== 0 ? WORLD_HOLE.loadBeneathEe : 0,
+            lifetimePr: (gates & 2) !== 0 ? WORLD_VIRGA.minLifetimePr : 0,
+            motorRetrofitTier: 3,
+          });
+          expect(deriveWorldState(input(buys, { lifetimeEe: ee, lifetimePr: pr, motorRetrofitTier: 3 }))).toEqual(deriveWorldState(canonical));
+        }
+      }
     }
   });
 });

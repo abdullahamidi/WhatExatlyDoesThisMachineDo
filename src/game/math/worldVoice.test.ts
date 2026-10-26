@@ -1274,3 +1274,28 @@ describe('WP23b: setting OFF, beats and force', () => {
     expect(s.state().pending.map((p) => [p.id, p.kind, p.offerEra])).toEqual([['PAY-06', 'eraEntry', 3]]);
   });
 });
+
+describe('table-scan guard: a closed moment window skips the idle table (no on-screen test)', () => {
+  // Counts the on-screen tests: the table scan reaches onScreen only through lineEligible.
+  function counting(...speakers: string[]): { onScreen: (speaker: string) => boolean; calls: () => number } {
+    let n = 0;
+    return { onScreen: (speaker) => { n += 1; return speakers.includes(speaker); }, calls: () => n };
+  }
+
+  it('with the window closed (play time under 90 s, or a toast up) the tick asks no speaker and returns null', () => {
+    const early = counting('crow');
+    const s = createWorldScheduler();
+    expect(s.tick(makeCtx({ ...QUIET, playMs: 1_000, onScreen: early.onScreen, logsSeen: new Set(['observer-count']) }))).toBeNull();
+    expect(early.calls()).toBe(0);
+    const toast = counting('crow');
+    expect(s.tick(makeCtx({ ...QUIET, toastUp: true, onScreen: toast.onScreen, logsSeen: new Set(['observer-count']) }))).toBeNull();
+    expect(toast.calls()).toBe(0);
+  });
+
+  it('with the window open the same idle line still plays: CRW-02 once observer-count is logged', () => {
+    const open = counting('crow');
+    const s = createWorldScheduler();
+    expect(s.tick(makeCtx({ ...QUIET, onScreen: open.onScreen, logsSeen: new Set(['observer-count']) }))).toEqual(cueFor('CRW-02'));
+    expect(open.calls()).toBeGreaterThan(0);
+  });
+});

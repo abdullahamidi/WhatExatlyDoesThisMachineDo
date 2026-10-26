@@ -149,9 +149,30 @@ export function lineSettledId(id: string, world: Readonly<WorldSaveState>, cycle
 }
 
 /**
- * R7 + R8: may a moment start now? R7 (global, core too): silence, first-moment play time (not for offline), a click and
- * a purchase, warmup (not for offline), no bubble on screen, and the start gap (logReplyGapMs / postCapGapMs / minGapMs).
- * R8 (non-core only): era cap, rolling hour cap, same-era gap, per-denizen gap. `offerEra` defaults to ctx.era.
+ * R7 global gates (core too), read by momentGate and by the scheduler's table-scan guard (worldVoice.ts pickTick): silence,
+ * first-moment play time (not for offline), a click and a purchase, warmup (not for offline), no bubble on screen, and the
+ * start gap (logReplyGapMs / postCapGapMs / minGapMs against the last moment start). Offline skips the first-moment play time:
+ * DOG-07 is offered on the return from an absence (8 s after WELCOME BACK, bible 7.1), so it would wait 90 s of the new session
+ * and could expire first. Click and purchase still apply.
+ */
+export function momentWindowOpen(
+  kind: OfferKind,
+  log: WorldMomentLog,
+  ctx: WorldSchedulerCtx,
+  cfg: WorldRuleConfig = WORLD_VOICE_CONFIG,
+): boolean {
+  if (ctx.silence !== null) return false;
+  if ((kind !== 'offline' && ctx.playMs < cfg.firstMomentAfterMs) || !ctx.hasClicked || !ctx.hasPurchased) return false;
+  if (kind !== 'offline' && ctx.nowMs < ctx.warmupUntilMs) return false;
+  if (ctx.bubblesVisible !== 0) return false;
+  const gap = kind === 'logReply' ? cfg.logReplyGapMs : kind === 'postCap' ? cfg.postCapGapMs : cfg.minGapMs;
+  if (log.lastStartMs !== null && ctx.nowMs - log.lastStartMs < gap) return false;
+  return true;
+}
+
+/**
+ * R7 + R8: may a moment start now? R7 is momentWindowOpen (global, core too). R8 (non-core only): era cap, rolling hour cap,
+ * same-era gap, per-denizen gap. `offerEra` defaults to ctx.era.
  */
 export function momentGate(
   line: WorldLine,
@@ -161,14 +182,7 @@ export function momentGate(
   cfg: WorldRuleConfig = WORLD_VOICE_CONFIG,
   offerEra: number = ctx.era,
 ): boolean {
-  // R7 global gates. Offline skips the first-moment play time: DOG-07 is offered on the return from an absence (8 s after
-  // WELCOME BACK, bible 7.1), so it would wait 90 s of the new session and could expire first. Click and purchase still apply.
-  if (ctx.silence !== null) return false;
-  if ((kind !== 'offline' && ctx.playMs < cfg.firstMomentAfterMs) || !ctx.hasClicked || !ctx.hasPurchased) return false;
-  if (kind !== 'offline' && ctx.nowMs < ctx.warmupUntilMs) return false;
-  if (ctx.bubblesVisible !== 0) return false;
-  const gap = kind === 'logReply' ? cfg.logReplyGapMs : kind === 'postCap' ? cfg.postCapGapMs : cfg.minGapMs;
-  if (log.lastStartMs !== null && ctx.nowMs - log.lastStartMs < gap) return false;
+  if (!momentWindowOpen(kind, log, ctx, cfg)) return false;
   // R8 non-core gates. Core lines never wait for a cap.
   if (line.core === true) return true;
   if ((ctx.world.eraMoments[offerEra - 1] ?? 0) >= nonCoreCapOf(offerEra)) return false;
