@@ -35,8 +35,8 @@ Left for the user: Steam app/depot ids, capsule art, trailer, SteamPipe upload (
 | WP22 | Part evolution tiers (3/5 visual MK tiers per repeatable part, tier-up beat; user directive 2026-10-24) | ✅ done (merged e5b97c4; Opus review APPROVE, EM PASS, AD round 5 RELEASE-READY after F11 HUD-inset fix) |
 | WP23a | Living world: denizens, environment arc, world voice bubbles, eras I–II + demo cut | ✅ done (merged f1065df; AD2f RELEASE-READY; X1 tier port wired) |
 | WP23b | Living world eras III–V, finale, postgame, cycle 2+; then §R release refresh | ✅ done (merged f8a5d94; AD4 round 5 RELEASE-READY); §R checkpoint 6245240, re-run after WP24/WP25 |
-| WP25 | Passive-first economy: machine carries progression, click = optional bonus (user playtest 2026-10-25) | planned (docs/plan/WP25.md; worktree wedtmd-art, claude/eco-wp25) |
-| WP24 | Living world v2: varied continuous behaviour, recorded-Tuesday day clock, gradual transitions (user playtest 2026-10-25) | planned (docs/plan/WP24.md; worktree wedtmd-shell, claude/world-wp24; merges after WP25) |
+| WP25 | Passive-first economy: machine carries progression, click = optional bonus (user playtest 2026-10-25) | ✅ done (merged ca297ce; Opus review APPROVE, EM PASS, AD1 round 2 RELEASE-READY) |
+| WP24 | Living world v2: varied continuous behaviour, recorded-Tuesday day clock, gradual transitions (user playtest 2026-10-25) | running (wp-exec2, worktree wedtmd-shell, claude/world-wp24); X0 rebase onto ca297ce after it passes |
 | WP25b | Surge: click = very serious income (playtest reading R2), capped burst on top of WP25 | follow-up, only if the user asks |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
@@ -130,6 +130,11 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   at 59.83 s, reduced-motion variant); postgame 90 s loop (pat + "Good boy.", PAY-12, Sensor 7 turn, mark 42); cycle 2+ traces;
   optional machine logs perimeter-umbrella / perimeter-phase; X1 follow-ups closed. Art Waves B–C by the Opus AD. Opus review
   APPROVE, EM green, AD4 round 5 RELEASE-READY. vitest 148 files / 4736 pass; app 483.2 KB, lazy world 116.6 KB.
+- **WP25** passive-first economy (merged ca297ce; user playtest 2026-10-25): data-only V0p retune (click echoes cut, Crank Servo in
+  era II, per-energy passive tilt, era-I passive opening, Echo bonus 30 → 15 %, generator 25 500 by Director call), HUD click worth +
+  AUTO-CRANK rate, machine output popups, "Manual operation no longer required." log, tree edge detours, greedy clickRate + income split,
+  passiveFirst.sim + economy.mjs. 0.5-cps-after-era-I player PF 1.17× of active (was 1.73×), idle 1.20× (was 2.15×), manual share
+  25–31 % (was 74–80 %). vitest 151 files / 4887 pass; app 489.0 KB. Follow-up: Crank Servo arm vs X-brace contrast (AD N1).
 - **Art**: every sprite and background layer is PixelLab Pro in one locked palette from one style
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
