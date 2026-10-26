@@ -11,7 +11,7 @@ import type { EndingPhase, OfflineReport, TechId, WorldVoices } from '../../data
 import { SYSTEM_LOG_CONFIG } from '../../data/systemLogs';
 import { CAMERA, VIEW } from '../../data/world';
 import {
-  LIVING_WORLD, WORLD_A11Y_PREFIX, WORLD_CHAIN_STARTS, WORLD_GLANCE_SEED, WORLD_LAYOUT, WORLD_LINES, WORLD_ROWS,
+  LIVING_WORLD, WORLD_A11Y_PREFIX, WORLD_CHAIN_STARTS, WORLD_GLANCE_SEED, WORLD_LAYOUT, WORLD_LINES, WORLD_PLAYBACK, WORLD_ROWS,
   WORLD_VOICE_CONFIG,
 } from '../../data/livingWorld';
 import type {
@@ -19,6 +19,10 @@ import type {
 } from '../../data/livingWorld';
 import { WORLD_DOUBLE_EXPOSURE, WORLD_GIRL } from '../../data/worldEras';
 import { WORLD_ENDING, WORLD_POSTGAME_LOOP } from '../../data/worldEnding';
+import { WORLD_BEHAVIOUR, WORLD_SPOTS } from '../../data/worldBehaviour';
+import { WORLD_AMBIENT } from '../../data/worldDay';
+import type { BehaviourActor, CueId, SpotId, UnisonId } from '../../data/worldBehaviour';
+import { TIER_HEARTBEAT } from '../../data/machineTiers';
 import { expandWorldText } from '../../data/worldText';
 import type { GameSession } from '../../simulation';
 import { affordableTechIds } from '../../simulation/progression/affordable';
@@ -32,6 +36,14 @@ import type { WorldBubbleController } from '../../ui/worldBubbleController';
 import type { WorldVoiceView } from '../../ui/worldVoice';
 import type { GameFeedback, PartEvolvedEvent, PartTorquedEvent } from '../context';
 import type { CameraPose } from '../math/finale';
+import {
+  behaviourK0, behaviourSeed, createBehaviourRunner, createUnisonConductor, cycleSeedOf,
+} from '../math/worldBehaviour';
+import type {
+  BehaviourCtx, BehaviourFrame, BehaviourLogEntry, BehaviourRunner, UnisonConductor,
+} from '../math/worldBehaviour';
+import { createWorldClocks } from '../math/worldClocks';
+import type { ClocksInput, ClocksOut, WorldClocks } from '../math/worldClocks';
 import { bubbleDurationMs } from '../math/worldBubble';
 import { GLANCE_TARGETS, doubleExposureSchedule, glanceSchedule } from '../math/worldGlance';
 import { framingKeyOfPose, framingPose, isOnScreen, placeCast, unseenChangeOk, viewRectOf } from '../math/worldPlacement';
@@ -42,6 +54,7 @@ import { deriveWorldState } from '../math/worldState';
 import type { GirlStageName, VirgaMode, WorldStateInput, WorldVisualState } from '../math/worldState';
 import type { CrowLead, ScriptCastId, WorldFinalePort, WorldFinalePortInput, WorldFinaleResult, WorldScriptFrame } from '../math/worldScript';
 import { isDownbeat } from '../math/worldPlayback';
+import type { PlaybackMode } from '../math/worldPlayback';
 import { blipCount, talkTimeline } from '../math/worldTurn';
 import { WP22_TIER_PORT } from '../math/worldTierPort';
 import { createTierTracker } from '../math/worldTierRules';
@@ -52,6 +65,7 @@ import { createWorldScheduler } from '../math/worldVoice';
 import type { WorldScheduler } from '../math/worldVoice';
 import { lineSettledId } from '../math/worldVoiceRules';
 import type { WorldCue, WorldSchedulerCtx } from '../math/worldVoiceRules';
+import type { WorldTween } from '../math/worldTransitions';
 import { LivingWorld } from './LivingWorld';
 import type { LivingId } from './LivingWorld';
 import { WorldAtmos } from './WorldAtmos';
@@ -155,8 +169,9 @@ export interface WorldDebugScript {
 // The film or postgame frame and its clocks, as the port last applied them.
 interface FilmState { frame: WorldScriptFrame; reduced: boolean; postgameS: number; loopS: number; sensorTurn: boolean }
 
-// One debug probe entry (LivingWorld, WorldProps, CastExtras and WorldAtmos share the shape).
-type ProbeEntry = { id: string; variant: string; x: number; visible: boolean; speaking: boolean };
+// One debug probe entry (LivingWorld, WorldProps, CastExtras and WorldAtmos share the shape): x and y are the world feet position of a
+// shown ground object (0 hidden or on a far plane), alpha the presented alpha.
+type ProbeEntry = { id: string; variant: string; x: number; y: number; alpha: number; visible: boolean; speaking: boolean };
 
 /** Debug API (C7) behind window.__wedtmd. Every call is a no-op or null once the director is destroyed. */
 export interface WorldDebugApi {
@@ -166,15 +181,37 @@ export interface WorldDebugApi {
   worldAdvance(ms: number): void;
   worldLogShown(logId: string): void;
   worldClock(hour: number | null): void;
-  livingWorld(): { id: string; variant: string; x: number; visible: boolean; speaking: boolean }[];
-  worldStats(): { objects: number; meanMs: number };
-  worldBubble(): { visible: boolean; rect: { x: number; y: number; w: number; h: number } | null; text: string; side: string } | null;
+  livingWorld(): { id: string; variant: string; x: number; y: number; alpha: number; visible: boolean; speaking: boolean }[];
+  // WP24 r2: the mean update time of each part (ms, per frame): cast, props, atmos (their renderers' windows), clocks and runners (the
+  // director's; a light frame records 0 for both, WP24 r6-F1).
+  worldStats(): { objects: number; meanMs: number; parts: { cast: number; props: number; atmos: number; clocks: number; runners: number } };
+  worldBubble():{ visible: boolean; rect: { x: number; y: number; w: number; h: number } | null; text: string; side: string } | null;
+  // WP24 time side: the debug settle (every target lands, the fades snap), the day clock (null while hidden), the day hold (AD audit),
+  // the queued and running transitions, and the presented prop rows.
+  worldSettle(on: boolean): void;
+  worldDay(): {
+    min: number; target: number; tint: number; wind: number; weather: string; held: boolean;
+    micro: { hitch: boolean; clockTwitch: boolean; lampDip: boolean; boothDip: boolean };
+  } | null;
+  worldDayHold(min: number | null): void;
+  worldTransitions(): { id: string; startedAtMs: number | null; durMs: number; k: number }[];
+  worldProps(): { id: string; frame: string; alpha: number; x: number; y: number }[];
+  // WP24 cast side: the runners now (the activity, its clock, the x, the walk, the look and the pick index), the ring of finished
+  // activities (oldest first), and the debug pin of an activity (the runner ends its current one; the conductor switches on a downbeat).
+  worldBehaviour(): { id: string; activity: string; step: number; x: number; sinceMs: number; walking: boolean; look: string; k: number }[];
+  worldBehaviourLog(): { id: string; activity: string; atMs: number; durMs: number; walked: boolean; reaction: boolean; look: string }[];
+  worldBehaviourNext(actor: 'inspector' | 'dog' | 'crow' | 'girl' | 'conductor', activity: string): boolean;
 }
 
 // The cast walkers that speak to camera: the girl only while she stands on the ground (anchorOf and the plane sprites handle the rest).
 type WalkingSpeaker = Exclude<SpeakerId, 'payphone'>;
 type GlanceId = Exclude<DenizenId, 'sensor7' | 'girl'>;
 type Placements = Readonly<Record<GroundId, WorldPlacement | null>>;
+// WP24 cast side: a cue of a step (its id and its running index: a runner answers each index once); a resolved spot (world x); a row of
+// the runner log ring (the actor and the runner's entry).
+type BehaviourCue = { id: CueId; index: number };
+type SpotSlot = { id: SpotId; x: number };
+interface BehaviourLogRow extends BehaviourLogEntry { id: BehaviourActor }
 
 // What the renderers show. placeKey (visible flag, placements and framing) is the part a relocation or a visibility change gates;
 // stateKey is the whole visual state. partial* is the state with the applied visible flag, committed while the gate holds.
@@ -187,6 +224,9 @@ interface Plan {
   partialKey: string;
   framing: FramingKey;
 }
+
+// The cast placement of the last plan with the inputs it was made from (WP24 r6-F3, placedFor).
+interface PlacedMemo { levels: Readonly<Record<TechId, number>>; cycle: number; ending: boolean; framing: FramingKey; placed: Placements }
 
 // wait: the bubble is not up yet (retried until placeWaitMs); shown: the bubble is up; hidden: it came down, the hold runs to doneAtMs.
 type LinePhase = 'wait' | 'shown' | 'hidden';
@@ -214,6 +254,27 @@ interface Glance { id: GlanceId; endAt: number }
 
 const CADENCE_MS = WORLD_VOICE_CONFIG.ladderRecheckMs;
 const TIMING_WINDOW = 120;
+// Render cache, not balance (WP24 r3 F3): the wall-clock hour behind the scheduler's localHour is read at most once per this interval.
+const HOUR_CACHE_MS = 1000;
+// A ring of the last TIMING_WINDOW durations (ms); mean() reads it as refreshTimingMean does (WP24 r2: the clocks and runners parts).
+class TimingRing {
+  private readonly values = new Float64Array(TIMING_WINDOW);
+  private count = 0;
+  private next = 0;
+
+  record(ms: number): void {
+    this.values[this.next] = ms;
+    this.next = (this.next + 1) % TIMING_WINDOW;
+    if (this.count < TIMING_WINDOW) this.count += 1;
+  }
+
+  mean(): number {
+    if (this.count === 0) return 0;
+    let sum = 0;
+    for (let i = 0; i < this.count; i++) sum += this.values[i] ?? 0;
+    return sum / this.count;
+  }
+}
 // Glance seed per cycle: a hash salt (not a balance number), so each cycle glances differently.
 const CYCLE_SEED_SALT = 7919;
 const GAME_VIEW: Rect = { x: 0, y: 0, w: VIEW.width, h: VIEW.height };
@@ -230,6 +291,57 @@ const CHAIN_BY_LOG: ReadonlyMap<string, ChainId> = new Map(
 );
 // The PAY-13 / PAY-14 opener lines (trigger kind opener): the opener counts as settled once one of them is in seen.
 const OPENER_IDS: readonly string[] = WORLD_LINES.filter((line) => line.trigger.kind === 'opener').map((line) => line.id);
+// The cast members that run a behaviour runner (WP24 C2), in the order the runners step.
+const BEHAVIOUR_ACTORS: readonly BehaviourActor[] = ['inspector', 'dog', 'crow', 'girl'];
+const NO_SPOTS: readonly { id: SpotId; dx: number }[] = [];
+// The playback mode of a presented fps (the tween's drawFps): 0 is the crank, else the mode whose fps is nearest (the midpoints of the
+// WORLD_PLAYBACK.fps table, structural).
+function modeOfFps(fps: number): PlaybackMode {
+  if (fps <= 0) return 'crank';
+  const { fps2, fps4, fps8 } = WORLD_PLAYBACK.fps;
+  if (fps < (fps2 + fps4) / 2) return 'fps2';
+  return fps < (fps4 + fps8) / 2 ? 'fps4' : 'fps8';
+}
+// The girl's stage as her runner reads it: the window parks her, the mini stages (mini, miniNear) draw her on the props plane, the ground
+// stage on the cast.
+function girlStageOf(stage: GirlStageName): 'window' | 'mini' | 'ground' {
+  if (stage === 'window') return 'window';
+  return stage === 'ground' ? 'ground' : 'mini';
+}
+// An actor's home x at a placement: its placement x. The girl is placed only on the ground, so her runner stands at 0 off it.
+function homeXOf(actor: BehaviourActor, placements: Placements): number | null {
+  const p = placements[actor];
+  if (p !== null) return p.x;
+  return actor === 'girl' ? 0 : null;
+}
+// The framing's spot list of an actor (WORLD_SPOTS): the Inspector and the dog have one, the crow and the girl none.
+function framingSpots(actor: BehaviourActor, framing: FramingKey): readonly { id: SpotId; dx: number }[] {
+  if (actor === 'crow' || actor === 'girl') return NO_SPOTS;
+  return WORLD_SPOTS[framing]?.[actor] ?? NO_SPOTS;
+}
+// Writes the spots of an actor at its home x into its reused list (the slots are rewritten, so a frame allocates nothing).
+// Returns the list.
+function fillSpots(out: SpotSlot[], src: readonly { id: SpotId; dx: number }[], homeX: number): SpotSlot[] {
+  let n = 0;
+  for (const s of src) {
+    const slot = out[n];
+    if (slot === undefined) out.push({ id: s.id, x: homeX + s.dx });
+    else {
+      slot.id = s.id;
+      slot.x = homeX + s.dx;
+    }
+    n += 1;
+  }
+  out.length = n;
+  return out;
+}
+// A behaviour context with every field set: each step rewrites the fields, and the beat object is the director's shared one.
+function newCtx(beat: { downbeat: boolean; index: number }): BehaviourCtx {
+  return {
+    era: 1, mode: 'fps2', crankSteps: 0, reduced: false, stare: false, reverse: false, vents: false, holeDig: false, sensor: false,
+    scraps: false, demoHold: false, paused: false, settle: false, homeX: 0, girlStage: 'window', spots: [], cues: [], beat,
+  };
+}
 
 // Every ending phase frames portrait (WP23b): the portrait reference pose is the view the ending placements are checked against.
 function portraitPose(): CameraPose {
@@ -279,6 +391,9 @@ export class LivingWorldDirector implements WorldFinalePort {
   private readonly ctx: WorldSchedulerCtx;
   private readonly cam: CameraPose = { centerX: 0, centerY: 0, zoom: 1 };
   private readonly timings = new Float64Array(TIMING_WINDOW);
+  // WP24 r2: the clocks step and the runners step, timed per step (worldStats parts; a light frame records 0, WP24 r6-F1).
+  private readonly clockTimings = new TimingRing();
+  private readonly runnerTimings = new TimingRing();
   private readonly api: WorldDebugApi;
   private subs: (() => void)[] = [];
   private logsSeen: Set<string>;
@@ -316,6 +431,7 @@ export class LivingWorldDirector implements WorldFinalePort {
   private lastRevision = -1;
   private applied: Plan | null = null;
   private wanted: Plan | null = null;
+  private placedMemo: PlacedMemo | null = null;
   // The framing of the last built plan, for the debug state only (worldState). Rendering takes Plan.framing.
   private framing: FramingKey = 'e1';
   private timingCount = 0;
@@ -354,6 +470,71 @@ export class LivingWorldDirector implements WorldFinalePort {
   private insPgDue = false;
   private insPgDone = false;
   private film: FilmState | null = null;
+  // WP24 time side (T10a1): one clocks owner (day, weather, micro schedules, transition queue, seeded per cycle), its reused input and
+  // last output, the scenery values ambient() hands out (one object, read by WorldScene each frame), the pending tint snap (boot and
+  // a new cycle, and every clock snap until read), the debug advance of the visual clock, the tape freeze end and the pending snap.
+  private clocks: WorldClocks;
+  private clocksIn: ClocksInput | null = null;
+  private clocksOut: ClocksOut | null = null;
+  private readonly ambientOut = { tint: 0, wind: 0, dustDrift: 0, snap: false };
+  private tintSnapPending = false;
+  private advancedMs = 0;
+  private tapeFrozenUntilMs = Number.NEGATIVE_INFINITY;
+  private pendingSnap = true;
+  // WP24 r5-F3: the every-second-frame cadence of the clocks and the runners. The dt, the crank clicks and the MK V downbeats of the light
+  // frames wait here for the next heavy frame; cadenceFrame counts the frames (an even count is heavy).
+  private cadenceDtMs = 0;
+  private cadenceCrank = 0;
+  private cadenceBeat = false;
+  private cadenceFrame = 0;
+  // WP24 r4-F1: the port and setting reads of the frame, taken once by readFrame() at the top of update() and before each debug sub-step.
+  // The clocks input and the runners read these fields; a port does not change inside one frame.
+  private frameTreeOpen = false;
+  private frameModalOpen = false;
+  private frameEraUp = false;
+  private frameReduced = false;
+  private frameVisualMs = 0;
+  // WP24 cast side (T10a2): one unison conductor (era IV), one runner per walker (seeded per cycle), one reused context per actor, the spot
+  // lists (resolved to world x), the beat (the MK V edge in play, a synthetic one in a debug advance), the cue queue (what the events
+  // and the last step queued, read by the next step), the cue counter, the cumulative clock counts already queued, the digBout count,
+  // the frames drawn in the step (read in the same step, never kept), the homes, the step numbers of the last frames, and the ring of
+  // finished activities.
+  private readonly conductor: UnisonConductor;
+  private readonly runners: Record<BehaviourActor, BehaviourRunner>;
+  private readonly ctxs: Record<BehaviourActor, BehaviourCtx>;
+  private readonly spotPools: Record<BehaviourActor, SpotSlot[]> = { inspector: [], dog: [], crow: [], girl: [] };
+  // The framing and home x each spot pool was last filled at (WP24 r4-F1): a pool is refilled only when one of them moved.
+  private readonly spotKeys: Record<BehaviourActor, { framing: FramingKey | null; homeX: number }> = {
+    inspector: { framing: null, homeX: NaN }, dog: { framing: null, homeX: NaN }, crow: { framing: null, homeX: NaN },
+    girl: { framing: null, homeX: NaN },
+  };
+  private readonly beat: { downbeat: boolean; index: number } = { downbeat: false, index: 0 };
+  private beatAcc = 0;
+  private cueNow: BehaviourCue[] = [];
+  private cueNext: BehaviourCue[] = [];
+  private cueSeq = 0;
+  private ventSeen = 0;
+  private gustSeen = 0;
+  // The last crankClick cue: the crow's tip cue is spaced by WORLD_AMBIENT.crowTipMinGapMs (-Infinity: the first click always cues).
+  private lastCrankCueMs = Number.NEGATIVE_INFINITY;
+  private digBouts = 0;
+  private readonly castFrames: Record<'inspector' | 'dog' | 'crow' | 'girl', BehaviourFrame | null> = {
+    inspector: null, dog: null, crow: null, girl: null,
+  };
+  private miniFrame: BehaviourFrame | null = null;
+  private readonly homeX: Record<BehaviourActor, number> = { inspector: 0, dog: 0, crow: 0, girl: 0 };
+  private readonly stepOf: Record<BehaviourActor, number> = { inspector: 0, dog: 0, crow: 0, girl: 0 };
+  private readonly behaviourLog: BehaviourLogRow[] = [];
+  private behaviourLogNext = 0;
+  // WP24 r3 (F3): the scheduler's on-screen test is memoized per world step. onScreenSeq moves at every change of an anchorOf input (the
+  // camera, the applied state, the cast and props poses and placements, the film script, sleep, wake, destroy); a speaker slot is valid
+  // while its stamp equals onScreenSeq.
+  private onScreenSeq = 0;
+  private readonly onScreenStamp: Partial<Record<SpeakerId, number>> = {};
+  private readonly onScreenValue: Partial<Record<SpeakerId, boolean>> = {};
+  // The wall-clock hour cache (ctxNow): hourCache is read at hourAtMs (wall ms) and refreshed once per HOUR_CACHE_MS.
+  private hourAtMs = Number.NEGATIVE_INFINITY;
+  private hourCache = 0;
 
   constructor(deps: WorldDirectorDeps) {
     this.scene = deps.scene;
@@ -370,6 +551,14 @@ export class LivingWorldDirector implements WorldFinalePort {
     const beatLow = (now: number): boolean => this.tier.heartbeatLow(now);
     this.props = new WorldProps(this.scene, this.rows, beatLow);
     this.atmos = new WorldAtmos(this.scene, this.rows);
+    this.clocks = createWorldClocks(cycleSeedOf(this.session.prestige.cycle));
+    // The runners (WP24 C6): one conductor for the era IV unison, one runner per walker, reset at boot with this session's k0 and homes.
+    this.conductor = createUnisonConductor(cycleSeedOf(this.session.prestige.cycle));
+    this.ctxs = { inspector: newCtx(this.beat), dog: newCtx(this.beat), crow: newCtx(this.beat), girl: newCtx(this.beat) };
+    this.runners = {
+      inspector: this.newRunner('inspector'), dog: this.newRunner('dog'), crow: this.newRunner('crow'), girl: this.newRunner('girl'),
+    };
+    this.resetRunners();
     // Z6: an offer repeats until its line is settled (lineSettledId), so a refused INS-13 never starves DOG-04.
     this.tracker = createTierTracker(this.tier, undefined, (id) => lineSettledId(id, this.session.world, this.session.prestige.cycle));
     // The Sensor 7 LED beats once the first top tier of the cycle is in (WP22 heartbeat, World scene clock).
@@ -398,7 +587,7 @@ export class LivingWorldDirector implements WorldFinalePort {
       edition: this.edition.id, setting: this.session.settings.worldVoices, silence: null,
       hasClicked: this.hasClicked, hasPurchased: this.hasPurchased, toastUp: false, toastClearedAtMs: null,
       indexClosedAtMs: null, bubblesVisible: 0, bubbleVisibleMs: 0, chainMemberWaiting: false,
-      onScreen: (speaker) => this.speakerOnScreen(speaker),
+      onScreen: (speaker) => this.speakerOnScreenMemo(speaker),
       world: this.session.world, levels: state.techLevels, logsSeen: this.logsSeen, lifetimeEe: state.lifetime.ee,
       localHour: null,
     };
@@ -425,10 +614,11 @@ export class LivingWorldDirector implements WorldFinalePort {
     }
     const now = this.nowMs;
     this.readCamera();
-    // Scene time, read once per frame. The cast clock takes it before any beat or turn starts this frame (the wake frame after the
-    // World slept: this.nowMs and the cast clock still hold the time from before the sleep).
+    this.readFrame();
+    // Scene time, read once per frame (the heartbeat and the film clocks). The cast clock takes the visual clock before any beat or turn
+    // starts this frame (the wake frame after the World slept: this.nowMs and the cast clock still hold the time from before the sleep).
     const sceneNow = this.scene.time.now;
-    this.cast.syncNow(sceneNow);
+    this.cast.syncNow(this.frameVisualMs);
     // The MK V heartbeat's low-to-high edge is the unison downbeat: read once per frame, before this frame's scheduler tick.
     const low = this.tier.heartbeatLow(sceneNow);
     this.unisonEdge = isDownbeat(this.beatWasLow, low);
@@ -436,7 +626,7 @@ export class LivingWorldDirector implements WorldFinalePort {
 
     this.trackEra(now);
     // Era card falling edge: its toast gate starts now, and eraEntry lines wait eraEntryAfterCardMs from here.
-    const eraUp = this.ports.eraCardShown();
+    const eraUp = this.frameEraUp;
     if (this.eraWasUp && !eraUp) {
       this.toastGate.onEraCardClosed(now);
       this.eraCardClosedAtMs = now;
@@ -457,6 +647,8 @@ export class LivingWorldDirector implements WorldFinalePort {
 
     this.refreshSilence();
     this.stepVisual(cadence);
+    // The visual state may have applied (cast and props apply, the girl stage): the on-screen memo is stale.
+    this.onScreenSeq += 1;
     if (this.tierSeedPending && this.applied !== null) {
       this.tierSeedPending = false;
       this.seedTiers();
@@ -477,12 +669,36 @@ export class LivingWorldDirector implements WorldFinalePort {
 
     const crank = this.crankSteps;
     this.crankSteps = 0;
-    this.cast.update(step, crank, sceneNow, this.cam);
-    this.props.update(step, crank, sceneNow);
-    // The pages start from the inspector's feet (null while the inspector is hidden: no pages).
-    this.atmos.update(step, sceneNow, this.cast.poseOf('inspector'));
+    // The clocks step and the renderers draw at the visual clock (the pages start from the inspector's feet, inside the sub-step).
+    // WP24 r5-F3: on the light frames of the cadence the clocks and the runners hold (see stepWorldCadence).
+    this.stepWorldCadence(step, crank);
 
     this.recordTiming(performance.now() - t0);
+  }
+
+  // WP24 r5-F3: the clocks and the runners step on every second frame (the 2-frame cadence is structural). A heavy frame is the even one,
+  // or one with a crank click, a MK V downbeat, a pending snap, no ClocksOut yet, a film or the ending; it steps the clocks and the runners
+  // on the dt, crank and downbeat accumulated since the last heavy frame. A light frame draws the last output again at the real frame dt.
+  private stepWorldCadence(step: number, crank: number): void {
+    this.cadenceDtMs += step;
+    this.cadenceCrank += crank;
+    if (this.unisonEdge) this.cadenceBeat = true;
+    this.cadenceFrame += 1;
+    const heavy = this.cadenceFrame % 2 === 0 || this.cadenceCrank > 0 || this.cadenceBeat || this.pendingSnap
+      || this.clocksOut === null || this.film !== null || this.session.state.ending.phase !== 'none';
+    if (!heavy) {
+      this.stepWorldClocks(0, 0, false, step, false);
+      return;
+    }
+    // WP24 r6-F1: the dt is capped at cadenceMaxStepMs (the excess is dropped). A walk tick is 125 ms and V6 allows one 8 px frame per
+    // step, so a long heavy step at a low frame rate must not cross two tick boundaries. The debug advance is not capped (advanceWorld).
+    const dtAcc = Math.min(this.cadenceDtMs, WORLD_BEHAVIOUR.cadenceMaxStepMs);
+    const crankAcc = this.cadenceCrank;
+    const downbeatAcc = this.cadenceBeat;
+    this.cadenceDtMs = 0;
+    this.cadenceCrank = 0;
+    this.cadenceBeat = false;
+    this.stepWorldClocks(dtAcc, crankAcc, downbeatAcc, step, true);
   }
 
   /** SYS LOG shown (toast up): the log channel holds the toast gate until it clears. */
@@ -514,6 +730,7 @@ export class LivingWorldDirector implements WorldFinalePort {
 
   /** World scene asleep: the clocks stop, the silence shows at once (worldSay and force see it) and bubbles go. */
   onSleep(): void {
+    this.onScreenSeq += 1;
     this.asleep = true;
     if (this.asleepSinceWall === null) this.asleepSinceWall = performance.now();
     this.silence = 'asleep';
@@ -522,13 +739,14 @@ export class LivingWorldDirector implements WorldFinalePort {
 
   // Awake again: the toast gate moves back by the wall time that passed while the clock was stopped, then silence is recomputed.
   onWake(): void {
+    this.onScreenSeq += 1;
     this.asleep = false;
     if (this.asleepSinceWall !== null) {
       this.toastGate.elapse(performance.now() - this.asleepSinceWall);
       this.asleepSinceWall = null;
     }
     this.dirty = true;
-    this.cast.syncNow(this.scene.time.now);
+    this.cast.syncNow(this.visualNow());
     this.refreshSilence();
   }
 
@@ -548,6 +766,7 @@ export class LivingWorldDirector implements WorldFinalePort {
     this.atmos.destroy();
     this.rows.back.destroy();
     this.rows.front.destroy();
+    this.onScreenSeq += 1;
     this.destroyed = true;
   }
 
@@ -579,6 +798,11 @@ export class LivingWorldDirector implements WorldFinalePort {
     this.lastInputMs = this.nowMs;
     this.crankSteps += 1;
     this.clickTimes.push(this.nowMs);
+    // A run of clicks cues the crow's tip once per crowTipMinGapMs (the crank steps and the rapid cue are unaffected).
+    if (this.nowMs - this.lastCrankCueMs >= WORLD_AMBIENT.crowTipMinGapMs) {
+      this.lastCrankCueMs = this.nowMs;
+      this.pushCue('crankClick');
+    }
   }
 
   private onPurchase(id: TechId): void {
@@ -667,10 +891,15 @@ export class LivingWorldDirector implements WorldFinalePort {
     this.cast.setScript(null);
     this.props.setScript(null);
     this.atmos.setScript(null);
+    this.onScreenSeq += 1;
     this.armOpener();
     this.indexClosedAtMs = null;
     this.clickTimes = [];
     this.rapidOn = false;
+    // A new game or a new cycle rewinds the clocks (09:00, fresh schedules on the cycle's seed) and snaps the scenery on its next commit.
+    this.clocks.reset(cycleSeedOf(this.session.prestige.cycle));
+    this.resetRunners();
+    this.pendingSnap = true;
     this.dirty = true;
     this.forceApply = true;
   }
@@ -689,7 +918,7 @@ export class LivingWorldDirector implements WorldFinalePort {
   private onTorqued(e: PartTorquedEvent): void {
     const fx = this.tracker.onTorqued(e, this.nowMs);
     if (fx.earFlick) {
-      this.cast.syncNow(this.scene.time.now);
+      this.cast.syncNow(this.visualNow());
       this.cast.notice('earFlick');
     }
   }
@@ -724,7 +953,7 @@ export class LivingWorldDirector implements WorldFinalePort {
     }
     if (fx.lampFlicker) this.props.lampFlicker();
     // Event path (runs before the frame's update when the machine ticks first): the cast clock takes scene time for the notices.
-    this.cast.syncNow(this.scene.time.now);
+    this.cast.syncNow(this.visualNow());
     if (fx.sheetTick && !this.speaking('inspector') && this.speakerOnScreen('inspector')) this.cast.notice('sheetTick');
     if (fx.sensorBlink) this.cast.notice('sensorBlink');
     for (const offer of fx.offers) this.offer(offer);
@@ -784,22 +1013,31 @@ export class LivingWorldDirector implements WorldFinalePort {
     const times = this.clickTimes;
     while (times.length > 0 && now - (times[0] ?? now) > WORLD_VOICE_CONFIG.rapidWindowMs) times.shift();
     const burst = times.length >= (WORLD_VOICE_CONFIG.rapidClicksPerS * WORLD_VOICE_CONFIG.rapidWindowMs) / 1000;
-    if (burst && !this.rapidOn) this.offer({ kind: 'rapid' });
+    if (burst && !this.rapidOn) {
+      this.offer({ kind: 'rapid' });
+      this.pushCue('rapid');
+    }
     this.rapidOn = burst;
   }
 
   // ---- silence, onboarding ----
 
+  // WP24 r6-F3: the affordable count is read by the TECH INDEX hint alone, and the hint needs the first click, no purchase, phase none, the
+  // tree shut and cycle 1. The count (a pass over every tech) is computed only then; otherwise it is 0, which no prompt rule reads.
   private refreshOnboarding(): void {
     const s = this.session.state;
     const techs = this.session.techs;
+    const purchased = anyPurchased(s.techLevels, techs);
+    const treeOpen = this.ports.techTreeOpen();
+    const cycle = this.session.prestige.cycle;
+    const hintPossible = s.totalClicks > 0 && !purchased && s.ending.phase === 'none' && !treeOpen && cycle === 1;
     const prompt = activePrompt({
       totalClicks: s.totalClicks,
-      anyPurchased: anyPurchased(s.techLevels, techs),
-      affordable: affordableTechIds(s, techs, this.session.maxEra).length,
+      anyPurchased: purchased,
+      affordable: hintPossible ? affordableTechIds(s, techs, this.session.maxEra).length : 0,
       phase: s.ending.phase,
-      treeOpen: this.ports.techTreeOpen(),
-      cycle: this.session.prestige.cycle,
+      treeOpen,
+      cycle,
     });
     this.onboarding = prompt === 'crank' || prompt === 'hint';
   }
@@ -846,6 +1084,7 @@ export class LivingWorldDirector implements WorldFinalePort {
     if (plan === null) return;
     if (this.forceApply || applied === null || plan.placeKey === applied.placeKey) {
       this.commit(plan);
+      this.retarget();
       return;
     }
     if (!cadence) return;
@@ -856,8 +1095,33 @@ export class LivingWorldDirector implements WorldFinalePort {
       oldOnScreen: applied.state.visible && anyOnScreen(applied.placements, view),
       newOnScreen: plan.state.visible && anyOnScreen(plan.placements, view),
     });
-    if (ok) this.commit(plan);
-    else if (plan.partialKey !== applied.stateKey) this.commitPartial(plan, applied);
+    if (ok) {
+      this.commit(plan);
+      this.retarget();
+    } else if (plan.partialKey !== applied.stateKey) {
+      this.commitPartial(plan, applied);
+      this.retarget();
+    }
+  }
+
+  // The transition queue takes the committed state as its targets (the gates decide when a change runs, the queue how it moves).
+  private retarget(): void {
+    const i = this.clocksInput();
+    if (i !== null) this.clocks.setTarget(i, this.frameVisualMs);
+  }
+
+  // The cast placement of a plan (WP24 r6-F3). placeCast is a pure function of the tech levels, the cycle and the ending flag (the pose and
+  // the framing follow from them), so the last one is reused while none of the three changed: a tick keeps the levels object, so a cadence
+  // rebuild skips the placement maths.
+  private placedFor(levels: Readonly<Record<TechId, number>>, ending: boolean): PlacedMemo {
+    const cycle = this.session.prestige.cycle;
+    const memo = this.placedMemo;
+    if (memo !== null && memo.levels === levels && memo.cycle === cycle && memo.ending === ending) return memo;
+    const pose = ending ? PORTRAIT_POSE : framingPose(levels);
+    const framing = ending ? 'portrait' : framingKeyOfPose(pose);
+    const next: PlacedMemo = { levels, cycle, ending, framing, placed: placeCast(levels, framing, pose, cycle) };
+    this.placedMemo = next;
+    return next;
   }
 
   private buildPlan(): void {
@@ -882,11 +1146,10 @@ export class LivingWorldDirector implements WorldFinalePort {
     };
     const state = deriveWorldState(input);
     // Every ending phase frames portrait (WP23b): the film and the postgame never move the placements with the camera.
-    const ending = s.ending.phase !== 'none';
-    const pose = ending ? PORTRAIT_POSE : framingPose(levels);
-    const framing = ending ? 'portrait' : framingKeyOfPose(pose);
+    const memo = this.placedFor(levels, s.ending.phase !== 'none');
+    const framing = memo.framing;
     this.framing = framing;
-    const placed = placeCast(levels, framing, pose, this.session.prestige.cycle);
+    const placed = memo.placed;
     // B-A3: the girl moves at most stepMaxWorldPx per commit. The held-back rest of her step is planned again at the next cadence.
     const girl = clampGirlStep(this.applied?.placements.girl ?? null, placed.girl, WORLD_GIRL.stepMaxWorldPx);
     const placements: Placements = girl === placed.girl ? placed : { ...placed, girl };
@@ -923,9 +1186,365 @@ export class LivingWorldDirector implements WorldFinalePort {
 
   private applyVisual(state: WorldVisualState, placements: Placements, framing: FramingKey): void {
     const reducedMotion = this.session.settings.reducedMotion;
+    // A relocation re-homes the runners (WP24 D12): it stays unseen, the activity goes on from the new home.
+    this.rehomeRunners(placements);
     this.cast.apply(state, placements, { reducedMotion });
     this.props.apply(state, placements, { reducedMotion, framing });
     this.atmos.apply(state, { reducedMotion });
+    // Boot and a new cycle snap every clock to the new state at once (no transition from the empty state): the first commit does it.
+    if (this.pendingSnap) this.snapClocks();
+  }
+
+  // The clocks land on the applied state at once and the pending snap is spent.
+  private snapClocks(): void {
+    const i = this.clocksInput();
+    if (i === null) return;
+    this.clocks.snap(i);
+    this.pendingSnap = false;
+  }
+
+  // ---- time side (WP24 T10a1): the visual clock, the clocks input, the world sub-step and the scenery values ----
+
+  // The visual clock: scene time plus the debug advance (worldAdvance). The cast clock, the clocks and the renderers read it.
+  private visualNow(): number {
+    return this.scene.time.now + this.advancedMs;
+  }
+
+  // The frame's port and setting reads (WP24 r4-F1): the tech tree, the modal stack and the era card, the reduced-motion setting and the
+  // visual clock. Taken at the top of update() and before each debug sub-step, so each read happens once per frame. Nothing else calls it.
+  private readFrame(): void {
+    this.frameTreeOpen = this.ports.techTreeOpen();
+    this.frameModalOpen = this.ports.modalOpen();
+    this.frameEraUp = this.ports.eraCardShown();
+    this.frameReduced = this.session.settings.reducedMotion;
+    this.frameVisualMs = this.visualNow();
+  }
+
+  // The clocks input for the applied state. One object for the whole run (no allocation on the frame path): created on the first applied
+  // state, then every field is written here. null before the first applied state.
+  private clocksInput(): ClocksInput | null {
+    const applied = this.applied;
+    if (applied === null) return null;
+    const s = this.session.state;
+    const i = this.clocksIn ?? (this.clocksIn = {
+      state: applied.state, levels: s.techLevels, lifetime: s.lifetime, edition: this.edition.id, phase: s.ending.phase,
+      cycle: this.session.prestige.cycle, reduced: this.session.settings.reducedMotion,
+      gates: { indexOpen: false, eraCardUp: false, modalOpen: false }, digBouts: 0, frozen: false,
+    });
+    i.state = applied.state;
+    i.levels = s.techLevels;
+    i.lifetime = s.lifetime;
+    i.phase = s.ending.phase;
+    i.cycle = this.session.prestige.cycle;
+    i.reduced = this.frameReduced;
+    i.gates.indexOpen = this.frameTreeOpen;
+    i.gates.eraCardUp = this.frameEraUp;
+    i.gates.modalOpen = this.frameModalOpen;
+    i.frozen = this.frameVisualMs < this.tapeFrozenUntilMs;
+    i.digBouts = this.digBouts;
+    return i;
+  }
+
+  // One world sub-step: the clocks step on dtMs (zero while the tape is frozen), the cumulative clock counts queue their cues, the runners
+  // step (stepRunners), then the three renderers draw at the visual clock. update() and the debug advance both run it; crank is the clicks
+  // since the last step (0 in an advance); downbeat is the MK V edge in play, the synthetic beat in an advance. Nothing runs before the
+  // first applied state (the renderers have no tween yet). WP24 r5-F3: renderDtMs is the real frame dt the renderers advance by (dtMs is the dt
+  // the clocks and the runners step on). A light frame (heavy false) runs no clock and no runner: it draws the last ClocksOut again, and
+  // the clock and runner timings record 0 on a light frame (WP24 r6-F1: worldStats parts are per-frame means, like cast, props and atmos).
+  private stepWorldClocks(dtMs: number, crank: number, downbeat: boolean, renderDtMs: number = dtMs, heavy: boolean = true): void {
+    // A new cycle or reset that leaves the applied state unchanged commits nothing: the pending snap lands here instead.
+    if (this.pendingSnap) this.snapClocks();
+    const i = this.clocksInput();
+    if (i === null) {
+      this.cueNext.length = 0;
+      return;
+    }
+    const now = this.frameVisualMs;
+    const last = this.clocksOut;
+    if (!heavy && last !== null) {
+      // A light frame runs no clock and no runner: both timing parts record 0 (per-frame means).
+      this.clockTimings.record(0);
+      this.runnerTimings.record(0);
+      this.cast.syncNow(now);
+      this.cast.update(renderDtMs, this.castFrames, last.tween, now, this.cam, last.ambient);
+      this.props.update(renderDtMs, crank, now, last.tween, last.ambient, this.miniFrame);
+      this.atmos.update(i.frozen ? 0 : renderDtMs, now, this.cast.poseOf('inspector'), last.tween, last.ambient);
+      this.onScreenSeq += 1;
+      return;
+    }
+    const t0 = performance.now();
+    const out = this.clocks.step(dtMs, now, i);
+    // One clock read closes the clocks part and opens the runners part (WP24 r4-F1: one timing read less per frame).
+    const t1 = performance.now();
+    this.clockTimings.record(t1 - t0);
+    this.clocksOut = out;
+    if (out.tintSnap) this.tintSnapPending = true;
+    // A vent puff that rose glints the puddle once (WORLD_REACT ventPuff routes to props.puddleRing; the queued cue reaches the cast).
+    if (out.ventPuffs > this.ventSeen) this.props.puddleRing();
+    this.ventSeen = this.queueCounted('ventPuff', out.ventPuffs, this.ventSeen);
+    this.gustSeen = this.queueCounted('gust', out.gusts, this.gustSeen);
+    this.cast.syncNow(now);
+    this.stepRunners(dtMs, crank, downbeat, out.tween);
+    this.runnerTimings.record(performance.now() - t1);
+    this.cast.update(renderDtMs, this.castFrames, out.tween, now, this.cam, out.ambient);
+    this.props.update(renderDtMs, crank, now, out.tween, out.ambient, this.miniFrame);
+    // The pages start from the inspector's feet (null while the inspector is hidden: no pages). The tape freeze holds the virga, the
+    // Chladni rings and the pages at dt 0 (WP24 r2, A10): they do not move while the tape is frozen.
+    this.atmos.update(i.frozen ? 0 : renderDtMs, now, this.cast.poseOf('inspector'), out.tween, out.ambient);
+    // The cast and props poses moved: the on-screen memo is stale (update and the debug advance both come through here).
+    this.onScreenSeq += 1;
+  }
+
+  // The debug advance (worldAdvance): time moves in advanceStepMs sub-steps, so the clocks and the renderers see the cadence of play. The
+  // visual clock moves with it (advancedMs). A non-finite or non-positive advance does nothing.
+  private advanceWorld(ms: number): void {
+    const step = WORLD_BEHAVIOUR.advanceStepMs;
+    if (this.destroyed || !Number.isFinite(ms) || ms <= 0 || !(step > 0)) return;
+    let remaining = ms;
+    while (remaining > 0) {
+      const sub = Math.min(remaining, step);
+      this.nowMs += sub;
+      this.playMs += sub;
+      this.advancedMs += sub;
+      this.readFrame();
+      this.stepWorldClocks(sub, 0, this.synthBeat(sub));
+      remaining -= sub;
+    }
+  }
+
+  // A debug advance has no MK V heartbeat: its sub-steps count the tier heartbeat period, and each full period is one downbeat.
+  private synthBeat(dtMs: number): boolean {
+    this.beatAcc += dtMs;
+    if (this.beatAcc < TIER_HEARTBEAT.periodMs) return false;
+    this.beatAcc -= TIER_HEARTBEAT.periodMs;
+    return true;
+  }
+
+  // ---- behaviour runners (WP24 T10a2): the cast's runners, the cues, the frames the renderers read ----
+
+  // One runner of an actor: its seed is the cycle's (behaviourSeed), its finished activities go to the log ring.
+  private newRunner(actor: BehaviourActor): BehaviourRunner {
+    const seed = behaviourSeed(this.session.prestige.cycle, actor);
+    return createBehaviourRunner(actor, seed, this.conductor, (e) => this.logBehaviour(actor, e));
+  }
+
+  // Every runner and the conductor restart on the cycle's seeds, at this session's k0 (D14) and each actor's current home. The cue queue,
+  // the cue counts, the digBout count and the crank cue gap restart with them (the clocks restart too).
+  private resetRunners(): void {
+    const cycle = this.session.prestige.cycle;
+    const k0 = behaviourK0(this.session.stats.activeSeconds);
+    this.conductor.reset(cycleSeedOf(cycle));
+    for (const actor of BEHAVIOUR_ACTORS) this.runners[actor].reset(behaviourSeed(cycle, actor), k0, this.homeX[actor]);
+    this.cueNow.length = 0;
+    this.cueNext.length = 0;
+    this.ventSeen = 0;
+    this.gustSeen = 0;
+    this.digBouts = 0;
+    this.lastCrankCueMs = Number.NEGATIVE_INFINITY;
+  }
+
+  // Moves the runners' homes to the placements that were just applied (only a changed x re-homes a runner).
+  private rehomeRunners(placements: Placements): void {
+    for (const actor of BEHAVIOUR_ACTORS) {
+      const x = homeXOf(actor, placements);
+      if (x === null || x === this.homeX[actor]) continue;
+      this.homeX[actor] = x;
+      this.runners[actor].rehome(x);
+    }
+  }
+
+  // Queues a cue for the next runner step (its index is the running counter, so each cue is answered once).
+  private pushCue(id: CueId): void {
+    this.cueNext.push({ id, index: this.cueSeq });
+    this.cueSeq += 1;
+  }
+
+  // Queues one cue per new event of a cumulative clock count (the count restarts at a reset); returns the count now seen.
+  private queueCounted(id: 'ventPuff' | 'gust', count: number, seen: number): number {
+    for (let n = count < seen ? 0 : seen; n < count; n++) this.pushCue(id);
+    return count;
+  }
+
+  // One finished activity of a runner into the log ring (WORLD_BEHAVIOUR.logSize, oldest overwritten first).
+  private logBehaviour(id: BehaviourActor, e: BehaviourLogEntry): void {
+    // A runner's clock stops while it is parked or paused, so e.atMs is moved onto the world clock (playMs), the one clock all runners share.
+    const offset = this.playMs - this.runners[id].snapshot().clockMs;
+    const row: BehaviourLogRow = { id, ...e, atMs: e.atMs + offset };
+    const size = WORLD_BEHAVIOUR.logSize;
+    if (this.behaviourLog.length < size) {
+      this.behaviourLog.push(row);
+      return;
+    }
+    this.behaviourLog[this.behaviourLogNext] = row;
+    this.behaviourLogNext = (this.behaviourLogNext + 1) % size;
+  }
+
+  // A frame's cue: the sensor blink, the dig count (the hole's clock input), and the cue for every runner's reactions.
+  private onEmitted(id: CueId): void {
+    if (id === 'atSensor') this.cast.notice('sensorBlink');
+    else if (id === 'digBout') this.digBouts += 1;
+    this.pushCue(id);
+  }
+
+  // Every frame drawn by the cast and the props is null while the runners are off (the layer hidden, a film, the ending, before the first
+  // applied state); the cast holds its last poses and the girl hides.
+  private clearFrames(): void {
+    for (const actor of BEHAVIOUR_ACTORS) this.castFrames[actor] = null;
+    this.miniFrame = null;
+  }
+
+  // An actor's spot list at its home (WP24 r4-F1): the list depends only on the framing and the home x, so the pool is refilled when one of
+  // them moved since its last fill and reused as it stands otherwise.
+  private spotsAt(actor: BehaviourActor, framing: FramingKey, homeX: number): SpotSlot[] {
+    const pool = this.spotPools[actor];
+    const key = this.spotKeys[actor];
+    if (key.framing !== framing || key.homeX !== homeX) {
+      fillSpots(pool, framingSpots(actor, framing), homeX);
+      key.framing = framing;
+      key.homeX = homeX;
+    }
+    return pool;
+  }
+
+  // One step of the runners on the world clock (WP24 C6, D11, D12, D17). It runs only while the layer shows and no film owns the cast: the
+  // beat counts every step; the cues queued since the last step are read here (the emitted ones queue for the next step). Each walker with
+  // a home steps once: the cast takes the inspector, dog and crow frames and the ground girl; the mini girl goes to the props. Paused
+  // runners hold their frame (the pauses are the cast's busy state and the tape freeze). The frames are read by the renderers at once.
+  private stepRunners(dtMs: number, crank: number, downbeat: boolean, tween: WorldTween): void {
+    this.beat.index += downbeat ? 1 : 0;
+    this.beat.downbeat = downbeat;
+    const applied = this.applied;
+    if (applied === null || !applied.state.visible || this.film !== null || this.session.state.ending.phase !== 'none') {
+      this.cueNext.length = 0;
+      this.clearFrames();
+      return;
+    }
+    const state = applied.state;
+    const placements = applied.placements;
+    // The cues this step reads are the ones queued since the last step; the queue starts empty for the emits of this step.
+    const spent = this.cueNow;
+    this.cueNow = this.cueNext;
+    this.cueNext = spent;
+    this.cueNext.length = 0;
+    const frozen = this.frameVisualMs < this.tapeFrozenUntilMs;
+    const mode = modeOfFps(tween.drawFps);
+    const girlStage = girlStageOf(state.girl.stageName);
+    const reduced = this.frameReduced;
+    // worldSettle (C7): every runner parks on its canonical rest frame at its home (no clock, no pick, no cue) while the clocks settle.
+    const settle = this.clocks.settling();
+    // The fields every actor shares are computed once here (WP24 r4-F1) and written into each actor's context below.
+    const sensor = placements.sensor7 !== null;
+    const scraps = state.props.scraps > 0 && placements.scraps !== null;
+    for (const actor of BEHAVIOUR_ACTORS) {
+      const home = homeXOf(actor, placements);
+      let f: BehaviourFrame | null = null;
+      if (home !== null) {
+        const ctx = this.ctxs[actor];
+        ctx.era = state.era;
+        ctx.mode = mode;
+        ctx.crankSteps = crank;
+        ctx.reduced = reduced;
+        ctx.stare = state.stare;
+        ctx.reverse = state.reverse;
+        ctx.vents = state.vents;
+        ctx.holeDig = state.dogPose === 'dig';
+        ctx.sensor = sensor;
+        ctx.scraps = scraps;
+        // The dog holds on its lie pose (the demo DOG-12 hold image); the crow parks while LivingWorld draws its high pose (cycle 2+,
+        // traces.crowHigh), so its log and the variety metrics do not count it.
+        ctx.demoHold = (actor === 'dog' && state.dogPose === 'lie') || (actor === 'crow' && state.traces.crowHigh);
+        ctx.settle = settle;
+        // The girl is busy only on the ground (her cast member is drawn there alone); a busy cast member holds its runner.
+        const castBusy = actor === 'girl' && girlStage !== 'ground' ? false : this.cast.busy(actor);
+        ctx.paused = frozen || castBusy;
+        ctx.homeX = home;
+        ctx.girlStage = girlStage;
+        ctx.cues = this.cueNow;
+        ctx.spots = this.spotsAt(actor, applied.framing, home);
+        f = this.runners[actor].step(dtMs, ctx);
+        this.stepOf[actor] = f.step;
+        if (f.emitted !== null) this.onEmitted(f.emitted);
+      }
+      if (actor === 'girl') {
+        this.castFrames.girl = girlStage === 'ground' ? f : null;
+        this.miniFrame = girlStage === 'mini' ? f : null;
+      } else {
+        this.castFrames[actor] = f;
+      }
+    }
+  }
+
+  // The debug view of the runners: the snapshot of each (its activity, clock, x, walk, look and pick index) and the step of its last frame.
+  private debugBehaviour(): {
+    id: string; activity: string; step: number; x: number; sinceMs: number; walking: boolean; look: string; k: number;
+  }[] {
+    return BEHAVIOUR_ACTORS.map((id) => {
+      const s = this.runners[id].snapshot();
+      return { id, activity: s.activity, step: this.stepOf[id], x: s.x, sinceMs: s.sinceMs, walking: s.walking, look: s.look, k: s.k };
+    });
+  }
+
+  // The finished activities, oldest first (the ring is copied out).
+  private debugBehaviourLog(): {
+    id: string; activity: string; atMs: number; durMs: number; walked: boolean; reaction: boolean; look: string;
+  }[] {
+    const log = this.behaviourLog;
+    const start = log.length < WORLD_BEHAVIOUR.logSize ? 0 : this.behaviourLogNext;
+    return [...log.slice(start), ...log.slice(0, start)].map((r) => ({
+      id: r.id, activity: r.activity, atMs: r.atMs, durMs: r.durMs, walked: r.walked, reaction: r.reaction, look: r.look,
+    }));
+  }
+
+  // The debug pin: a runner ends its current activity at its next step; the conductor switches at the next downbeat. False when the
+  // activity is not valid here.
+  private debugBehaviourNext(actor: BehaviourActor | 'conductor', activity: string): boolean {
+    if (actor === 'conductor') return this.conductor.next(activity as UnisonId);
+    return this.runners[actor].next(activity);
+  }
+
+  /**
+   * The scenery values of this frame (WorldScene forwards them to the sky, the dust and the pylons): the day tint, the wind and the dust
+   * drift; snap is true once for each clock snap (boot, a new cycle) and reads here. null while the layer is hidden or nothing is applied.
+   * The object is reused: read it at once, do not keep it.
+   */
+  ambient(): { tint: number; wind: number; dustDrift: number; snap: boolean } | null {
+    const out = this.clocksOut;
+    if (this.destroyed || out === null || this.applied === null || !this.applied.state.visible) return null;
+    const a = this.ambientOut;
+    // Reduced motion (D15): no wind (the receiver hangs, the scraps and sprout stay still) and the dust drift stays at its centre.
+    const reduced = this.session.settings.reducedMotion;
+    a.tint = out.tint;
+    a.wind = reduced ? 0 : out.ambient.wind;
+    a.dustDrift = reduced ? 1 : out.ambient.dustDrift;
+    a.snap = this.tintSnapPending;
+    this.tintSnapPending = false;
+    return a;
+  }
+
+  /** True while worldSettle is on: the scenery lands its targets and snaps its fades, whatever the layer shows (WorldScene reads it). */
+  settling(): boolean {
+    return !this.destroyed && this.clocks.settling();
+  }
+
+  // The day and weather of the clocks while the layer shows (null while hidden, nothing applied, or destroyed).
+  private debugDay(): {
+    min: number; target: number; tint: number; wind: number; weather: string; held: boolean;
+    micro: { hitch: boolean; clockTwitch: boolean; lampDip: boolean; boothDip: boolean };
+  } | null {
+    if (this.destroyed || this.applied === null || !this.applied.state.visible) return null;
+    return this.clocks.debugDay();
+  }
+
+  // The queued and running transitions, copied out of the queue's reused view.
+  private debugTransitions(): { id: string; startedAtMs: number | null; durMs: number; k: number }[] {
+    return this.clocks.transitions().map((t) => ({ id: t.id, startedAtMs: t.startedAtMs, durMs: t.durMs, k: t.k }));
+  }
+
+  // The presented prop rows (lamp, booth, windows, motes, scraps, sprout, rings, virga, pages, clock) and the cast's sensor LED, copied out
+  // of the renderers' reused rows.
+  private debugProps(): { id: string; frame: string; alpha: number; x: number; y: number }[] {
+    const rows = [...this.props.props(), ...this.atmos.rows(), ...this.cast.sensorRows()];
+    return rows.map((r) => ({ id: r.id, frame: r.frame, alpha: r.alpha, x: r.x, y: r.y }));
   }
 
   // ---- finale film and postgame (WP23b): the WorldFinalePort ----
@@ -942,6 +1561,7 @@ export class LivingWorldDirector implements WorldFinalePort {
       this.cast.setScript(null);
       this.props.setScript(null);
       this.atmos.setScript(null);
+      this.onScreenSeq += 1;
       return { lead: null };
     }
     const sceneNow = this.scene.time.now;
@@ -957,7 +1577,8 @@ export class LivingWorldDirector implements WorldFinalePort {
     this.cast.setScript(frame);
     this.props.setScript(frame);
     this.atmos.setScript(frame);
-    this.film = { frame, reduced: i.reduced, postgameS: this.keepAtMs !== null ? keepS : loopS, loopS, sensorTurn };
+    this.onScreenSeq += 1;
+    this.film ={ frame, reduced: i.reduced, postgameS: this.keepAtMs !== null ? keepS : loopS, loopS, sensorTurn };
     return { lead: frame.lead };
   }
 
@@ -1096,7 +1717,7 @@ export class LivingWorldDirector implements WorldFinalePort {
     const cam = this.readCamera();
     const a = this.cast.anchor('sensor7', cam);
     if (a === null || !isOnScreen(a.head, GAME_VIEW, WORLD_VOICE_CONFIG.viewInsetPx)) return;
-    this.cast.syncNow(this.scene.time.now);
+    this.cast.syncNow(this.visualNow());
     this.cast.turnToCamera('sensor7', 'glance');
   }
 
@@ -1148,6 +1769,8 @@ export class LivingWorldDirector implements WorldFinalePort {
       const ms = WORLD_VOICE_CONFIG.tapeFreezeMs;
       this.cast.tapeFreeze(ms);
       this.props.tapeFreeze(ms);
+      // The tape freeze holds every presented element: the clocks take no time until it ends (clocksInput frozen).
+      this.tapeFrozenUntilMs = this.visualNow() + ms;
     } else if (id === 'beat.failedSync') {
       this.cast.failedSync();
     } else if (id === 'beat.sensorTurn') {
@@ -1179,6 +1802,7 @@ export class LivingWorldDirector implements WorldFinalePort {
     this.lastRingMs = this.nowMs;
     this.feedback.worldSound.emit({ kind: 'ring' });
     this.props.ring();
+    this.pushCue('ring');
   }
 
   private ringIfDue(nowMs: number): void {
@@ -1396,7 +2020,7 @@ export class LivingWorldDirector implements WorldFinalePort {
     c.levels = s.techLevels;
     c.logsSeen = this.logsSeen;
     c.lifetimeEe = s.lifetime.ee;
-    c.localHour = this.clockHour ?? new Date().getHours();
+    c.localHour = this.clockHour ?? this.wallHour();
     c.chainMemberWaiting = this.chainMemberWaiting();
     c.phase = s.ending.phase;
     c.eraAgeMs = now - this.eraSinceMs;
@@ -1406,6 +2030,16 @@ export class LivingWorldDirector implements WorldFinalePort {
     return c;
   }
 
+  // The local hour (0-23) from the wall clock, read at most once per HOUR_CACHE_MS: a per-frame Date allocation is not needed for an hour.
+  private wallHour(): number {
+    const wall = Date.now();
+    if (wall - this.hourAtMs >= HOUR_CACHE_MS || wall < this.hourAtMs) {
+      this.hourAtMs = wall;
+      this.hourCache = new Date(wall).getHours();
+    }
+    return this.hourCache;
+  }
+
   // True while a chain member (CROSSED LINES, postCap) has not shown its bubble yet (prelude or placement wait).
   private chainMemberWaiting(): boolean {
     return this.active.some((a) => a.chainId !== null && a.phase === 'wait');
@@ -1413,6 +2047,8 @@ export class LivingWorldDirector implements WorldFinalePort {
 
   // The Phaser camera's view centre and zoom (the same pose the renderers frame). Written into the shared pose object.
   private readCamera(): CameraPose {
+    // update() reads the camera first, and so do the bubble controller and the Sensor 7 glance: each one moves this.cam, so the memo goes.
+    this.onScreenSeq += 1;
     const camera = this.scene.cameras.main;
     this.cam.centerX = camera.midPoint.x;
     this.cam.centerY = camera.midPoint.y;
@@ -1456,6 +2092,16 @@ export class LivingWorldDirector implements WorldFinalePort {
     return anchor !== null && isOnScreen(anchor.head, GAME_VIEW, WORLD_VOICE_CONFIG.viewInsetPx);
   }
 
+  // speakerOnScreen for the scheduler's per-candidate test: one answer per speaker per onScreenSeq (the pick reads the same few speakers
+  // for every line). Slots are keyed by speaker; a stale stamp recomputes.
+  private speakerOnScreenMemo(speaker: SpeakerId): boolean {
+    if (this.onScreenStamp[speaker] === this.onScreenSeq) return this.onScreenValue[speaker] === true;
+    const on = this.speakerOnScreen(speaker);
+    this.onScreenStamp[speaker] = this.onScreenSeq;
+    this.onScreenValue[speaker] = on;
+    return on;
+  }
+
   private refreshTimingMean(): number {
     if (this.timingCount === 0) return 0;
     let sum = 0;
@@ -1478,11 +2124,7 @@ export class LivingWorldDirector implements WorldFinalePort {
       worldQuiet: (on) => {
         this.quiet = on;
       },
-      worldAdvance: (ms) => {
-        if (!Number.isFinite(ms)) return;
-        this.nowMs += ms;
-        this.playMs += ms;
-      },
+      worldAdvance: (ms) => this.advanceWorld(ms),
       worldLogShown: (logId) => {
         this.onLogShown(logId);
         this.later(this.nowMs + SYSTEM_LOG_CONFIG.durationMs, () => this.onLogCleared(logId), false);
@@ -1491,11 +2133,31 @@ export class LivingWorldDirector implements WorldFinalePort {
         this.clockHour = hour === null || !Number.isFinite(hour) ? null : Math.floor(hour);
       },
       livingWorld: () => (this.destroyed ? [] : this.probeList()),
-      worldStats: () => ({
-        objects: this.cast.stats().objects + this.props.stats().objects + this.atmos.stats().objects,
-        meanMs: this.refreshTimingMean(),
-      }),
+      worldStats: () => {
+        const cast = this.cast.stats();
+        const props = this.props.stats();
+        const atmos = this.atmos.stats();
+        return {
+          objects: cast.objects + props.objects + atmos.objects,
+          meanMs: this.refreshTimingMean(),
+          parts: {
+            cast: cast.meanMs, props: props.meanMs, atmos: atmos.meanMs, clocks: this.clockTimings.mean(), runners: this.runnerTimings.mean(),
+          },
+        };
+      },
       worldBubble: () => this.debugBubble(),
+      worldSettle: (on) => {
+        if (!this.destroyed) this.clocks.settle(on);
+      },
+      worldDay: () => this.debugDay(),
+      worldDayHold: (min) => {
+        if (!this.destroyed) this.clocks.holdDay(min === null || !Number.isFinite(min) ? null : min);
+      },
+      worldTransitions: () => (this.destroyed ? [] : this.debugTransitions()),
+      worldProps: () => (this.destroyed ? [] : this.debugProps()),
+      worldBehaviour: () => (this.destroyed ? [] : this.debugBehaviour()),
+      worldBehaviourLog: () => (this.destroyed ? [] : this.debugBehaviourLog()),
+      worldBehaviourNext: (actor, activity) => !this.destroyed && this.debugBehaviourNext(actor, activity),
     };
   }
 
@@ -1505,7 +2167,7 @@ export class LivingWorldDirector implements WorldFinalePort {
     this.refreshSilence();
     const cue = this.scheduler.force(id, this.ctxNow());
     if (cue === null) return false;
-    this.cast.syncNow(this.scene.time.now);
+    this.cast.syncNow(this.visualNow());
     this.startCue(cue);
     return true;
   }
@@ -1518,7 +2180,8 @@ export class LivingWorldDirector implements WorldFinalePort {
     return [
       ...this.cast.probe().filter((e) => e.id !== 'girl' || !onPlane),
       ...props.filter((e) => e.id !== 'girl' || onPlane),
-      ...this.cast.extrasProbe(),
+      // The extras entries carry no alpha or y: a shown one reads alpha 1 and y 0 until they do.
+      ...this.cast.extrasProbe().map((e) => ({ alpha: e.visible ? 1 : 0, y: 0, ...e })),
       ...this.atmos.probe(),
     ];
   }

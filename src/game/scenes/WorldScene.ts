@@ -452,6 +452,19 @@ export class WorldScene extends Phaser.Scene {
     this.steamFx?.update(delta);
     // WP23a: the living world (figures, props, bubble, scheduler) before the finale, which may override the frame.
     this.worldDirector?.update(delta);
+    // WP24 C6: the scenery follows the day clock, the wind and the settle state. A settle lands the fades stepped above in this frame.
+    const ambient = this.worldDirector?.ambient() ?? null;
+    if (ambient !== null) {
+      this.background?.setDayTint(ambient.tint, ambient.snap);
+      this.dust?.setWind(ambient.wind, ambient.dustDrift);
+    } else {
+      // White (no tint): the sky eases back to neutral while the living world layer is hidden.
+      this.background?.setDayTint(0xffffff, true);
+    }
+    if (this.worldDirector?.settling() === true) {
+      this.background?.settleFades();
+      for (const line of this.pylonLines) line.settleFade();
+    }
     // Cheap flag compare each frame: the streams only switch when the spire's level crosses its gate (or a reset).
     this.dust?.setRising(this.ctx.session.state.techLevels[DUST_RISING.techId] >= DUST_RISING.minLevel);
     // Finale last: it overrides what the renderers above just drew (phase 'none' only pushes the neutral frame once).

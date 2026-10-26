@@ -74,8 +74,8 @@ declare global {
       worldAdvance(ms: number): void;
       worldLogShown(logId: string): void;
       worldClock(hour: number | null): void;
-      livingWorld(): { id: string; variant: string; x: number; visible: boolean; speaking: boolean }[];
-      worldStats(): { objects: number; meanMs: number };
+      livingWorld(): { id: string; variant: string; x: number; y: number; alpha: number; visible: boolean; speaking: boolean }[];
+      worldStats(): { objects: number; meanMs: number; parts: { cast: number; props: number; atmos: number; clocks: number; runners: number } };
       worldBubble(): { visible: boolean; rect: { x: number; y: number; w: number; h: number } | null; text: string; side: string } | null;
       // WP18: parts visibility probe, photo mode and the final-machine teaser (ShowcaseScene)
       partsVisible(): { visible: number; total: number; hidden: MachineComponentId[] } | null;
@@ -96,6 +96,18 @@ declare global {
       // WP22: part tier probes (World machine)
       partTiers(): Partial<Record<TechId, number>> | null;
       tierBeatsActive(): number;
+      // WP24: cast runners, day clock, transitions, settle and presented props (debug only)
+      worldBehaviour(): { id: string; activity: string; step: number; x: number; sinceMs: number; walking: boolean; look: string; k: number }[];
+      worldBehaviourLog(): { id: string; activity: string; atMs: number; durMs: number; walked: boolean; reaction: boolean; look: string }[];
+      worldBehaviourNext(actor: 'inspector' | 'dog' | 'crow' | 'girl' | 'conductor', activity: string): boolean;
+      worldDay(): {
+        min: number; target: number; tint: number; wind: number; weather: string; held: boolean;
+        micro: { hitch: boolean; clockTwitch: boolean; lampDip: boolean; boothDip: boolean };
+      } | null;
+      worldDayHold(min: number | null): void;
+      worldTransitions(): { id: string; startedAtMs: number | null; durMs: number; k: number }[];
+      worldSettle(on: boolean): void;
+      worldProps(): { id: string; frame: string; alpha: number; x: number; y: number }[];
     };
   }
 }
@@ -182,11 +194,12 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
   const worldClock = (hour: number | null): void => {
     worldDirector()?.worldClock(hour);
   };
-  /** Each living-world figure and prop: id, current frame, world x, visibility and speaking flag; [] when missing. */
-  const livingWorld = (): { id: string; variant: string; x: number; visible: boolean; speaking: boolean }[] =>
+  /** Each living-world figure and prop: id, current frame, world x and feet y, alpha, visibility and speaking flag; [] when missing. */
+  const livingWorld = (): { id: string; variant: string; x: number; y: number; alpha: number; visible: boolean; speaking: boolean }[] =>
     worldDirector()?.livingWorld() ?? [];
-  /** Object count and mean director frame time (ms); zeros when missing. */
-  const worldStats = (): { objects: number; meanMs: number } => worldDirector()?.worldStats() ?? { objects: 0, meanMs: 0 };
+  /** Object count, mean director frame time (ms) and the mean update time of each part (ms, WP24 r2); zeros when missing. */
+  const worldStats = (): { objects: number; meanMs: number; parts: { cast: number; props: number; atmos: number; clocks: number; runners: number } } =>
+    worldDirector()?.worldStats() ?? { objects: 0, meanMs: 0, parts: { cast: 0, props: 0, atmos: 0, clocks: 0, runners: 0 } };
   /** The speech bubble as shown now (visibility, rect, text, side); null when missing. */
   const worldBubble = (): { visible: boolean; rect: { x: number; y: number; w: number; h: number } | null; text: string; side: string } | null =>
     worldDirector()?.worldBubble() ?? null;
@@ -264,6 +277,32 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     game.scene.getScene<WorldScene>('World')?.getMachine()?.partTiers() ?? null;
   /** Tier-up beats in flight (WP22, D7 unit); 0 without a World machine. */
   const tierBeatsActive = (): number => game.scene.getScene<WorldScene>('World')?.getMachine()?.tierBeatsActive() ?? 0;
+  /** WP24 cast: each runner's activity, clock, x, walk, look and pick index (the director's list); [] when missing. */
+  const worldBehaviour = (): { id: string; activity: string; step: number; x: number; sinceMs: number; walking: boolean; look: string; k: number }[] =>
+    worldDirector()?.worldBehaviour() ?? [];
+  /** WP24 cast: the ring of finished activities, oldest first (debug only); [] when missing. */
+  const worldBehaviourLog = (): { id: string; activity: string; atMs: number; durMs: number; walked: boolean; reaction: boolean; look: string }[] =>
+    worldDirector()?.worldBehaviourLog() ?? [];
+  /** WP24 debug pin (D19): the actor ends its activity and starts `activity` (the conductor at the next downbeat); false when refused or missing. */
+  const worldBehaviourNext = (actor: 'inspector' | 'dog' | 'crow' | 'girl' | 'conductor', activity: string): boolean =>
+    worldDirector()?.worldBehaviourNext(actor, activity) ?? false;
+  /** WP24 day clock: minute, target, tint, wind, weather and the hold flag; null while the layer is hidden or missing. */
+  const worldDay = (): {
+    min: number; target: number; tint: number; wind: number; weather: string; held: boolean;
+    micro: { hitch: boolean; clockTwitch: boolean; lampDip: boolean; boothDip: boolean };
+  } | null => worldDirector()?.worldDay() ?? null;
+  /** WP24 day clock (AD audit): holds the day at `min`; null releases the hold. No-op when missing. */
+  const worldDayHold = (min: number | null): void => {
+    worldDirector()?.worldDayHold(min);
+  };
+  /** WP24 transition queue: queued and running transitions; [] when settled or missing. */
+  const worldTransitions = (): { id: string; startedAtMs: number | null; durMs: number; k: number }[] => worldDirector()?.worldTransitions() ?? [];
+  /** WP24 settle (debug, sticky): every target lands and the fades snap; no-op when missing. */
+  const worldSettle = (on: boolean): void => {
+    worldDirector()?.worldSettle(on);
+  };
+  /** WP24 presented props: id, frame, alpha, world x and feet y of each prop row; [] when missing. */
+  const worldProps = (): { id: string; frame: string; alpha: number; x: number; y: number }[] => worldDirector()?.worldProps() ?? [];
   window.__wedtmd = {
     session,
     crankClientPoint,
@@ -308,5 +347,13 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     plateCap,
     partTiers,
     tierBeatsActive,
+    worldBehaviour,
+    worldBehaviourLog,
+    worldBehaviourNext,
+    worldDay,
+    worldDayHold,
+    worldTransitions,
+    worldSettle,
+    worldProps,
   };
 }

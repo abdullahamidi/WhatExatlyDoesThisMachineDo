@@ -117,10 +117,11 @@ export const WORLD_GIRL = {
 export const WORLD_TRACES = {
   redBallFromCycle: 2, redBallDxWorldPx: 22, clipboardMax: 3, readoutOneFromCycle: 2, crowHighFromCycle: 2,
   // Clipboard overlay per frame: art px from the feet pivot, un-flipped (the flip mirrors x). front, talk, frontUmbrella, talkUmbrella,
-  // shield and umbrellaOpen have no overlay (the board is face-on or not drawn). Source: scripts/art/world/README.md (AD3a).
+  // shield, umbrellaOpen and umbrellaHalf have no overlay (the board is face-on or not drawn). Source: scripts/art/world/README.md (AD3a).
+  // WP24 AD1b-1: lookUp holds the board 1 px lower than idleA (top ink row 20); crouch rests it on the raised knee (row 25).
   clipboardOffsetArt: {
     idleA: [5, -21], idleB: [5, -20], walk0: [5, -20], walk1: [5, -21], walk2: [5, -20], walk3: [5, -21], write0: [5, -21], write1: [5, -21],
-    glance: [5, -21], pat0: [5, -21], pat1: [5, -21], watch: [4, -21], wave: [4, -20],
+    glance: [5, -21], pat0: [5, -21], pat1: [5, -21], watch: [4, -21], wave: [4, -20], lookUp: [5, -20], crouch: [5, -15],
   },
 } as const;
 

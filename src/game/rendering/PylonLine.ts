@@ -60,8 +60,8 @@ function pylonStrip(def: ParallaxLayerDef): PylonStrip {
 // Thin cyan cable from a machine feed point (the cable mast top, or the turbine export) to the lit pylon
 // insulator it is pinned to (CR7, CR-A). It lives in world space, outside the machine texture: its far end
 // moves with the pylons layer parallax, its near end moves with the machine. Visibility and fade follow the
-// pylonsLit layer and the feed's tech gate, and the fade-in waits until the feed's part has finished
-// assembling. The anchor is chosen once on first light and kept.
+// pylonsLit layer (its fadeMs, WP24 D9) and the feed's tech gate, and the fade-in waits until the feed's part has
+// finished assembling. The anchor is chosen once on first light and kept.
 // A feed with leadTo also gets a 1 px lead from the feed point up to leadTo, drawn at machine cable depth (over the
 // machine casing) on its own Graphics; the catenary then starts at leadTo.
 export class PylonLine {
@@ -71,6 +71,8 @@ export class PylonLine {
   private readonly feed: PylonFeed;
   private readonly componentAssembling: () => boolean;
   private fade: number;
+  private target: number; // the fade the last update (or the constructor) aimed at; settleFade snaps to it
+  private camera: Phaser.Cameras.Scene2D.Camera | null = null; // camera of the last update; settleFade redraws at its scroll
   private lastKey: string | null = null;
   private pinned: PylonAnchorRef | null = null; // chosen on first light; cleared once the layer hides
 
@@ -102,6 +104,7 @@ export class PylonLine {
     this.componentAssembling = componentAssembling;
     // Already lit at load: no fade-in.
     this.fade = def !== undefined && isLayerVisible(def, techLevels) && this.gateMet(techLevels) ? 1 : 0;
+    this.target = this.fade;
   }
 
   /** True when the feed's tech gate (if any) is owned at the required level. */
@@ -110,25 +113,14 @@ export class PylonLine {
     return gate === undefined || techLevels[gate.techId] >= gate.minLevel;
   }
 
-  // Fades toward the layer's target and redraws only when the camera scroll or the fade changed.
+  // Fades toward the layer's target (its fadeMs, default PARALLAX_FADE_MS) and redraws only when the camera scroll or the fade changed.
   update(camera: Phaser.Cameras.Scene2D.Camera, techLevels: Readonly<Record<TechId, number>>, deltaMs: number): void {
     const active = this.active;
     if (active === null) return;
-    const target = isLayerVisible(active.strip.def, techLevels) && this.gateMet(techLevels) && !this.componentAssembling() ? 1 : 0;
-    this.fade = fadeStep(this.fade, target, deltaMs, PARALLAX_FADE_MS);
-    if (this.fade === 0) {
-      if (this.lastKey !== null) {
-        this.graphics.clear();
-        this.leadGraphics.clear();
-        this.lastKey = null;
-      }
-      if (target === 0) this.pinned = null; // layer hidden again (session reset): the next light picks anew
-      return;
-    }
-    const key = `${camera.scrollX},${camera.scrollY},${this.fade}`;
-    if (key === this.lastKey) return;
-    this.lastKey = key;
-    this.draw(active, { x: camera.scrollX, y: camera.scrollY }, this.fade);
+    this.camera = camera;
+    this.target = isLayerVisible(active.strip.def, techLevels) && this.gateMet(techLevels) && !this.componentAssembling() ? 1 : 0;
+    this.fade = fadeStep(this.fade, this.target, deltaMs, active.strip.def.fadeMs ?? PARALLAX_FADE_MS);
+    this.redraw(active, camera);
   }
 
   /** Destroys the Graphics objects; safe to call twice. */
@@ -136,6 +128,31 @@ export class PylonLine {
     if (this.graphics.scene) this.graphics.destroy(); // Phaser clears scene on destroy
     if (this.leadGraphics.scene) this.leadGraphics.destroy();
     this.lastKey = null;
+  }
+
+  /** Settle mode (C6): snaps the fade to its target (the gate and assembly rules of the last update) and redraws at once. */
+  settleFade(): void {
+    const active = this.active;
+    if (active === null) return;
+    this.fade = this.target;
+    if (this.camera !== null) this.redraw(active, this.camera);
+  }
+
+  // Draws the cable for the current fade and camera scroll; clears it while hidden and releases the anchor once the layer is hidden again.
+  private redraw(active: ActivePylonLine, camera: Phaser.Cameras.Scene2D.Camera): void {
+    if (this.fade === 0) {
+      if (this.lastKey !== null) {
+        this.graphics.clear();
+        this.leadGraphics.clear();
+        this.lastKey = null;
+      }
+      if (this.target === 0) this.pinned = null; // layer hidden again (session reset): the next light picks anew
+      return;
+    }
+    const key = `${camera.scrollX},${camera.scrollY},${this.fade}`;
+    if (key === this.lastKey) return;
+    this.lastKey = key;
+    this.draw(active, { x: camera.scrollX, y: camera.scrollY }, this.fade);
   }
 
   /** Lead from the feed point up to leadTo: 1 art px core with 2x2 highlight caps, like the machine cables. */

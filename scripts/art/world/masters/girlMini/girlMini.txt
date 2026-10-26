@@ -34,3 +34,21 @@
 ..KKKKK.
 ..KaaaK.
 ..KKKKK.
+
+# WP24 AD1b-2 (drawn over the AD1a placeholder, column 2): palm = the era III vent beat on the pylon plane: the free
+# hand raised beside the hood, palm up (u, 2 px at x 6 rows 2-3, ink cap row 1), sleeve s at the shoulder (6, 4); the
+# cold lantern dot w at (3, 8) exactly as cold; boots, hem and pivot unchanged.
+
+@frame palm
+........
+......K.
+....KKuK
+...KKKuK
+..KvbssK
+..KvbsK.
+..KvusK.
+..KKusK.
+..KwusK.
+..KKKKK.
+..KaaaK.
+..KKKKK.

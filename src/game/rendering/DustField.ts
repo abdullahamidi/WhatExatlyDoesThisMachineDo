@@ -1,12 +1,15 @@
 import Phaser from 'phaser';
 import type { AssetId } from '../../assets/assetIds';
-import { MACHINE_ANCHOR, DUST, DUST_RISING } from '../../data/world';
+import { MACHINE_ANCHOR, DUST, DUST_RISING, DUST_WIND } from '../../data/world';
 import { FINALE_DUST } from '../../data/finale';
 import type { FinaleFrame } from '../math/finale';
 
 const DUST_TEXTURE: AssetId = 'fx.dust';
 
-/** Mote emitter config: the shared look (life, size, fade, count) with this stream's spawn top and vertical drift. */
+/**
+ * Mote emitter config: the shared look (life, size, fade, count) with this stream's spawn top and vertical drift.
+ * The speed ranges are the configured ones; setWind rescales a live stream's ranges (windSpeeds).
+ */
 function moteConfig(spawnTopY: number, speedY: readonly [number, number], emitting: boolean): Phaser.Types.GameObjects.Particles.ParticleEmitterConfig {
   return {
     x: { min: MACHINE_ANCHOR.x - DUST.spawnHalfWidth, max: MACHINE_ANCHOR.x + DUST.spawnHalfWidth },
@@ -22,25 +25,35 @@ function moteConfig(spawnTopY: number, speedY: readonly [number, number], emitti
   };
 }
 
+// Scales a stream's speed ranges by the wind factor: each new mote draws its speed from the bounds (EmitterOp start / end),
+// so no per-emit callback runs. Live motes keep their speed.
+function windSpeeds(stream: Phaser.GameObjects.Particles.ParticleEmitter, speedY: readonly [number, number], factor: number): void {
+  const { speedX, speedY: vertical } = stream.ops;
+  speedX.start = DUST.speedX[0] * factor;
+  speedX.end = DUST.speedX[1] * factor;
+  vertical.start = speedY[0] * factor;
+  vertical.end = speedY[1] * factor;
+}
+
 // Drifting dust motes spread across the band around the machine (MACHINE_ANCHOR.x +- DUST.spawnHalfWidth), pre-populated so the first frame already has dust.
 // Two streams share the look: `normal` (DUST band and drift) and `rising` (Era IV, once the spire stands:
 // DUST_RISING band and upward drift). Only one emits at a time; the stopped stream's live motes finish naturally.
+// setWind moves both streams with the weather: horizontal gravity (live motes too) and the speed factor of new motes.
 export class DustField {
   private readonly normal: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly rising: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly reverse: Phaser.GameObjects.Particles.ParticleEmitter;
+  private drift = 1; // wind speed factor of the normal and rising streams' new motes (1 = as configured)
+  private gravityX = 0; // last horizontal gravity written to the normal and rising streams
   private risingOn = false;
   private finale: FinaleFrame['dust'] = 'normal';
 
   constructor(scene: Phaser.Scene) {
-    this.normal = scene.add.particles(0, 0, DUST_TEXTURE, moteConfig(DUST.spawnTopY, DUST.speedY, true));
-    this.normal.setDepth(DUST.depth);
+    this.normal = scene.add.particles(0, 0, DUST_TEXTURE, moteConfig(DUST.spawnTopY, DUST.speedY, true)).setDepth(DUST.depth);
     this.normal.fastForward(DUST.lifespanMs[1]);
-    this.rising = scene.add.particles(0, 0, DUST_TEXTURE, moteConfig(DUST_RISING.spawnTopY, DUST_RISING.speedY, false));
-    this.rising.setDepth(DUST.depth);
+    this.rising = scene.add.particles(0, 0, DUST_TEXTURE, moteConfig(DUST_RISING.spawnTopY, DUST_RISING.speedY, false)).setDepth(DUST.depth);
     // Finale (WP13): the rising motes fall back down (FINALE_DUST.speedY) from the rising band; stopped by the finale frame.
-    this.reverse = scene.add.particles(0, 0, DUST_TEXTURE, moteConfig(DUST_RISING.spawnTopY, FINALE_DUST.speedY, false));
-    this.reverse.setDepth(DUST.depth);
+    this.reverse = scene.add.particles(0, 0, DUST_TEXTURE, moteConfig(DUST_RISING.spawnTopY, FINALE_DUST.speedY, false)).setDepth(DUST.depth);
   }
 
   /**
@@ -52,6 +65,26 @@ export class DustField {
     this.risingOn = on;
     // While the finale owns the field only the remembered state changes; it applies when the finale hands back to 'normal'.
     if (this.finale === 'normal') this.showStream(immediate);
+  }
+
+  /**
+   * Wind on the normal and rising streams: `unit` x DUST_WIND.gravityXPerUnit is their horizontal gravity, `drift` the
+   * speed factor of their new motes (1 = as configured). Each is written only when it moved by its deadband
+   * (DUST_WIND.epsilon, DUST_WIND.driftEpsilon). Ignored while the finale owns the field.
+   */
+  setWind(unit: number, drift: number): void {
+    if (this.finale !== 'normal') return;
+    const gravityX = unit * DUST_WIND.gravityXPerUnit;
+    if (Math.abs(gravityX - this.gravityX) >= DUST_WIND.epsilon) {
+      this.gravityX = gravityX;
+      this.normal.gravityX = gravityX;
+      this.rising.gravityX = gravityX;
+    }
+    if (Math.abs(drift - this.drift) >= DUST_WIND.driftEpsilon) {
+      this.drift = drift;
+      windSpeeds(this.normal, DUST.speedY, drift);
+      windSpeeds(this.rising, DUST_RISING.speedY, drift);
+    }
   }
 
   /**
@@ -81,20 +114,13 @@ export class DustField {
 
   // Starts the stream for the remembered state. immediate: fills it now and drops the other stream's motes.
   private showStream(immediate: boolean): void {
-    if (this.risingOn) {
-      this.normal.stop();
-      this.rising.start();
-      if (immediate) {
-        this.rising.fastForward(DUST.lifespanMs[1]);
-        this.normal.killAll();
-      }
-    } else {
-      this.rising.stop();
-      this.normal.start();
-      if (immediate) {
-        this.normal.fastForward(DUST.lifespanMs[1]);
-        this.rising.killAll();
-      }
+    const on = this.risingOn ? this.rising : this.normal;
+    const off = this.risingOn ? this.normal : this.rising;
+    off.stop();
+    on.start();
+    if (immediate) {
+      on.fastForward(DUST.lifespanMs[1]);
+      off.killAll();
     }
   }
 }

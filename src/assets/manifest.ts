@@ -714,8 +714,8 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     description: 'Flywheel rim 2 plus a one pixel brass inlay ring, drawn over rim 2 at MK III; rotationally symmetric.',
   },
   'world.inspector': {
-    id: 'world.inspector', file: 'world/inspector.png', width: 380, height: 240, origin: { x: 0.5, y: 1 }, tileable: 'none',
-    frame: { width: 20, height: 40, count: 114 },
+    id: 'world.inspector', file: 'world/inspector.png', width: 440, height: 240, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 20, height: 40, count: 132 },
     eraRows: 6,
     description: 'Inspector sheet, 19 frames per era row (dome hat, long coat, clipboard at the chest, umbrella) in rows I, II, III, IV, V, whole; file world/inspector.png.',
   },
@@ -725,8 +725,8 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     description: 'Cycle trace on the Inspector clipboard, 3 frames of 6x3; file world/clipboard-pages.png.',
   },
   'world.dog': {
-    id: 'world.dog', file: 'world/dog.png', width: 560, height: 120, origin: { x: 0.5, y: 1 }, tileable: 'none',
-    frame: { width: 28, height: 20, count: 120 },
+    id: 'world.dog', file: 'world/dog.png', width: 644, height: 120, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 28, height: 20, count: 138 },
     eraRows: 6,
     description: 'Dog sheet, 20 frames per era row (low wedge, one upright ear, curled tail) in rows I, II, III, IV, V, whole; file world/dog.png.',
   },
@@ -745,20 +745,20 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     description: 'Red ball prop, one 3x3 frame: mutedOrange ball with a glint and a shadow (cycle 2+ trace by the dog, postgame); file world/red-ball.png.',
   },
   'world.crow': {
-    id: 'world.crow', file: 'world/crow.png', width: 240, height: 108, origin: { x: 0.5, y: 1 }, tileable: 'none',
-    frame: { width: 24, height: 18, count: 60 },
+    id: 'world.crow', file: 'world/crow.png', width: 288, height: 108, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 24, height: 18, count: 72 },
     eraRows: 6,
     description: 'Crow sheet, 10 frames per era row (wedge body, two wing fans, hooked beak) in rows I, II, III, IV, V, whole; file world/crow.png.',
   },
   'world.girl': {
-    id: 'world.girl', file: 'world/girl.png', width: 160, height: 168, origin: { x: 0.5, y: 1 }, tileable: 'none',
-    frame: { width: 16, height: 28, count: 60 },
+    id: 'world.girl', file: 'world/girl.png', width: 192, height: 168, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 16, height: 28, count: 72 },
     eraRows: 6,
     description: 'Girl with the lantern, 10 frames per era row (hood, raincoat, lantern: stand, palm, talk, shield, back-run, lantern drop) in rows I, II, III, IV, V, whole; file world/girl.png.',
   },
   'world.girlMini': {
-    id: 'world.girlMini', file: 'world/girl-mini.png', width: 16, height: 12, origin: { x: 0.5, y: 1 }, tileable: 'none',
-    frame: { width: 8, height: 12, count: 2 },
+    id: 'world.girlMini', file: 'world/girl-mini.png', width: 24, height: 12, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 8, height: 12, count: 3 },
     description: 'Girl seen from the pylon plane, 2 frames (lantern warm, lantern cold white); file world/girl-mini.png.',
   },
   'world.girlWindow': {
