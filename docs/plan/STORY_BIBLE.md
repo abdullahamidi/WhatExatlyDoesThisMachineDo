@@ -278,6 +278,12 @@ off-stage for that stage and its lines wait.
 
 **Sensor 7 is the exception:** its head is live, not on the tape. It tracks the camera in every phase.
 
+**WP24 (2026-10-26): runners.** Each denizen runs its own behaviour scheduler. It picks the next activity from a weighted list for the current era: a rest, a walk between spots, or a reaction to a cue (a ring, a gust, a vent puff). The sequence is seeded, so each boot of a played save opens elsewhere in it.
+- Canon holds under the variety: the girl never moves on screen, the crow never travels before the finale, Sensor 7 always faces the camera, and no denizen walks twice in a row. The payoff frames (pat, wave, shield, chase, flat, the crow's flight, run, lantern drop) appear only from the finale on, except the dog's lie-down hold in the demo. Watch and sleep may appear before the finale.
+- **The recorded Tuesday.** The street clock is stopped at about 4:41. The day runs from 09:00 toward 16:41 as the machine's lifetime fills, and the light and the wind follow it. It stops at 16:41. The finale and postgame hold 16:41. A new cycle rewinds to 09:00 under the white peak. The postgame keeps its exact 90 s loop.
+- **Crank mode (before `wornMotor`).** Nothing moves in real time. Each crank click winds every visible walker one step: a walk moves one drawn frame, and every other activity advances one clip frame. Each runner then holds 500 ms.
+- Interruptions (a turn, a glance, a talk, a failed sync, a tape freeze) pause a runner and resume the same activity. They never skip it.
+
 ### 3.1 The Inspector (person) `inspector`
 
 - **What:** a tall figure in a long work coat and hard hat, with a clipboard. A closed umbrella hangs on his arm from
@@ -301,6 +307,14 @@ off-stage for that stage and its lines wait.
 | Postgame | crisp | 90 s loop: crosses the street, **pats the dog** (`Good boy.`, in-world, once per session), checks his watch at the same second every loop, waves up at the girl's window, writes, leaves. The umbrella stays closed: the forecast rain never comes. |
 | Cycle 2+ | sepia ghost again; clipboard one step thicker per finished cycle (max 3) | INS-14 replaces INS-01. |
 
+**WP24 (2026-10-26): the Inspector's rounds, spots and new poses (eras I–III; era V).**
+- **Rounds.** He stands, strolls, writes, watches and looks up. He walks between three spots: by Sensor 7, the middle, and the scrap. Each walk ends in a short hold, and a walk never follows a walk.
+- **Reading.** Reading walks him to Sensor 7. The Sensor 7 LED double blinks as he starts.
+- **lookUp (new).** He tilts his head back to the sky for 4–10 s, from era I.
+- **crouch (new, while the scraps last).** He kneels to inspect the ground, never the machine. He travels to the Sensor 7 spot and kneels at its foot (framing s11). In e1 and s9 he kneels at the sensor side, with the scrap just past his boot. The sensor spot is also on the s8 list, so the crouch can run there while scraps remain.
+- **Umbrella (era III, vents).** A steam vent puff opens his umbrella. It goes half open, then open, then half again, and the first and last frames hold for 0.5 s. He holds it for 9–17 s.
+- **Era V.** He stands facing the camera, and the stare stays. Two new looks: `mouth`, where the mouth opens on a talk frame with no text, and `withSensor`, a reversed walk to Sensor 7 where he stops and talks silently. The Sensor 7 double blink starts with the walk.
+
 ### 3.2 The Dog (animal) `dog`
 
 - **What:** a thin rust-colored mutt with one torn ear, a blank collar tag and a red collar (from era III). It is
@@ -321,6 +335,11 @@ off-stage for that stage and its lines wait.
 | Postgame | whole | Sleeps, wakes when the Inspector passes, gets patted, chases a **red ball**. Never looks at the camera. |
 | Demo post-cap | — | After DOG-12 it **lies down facing the camera for the rest of the session** (and in every later session of that save). This is the hold image. |
 | Cycle 2+ | sepia, chained again | **Keeps the red ball**: the only saturated red in a sepia world, and the only object that crosses the white. |
+
+**WP24 (2026-10-26): the dog's activities (eras I–III; era V).**
+- **Rounds (eras I–III).** Sit, sniff, pace (a walk between the stake, the home spot and the out spot), and two new ones. **scratch** (a hind leg lifts to a paw behind his ear, 1.5–3 s). **lookUp** (he tilts his head back to the sky, 3–8 s; a crow movement or a ring makes him do it).
+- **Sleep before the finale (Q5).** He lies down for 10–18 s in eras I–III. A ring or a rapid crank click wakes him. This reuses the postgame sleep frame. The chase and the flat beam pose stay payoff-only.
+- **Era V.** The head pose and talk. A new **mouth** (talk and head alternate, 2–4 s, no text). The walks stay reversed: the wander and the walk back to the stake.
 
 ### 3.3 The Crow (animal) `crow`
 
@@ -343,6 +362,13 @@ off-stage for that stage and its lines wait.
 | Finale | whole at 33.2 s | Glossy blue-black. Takes off at 37.0 s and climbs into the flock band. At 38.0 s it **leads the first flock**: one sprite handed to the `fx.bird` pool, drawn with its whole frames. Glides back to the lamp 47.5-49.3 s. Last look at 59.83 s. |
 | Postgame | an ordinary crow | KEEP +3 s: hops to the booth roof, **scratches mark 42** (3 pecks), hops back. Real caw sound only, no bubble: the mimic is gone. Perches between flocks. |
 | Cycle 2+ | frozen again | Frozen in its **last postgame flight pose**: higher, wings up. |
+
+**WP24 (2026-10-26): the crow's activities.**
+- **Era I.** Frozen, with a tip try: the near wing tip lifts (the new frozenTip frame), then the crow is still again. A crank click (at most one per 2 s) or a gust starts it.
+- **Era II.** A skip: the 4 px stutter at a faster tape pace. The tip try also appears here, with no reaction.
+- **Era III.** The ruffle (new): the crow puffs up for 1.5–2.5 s, and that movement makes the dog look up. One drop falls from its wet point and clears the lamp. It is one drop per ruffle, and it is off under reduced motion.
+- **Era V.** A caw: the beak opens (talk, then head) for 2–3 s, with no text. The 4 px stutter in place stays.
+- **Cycle 2+ (Revision 5 b).** From cycle 2 the crow holds its crowHigh trace (frozen mid-flight, wings up) for all of eras I–II. It is a deliberate uncanny stillness, not a stall.
 
 ### 3.4 The Girl with the Lantern (person) `girl`
 
@@ -375,6 +401,13 @@ off-stage for that stage and its lines wait.
 | Finale | whole at 31.1 s | **The first time we see her back.** She drops the lantern and runs off left (31.5-34.0 s) while the skyline fades in (29.3-37.3 s). The lantern lies in the grass in the baseL survey hold. At 59.83 s she is at her restored window, facing the camera. |
 | Postgame | her restored window, lit warm (the window must coincide with a lit window on `skyline-restored.png`) | A tiny figure at the curtain, looking down at the street, not at you. Waves back when the Inspector waves. |
 | Cycle 2+ | starts one plane nearer per finished cycle: cycle 2 at the pylon plane, cycle 3+ on the ground back row | Lantern back in her hand. Never nearer than her era V position. |
+
+**WP24 (2026-10-26): the girl's new poses and the pylon-plane mini.**
+- **On the ground** (cycle 3+ in eras I–III, the era IV conductor, era V). She stands and sways, and now also lifts the lantern and tilts her hood. Both new poses face the camera, so they are stare-safe.
+  - **lanternUp:** the lantern is held forward at chest height, below the shoulder, with the arm bent. It is never the raised lantern of the finale shield (the 13 s beat, §9.1).
+  - **tilt:** the hood is tipped to one side and the body stays put.
+- **On the pylon plane** (cycle 2; eras II–III). Her lantern gutters cold. The flicker keeps the cold lantern and flickers between full and 80 % alpha, 1–2 s a step. The dim drops it to 55 % alpha for 5–15 s. Palm (era III, vents): the free hand comes up beside the hood, palm up. The warm lantern never shows in eras II–III.
+- **Her window** (era I): the window dims for 5–15 s every 40–90 s. The cast is unchanged.
 
 ### 3.5 The Payphone (object) `payphone`
 
@@ -456,6 +489,12 @@ the only large change.
 
 **The postgame exact loop covers only denizen and prop loops** (90 s period). Canon flocks (every 40-70 s) and seeds
 keep their own schedules. The world as a whole is never claimed to be periodic.
+
+**WP24 (2026-10-26): the day, the wind and the dust.** Nothing here snaps. Each change fades, ramps or flickers in (§5.5 and GAME_SPEC §18.5).
+- **Light (ruin layers only).** The sky, mountains, skyline and pylons take a tint that follows the recorded Tuesday: morning grey at 09:00, neutral at 13:00, amber at 16:41 (held through the finale and postgame). The tint never takes the light below 86 % brightness. The restored layers, the violet sky, the horizon glow, the ground, the machine and the denizens are never tinted. From 14:40 the lamp glow rises by up to 1.5 times. By 16:41 the shadows shift up to 4 px and widen up to 1.2 times.
+- **Wind.** Era I: dry, with gusts. Era II: dry, calmer. Era III: the front builds. The wind rises, the virga grows more opaque and scrolls faster, and steam vents puff every 25–60 s while they are on. In eras I–III the gusts also move the receiver and the scraps. Era IV: dead calm. The wind eases to zero over 60 s, the virga slows to a stop and freezes, and the dust rises, so things fall up. Era V: still air, no gusts. The dust keeps drifting and breathes: its speed moves ±10 % on a 97 s sine.
+- **Fog.** The booth glass and the Sensor 7 lens fog build at the first vent puff and clear over 30 s after era IV starts. The glass dries in the still air.
+- **Era V.** The violet Chladni lines breathe (alpha 0.6–1, half-cycles of 8–15 s). The motes drift down into the dead lamp, one at a time, on their own paths.
 
 ### 4.2 Must not happen before the finale
 
@@ -626,6 +665,11 @@ in table order. They follow the same rules as every other log:
 | The stare | from the ONE OBSERVER chain through era V | Every denizen at rest faces the camera; it turns to profile only while moving. Glances stop. |
 | Girl's steps | the 5 era V milestones, unseen | She is nearer. |
 | Sensor 7 postgame turn | ≥ 20 min into the postgame, once per cycle | §3.6. |
+
+**WP24 (2026-10-26): era IV unison actions.** The era IV conductor runs the whole cast on the downbeat. Each denizen joins a unison action within three beats.
+- Before ONE OBSERVER: **still** (a held pose, accented on the downbeat by the write, wag or talk frame), **sway** (a frame per beat), **look** (the Inspector and the dog look up, the crow turns its head, the girl lifts her lantern), **mouth** (the mouth opens on the downbeat, no text), **hold**, and **rise** (the body lifts one art px).
+- After ONE OBSERVER: **stare** (unchanged: every denizen at rest faces the camera), **beat** (one pulse on the downbeat), **mouth**, **hold** and **rise**.
+- Reduced motion keeps the downbeat accents and the stare. The rise is zero.
 
 ---
 

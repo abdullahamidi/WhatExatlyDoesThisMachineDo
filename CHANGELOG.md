@@ -2,7 +2,7 @@
 
 Notable changes per release, newest first. Work packages are named WPn; plans are in `docs/plan/`.
 
-## 0.10.0 — Living machine — 2026-10-25
+## 0.10.0 — Living machine — 2026-10-27
 
 ### Added
 - **WP22** Part evolution tiers: repeatable parts change how they look as they are upgraded, through 3 or 5 visual tiers (MK I SALVAGED to MK V AS BUILT). Visual only: no balance change, no save field.
@@ -15,13 +15,21 @@ Notable changes per release, newest first. Work packages are named WPn; plans ar
 - **WP23b** The finale and the postgame include the denizens. The postgame has a 90-second loop of their behaviour.
 - **WP23b** New cycles leave traces in the world. Two more system logs.
 - **WP23a / WP23b** Demo: the living world covers eras I and II, with its own short arc after the Substation Blueprint cap.
+- **WP24** Living world v2 (playtest feedback): every denizen runs its own day of varied activities. They walk between spots, write, crouch at Sensor 7, look up, scratch, doze, open an umbrella when a vent puffs, and react to the machine. No move repeats back to back, and nobody teleports.
+- **WP24** The recorded Tuesday: a day clock runs from 09:00 to 16:41 as the machine progresses. The far ruins drift from grey morning to neutral noon to amber afternoon. Wind and gusts move dust, rain and sprouts. The finale and the postgame hold at 16:41.
+- **WP24** No instant changes. Era changes crossfade over 8 seconds. The lamp buzzes on, the booth lights after it, and the windows and their glow light one at a time. Fog, puddles and burning scraps fade in over 20 to 45 seconds.
+- **WP24** New denizen poses (11 cells) and small ambient events (a lamp dip, a clock twitch, a dripping crow).
+- **WP25** Passive-first economy (playtest feedback): the machine now carries progression and the crank is an optional bonus. A player who drops to half a click per second after era I reaches each era gate in about 1.2× the always-clicking time (was up to 2.15×).
+- **WP25** The HUD shows what one crank turn is worth in seconds of machine output, plus the AUTO-CRANK rate. The machine shows its own output in small popups. A SYSTEM log notes "Manual operation no longer required."
+- **WP25** The Crank Servo (auto-crank) moves to era II, so the demo has it too.
 
 ### Changed
 - **WP22** HUD inset follows UI SCALE (100, 125 and 150 %).
 - **WP23a** Saves: an optional `world` block (which living-world lines were seen). No save version change; older saves load as before.
+- **WP25** Balance: click echoes are shorter (Dynamo and Steam Hammer 0.25 s, Echo Crank 0.5 s, Inversion 0.75 s). Passive output is raised per energy. The Echo bonus is 15 % per Echo (was 30 %), and total pace is still faster than before. Generator cost 25 500. Data only: no save change.
 
 ### Verification
-- Bundle budgets (`scripts/smoke/perf-budget.json`, checked by `scripts/perf/bundle-budget.mjs`): app JS raw <= 500 KB (was 460 KB), lazy living-world chunk <= 120 KB (loads after the scene is created, off the boot path), CSS <= 45 KB (was 44 KB).
+- Bundle budgets (`scripts/smoke/perf-budget.json`, checked by `scripts/perf/bundle-budget.mjs`): app JS raw <= 500 KB (was 460 KB), lazy living-world chunk <= 210 KB (was 120 KB; WP24 behaviour, day clock and transitions; loads with the World scene, off the boot path), CSS <= 45 KB (was 44 KB).
 - Timing rows (GPU perf median of 3, 60 min soak, world update cost) are re-measured on a quiet PC. Their status is in `docs/STEAM_RELEASE.md` section 15.
 - Known note: denizens are small at the default camera (the Inspector is about 30 px tall at 1080p, smaller at zoom 0.5 in eras III to V). They are readable but easy to miss.
 

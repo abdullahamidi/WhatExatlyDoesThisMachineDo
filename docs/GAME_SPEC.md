@@ -253,3 +253,10 @@ who drops to 0.5 clicks/s after era I reaches every gate in about 1.17–1.2× t
 its own output in popups, and a SYSTEM line notes "Manual operation no longer required." Director calls: generator.baseCost
 25000 → 25500 (keeps the era-I windows; outside the planned lever list) and no new ME-priced tech in era IV (ME keeps being spent:
 continuity 92 %, dead time 4.0 min ≤ 5).
+
+### 18.5 User playtest (2026-10-25): living world v2 (WP24)
+Append-only note (WP24 T14, 2026-10-26). Nothing above this line was changed.
+- **Scheduler.** Each denizen runs its own weighted list of activities per era: rest, walks between spots, reactions to cues. No walk follows a walk, and each boot of a played save opens elsewhere in the sequence. Before Worn Motor, one crank click steps every walker. Canon holds: the girl never moves on screen, the crow never travels before the finale, Sensor 7 faces the camera.
+- **Recorded Tuesday.** The day runs from 09:00 toward 16:41 on the stopped street clock (about 4:41) as the machine's lifetime fills; the finale and postgame hold 16:41. The light tint is subtle (never more than 14 % darker) and the wind follows the era. The postgame keeps its exact 90 s loop.
+- **No instant change.** Every change that used to snap (era rows, lamp, booth, windows, motes, hole, puddles, sprout, fog, virga) now crossfades, ramps or flickers in over 1.5 s to 60 s. Queued changes start 1 s after the gate closes and stagger 0.6–1.2 s apart. An interruption pauses a walker or pose; it never skips it.
+- **§4 reading.** "Environment relatively static" now reads: "the environment lives slowly in the background, canon-bound; the machine stays the focus." §4 itself is unchanged.

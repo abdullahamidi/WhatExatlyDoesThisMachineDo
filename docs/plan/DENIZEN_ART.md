@@ -185,6 +185,14 @@ Frame sizes are art px. The pivot is (0.5, 1): feet on the bottom row, body cent
 - **Per era:** row as in §1.6; the bible §3.1 behaviors on top. Era IV: front at rest after ONE OBSERVER (the stare).
 - **Readability:** 33 / 50 / 66 logical px. Proof at 1×, 1.5×, 2× and 3× passes.
 
+**WP24 (2026-10-26): walks, spots and the three new Inspector cells.**
+- **Walk speed.** A walk draws 8 world px per frame at the playback fps: 16, 32 or 64 world px/s at 2, 4 or 8 fps. Holds run on real time and drawn frames snap to the mode fps. Before `wornMotor`, a crank click draws the next frame instead.
+- **Spots, not the shuttle.** The route above is replaced. The Inspector walks between three spots: the sensor (-24 world px from his placement x), mid (0) and the scrap (+24). A walk covers at least 24 world px and lasts at most 6 s, so a sensor-to-scrap walk is six drawn frames. Every walk ends in an arrival hold, and a walk never follows a walk.
+- **New cells** (frames 19–21; sheet 440 × 240, 22 frames per row):
+  - 19 `lookUp`: idle body with the head tilted back to the sky and the board held one px lower. Rows III to whole keep the closed umbrella hooked on the forearm.
+  - 20 `crouch`: kneels on the far knee with the board on the near knee; 26 px tall. The crouch travels to the Sensor 7 spot. The AD1b-1 hand-off that stopped it short of the scrap is superseded by WP24 Revision 6.
+  - 21 `umbrellaHalf`: umbrellaOpen with the canopy half open. The vent reaction runs half, open, half.
+
 ### 2.2 The Dog `world.dog`
 
 - **Size:** frame 28×20, body 24×16. A low wedge with one upright ear, one torn ear and a curled tail. The coat is
@@ -218,6 +226,11 @@ Frame sizes are art px. The pivot is (0.5, 1): feet on the bottom row, body cent
   - the upright ear always breaks the top line;
   - no frame drops the ear.
 
+**WP24 (2026-10-26): the dog's new cells** (frames 20–22; sheet 644 × 120, 23 frames per row).
+- 20 `scratch0` and 21 `scratch1`: the sit body with the near hind leg lifted from the haunch to a paw behind the ear (paw rows 6–8, then 7–9, on a 6 fps stroke). The far hind foot stays on the ground. Used by the scratch round, eras I–III.
+- 22 `lookUp`: the sit body with the head tilted back to the sky, muzzle up; the upright ear stays upright. Used by the lookUp round (eras I–III, after a crow move or a ring) and by the era IV `look` beat.
+- Frames 16 (`sleep`) and 19 (`wag`) are reused before the finale. No new cell.
+
 ### 2.3 The Crow `world.crow`
 
 - **Size:** frame 24×18, body 20×14. Wedge body, two spread wing fans, hooked beak. Ink and iron `0 1 2` with a
@@ -237,6 +250,11 @@ Frame sizes are art px. The pivot is (0.5, 1): feet on the bottom row, body cent
   4 world px.
 - **Readability:** 14 px at zoom .5, at the floor. The sky behind it is the lightest value on screen, so the ink
   wings read.
+
+**WP24 (2026-10-26): the crow's new cells** (frames 10–11; sheet 288 × 108, 12 frames per row).
+- 10 `frozenTip`: frozen with the near wing tip lifted 2 px. Used by the tip try (eras I–II). The III-to-whole cells carry frozen's layers.
+- 11 `ruffle`: perch0 puffed and damp, crown and breast 1 px out, one wet point under the breast (the falling drop is code). Used by the era III ruffle round.
+- The cycle 2+ hold (`fly2`, frozen mid-flight) reuses existing frames.
 
 ### 2.4 The Girl with the Lantern `world.girl`, `world.girlMini`, `world.girlWindow`
 
@@ -264,6 +282,13 @@ Frame sizes are art px. The pivot is (0.5, 1): feet on the bottom row, body cent
   - The "approach" in era V moves her feet down the foreground band (+8 world px per step, 5 steps), not toward the
     machine.
   - In the finale she runs away from the camera.
+
+**WP24 (2026-10-26): the girl's new cells and the mini palm.** Ground: frames 10–11, sheet 192 × 168, 12 frames per row. Mini: frame 2, sheet 24 × 12, 3 frames in one row.
+- 10 `lanternUp`: faces the camera, hood and face smudge as stand0. The lantern is held forward at chest height, below the shoulder, with the arm bent. It is never raised: the raised lantern is the finale `shield` (frame 4), and the two must read as different poses. Body 11 × 24.
+- 11 `tilt`: stand0 with the hood tipped to one side. Lantern, hand, coat and boots stay as stand0, so the era IV beat moves only the head. Body 12 × 24.
+- Both new ground frames face the camera and sit in `WORLD_STARE_SAFE`.
+- girlMini frame 2 `palm`: the cold lantern with the free hand raised beside the hood, palm up (6 × 11 in the 8 × 12 cell). Used by the mini palm on a vent puff (era III).
+- The mini flicker needs no cell: it is the cold frame (1) with a per-frame alpha of 1 and 0.8. The warm frame (0) is never shown in eras II–III.
 
 ### 2.5 The Payphone booth and street corner `world.payphone`, `world.receiver`, `world.lamp`, `world.clock`
 
@@ -562,6 +587,18 @@ six windows coming up at `generator` (AD2c proof pairs).
   disc / box / tripod), so a missing PNG still stages the scene.
 - **Sources:** masters and prop layers as PNG + the recolor script under `tools/art/livingWorld/` (proposal). They are
   not shipped.
+
+**WP24 (2026-10-26): sheet widths after the layout extension (AD1a).** New frames sit at the end of each sheet, so no existing index moves. Sizes were checked against the PNG headers. The manifest carries the width and `frame.count`; its descriptions keep the old counts (WP24 D8).
+
+| sheet | file | size (px) | before (px, frames) | frame (art px) | per row | rows | frames |
+|---|---|---|---|---|---|---|---|
+| inspector | `world/inspector.png` | 440 × 240 | 380 × 240, 19 | 20 × 40 | 22 | 6 | 132 |
+| dog | `world/dog.png` | 644 × 120 | 560 × 120, 20 | 28 × 20 | 23 | 6 | 138 |
+| crow | `world/crow.png` | 288 × 108 | 240 × 108, 10 | 24 × 18 | 12 | 6 | 72 |
+| girl | `world/girl.png` | 192 × 168 | 160 × 168, 10 | 16 × 28 | 12 | 6 | 72 |
+| girlMini | `world/girl-mini.png` | 24 × 12 | 16 × 12, 2 | 8 × 12 | 3 | 1 | 3 |
+
+girlMini is one row (no era rows).
 
 ### 6.5 Texture and display-object budget
 

@@ -39,11 +39,11 @@ Version 0.10.0 (`package.json`). The full game and the Steam demo are built from
 
 ## How to play
 
-**Crank.** Click the hand crank, or press Space or Enter, to make Mechanical Energy (ME). Keyboard presses are capped at 15 per second, and key repeat is ignored.
+**Crank.** Click the hand crank, or press Space or Enter, to make Mechanical Energy (ME). Keyboard presses are capped at 15 per second, and key repeat is ignored. Once the machine runs on its own (the Crank Servo, era II), clicking is an optional bonus: the HUD shows what one turn is worth in seconds of machine output.
 
 **Tech Index.** Press `T` or the TECH INDEX button in the HUD. Buy technologies with the energy shown on each node. Keystones open the next era. The HUD line `NEXT:` names the next milestone or keystone.
 
-**Living world.** A few denizens of the wasteland stand at the edges of the scene and change with each era. Now and then one turns to you and speaks in a speech bubble. WORLD VOICES in SETTINGS sets how often: ON, RARE or OFF.
+**Living world.** A few denizens of the wasteland stand at the edges of the scene and change with each era. Each keeps busy with its own varied day, a recorded Tuesday that runs from 09:00 toward 16:41 as the machine progresses, and changes arrive gradually, never in one frame. Now and then one turns to you and speaks in a speech bubble. WORLD VOICES in SETTINGS sets how often: ON, RARE or OFF.
 
 **Eras and energies**
 
@@ -414,7 +414,7 @@ against the built `dist/`. Sizes are raw, in decimal KB and MB.
 | Budget | Limit | Checked by |
 |---|---|---|
 | App JS (`index-*.js`, raw) | 500 KB | `npm run perf:bundle` |
-| Lazy living-world chunk (`LivingWorldDirector-*.js`, raw) | 120 KB | `npm run perf:bundle` |
+| Lazy living-world chunk (`LivingWorldDirector-*.js`, raw) | 210 KB | `npm run perf:bundle` |
 | Phaser chunk (`phaser-*.js`, raw) | 1500 KB | `npm run perf:bundle` |
 | CSS (raw) | 45 KB | `npm run perf:bundle` |
 | `public/assets` total | 8000 KB | `npm run perf:bundle` |
