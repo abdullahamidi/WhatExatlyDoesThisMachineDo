@@ -1,14 +1,16 @@
-// Cast extras (WP23b): the small sprites tied to the cast poses: the inspector's clipboard pages, the dog's red ball and the era V
-// double-exposure flash of each host (a violet whole-self frame over its body). Why: they follow the same ExtraPose the cast draws, so
-// they never drift off a host; the simulation decides what shows (WorldVisualState traces, the script frame). Overlay offsets come from
-// WORLD_TRACES (art px, un-flipped), the flash hold from WORLD_DOUBLE_EXPOSURE. Built once in the constructor; every object sits in a
-// row container. Reduced motion: no flash. Rendering only: no economy state is read or written.
+// Cast extras (WP23b, WP24): the small sprites tied to the cast poses: the inspector's clipboard pages, the dog's red ball, the era V
+// double-exposure flash of each host (a violet whole-self frame over its body) and the crow's ruffle drip (WP24: one drop per ruffle,
+// falling from the chest). Why: they follow the same ExtraPose the cast draws, so they never drift off a host; the simulation decides what
+// shows (WorldVisualState traces, the script frame). Overlay offsets come from WORLD_TRACES (art px, un-flipped), the flash hold from
+// WORLD_DOUBLE_EXPOSURE, the drip from WORLD_AMBIENT.drip. Built once in the constructor; every object sits in a row container. Reduced
+// motion: no flash, no drip. Rendering only: no economy state is read or written.
 import type Phaser from 'phaser';
 import { PALETTE } from '../../data/palette';
 import { PIXEL_SCALE } from '../../data/world';
 import { WORLD_DEPTH_OFFSETS, WORLD_ERA_ROW, WORLD_FRAMES, WORLD_SHEET_KEYS } from '../../data/livingWorld';
 import type { WorldRow, WorldSheetId } from '../../data/livingWorld';
 import { WORLD_DOUBLE_EXPOSURE, WORLD_TRACES } from '../../data/worldEras';
+import { WORLD_AMBIENT } from '../../data/worldDay';
 import { sheetFrameIndex } from '../math/worldPlayback';
 import type { WorldScriptFrame } from '../math/worldScript';
 import type { WorldVisualState } from '../math/worldState';
@@ -35,6 +37,11 @@ const HOSTS: Record<ExtraHostId, { sheet: WorldSheetId; row: WorldRow; depth: nu
   girl: { sheet: 'girl', row: 'front', depth: WORLD_DEPTH_OFFSETS.cast },
 };
 const HOST_IDS: readonly ExtraHostId[] = ['inspector', 'dog', 'crow', 'girl'];
+// The ruffle drip (WORLD_AMBIENT.drip): the crow frame that starts one drop, and the drop's numbers.
+const RUFFLE_FRAME = 'ruffle';
+const DRIP = WORLD_AMBIENT.drip;
+// Every object this renderer owns: a sprite or the drip square.
+type Owned = Phaser.GameObjects.Sprite | Phaser.GameObjects.Graphics;
 
 // Clipboard frame for a page count: thin (1) .. thick (3). A count below 1 shows thin.
 function pageFrame(pages: number): number {
@@ -46,6 +53,11 @@ function paintFrame(sprite: Phaser.GameObjects.Sprite, index: number): void {
   if (Number(sprite.frame.name) !== index) sprite.setFrame(index);
 }
 
+// Hides an extra only while it shows: most frames hide the idle extras, and a hidden one costs no call.
+function hideIfShown(o: Owned): void {
+  if (o.visible) o.setVisible(false);
+}
+
 /**
  * Clipboard, red ball and double-exposure flashes of the cast. apply() takes the visual state, update() places every extra on the host
  * poses of the frame, flash() starts a host's violet frame. A hidden host or a hidden layer hides its extras.
@@ -53,11 +65,16 @@ function paintFrame(sprite: Phaser.GameObjects.Sprite, index: number): void {
 export class CastExtras {
   private readonly scene: Phaser.Scene;
   private readonly rows: WorldRows;
-  private readonly owned: Phaser.GameObjects.Sprite[] = [];
+  private readonly owned: Owned[] = [];
   private readonly clipboard: Phaser.GameObjects.Sprite;
   private clipboardRow: WorldRow = 'back';                  // the row container the clipboard sits in (built in back)
   private readonly ball: Phaser.GameObjects.Sprite;
   private readonly flashSprites: Record<ExtraHostId, Phaser.GameObjects.Sprite>;
+  private readonly drip: Phaser.GameObjects.Graphics;       // the crow's ruffle drop: one square, moved, never redrawn
+  private dripAt = Number.NEGATIVE_INFINITY;                // nowMs when the drop started; -Infinity when none is falling
+  private dripX = 0;                                        // the drop's start x and y (world px)
+  private dripY = 0;
+  private ruffling = false;                                 // the crow showed the ruffle frame last update (the edge starts a drop)
   private readonly poses: Record<ExtraHostId, ExtraPose | null> = { inspector: null, dog: null, crow: null, girl: null };
   private readonly flashUntil: Record<ExtraHostId, number> = { inspector: -Infinity, dog: -Infinity, crow: -Infinity, girl: -Infinity };
   private readonly forced: Record<'clipboard' | 'redBall', boolean | null> = { clipboard: null, redBall: null };
@@ -79,6 +96,7 @@ export class CastExtras {
       inspector: this.flashIn(rows, 'inspector'), dog: this.flashIn(rows, 'dog'),
       crow: this.flashIn(rows, 'crow'), girl: this.flashIn(rows, 'girl'),
     };
+    this.drip = this.dripIn(rows.back);
     sortWorldRows(rows);
     this.hideAll();
   }
@@ -116,6 +134,7 @@ export class CastExtras {
       this.drawBall(state);
       for (const id of HOST_IDS) this.drawFlash(id);
     }
+    this.drawDrip();
     this.sample(performance.now() - t0);
   }
 
@@ -138,15 +157,19 @@ export class CastExtras {
     return this.flashTotal;
   }
 
-  /** Debug probe: the clipboard (variant = page name), the red ball, and each host's flash (variant = host id). */
-  probe(): { id: string; variant: string; x: number; visible: boolean; speaking: boolean }[] {
-    const entry = (id: string, variant: string, s: Phaser.GameObjects.Sprite) => (
-      { id, variant, x: s.x, visible: s.visible, speaking: false }
+  /**
+   * Debug probe: the clipboard (variant = page name), the red ball, each host's flash (variant = host id) and the crow's drip (variant
+   * fall while a drop falls, else none). Presented x, y (rounded, 0 while hidden), alpha (0 while hidden) and visibility.
+   */
+  probe(): { id: string; variant: string; x: number; y: number; alpha: number; visible: boolean; speaking: boolean }[] {
+    const entry = (id: string, variant: string, s: Owned) => (
+      { id, variant, x: s.x, y: s.visible ? Math.round(s.y) : 0, alpha: s.visible ? s.alpha : 0, visible: s.visible, speaking: false }
     );
     return [
       entry('clipboard', WORLD_FRAMES.clipboardPages[Number(this.clipboard.frame.name)] ?? '', this.clipboard),
       entry('redBall', 'ball', this.ball),
       ...HOST_IDS.map((id) => entry('flash', id, this.flashSprites[id])),
+      entry('drip', this.drip.visible ? 'fall' : 'none', this.drip),
     ];
   }
 
@@ -194,6 +217,18 @@ export class CastExtras {
     return this.spriteIn(rows[host.row], host.sheet, host.depth + LIFT).setTint(PALETTE.violetLight).setAlpha(WORLD_DOUBLE_EXPOSURE.alpha);
   }
 
+  // The drip: one square of drip.sizeArtPx in drip.paletteKey, drawn once at the origin and moved with setPosition. It sits in the crow's
+  // row (rows.back), above the crow body, so the top level is unchanged.
+  private dripIn(row: Phaser.GameObjects.Container): Phaser.GameObjects.Graphics {
+    const size = DRIP.sizeArtPx * PIXEL_SCALE;
+    const drop = this.scene.add.graphics();
+    drop.fillStyle(PALETTE[DRIP.paletteKey], 1).fillRect(0, 0, size, size);
+    drop.setDepth(WORLD_DEPTH_OFFSETS.crow + LIFT).setVisible(false);
+    row.add(drop);
+    this.owned.push(drop);
+    return drop;
+  }
+
   // ---- update ----
 
   // Clipboard: shown with the page count (cycle traces) or forced, and only while the inspector shows a frame with a board.
@@ -209,7 +244,7 @@ export class CastExtras {
     const offset = pose !== null && pose.visible ? CLIPBOARD_OFFSET[pose.frame] : undefined;
     const wanted = this.forced.clipboard ?? (state.traces.clipboard > 0);
     if (pose === null || offset === undefined || !wanted) {
-      sprite.setVisible(false);
+      hideIfShown(sprite);
       return;
     }
     // WHY: the offset is un-flipped art px, so a flipped host mirrors it.
@@ -227,7 +262,7 @@ export class CastExtras {
     const dog = this.poses.dog;
     const wanted = this.forced.redBall ?? (state.traces.redBall || this.script?.props.redBall === true);
     if (dog === null || !dog.visible || !wanted) {
-      sprite.setVisible(false);
+      hideIfShown(sprite);
       return;
     }
     const dir = dog.flip ? -1 : 1;
@@ -239,11 +274,39 @@ export class CastExtras {
     const sprite = this.flashSprites[id];
     const pose = this.poses[id];
     if (pose === null || !pose.visible || this.nowMs >= this.flashUntil[id]) {
-      sprite.setVisible(false);
+      hideIfShown(sprite);
       return;
     }
     paintFrame(sprite, sheetFrameIndex(HOSTS[id].sheet, pose.frame, WORLD_ERA_ROW.whole));
     sprite.setPosition(pose.x, pose.feetY).setFlipX(pose.flip).setAlpha(WORLD_DOUBLE_EXPOSURE.alpha * pose.alpha).setVisible(true);
+  }
+
+  // The crow's ruffle drip: one drop per ruffle, started on the frame edge into 'ruffle' at the chest offset (flipped with the crow), falling
+  // drip.fallPx over drip.fallMs (accelerating, never upward), then hidden. Off under reduced motion, while a film runs and while the crow
+  // is not shown: those cancel a falling drop.
+  private drawDrip(): void {
+    const pose = this.poses.crow;
+    if (!this.live || this.reduced || this.script !== null || pose === null || !pose.visible) {
+      this.ruffling = false;
+      this.dripAt = Number.NEGATIVE_INFINITY;
+      hideIfShown(this.drip);
+      return;
+    }
+    const ruffle = pose.frame === RUFFLE_FRAME;
+    if (ruffle && !this.ruffling) {
+      const dir = pose.flip ? -1 : 1;
+      this.dripX = pose.x + DRIP.offsetArt.x * PIXEL_SCALE * dir;
+      this.dripY = pose.feetY + DRIP.offsetArt.y * PIXEL_SCALE;
+      this.dripAt = this.nowMs;
+    }
+    this.ruffling = ruffle;
+    const t = this.nowMs - this.dripAt;
+    if (t < 0 || t >= DRIP.fallMs) {
+      hideIfShown(this.drip);
+      return;
+    }
+    const p = t / DRIP.fallMs;
+    this.drip.setPosition(this.dripX, this.dripY + DRIP.fallPx * p * p).setAlpha(pose.alpha).setVisible(true);
   }
 
   private cancelFlashes(): void {

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { VIEW, WORLD, CAMERA, PARALLAX_LAYERS, PARALLAX_FADE_MS, PIXEL_SCALE } from '../../data/world';
+import { VIEW, WORLD, CAMERA, PARALLAX_LAYERS, PARALLAX_FADE_MS, PIXEL_SCALE, DAY_TINT_LAYERS, DAY_TINT_TAU_MS } from '../../data/world';
 import type { ParallaxLayerDef } from '../../data/world';
 import type { FinaleTrackId } from '../../data/finale';
 import type { TechId } from '../../data/types';
@@ -7,19 +7,27 @@ import { ASSET_MANIFEST } from '../../assets/manifest';
 import { effectiveMinZoom } from '../math/camera';
 import { parallaxSpan, parallaxStrip, isLayerVisible, fadeStep, layerPhase, stageAlpha } from '../math/parallax';
 
-// Any layer part that can change alpha and visibility.
-type FadePart = Phaser.GameObjects.Components.AlphaSingle & Phaser.GameObjects.Components.Visible;
+// Any layer part: a game object that can change alpha and visibility.
+type FadePart = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.AlphaSingle & Phaser.GameObjects.Components.Visible;
 
-// A layer with visibleWhen / alphaStages (tech fade) and/or a finale track (def.finale). fade 0 = hidden, 1 = fully
-// shown (alpha layers: fade = alpha / def.alpha); finaleV = finale track value (0 until applyFinale runs). Layers with
-// neither keep fade 1 and are never repainted. parts are its game objects.
+// Every parallax layer. A layer with visibleWhen / alphaStages (tech fade) and/or a finale track (def.finale) is repainted
+// on change: fade 0 = hidden, 1 = fully shown (alpha layers: fade = alpha / def.alpha); target = the fade it heads to (set
+// by update); finaleV = finale track value (0 until applyFinale runs). The rest keep fade 1 and are never repainted.
+// parts are its game objects. A ruin layer in DAY_TINT_LAYERS also holds its day-tinted objects: tinted (its strip or sky
+// image) and underfill (its solid fill rectangle, if any); other layers have tinted null.
 interface LayerState {
   readonly def: ParallaxLayerDef;
   readonly fading: boolean;
   fade: number;
+  target: number;
   finaleV: number;
   readonly parts: FadePart[];
+  readonly tinted: Phaser.GameObjects.Image | Phaser.GameObjects.TileSprite | null;
+  readonly underfill: Phaser.GameObjects.Rectangle | null;
 }
+
+const CHANNEL_MAX = 0xff;
+const TINT_NONE = 0xffffff; // white: no tint, the identity of the multiply
 
 // Finale multiplier of a layer: 'in' = v (hidden at 0), 'out' = 1 - v; 1 when the layer has no finale track.
 function finaleMultiplier(def: ParallaxLayerDef, v: number): number {
@@ -36,33 +44,43 @@ function fadeTarget(def: ParallaxLayerDef, techLevels: Readonly<Record<TechId, n
   return isLayerVisible(def, techLevels) ? 1 : 0;
 }
 
+// Channel i of a 0xRRGGBB colour (0 = red, 1 = green, 2 = blue).
+function channel(rgb: number, i: number): number {
+  return (rgb >> (16 - 8 * i)) & CHANNEL_MAX;
+}
+
+// Per-channel product of two 0xRRGGBB colours, each channel rounded: a layer's own tint x the day tint.
+function multiplyTint(a: number, b: number): number {
+  let out = 0;
+  for (let i = 0; i < 3; i++) out = (out << 8) | Math.round((channel(a, i) * channel(b, i)) / CHANNEL_MAX);
+  return out;
+}
+
 // Sky image (screen-fixed) plus one horizontally tiled strip per parallax layer, all driven by PARALLAX_LAYERS.
 // Layers with visibleWhen are hidden until their tech level is reached, then fade in (and out on a reset).
 // Layers with alphaStages take their stage alpha at load (no fade-in) and fade toward a new stage alpha later.
+// The ruin layers in DAY_TINT_LAYERS take the day tint (setDayTint), eased over DAY_TINT_TAU_MS in update().
 export class ParallaxBackground {
-  private readonly objects: Phaser.GameObjects.GameObject[] = [];
   private readonly layers: LayerState[] = [];
+  private readonly day = [CHANNEL_MAX, CHANNEL_MAX, CHANNEL_MAX]; // eased day tint, R G B
+  private dayTarget = TINT_NONE;
+  private dayPainted = TINT_NONE; // last integer day tint written to Phaser
 
   constructor(scene: Phaser.Scene, techLevels: Readonly<Record<TechId, number>>) {
     const minZoom = effectiveMinZoom(VIEW, WORLD, CAMERA.minZoom);
     for (const def of PARALLAX_LAYERS) {
       const parts: FadePart[] = [];
-      const track = <T extends FadePart & Phaser.GameObjects.GameObject>(object: T): T => {
-        this.objects.push(object);
-        parts.push(object);
-        return object;
-      };
-
+      let tinted: Phaser.GameObjects.Image | Phaser.GameObjects.TileSprite;
+      let underfill: Phaser.GameObjects.Rectangle | null = null;
       if (def.scrollFactor === 0) {
         // Sky: covers the widest visible rect (VIEW / minZoom) at every zoom.
-        track(
-          scene.add
-            .image(VIEW.width / 2, VIEW.height / 2, def.assetId)
-            .setScrollFactor(0)
-            .setDepth(def.depth)
-            .setAlpha(def.alpha)
-            .setDisplaySize(VIEW.width / minZoom, VIEW.height / minZoom),
-        );
+        tinted = scene.add
+          .image(VIEW.width / 2, VIEW.height / 2, def.assetId)
+          .setScrollFactor(0)
+          .setDepth(def.depth)
+          .setAlpha(def.alpha)
+          .setDisplaySize(VIEW.width / minZoom, VIEW.height / minZoom);
+        parts.push(tinted);
       } else {
         const sf = def.scrollFactor;
         const phase = layerPhase(sf, ASSET_MANIFEST[def.assetId].width, PIXEL_SCALE);
@@ -80,49 +98,78 @@ export class ParallaxBackground {
         });
         const spanY = parallaxSpan(WORLD.height, VIEW.height, minZoom, sf);
 
-        const strip = track(
-          scene.add
-            .tileSprite(geometry.left, geometry.bottom, geometry.width, geometry.height, def.assetId)
-            .setOrigin(0, 1)
-            .setTileScale(PIXEL_SCALE, PIXEL_SCALE)
-            .setScrollFactor(sf)
-            .setDepth(def.depth)
-            .setAlpha(def.alpha),
-        );
+        tinted = scene.add
+          .tileSprite(geometry.left, geometry.bottom, geometry.width, geometry.height, def.assetId)
+          .setOrigin(0, 1)
+          .setTileScale(PIXEL_SCALE, PIXEL_SCALE)
+          .setScrollFactor(sf)
+          .setDepth(def.depth)
+          .setAlpha(def.alpha);
+        parts.push(tinted);
         if (def.tint !== undefined) {
-          strip.setTint(def.tint);
+          tinted.setTint(def.tint);
         }
 
         // Solid fill below the strip so panning never reveals a gap.
         if (def.underfill !== null && spanY.max - geometry.bottom > 0) {
-          track(
-            scene.add
-              .rectangle(geometry.left, geometry.bottom, geometry.width, spanY.max - geometry.bottom, def.underfill)
-              .setOrigin(0, 0)
-              .setScrollFactor(sf)
-              .setDepth(def.depth)
-              .setAlpha(def.alpha),
-          );
+          underfill = scene.add
+            .rectangle(geometry.left, geometry.bottom, geometry.width, spanY.max - geometry.bottom, def.underfill)
+            .setOrigin(0, 0)
+            .setScrollFactor(sf)
+            .setDepth(def.depth)
+            .setAlpha(def.alpha);
+          parts.push(underfill);
         }
       }
 
+      const dayTinted = (DAY_TINT_LAYERS as readonly string[]).includes(def.id);
       const fading = def.visibleWhen !== undefined || def.alphaStages !== undefined;
-      if (fading || def.finale !== undefined) {
-        const layer: LayerState = { def, fading, fade: fading ? fadeTarget(def, techLevels) : 1, finaleV: 0, parts };
-        this.layers.push(layer);
-        this.paint(layer);
-      }
+      const fade = fading ? fadeTarget(def, techLevels) : 1;
+      const layer: LayerState = {
+        def,
+        fading,
+        fade,
+        target: fade,
+        finaleV: 0,
+        parts,
+        tinted: dayTinted ? tinted : null,
+        underfill: dayTinted ? underfill : null,
+      };
+      this.layers.push(layer);
+      this.paint(layer);
     }
   }
 
-  // Moves every fading layer toward its target fade; objects are only touched while the fade changes.
+  // Moves every fading layer toward its target fade (def.fadeMs, default PARALLAX_FADE_MS) and eases the day tint over
+  // deltaMs; objects are only touched while a value changes.
   update(techLevels: Readonly<Record<TechId, number>>, deltaMs: number): void {
+    this.stepDayTint(deltaMs);
     for (const layer of this.layers) {
       if (!layer.fading) continue;
-      const target = fadeTarget(layer.def, techLevels);
-      const next = fadeStep(layer.fade, target, deltaMs, PARALLAX_FADE_MS);
+      layer.target = fadeTarget(layer.def, techLevels);
+      const next = fadeStep(layer.fade, layer.target, deltaMs, layer.def.fadeMs ?? PARALLAX_FADE_MS);
       if (next === layer.fade) continue;
       layer.fade = next;
+      this.paint(layer);
+    }
+  }
+
+  /**
+   * Day tint (0xRRGGBB, white = none) for the DAY_TINT_LAYERS, multiplied with each layer's own tint. The colour eases
+   * toward `rgb` in update(); `snap` lands on it at once. Phaser is written only when the integer colour changes.
+   */
+  setDayTint(rgb: number, snap = false): void {
+    this.dayTarget = rgb;
+    if (!snap) return;
+    for (let i = 0; i < 3; i++) this.day[i] = channel(rgb, i);
+    this.paintDayTint();
+  }
+
+  /** Settle mode (C5): snaps every fading layer to its target fade and paints it once; no-op when every layer is there. */
+  settleFades(): void {
+    for (const layer of this.layers) {
+      if (!layer.fading || layer.fade === layer.target) continue;
+      layer.fade = layer.target;
       this.paint(layer);
     }
   }
@@ -141,10 +188,11 @@ export class ParallaxBackground {
   }
 
   destroy(): void {
-    for (const object of this.objects) {
-      object.destroy();
+    for (const layer of this.layers) {
+      for (const part of layer.parts) {
+        part.destroy();
+      }
     }
-    this.objects.length = 0;
     this.layers.length = 0;
   }
 
@@ -153,6 +201,33 @@ export class ParallaxBackground {
     for (const part of layer.parts) {
       part.setAlpha(layer.def.alpha * layer.fade * mult);
       part.setVisible(layer.fade > 0 && mult > 0);
+    }
+  }
+
+  // Eases each channel toward the day target over deltaMs (1 - e^(-dt / tau) of the gap per step; tau <= 0 snaps; a bad dt
+  // leaves it), then paints when the integer colour moved.
+  private stepDayTint(deltaMs: number): void {
+    if (Number.isFinite(deltaMs) && deltaMs > 0) {
+      for (let i = 0; i < 3; i++) {
+        const current = this.day[i]!;
+        const target = channel(this.dayTarget, i);
+        this.day[i] = DAY_TINT_TAU_MS <= 0 ? target : current + (target - current) * (1 - Math.exp(-deltaMs / DAY_TINT_TAU_MS));
+      }
+    }
+    this.paintDayTint();
+  }
+
+  // Writes the integer day colour through every day-tinted layer: its own tint x the day, and its underfill x the day.
+  private paintDayTint(): void {
+    let day = 0;
+    for (let i = 0; i < 3; i++) day = (day << 8) | Math.round(this.day[i]!);
+    if (day === this.dayPainted) return;
+    this.dayPainted = day;
+    for (const layer of this.layers) {
+      layer.tinted?.setTint(multiplyTint(layer.def.tint ?? TINT_NONE, day));
+      if (layer.underfill !== null) {
+        layer.underfill.setFillStyle(multiplyTint(layer.def.underfill ?? TINT_NONE, day));
+      }
     }
   }
 }

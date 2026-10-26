@@ -299,15 +299,15 @@ export type WorldSheetId = 'inspector' | 'dog' | 'crow' | 'girl' | 'payphone' | 
   | 'lamp' | 'lampGlow' | 'clock' | 'stakeChain' | 'hole' | 'scraps' | 'mote' | 'windowLit'
   | 'puddle' | 'sprout' | 'lantern' | 'redBall' | 'clipboardPages' | 'page' | 'virga';
 export const WORLD_FRAMES: Record<WorldSheetId, readonly string[]> = {
-  inspector: ['idleA', 'idleB', 'walk0', 'walk1', 'walk2', 'walk3', 'write0', 'write1', 'glance', 'front', 'talk', 'shield', 'pat0', 'pat1', 'wave', 'watch', 'umbrellaOpen', 'frontUmbrella', 'talkUmbrella'],
-  dog: ['sit0', 'sit1', 'sniff0', 'sniff1', 'walk0', 'walk1', 'walk2', 'walk3', 'dig0', 'dig1', 'shake0', 'shake1', 'head', 'talk', 'flat', 'lie', 'sleep', 'chase0', 'chase1', 'wag'],
-  crow: ['frozen', 'perch0', 'perch1', 'head', 'talk', 'peck0', 'peck1', 'fly0', 'fly1', 'fly2'],
-  girl: ['stand0', 'stand1', 'palm', 'talk', 'shield', 'run0', 'run1', 'run2', 'run3', 'lanternDrop'],
+  inspector: ['idleA', 'idleB', 'walk0', 'walk1', 'walk2', 'walk3', 'write0', 'write1', 'glance', 'front', 'talk', 'shield', 'pat0', 'pat1', 'wave', 'watch', 'umbrellaOpen', 'frontUmbrella', 'talkUmbrella', 'lookUp', 'crouch', 'umbrellaHalf'],
+  dog: ['sit0', 'sit1', 'sniff0', 'sniff1', 'walk0', 'walk1', 'walk2', 'walk3', 'dig0', 'dig1', 'shake0', 'shake1', 'head', 'talk', 'flat', 'lie', 'sleep', 'chase0', 'chase1', 'wag', 'scratch0', 'scratch1', 'lookUp'],
+  crow: ['frozen', 'perch0', 'perch1', 'head', 'talk', 'peck0', 'peck1', 'fly0', 'fly1', 'fly2', 'frozenTip', 'ruffle'],
+  girl: ['stand0', 'stand1', 'palm', 'talk', 'shield', 'run0', 'run1', 'run2', 'run3', 'lanternDrop', 'lanternUp', 'tilt'],
   payphone: ['dark', 'lit', 'ring0', 'ring1', 'fog', 'restored'],
   receiver: ['hang', 'swing0', 'swing1', 'swing2', 'level', 'onHook'],
   sensor7: ['tripod', 'headL', 'headC', 'headR', 'headUp', 'fog', 'glyphDash', 'glyphOne'],
   girlWindow: ['flickerA', 'flickerB', 'dark', 'restored'],
-  girlMini: ['warm', 'cold'],
+  girlMini: ['warm', 'cold', 'palm'],
   lamp: ['dead', 'lit', 'warm', 'restored'],
   lampGlow: ['cold', 'warm'],
   clock: ['ruin', 'restored'],

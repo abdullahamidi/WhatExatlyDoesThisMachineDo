@@ -1096,15 +1096,15 @@ describe('part evolution tiers (WP22)', () => {
 /** WP23a living-world assets (DENIZEN_ART 5.1): id, size, origin, tileable, frame and era rows. file is null until the Art Director delivers the PNGs. */
 const WP23A_ENTRIES: ReadonlyArray<{ id: AssetId; width: number; height: number; origin: { x: number; y: number };
   tileable: 'none' | 'x' | 'xy'; frame?: { width: number; height: number; count: number }; eraRows?: number }> = [
-  { id: 'world.inspector', width: 380, height: 240, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 20, height: 40, count: 114 }, eraRows: 6 },
+  { id: 'world.inspector', width: 440, height: 240, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 20, height: 40, count: 132 }, eraRows: 6 },
   { id: 'world.clipboardPages', width: 18, height: 3, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 6, height: 3, count: 3 } },
-  { id: 'world.dog', width: 560, height: 120, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 28, height: 20, count: 120 }, eraRows: 6 },
+  { id: 'world.dog', width: 644, height: 120, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 28, height: 20, count: 138 }, eraRows: 6 },
   { id: 'world.stakeChain', width: 20, height: 6, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 10, height: 6, count: 2 } },
   { id: 'world.hole', width: 64, height: 6, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 16, height: 6, count: 4 } },
   { id: 'world.redBall', width: 3, height: 3, origin: { x: 0.5, y: 1 }, tileable: 'none' },
-  { id: 'world.crow', width: 240, height: 108, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 24, height: 18, count: 60 }, eraRows: 6 },
-  { id: 'world.girl', width: 160, height: 168, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 16, height: 28, count: 60 }, eraRows: 6 },
-  { id: 'world.girlMini', width: 16, height: 12, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 8, height: 12, count: 2 } },
+  { id: 'world.crow', width: 288, height: 108, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 24, height: 18, count: 72 }, eraRows: 6 },
+  { id: 'world.girl', width: 192, height: 168, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 16, height: 28, count: 72 }, eraRows: 6 },
+  { id: 'world.girlMini', width: 24, height: 12, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 8, height: 12, count: 3 } },
   { id: 'world.girlWindow', width: 16, height: 6, origin: { x: 0, y: 0 }, tileable: 'none', frame: { width: 4, height: 6, count: 4 } },
   { id: 'world.lantern', width: 12, height: 4, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 6, height: 4, count: 2 } },
   { id: 'world.payphone', width: 168, height: 312, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 28, height: 52, count: 36 }, eraRows: 6 },

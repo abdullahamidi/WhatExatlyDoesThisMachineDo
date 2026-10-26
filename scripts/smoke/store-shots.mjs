@@ -169,6 +169,7 @@ async function main() {
     const shown = await page.evaluate(() => {
       window.__wedtmd?.worldQuiet?.(true);
       window.__wedtmd?.setOutputTicks?.(false);
+      window.__wedtmd?.worldSettle?.(true);
       return window.__wedtmd?.outputStats?.()?.shown ?? null;
     });
     outputBase.set(page, shown);

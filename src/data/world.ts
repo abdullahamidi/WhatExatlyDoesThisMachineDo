@@ -17,11 +17,13 @@ export const PATTERN_ORIGIN_X = 1280;
 export const DEPTH = { background: -100, ground: 0, machine: 100, dust: 200, floatingText: 300 } as const;
 export const PARALLAX_BOTTOM_MARGIN = 200;                      // world px the non-sky layer textures extend below the ground line (hidden behind the ground)
 export const PARALLAX_FADE_MS = 1500;                           // ms for a parallax layer to fade in or out when its visibility changes
+export const PYLONS_LIT_FADE_MS = 6000;                         // ms for the lit pylons layer and its cables to light (WP24 D9: the powerLines moment reads as seconds, not a blink)
 export interface ParallaxLayerDef { id: string; assetId: AssetId; scrollFactor: number;
   bottomY: number;      // world y where the texture BOTTOM appears when the camera is centred on CAMERA.focus
   depth: number; alpha: number;
   underfill: number | null;   // colour of a rectangle filled below the texture so panning shows no gap
   tint?: number;              // tint: haze colour multiplied into the layer (audit S3 #14)
+  fadeMs?: number;      // ms of the fade in / out (default PARALLAX_FADE_MS; set on pylonsLit only, WP24 D9)
   visibleWhen?: { techId: TechId; minLevel: number };   // layer shown only when this tech level is reached (default: always)
   finale?: { track: FinaleTrackId; dir: 'in' | 'out' };   // WP13 finale: alpha multiplier from the track value (in = v, out = 1 - v); combines with visibleWhen / alphaStages
   alphaStages?: readonly { techId: TechId; minLevel: number; alpha: number }[] }   // target alpha = stageAlpha() (max alpha over met stages, 0 if none); fades PARALLAX_FADE_MS; never combined with visibleWhen
@@ -30,7 +32,7 @@ export const PARALLAX_LAYERS: readonly ParallaxLayerDef[] = [
   { id: 'mountains', assetId: 'bg.mountains', scrollFactor: 0.15, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 10, alpha: 0.45, underfill: 0x5f5244 /* WP16b F5: = bottom rows (197-255) of bg/mountains.png, darkest tone of its far-plain ramp (ART_BRIEF sand #5f5244; not a PALETTE key) */, finale: { track: 'mountains', dir: 'out' } },
   { id: 'skyline',   assetId: 'bg.skyline',   scrollFactor: 0.3,  bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 20, alpha: 0.4,  underfill: null /* WP16b F5: rows 220-319 of bg/skyline.png are transparent; a fill here brings the grey band back */, finale: { track: 'skyline', dir: 'out' } },
   { id: 'pylons',    assetId: 'bg.pylons',    scrollFactor: 0.55, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 30, alpha: 0.45, underfill: null, tint: 0xb8a98f },
-  { id: 'pylonsLit', assetId: 'bg.pylonsLit', scrollFactor: 0.55, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 31, alpha: 0.7, underfill: null, visibleWhen: { techId: 'powerLines', minLevel: 1 } },
+  { id: 'pylonsLit', assetId: 'bg.pylonsLit', scrollFactor: 0.55, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 31, alpha: 0.7, underfill: null, fadeMs: PYLONS_LIT_FADE_MS, visibleWhen: { techId: 'powerLines', minLevel: 1 } },
   { id: 'skyViolet', assetId: 'bg.skyViolet', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 1, alpha: 1, underfill: null,
     alphaStages: [{ techId: 'nullChamber', minLevel: 1, alpha: 0.25 }, { techId: 'lensArray', minLevel: 1, alpha: 0.5 }, { techId: 'horizonField', minLevel: 5, alpha: 0.75 }, { techId: 'skyAperture', minLevel: 1, alpha: 1 }],
     finale: { track: 'sky', dir: 'out' } },
@@ -45,6 +47,9 @@ export const PARALLAX_LAYERS: readonly ParallaxLayerDef[] = [
   { id: 'skylineRestored', assetId: 'bg.skylineRestored', scrollFactor: 0.3, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 21, alpha: 0.4, underfill: PALETTE.green1 /* far fields, = ground rows of bg.skylineRestored */,
     finale: { track: 'skyline', dir: 'in' } },
 ];
+/** Ruin layers that take the day tint (WP24 D5): never the restored twins, skyViolet, horizonGlow, the ground or the machine. */
+export const DAY_TINT_LAYERS = ['sky', 'mountains', 'skyline', 'pylons'] as const;
+export const DAY_TINT_TAU_MS = 1500;                            // ms of the exponential ease of the day tint toward its target (WP24 D5)
 /** Era V eclipse sprite in the sky (sky px, origin centre): frame 0 = the baked sun, hidden; stages step the frame up as techs arrive; diamond = the one-off flash frame. */
 export const ECLIPSE = { assetId: 'bg.eclipse', skyPx: { x: 372, y: 290 }, depth: DEPTH.background + 2,
   stages: [{ techId: 'nullChamber', minLevel: 1, frame: 1 }, { techId: 'lensArray', minLevel: 1, frame: 2 }, { techId: 'horizonField', minLevel: 5, frame: 3 }, { techId: 'skyAperture', minLevel: 1, frame: 5 }],
@@ -79,6 +84,8 @@ export const DUST: { maxParticles: number; frequencyMs: number; lifespanMs: [num
 /** Rising dust once the spire stands (Era IV): mote speedY [-18, -6] world px/s, spawn top GROUND_Y - 900. */
 export const DUST_RISING: { techId: TechId; minLevel: number; speedY: [number, number]; spawnTopY: number } =
   { techId: 'resonatorSpire', minLevel: 1, speedY: [-18, -6], spawnTopY: GROUND_Y - 900 };
+/** Wind on the dust streams (WP24 D6): horizontal gravity per unit of wind, the deadband of a gravity write (px/s^2) and of a drift write (speed factor). */
+export const DUST_WIND = { gravityXPerUnit: 12, epsilon: 0.5, driftEpsilon: 0.01 } as const;
 export const CRANK_FEEDBACK = { degreesPerClick: 90, tweenMs: 160, shakePx: 1 /* art px */, shakeMs: 60,
   floatRisePx: 40, floatMs: 1100, hitRadius: 36 /* art px, crank click area */ } as const;
 export const FLOATING_TEXT = { fontSizePx: 24, minScreenPx: 16, strokePx: 4, jitterX: 6, spawnOffset: { x: 116, y: -128 },

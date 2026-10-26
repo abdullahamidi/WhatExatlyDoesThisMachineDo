@@ -115,9 +115,9 @@ minimum on-screen sizes, and `src/assets/worldSheets.test.ts` once the manifest 
 | hole | `world/hole.png` 64x6 | 95.6 | 0 / 0, 2 info | CLEAN | 1 per cell; stages only grow (`grow` check in check_sheet) |
 | scraps | `world/scraps.png` 24x4 | 99.1 | 0 / 0, 3 info | CLEAN | 1 per cell; ink edge (paper = far-plain value) |
 | mote | `world/mote.png` 4x2 | 100.0 (AD3a) | 0 / 0, 2 info | CLEAN | ash `s` over `b`; moth `C` over `w` (a 1 px `C` glint scored 88: singletons) |
-| crow | `world/crow.png` 240x108 | 99.8 (AD3b; WP23a 100.0) | 0 / 0, 4 info | CLEAN | 60 components = 1 per cell, 0 holes; body 24x14 (14 = the zoom .5 floor); AD3b cells 14-17 tall |
-| girl | `world/girl.png` 160x168 | 98.1 (AD3b; WP23a 98.7) | 0 / 0, 3 info | CLEAN | 60 = 1 per cell, 0 holes; body 12x24 = the tone-check maximum (every AD3b cell inside it) |
-| girlMini | `world/girl-mini.png` 16x12 | 100.0 | 0 / 0, 3 info | CLEAN | 1 per cell; body 5x10 |
+| crow | `world/crow.png` 288x108 | 99.8 (WP24 AD1b-2; AD3b 99.8, WP23a 100.0) | 0 / 0, 4 info | CLEAN | 1 per cell (check_sheet), 0 holes; lint counts 67 on the sheet: the ruffle crown (cell row 0) touches the toes of the cell above (5 cells); body 24x14 (14 = the zoom .5 floor); AD3b cells 14-17 tall, frozenTip 16, ruffle 18 |
+| girl | `world/girl.png` 192x168 | 97.8 (WP24 AD1b-2; AD3b 98.1, WP23a 98.7) | 0 / 0, 3 info | CLEAN | 72 = 1 per cell, 0 holes; body 12x24 = the tone-check maximum (every cell inside it; lanternUp 11x24) |
+| girlMini | `world/girl-mini.png` 24x12 | 100.0 (WP24 AD1b-2) | 0 / 0, 3 info | CLEAN | 1 per cell; body 5x10 (palm: + the raised hand, 6x11) |
 | girlWindow | `world/girl-window.png` 16x6 | 96.0 (AD3b; WP23a 100.0) | 0 / 0, 3 info (banding = the flat lit rows) | CLEAN | rust only (`c d e f`, sheets.py `only`; the restored frame adds `A B C`, `only_frames`), no outline |
 | payphone | `world/payphone.png` 168x312 | 97.8 (AD3b; WP23a 98.9) | 0 / 0, 4 info (banding = the flat glass and panel rows) | CLEAN | 36 = 1 per cell, 0 holes; body 26x51 incl. the phone unit |
 | receiver | `world/receiver.png` 48x72 | 95.1 (AD3b; WP23a 95.2) | 0 / 0, 3 info | CLEAN | 1 per cell (check_sheet); lint counts 26 on the sheet: each cord on row 0 touches the handset of the cell above (onHook cells stand alone) |
@@ -143,21 +143,21 @@ AD2c (2026-10-24, round 3): dog head / talk / lie redrawn (F6, the front head re
 redrawn as 3/4 heads (the flank lens read as aiming at the machine). Only those cells changed (diff bbox: dog columns 12,
 13, 15; sensor7 columns 1, 3); check_sheet CLEAN, workbench numbers in the table, `worldSheets.test.ts` 20 / 20.
 
-## Frame tables (column order is final, WP23 D7)
+## Frame tables (column order: WP23 D7, then WP24 D8 appends new columns at the END of a sheet, so no index moves)
 
 Era-row sheets (6 rows I, II, III, IV, V, whole): inspector, dog, crow, girl, payphone, receiver, sensor7.
 
 | sheet | id | file | cell | frames (columns) | status |
 |---|---|---|---|---|---|
-| inspector | world.inspector | world/inspector.png 380x240 | 20x40 | idleA, idleB, walk0, walk1, walk2, walk3, write0, write1, glance, front, talk, shield, pat0, pat1, wave, watch, umbrellaOpen, frontUmbrella, talkUmbrella | AD-a 11 + AD3a 8 (all 19 drawn) |
-| dog | world.dog | world/dog.png 560x120 | 28x20 | sit0, sit1, sniff0, sniff1, walk0, walk1, walk2, walk3, dig0, dig1, shake0, shake1, head, talk, flat, lie, sleep, chase0, chase1, wag | AD-b 13 + AD3a 7 (all 20 drawn) |
-| crow | world.crow | world/crow.png 240x108 | 24x18 | frozen, perch0, perch1, head, talk, peck0, peck1, fly0, fly1, fly2 | AD-c 3 + AD3b 7 (all 10 drawn) |
-| girl | world.girl | world/girl.png 160x168 | 16x28 | stand0, stand1, palm, talk, shield, run0, run1, run2, run3, lanternDrop | AD-c 2 + AD3b 8 (all 10 drawn) |
+| inspector | world.inspector | world/inspector.png 440x240 | 20x40 | idleA, idleB, walk0, walk1, walk2, walk3, write0, write1, glance, front, talk, shield, pat0, pat1, wave, watch, umbrellaOpen, frontUmbrella, talkUmbrella, lookUp, crouch, umbrellaHalf | AD-a 11 + AD3a 8 + WP24 AD1b-1 3 (all 22 drawn) |
+| dog | world.dog | world/dog.png 644x120 | 28x20 | sit0, sit1, sniff0, sniff1, walk0, walk1, walk2, walk3, dig0, dig1, shake0, shake1, head, talk, flat, lie, sleep, chase0, chase1, wag, scratch0, scratch1, lookUp | AD-b 13 + AD3a 7 + WP24 AD1b-1 3 (all 23 drawn) |
+| crow | world.crow | world/crow.png 288x108 | 24x18 | frozen, perch0, perch1, head, talk, peck0, peck1, fly0, fly1, fly2, frozenTip, ruffle | AD-c 3 + AD3b 7 + WP24 AD1b-2 2 (all 12 drawn) |
+| girl | world.girl | world/girl.png 192x168 | 16x28 | stand0, stand1, palm, talk, shield, run0, run1, run2, run3, lanternDrop, lanternUp, tilt | AD-c 2 + AD3b 8 + WP24 AD1b-2 2 (all 12 drawn) |
 | payphone | world.payphone | world/payphone.png 168x312 | 28x52 | dark, lit, ring0, ring1, fog, restored | AD-c 4 + AD3b 2 (all 6 drawn) |
 | receiver | world.receiver | world/receiver.png 48x72 | 8x12 | hang, swing0, swing1, swing2, level, onHook | AD-c 5 + AD3b 1 (all 6 drawn) |
 | sensor7 | world.sensor7 | world/sensor7.png 160x240 | 20x40 | tripod, headL, headC, headR, headUp, fog, glyphDash, glyphOne | AD-d 7 + AD3c fog (all 8 drawn) |
 | girlWindow | world.girlWindow | world/girl-window.png 16x6 | 4x6 | flickerA, flickerB, dark, restored | AD-c 3 + AD3b 1 (all 4 drawn) |
-| girlMini | world.girlMini | world/girl-mini.png 16x12 | 8x12 | warm, cold | AD-c (2 drawn) |
+| girlMini | world.girlMini | world/girl-mini.png 24x12 | 8x12 | warm, cold, palm | AD-c 2 + WP24 AD1b-2 palm (all 3 drawn) |
 | lamp | world.lamp | world/street-lamp.png 48x60 | 12x60 | dead, lit, warm, restored | AD-d 2 + AD3c 2 (all 4 drawn) |
 | lampGlow | world.lampGlow | world/lamp-glow.png 64x16 | 32x16 | cold, warm | AD-d cold + AD3c warm |
 | clock | world.clock | world/street-clock.png 32x44 | 16x44 | ruin, restored | AD-d ruin + AD3c restored |
@@ -183,11 +183,22 @@ floors of the big central tower (all real `#2b2e31` cut-outs of `bg/skyline.png`
 
 ## PLACEHOLDER CELLS (copies of an earlier frame until a later wave redraws them)
 
+None (WP24 AD1b-2: no `@copy` in any master; no build prints a PLACEHOLDER line. WP24 AD1b-3 re-checked: 0 `@copy`
+lines under `masters/`, all 11 WP24 cells drawn and gated, so the table stays empty).
+
 | sheet | cell(s) | copy of | redrawn in |
 |---|---|---|---|
 
-None since WP23b AD3c: no master holds an `@copy` any more (build_sheet prints no PLACEHOLDER line for any sheet).
+WP24 AD1a (2026-10-26, D8): 11 placeholder cells, every era row baked through `eraRecolor` from the copied frame (base +
+layers), so each is palette-correct and gate-clean; build_sheet prints one PLACEHOLDER line per cell. AD1b painted them
+at unchanged size: AD1b-1 the 6 inspector and dog cells, AD1b-2 the 5 crow, girl and girlMini cells.
 
+Summary after WP24 AD1b-3: 24 PNGs, 142 frame columns, all 142 drawn, 0 placeholders; final QA passed, no cell changed
+(see "WP24 AD1b-3" below).
+Summary after WP24 AD1b-2: 24 PNGs, 142 frame columns, all 142 drawn, 0 placeholders (see "WP24 AD1b-2" below).
+Summary after WP24 AD1b-1: 24 PNGs, 142 frame columns, 137 drawn, 5 placeholders (table above; the inspector and dog
+columns are painted, see "WP24 AD1b-1" below).
+Summary after WP24 AD1a: 24 PNGs, 142 frame columns, 131 drawn, 11 placeholders.
 Summary after WP23b AD3c: 24 PNGs, 131 frame columns, all 131 drawn, 0 placeholders. AD3c drew the last 5 (sensor7
 fog, lamp warm and restored, lampGlow warm, clock restored) and added puddle 10, sprout 5, page 2, virga 2. (AD3b: 20
 PNGs, 112 columns, 107 drawn, 5 placeholders; AD3a: 88 drawn, 24 placeholders; WP23a: 17 PNGs, 106 columns, 65 drawn,
@@ -679,3 +690,228 @@ postgame grass. Now: on its side, bail left, ink cage around still-warm glass `B
 score 91.0 (singletons -9: the two glass pixels), lint 0 / 0 (3 info), `npx vitest run src/assets/worldSheets.test.ts` 29 / 29. The
 fallen lantern lies at the girl's era V feet (front row + 40, world y 1752), below the zoom-1 baseL view (bottom 1740): it shows at
 the full pose, LAST LOOK, the choice and the postgame (ART_AUDIT N1). Evidence: `<S>/WP23b/ad4/crops/F4-lantern-postgame-before-after-x5.png`.
+
+## WP24 AD1a (sheet layout extension, 2026-10-26, D8)
+
+One atomic change: the 11 living world v2 cells appended as PLACEHOLDER columns (`@copy` in the masters, see the
+PLACEHOLDER table) plus the coupled data. No existing column moved: the old frame lists are a prefix of the new ones, and
+a per-pixel check against the pre-AD1a PNGs finds the old area of every sheet identical and each new cell equal to its
+copy source in all era rows. Hand work only (no PixelLab generation, no gate upload: the copied cells carry the gates of
+their sources; AD1b re-gates the painted cells).
+
+| sheet | PNG (old -> new) | frames (old -> new) | manifest `frame.count` | new columns (copy of) | check_sheet |
+|---|---|---|---|---|---|
+| inspector | 380x240 -> 440x240 | 19 -> 22 | 114 -> 132 | lookUp (idleA), crouch (idleB), umbrellaHalf (umbrellaOpen) | CLEAN |
+| dog | 560x120 -> 644x120 | 20 -> 23 | 120 -> 138 | scratch0 (sit0), scratch1 (sit1), lookUp (sit0); no `stretch` | CLEAN |
+| crow | 240x108 -> 288x108 | 10 -> 12 | 60 -> 72 | frozenTip (frozen), ruffle (perch0) | CLEAN |
+| girl | 160x168 -> 192x168 | 10 -> 12 | 60 -> 72 | lanternUp (stand0, never shield), tilt (stand1) | CLEAN |
+| girlMini | 16x12 -> 24x12 | 2 -> 3 | 2 -> 3 | palm (cold) | CLEAN |
+
+Coupled data (same change): `WORLD_FRAMES` tails (`src/data/livingWorld.ts`), the five manifest entries (width and
+`frame.count`; descriptions unchanged, so `src/assets/assetGuide.test.ts` is untouched) and their `manifest.test.ts`
+rows, `WORLD_TRACES.clipboardOffsetArt` lookUp [5, -21] and crouch [5, -20] (`src/data/worldEras.ts`: the board top row
+of the copy sources idleA / idleB; AD1b-1 moves them with the painted board), `umbrellaHalf` in the `worldEras.test.ts`
+`FACE_ON_FRAMES` (it hides the board like umbrellaOpen), and the `docs/ASSET_GUIDE.md` block regenerated with
+`ASSET_GUIDE_OUT`. Decoded PNG total (276 PNGs under `public/assets/`, w x h x 4): 54.32 -> 54.46 MiB (limit 56).
+Evidence: `<S>/WP24/ad/ad1a/` (`before/` the pre-AD1a PNGs, `guide-tables.md` the generator output).
+
+Hand-offs for AD1b (same files, same sizes): `umbrellaHalf -> umbrellaOpen` and `scratch0 / scratch1` need a storyboard
+(fixed pivot, no pops); `lanternUp` and `tilt` stay camera-facing (`WORLD_STARE_SAFE.girl`); `lanternUp` = the lantern held
+forward at chest height, below the shoulder, arm bent (a contact pair next to `shield`); `lookUp` / `crouch` keep the
+board in profile and re-measure `clipboardOffsetArt` (crouch: the board drops with the body).
+
+## WP24 AD1b-1 (inspector + dog cells, 2026-10-26)
+
+Painted over the AD1a placeholders, every era row: inspector `lookUp`, `crouch`, `umbrellaHalf` (columns 19-21) and dog
+`scratch0`, `scratch1`, `lookUp` (columns 20-22). Same files and sizes (inspector 440x240, dog 644x120); a per-cell diff
+against the AD1a PNGs changes exactly those 6 columns; the shipped PNGs are byte-identical to a rebuild from the masters
+and no build prints a PLACEHOLDER line for these two sheets. Hand-pixelled; PixelLab used for the gates only (no
+generations spent).
+
+| cell (column) | score | lint | silhouette | storyboard | check_sheet |
+|---|---|---|---|---|---|
+| inspector lookUp (19) | 96.4 | 0 / 0, 4 info | 1 per cell, 0 holes | still | CLEAN |
+| inspector crouch (20) | 96.5 | 0 / 0, 3 info | 1 per cell, 0 holes | still | CLEAN |
+| inspector umbrellaHalf (21) | 96.6 | 0 / 0, 4 info | 1 per cell, 0 holes (the column strip is 1: canopies touch the boots above, as umbrellaOpen) | half -> open -> half: feet row identical, changes only in (2, 1)-(18, 22) = canopy + near hand, all 6 rows | CLEAN |
+| dog scratch0 (20) | 99.7 | 0 / 0, 3 info | 1 per cell, 0 holes | scratch0 <-> scratch1: feet row identical, 10-12 px change in (11, 6)-(14, 9) = the paw, all 6 rows | CLEAN |
+| dog scratch1 (21) | 99.7 | 0 / 0, 3 info | 1 per cell, 0 holes | (pair above) | CLEAN |
+| dog lookUp (22) | 100.0 | 0 / 0, 3 info | 1 per cell, 0 holes | still | CLEAN |
+| sheets | inspector 96.0 (0 / 0, 4 info, 112 comps = 132 cells - 20 canopy touches); dog halves (cells 0-11 / 12-22) 99.1 / 98.0 (0 / 0, 72 / 66 comps) | | | | CLEAN |
+
+Scores are per column (6 era cells, `pixelart_workbench score` / `lint` on the column strip). The workbench `storyboard` /
+`motion` commands now read only stills or draw results, so the pivot / pop check is `<O>/ad/ad1b1/work/storyboard.py`
+(feet row identical, changed pixels inside the moving region, 1 component per frame, every era row: 0 fails).
+
+Cells (art px, cell coordinates, masters face +x):
+- lookUp: idleA body; the head tilted back to the sky (hat dome back, peak raised to the upper right, face and chin up,
+  throat to the collar); the board held 1 px lower than idleA (top ink row 20, x 13-15). Rows III-whole carry the closed
+  umbrella hooked on the forearm 1 px lower (crook rows 25-26, ferrule tip row 36); whole adds the pressed creases.
+- crouch: kneeling on the far knee (shin flat on the ground, toes tucked at x 0-2), the near knee up (thigh rows 29-31
+  under the coat, shin x 14-15, boot to x 19), the coat draped to the ground at the back, the write0 head bowed to the
+  ground in front; the board resting on the near knee (top ink row 25, x 13-15). 26 art px tall (people floor 24).
+  Rows III-whole: the closed umbrella hooked on the forearm over the thigh, hanging to the ground in the gap between the
+  coat and the shin (crook rows 30-31, ferrule row 37, tip row 38).
+- umbrellaHalf: umbrellaOpen with the canopy half open: a cone (apex row 0 x 10-11 as umbrellaOpen, body x 6-15, rim
+  row 5 x 5-16, rib tips x 5 / 11 / 16 under the rim; the x 11 tip rests on the hat like umbrellaOpen's) and the near
+  forearm half out (fist at x 13, no palm yet). Head, coat, legs, far hand and handle are pixel-identical to
+  umbrellaOpen. No clipboard (FACE_ON_FRAMES), no eyes (profile), pressed creases in whole.
+- scratch0 / scratch1: sit0 head and body (no pop from sit / sniff); the NEAR hind leg raised from the haunch along the
+  back (lit `e` stroke, `c` shade, ink rim) to a 3 px paw pad `t` behind the ear: scratch0 paw rows 6-8, scratch1 rows
+  7-9 (the 6 fps stroke). The lifted near foot leaves the far hind foot on the ground in shade (row 18 `c`). sit0 eye
+  and collar layers; healthy sheen on the back edge, the raised leg and the ear.
+- dog lookUp: sit0 body; the head tilted back to the sky, muzzle up (dorsal `d` left, throat `t` right, nose `b` on
+  top, x 20-24 rows 2-6), the upright ear behind the skull (still upright, never dropped), the torn stub hidden behind
+  the skull. Eye layer (III+) at (20, 6); sit0 collar; healthy sheen on the ear, the head back and the back edge.
+
+Coupled data (D8, same change): `WORLD_TRACES.clipboardOffsetArt` (`src/data/worldEras.ts`) lookUp [5, -21] -> [5, -20]
+and crouch [5, -20] -> [5, -15] (the measured board top ink rows 20 / 25; the thick pages overlay checked in both facings
+on rows III and whole: `<O>/ad/ad1b1/clipboard-overlay-check.png`). The crouch board drops 5 px with the body: a board
+on the knee cannot sit higher (knee top row 29, knee height 10 art px).
+
+Hand-offs (behaviour / renderer owners; nothing blocks):
+- crouch faces like every profile rest (flip in the left wing); its gaze lands about 16-20 world px in front of the pivot
+  (front boot toe at pivot + 18 world). For the scrap to sit under his eyes, the `scrap` travel target should stop the feet
+  about 20 world px short of the scrap x (facing side), not on it (T1 / T3 spot owners; AD2 judges live).
+- umbrellaHalf plays with umbrellaOpen's flip and pivot; nothing else changes between them.
+
+Evidence (`<O>` = `<S>/WP24`, all under `<O>/ad/ad1b1/`): `contact-inspector.png`, `contact-dog.png` (frames x era rows,
+ladder, readability 1x / 1.5x / 2x / 3x); `comp/board-z1-e1.png`, `comp/board-z075-s9.png`, `comp/board-z05-s11.png`
+(1:1 device px and x3 crops on the denizen-free 1080p store shots, row I / II plus row III at zoom 1 and .75, row III at
+.5) and the full `comp/comp-*.png`; `storyboard/sb-*.png` (8x strips, red = pixels that change to the next frame) and
+`sb-*.gif` (clip timing); `gate/` (uploaded PNGs, `uploads.txt`, `workbench.txt`); `before/` (the AD1a PNGs and
+masters); `work/` (drafts, `write_tails.py` = the master writer, `ad_comp.py`, `storyboard.py`).
+
+## WP24 AD1b-2 (crow + girl + girl mini cells, 2026-10-26)
+
+Painted over the AD1a placeholders, every era row: crow `frozenTip`, `ruffle` (columns 10-11), girl `lanternUp`, `tilt`
+(columns 10-11) and girlMini `palm` (column 2). Same files and sizes (crow 288x108, girl 192x168, girl-mini 24x12); a
+per-cell diff against the AD1a PNGs changes exactly those 5 columns; the shipped PNGs are byte-identical to a rebuild
+from the masters and no build prints a PLACEHOLDER line (all 142 columns drawn). Hand-pixelled; PixelLab used for the
+gates only (no generations spent). No code or data change: frame names, sizes and manifest entries are AD1a's.
+
+| cell (column) | score | lint | silhouette | storyboard | check_sheet |
+|---|---|---|---|---|---|
+| crow frozenTip (10) | 100.0 | 0 / 0, 3 info | 1 per cell, 0 holes | frozen <-> frozenTip: feet row identical, 10 px change in (1, 2)-(5, 4) = the wing tip, all 6 rows | CLEAN |
+| crow ruffle (11) | 99.3 | 0 / 0, 3 info | 1 per cell, 0 holes (the column strip is 1: the raised crown touches the toes of the cell above) | perch0 <-> ruffle: feet row identical, 53-70 px change in (4, 0)-(23, 15), all 6 rows | CLEAN |
+| girl lanternUp (10) | 94.9 | 0 / 0, 3 info | 1 per cell, 0 holes | stand0 <-> lanternUp: feet row identical, 32 px (row V 38) change in (1, 13)-(8, 21) | CLEAN |
+| girl tilt (11) | 97.9 | 0 / 0, 3 info | 1 per cell, 0 holes | stand0 <-> tilt (era IV sway): feet row identical, 29 px change in (3, 4)-(9, 10) = the hood | CLEAN |
+| girlMini palm (2) | 100.0 | 0 / 0, 3 info | 1 component, 0 holes | cold <-> palm: feet row identical, 8 px change in (5, 1)-(7, 4) | CLEAN |
+| sheets | crow 99.8 (0 / 0, 4 info, 67 comps = 72 cells - 5 crown touches); girl 97.8 (0 / 0, 3 info, 72); girl-mini 100.0 (0 / 0, 3 info, 3) | | | | CLEAN |
+
+Scores are per column (6 era cells; girl-mini 1 cell), `pixelart_workbench score` / `lint`. Pivot / pop check:
+`<O>/ad/ad1b2/work/storyboard.py` (5 clips, every era row: 0 fails).
+
+Cells (art px, cell coordinates):
+- frozenTip: frozen with the NEAR wing tip lifted, the bible 3.3 "wingtip jitters, as if trying to move": the outer
+  primary 2 px up (finger x 2 rows 3-5, cap row 2), the next 1 px (finger x 4 rows 4-5, cap row 3), the third and the far
+  wing unchanged. Body, head, tail, feet, eye (III+) and gloss (whole) layers as frozen. 16 art px tall.
+- ruffle: perch0 puffed and damp. Crown raised 1 px (row 0 x 13-15), nape tuft (9, 4), throat hackle (19-20, 7), back
+  1 px out with a tuft (4, 10), breast 1 px out (x 22) with a tuft (23, 11), belly rounded to x 20 with ONE wet point
+  hanging under the breast at (19, 15) (a feather point, not a drop: the falling drip is code); an extra wet primary on
+  row 13 (x 13). Legs, toes (row 17), beak, eye (16, 3) and tail are perch0's, so the pivot never moves. `damp` layer
+  III IV V = the tail tip drip only (perch0 / perch1 keep it: no pop; the perch0 beak drip is gone, as on perch1:
+  shaken off). `gloss` (iron 3, crown + wing leading edge) whole only. 18 art px tall, 24 wide.
+- lanternUp: faces the camera, hood and face smudge exactly stand0 (no eye or mouth pixel); the lantern held forward at
+  CHEST height, below the shoulder line (row 12): box x 6-8 rows 13-16, dot `C` (7, 14), base `d` (7, 15); the arm bent:
+  upper arm out from the shoulder to an elbow bump (x 2-3 rows 13-16), forearm in (row 15) to the hand `f` (5, 14) at
+  the lantern's side; the hanging lantern and its hand are gone (the coat edge is the plain shield/run trapezoid there).
+  `violet` layer (row V): the dot `L` (the era V violet lantern; the rim cannot reach a centred dot). NEVER raised: the
+  shield (finale 13 s) holds the box over the face (rows 8-11) and hides the smudge; lanternUp keeps the face visible and
+  the box 5 rows lower (contact pair `<O>/ad/ad1b2/pair-lanternUp-vs-shield.png`, zoom 1 and .5). 11x24.
+- tilt: stand0 with the hood tipped toward her right shoulder (viewer's left; stand1 and talk lean right, so it reads as
+  a third look): tip 2 px left (x 5), left hood side vertical and 1 px out at face height (x 3 rows 8-10), right slope
+  stepped (6-7, 5) / (8, 6) / (9-10, 7), smudge 1 px left; lantern, hand, coat and boots exactly stand0 (rows 11-27
+  identical, so the era IV stand0 <-> tilt beat moves only the head). 12x24.
+- girlMini palm: cold with the free hand raised beside the hood, palm up: `u` 2 px at x 6 rows 2-3, ink cap (6, 1), the
+  sleeve `s` at the shoulder (6, 4); the cold dot `w` (3, 8), hem, boots and pivot exactly cold. The body stays 5x10; the
+  hand adds 1 px right and 1 px up (6x11 in the 8x12 cell), as the ground palm raises the hand beside the hood.
+
+Hand-offs (behaviour / renderer owners; nothing blocks):
+- T6 / T2 ruffle drip (`WORLD_AMBIENT.drip.offsetArt`, AD-owned tuning): start the drop at the ruffle's wet point, art
+  px (19, 15) = feet pivot + (+7, -3) (pixel top-left; the crow is never flipped in era III), so it falls from the one
+  wet feather and clears the lamp head (the 12 px lamp cell is centred under the crow pivot, so x +7 is outside it); the
+  current (2, -10) starts inside the breast
+  (cell (14, 8)). AD2 judges live.
+- frozenTip plays only in eras I-II (rows I / II); the III-whole cells carry frozen's eye and gloss layers for safety.
+
+Evidence (`<O>` = `<S>/WP24`, all under `<O>/ad/ad1b2/`): `pair-lanternUp-vs-shield.png` (the contact pair: zoom 1 e1
+rows V / whole / I and zoom .5 s15 rows V / whole, 1:1 device px and x3); `contact-crow.png`, `contact-girl.png`,
+`contact-girlMini.png` (frames x era rows, ladder, readability 1x / 1.5x / 2x / 3x); `comp/board-*.png` (1:1 device px and
+x3 crops on the denizen-free 1080p store shots: zoom 1 e1 row I crow frozen / frozenTip + ground girl, mini at the e1
+trace foot; zoom .75 s9 row III crow perch0 / ruffle on the warm lamp, ground girl, mini cold / palm; zoom .5 s11 row
+III crow + near mini, row IV girl; s15 row V girl stand0 / lanternUp / tilt / stand1) and the full `comp/comp-*.png`;
+`storyboard/sb-*.png` / `sb-*.gif`; `gate/` (uploaded PNGs, `uploads.txt`, `workbench.txt`); `before/` (the AD1a PNGs
+and masters); `work/` (drafts `d_*.txt`, `apply.py` = the master writer, `draft.py`, `quickcomp.py`, `ad1b2_comp.py`,
+`storyboard.py`, `edges.py`).
+
+## WP24 AD1b-3 (final art QA of the 11 WP24 cells, 2026-10-26)
+
+No cell changed: every gate passed, so the five PNGs and their masters are byte-identical to AD1b-1 / AD1b-2 (`cmp`
+against `<O>/ad/ad1b3/before/`). No code or data change: the `clipboardOffsetArt` values need no nudge. Hand-pixelled
+sources; PixelLab used for the gates only (no generations spent).
+
+Checks:
+- Rebuild: inspector, dog, crow, girl and girlMini built from the masters into `<O>/ad/ad1b3/rebuild/` are byte-identical
+  to the shipped PNGs; no PLACEHOLDER line; 0 `@copy` under `masters/`. `check_sheet.py` CLEAN on all five
+  (`<O>/ad/ad1b3/check/`). Sizes unchanged: inspector 440x240, dog 644x120, crow 288x108, girl 192x168, girl-mini 24x12.
+- `npx vitest run src/assets src/data --maxWorkers=2`: 38 files, 1041 tests pass.
+- Workbench, re-uploaded from the shipped PNGs (`<O>/ad/ad1b3/gate/workbench.txt`, `uploads.txt`): every number of
+  AD1b-1 / AD1b-2 reproduced exactly.
+
+| cell (column) | score | lint | silhouette | storyboard (`<O>/ad/ad1b3/work/storyboard.py`, every era row) | verdict |
+|---|---|---|---|---|---|
+| inspector lookUp (19) | 96.4 | 0 / 0, 4 info | 1 per cell, 0 holes | idleA <-> lookUp: feet row identical; head, board forearm and (III+) the hooked umbrella move 1 px together, (4, 7)-(16, 36) | PASS |
+| inspector crouch (20) | 96.5 | 0 / 0, 3 info | 1 per cell, 0 holes | still (a rest; 26 art px tall, floor 24) | PASS |
+| inspector umbrellaHalf (21) | 96.6 | 0 / 0, 4 info | 1 per cell (strip 1: canopy touches the boots above) | half -> open -> half: 57 px (V 60) in (2, 1)-(18, 22) = canopy + near hand | PASS |
+| dog scratch0 (20) | 99.7 | 0 / 0, 3 info | 1 per cell, 0 holes | sit0 -> scratch0: 35 px (V 39) in (9, 6)-(16, 18); scratch0 <-> scratch1: 10-12 px in (11, 6)-(14, 9) = the paw | PASS |
+| dog scratch1 (21) | 99.7 | 0 / 0, 3 info | 1 per cell, 0 holes | (pair above) | PASS |
+| dog lookUp (22) | 100.0 | 0 / 0, 3 info | 1 per cell, 0 holes | sit0 <-> lookUp: 47-54 px in (14, 2)-(26, 9) = the head | PASS |
+| crow frozenTip (10) | 100.0 | 0 / 0, 3 info | 1 per cell, 0 holes | frozen <-> frozenTip: 10 px in (1, 2)-(5, 4) = the wing tip | PASS |
+| crow ruffle (11) | 99.3 | 0 / 0, 3 info | 1 per cell (strip 1: crown touches the toes above) | perch0 <-> ruffle: 53-70 px in (4, 0)-(23, 15), feet row identical | PASS |
+| girl lanternUp (10) | 94.9 | 0 / 0, 3 info | 1 per cell, 0 holes | stand0 <-> lanternUp: 32 px (V 38) in (1, 13)-(8, 21) | PASS |
+| girl tilt (11) | 97.9 | 0 / 0, 3 info | 1 per cell, 0 holes | stand0 <-> tilt: 29 px in (3, 4)-(9, 10) = the hood | PASS |
+| girlMini palm (2) | 100.0 | 0 / 0, 3 info | 1 component, 0 holes | cold <-> palm: 8 px in (5, 1)-(7, 4) | PASS |
+| sheets | inspector 96.0 (0 / 0, 4 info, 112 comps); dog halves 99.1 / 98.0 (72 / 66); crow 99.8 (67); girl 97.8 (72); girl-mini 100.0 (3) | | | 10 clips x 6 rows: 0 fails | CLEAN |
+
+In-game size (`<O>/ad/ad1b3/work/ad1b3_comp.py`: every cell where the WP24 behaviour puts it, on the denizen-free
+1080p store shots; Inspector at his spots, facing away from the machine (restFlip), with the thick clipboard pages at
+`clipboardOffsetArt`; dog in the front row at its spots; crow on the lamp at its era lift; ground girl at her
+placements; mini on the near pylon): zoom 1 e1 row I, zoom .75 s9 row II, zoom .5 s11 rows III (vents) and IV
+(unison look / sway), zoom .5 s15 row V. Reads: lookUp (both actors) reads as a look to the sky at every zoom;
+umbrellaHalf -> umbrellaOpen reads as the canopy opening; crouch reads as kneeling; frozenTip is a small twitch of the
+near primary (zoom 1 and .75, eras I-II only); ruffle reads as a puffed crow on the warm lamp at .5; lanternUp holds the
+lantern at the chest with the face smudge visible, tilt reads as a third head look; the mini palm is a 1-2 device px
+hand at .5 (a change, enough at the pylon plane). Contact pair: lanternUp next to shield at zoom 1 (rows I, V, whole) and
+.5 (s15 rows V, whole) reads as a different pose (the box at the chest below the shoulder, the arm bent, the face
+visible; shield covers the face). Clipboard pages on lookUp [5, -20] and crouch [5, -15] sit on the board top in both
+facings, rows I and III, as on idleA / idleB (`view/clipboard-check.png`): no nudge.
+
+Dog scratch, judged and kept: at zoom .5-.75 the raised leg along the back reads as a hump between the beats; the
+movement is the read (the paw jumps 1 px at 6 fps behind the ear for 1.5-3 s). Two alternatives were drawn in a scratch
+copy of the toolchain and compared at all three zooms (`view/dog-B.png`: the leg as a ">" across the flank with the
+knee at the elbow; `view/dog-C.png`: the leg inside the silhouette, paw bump behind the head): both read worse in game
+(interior ink turns into noise on the 28x20 body, the paw above the head reads as a second ear), so the AD1b-1 cells
+stay: the hock up behind the withers and the paw at the ear is the strongest silhouette. AD2 judges it live in motion.
+
+Hand-offs (data owners through the EM; nothing blocks the art):
+- H1 crouch looks at nothing (T1 / T3 spot data; AD1b-1 hand-off, now measured). crouch travels to the `scrap` spot
+  (placement x + 24) and faces left (restFlip, left wing); its gaze lands 16-20 world px in front of the feet. e1 / s8 /
+  s9: feet 1496, gaze 1476-1480, scraps 1330 / 1420 / 1530: the nearest in front is 76 px away and 1530 lies 34 px
+  behind him (`comp/comp-z1-e1-I-v2.png`, `comp/comp-z075-s9-II-v2.png`). s11 / s15: feet 808, gaze 788-792, scraps 690
+  / 830 / 960: 830 sits 22 px behind his back boot (`comp/comp-z05-s11-III-v4.png`). Rule for any fix: scrap x = feet x
+  minus 18 at the scrap spot. Options: per-framing `WORLD_SPOTS` (e1 / s8 / s9 scrap dx -34: feet 1438 over the 1420 scrap,
+  if `actorBand` keeps it), or a scrap x in `WORLD_PLACEMENTS.<framing>.scraps.xs` at the spot minus 18 (e1 family
+  1478, s11 / s15 790; both lie under his feet when he stands at `mid`, so AD2 picks). Art unchanged either way.
+- H2 info: the cycle 3+ ground girl (e1 / s8 / s9 x 1538) stands on the 1530 scrap; its edge shows at her left boot
+  (`comp/board-z1-e1-I-girl.png`). Pre-existing (WP23b data); AD2 judges.
+
+Decoded PNG total (276 PNGs under `public/assets/`, w x h x 4): 54.46 MiB (limit 56), unchanged.
+
+Evidence (`<O>` = `<S>/WP24`, all under `<O>/ad/ad1b3/`): `comp/board-<scene>-<actor>.png` (1:1 device px and x3 crops,
+variants side by side; scenes `z1-e1-I`, `z075-s9-II`, `z05-s11-III`, `z05-s11-IV`, `z05-s15-V`, `pair-z1-e1`,
+`pair-z05-s15`) and the full `comp/comp-*.png`; `storyboard/storyboard.txt`, `sb-*.png` (8x strips, red = pixels that
+change to the next frame), `sb-*.gif` (data timing), `board-storyboards.png`; `view/v-*.png` (the new cells next to
+their neighbours, 6x-16x), `view/clipboard-check.png`, `view/dog-B.png` / `dog-C.png`; `gate/` (uploaded PNGs,
+`uploads.txt`, `workbench.txt`); `rebuild/`, `check/`, `frames/`; `before/` (PNGs, masters, README before AD1b-3);
+`draft/` (the scratch toolchain copy with the rejected dog drafts); `work/` (`gate_prep.py`, `storyboard.py`,
+`ad1b3_comp.py`, `clipcheck.py`, `view.py`, `dogview.py`, `mkscratch.py`, `apply.py`).

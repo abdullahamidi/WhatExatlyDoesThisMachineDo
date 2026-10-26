@@ -3,12 +3,17 @@
 // WP23b T18: eras III-V placements and states (I, M), the finale film (J, JR), the postgame (K), cycles 2+ (L) and the bubble box
 // flip guard (F23, 1280x800). One fresh context per case. Why: the living world is a layer, so every check reads the debug hook
 // (window.__wedtmd) and the DOM only.
+// WP24 (T9a): the living-world v2 cases NV (variety), NC (changes), NT (teleport), NU (umbrella), NK (crank, reduced motion).
+// WP24 (T9b): ND (defer), NE (era), NY (day), NS (settle), and the existing-check rules (A_crank_step, I_chladni, I_virga_frozen, I_puddle_sprout, I_stare_dog, I_accent_still).
+// WP24 r3: NH (demo hold guard): DOG-12 suspends only the dog runner; the Inspector and the crow keep stepping (demo only).
 // Usage: PW_PATH=<playwright> node scripts/smoke/world.mjs "<url with ?debug=1>" <outdir>
 // Prints ONE JSON object { results, fail, errors }; exit code 1 when fail or errors is non-empty. Runs on :4174 and :4177.
-// ONLY=H,I,M (env, optional): a comma list of case keys to run alone (A B C D E F G H I M J JR K L F23); unset runs every case.
+// ONLY=H,I,M (env, optional): a comma list of case keys to run alone (A B C D E F G H I M J JR K L NV NC NT NU NK ND NE NY NS NH F23); unset runs every case.
 // Timing is deterministic: worldAdvance moves the scheduler clock and the play time, worldLogShown feeds the SYS LOG port,
 // worldSay forces a line past gaps and caps (not past hard silence). The demo edition refuses era III and everything after it, so
-// every check that needs era III or later records value.skipped there (I, M, J, JR, K, L, G_era3_visible, G_display_peak).
+// every check that needs era III or later records value.skipped there (I, M, J, JR, K, L, NV, NC, NU, NK, NE, NS, the NY tint and held checks, G_era3_visible, G_display_peak).
+// The demo cap (A10) also records value.skipped for the motion checks once the world is silent after the S9 buys (demoSilence): N_no_teleport,
+// the ND motion checks (not N_defer_hold) and the S9 rows of NV and NC. The full build keeps them strict.
 import fs from 'fs';
 import path from 'path';
 import {
@@ -229,12 +234,22 @@ async function caseA(page) {
   }
   await check(page, 'A_frozen', frozen, { before: v0 });
   await shot(page, 'world-A-s0.png');
-  const before = await livingOf(page);
+  // A_crank_step (WP24): one click steps every visible walker by one, read from the runners (worldBehaviour), not the variants.
+  // A parked walker (the girl in the window stage) keeps step 0 and is not counted.
+  const beforeB = await page.evaluate(() => ({
+    b: window.__wedtmd.worldBehaviour() ?? [],
+    vis: (window.__wedtmd.livingWorld() ?? []).filter((e) => e.visible === true).map((e) => e.id),
+  }));
   await crankClicks(page, 1, 0);
-  await sleep(300);
-  const after = await livingOf(page);
-  const stepped = before !== null && after !== null && (before.inspector !== after.inspector || before.dog !== after.dog);
-  await check(page, 'A_crank_step', stepped, { before, after });
+  await sleep(400);
+  const afterB = await page.evaluate(() => window.__wedtmd.worldBehaviour() ?? []);
+  const walkers = steppable(beforeB.vis, beforeB.b);
+  const stepOf = (list, id) => list.find((e) => e.id === id)?.step ?? null;
+  const stepped = walkers.length > 0 && walkers.every((id) => {
+    const a = stepOf(beforeB.b, id);
+    return a !== null && stepOf(afterB, id) === a + 1;
+  });
+  await check(page, 'A_crank_step', stepped, { walkers, before: beforeB.b, after: afterB });
 }
 
 // B first line: INS-01 through its observer-count log reply. Bubble, its rects at UI 100 and 150, the live region, the ARIA state.
@@ -417,7 +432,9 @@ async function caseG(page) {
     }
     const numeric = samples.every((x) => typeof x === 'number');
     const meanMs = numeric ? samples.reduce((a, b) => a + b, 0) / samples.length : null;
-    await check(page, 'G_cost', numeric && meanMs <= 0.3, { meanMs, samples: samples.length }, true);
+    // The per-part means (WP24 r2, informational: cast, props, atmos, clocks, runners), read once after the window.
+    const parts = await page.evaluate(() => window.__wedtmd.worldStats()?.parts ?? null);
+    await check(page, 'G_cost', numeric && meanMs <= 0.3, { meanMs, samples: samples.length, parts }, true);
   }
 
   if (await isDemo(page)) {
@@ -614,7 +631,7 @@ const INS14_TEXT = 'Same rounds. Page one. You look familiar.';   // INS-14 (cyc
 const GIRL_STEP_MAX_PX = 12;   // WORLD_GIRL.stepMaxWorldPx (B-A3): one committed change moves the girl at most this far
 const GRL12_CYCLE3 = 'Cycle 0044. You came back. So did we.';   // GRL-12 at cycle 3: {cycle} is the label 42 + 3 - 1 = 0044
 const DEMO_WHY = 'demo edition: eras III-V, the finale, the postgame and cycle 2 are refused';
-const I_NAMES = ['I_s10_placed', 'I_s11_placed', 'I_s13_placed', 'I_s15_placed', 'I_umbrella', 'I_puddle_sprout', 'I_girl_steps', 'I_girl_step_clamp',
+const I_NAMES = ['I_s10_placed', 'I_s11_placed', 'I_s13_placed', 'I_s15_placed', 'I_puddle_sprout', 'I_girl_steps', 'I_girl_step_clamp',
   'I_nothing_unhappens', 'I_double_exposure', 'I_reverse', 'I_stare_dog', 'I_chladni'];
 const M_NAMES = ['I_virga_frozen', 'I_sync', 'I_one_observer', 'I_accent_still'];
 const J_NAMES = ['J_restore_times', 'J_shield', 'J_last_look', 'J_crow_flight', 'J_drawn', 'J_no_bubble', 'J_skip'];
@@ -651,6 +668,31 @@ const INNER = { s15: ['dog', 'clock', 'stakeChain', 'hole', 'puddles', 'sprout',
 const skipCheck = (name, why = DEMO_WHY) => report.check(name, true, { skipped: why });
 const skipAll = (names, why = DEMO_WHY) => names.forEach((n) => skipCheck(n, why));
 const isDemo = (page) => page.evaluate(() => window.__wedtmd.demoState() !== null).catch(() => false);
+
+// Demo cap (A10): the S9 buys put the demo at its cap and the World scene sleeps, so the world clocks stop. The reason is not enough on its own:
+// quiet comes first in the reason order and hides asleep, so a clock that does not move over two frames counts as silent too. Returns the
+// reason, or null when the world runs or the build is the full game (its checks stay strict). Asleep and the hidden layer or tab are silent.
+const SILENT_STATES = ['asleep', 'layer-hidden', 'tab-hidden'];
+async function demoSilence(page) {
+  if (!(await isDemo(page))) return null;
+  const silence = await page.evaluate(() => window.__wedtmd.worldState()?.silence ?? null).catch(() => null);
+  if (SILENT_STATES.includes(silence)) return silence;
+  // The 1 s timer covers a page whose frames do not run (hidden): a frame that never comes reads as stopped.
+  const stopped = await page.evaluate(() => new Promise((resolve) => {
+    const w = window.__wedtmd;
+    const a = w.worldState()?.playMs ?? null;
+    const done = () => resolve(a !== null && (w.worldState()?.playMs ?? null) === a);
+    requestAnimationFrame(() => requestAnimationFrame(done));
+    setTimeout(done, 1000);
+  })).catch(() => false);
+  return stopped ? 'clock-stopped' : null;
+}
+// Records each name as passed with value.skipped when reason (from demoSilence) is set; false (nothing recorded) when the world runs.
+async function skipIfSilent(page, names, reason) {
+  if (reason === null) return false;
+  for (const name of names) await check(page, name, true, { skipped: `world silent (${reason}): demo cap`, silence: reason }, true);
+  return true;
+}
 
 // The living-world fields the WP23b checks read (null without a director).
 const worldSnap = (page) => page.evaluate(() => {
@@ -892,7 +934,7 @@ async function waitBox(page, capMs) {
   }
 }
 
-// I eras III-V (full edition): the rows per framing (s10, s11 / s13, s15), vents and the umbrella, puddle and sprout, the girl's five
+// I eras III-V (full edition): the rows per framing (s10, s11 / s13, s15), vents, puddle and sprout, the girl's five
 // steps, nothing un-happens (S9 to S15), the era V double exposure (none under reduced motion), the Chladni rings (I_chladni), the reversed loops and the stare dog.
 async function caseI(page) {
   if (await isDemo(page)) { skipAll(I_NAMES); return; }
@@ -910,9 +952,8 @@ async function caseI(page) {
   const r11 = await waitRows(page, 's11', R6.s11, [], MACHINE_RANGE.s11);
   await check(page, 'I_s11_placed', f11.length === 0 && r11.ok, { buyFail: f11, problems: r11.problems }, true);
   const ws11 = await worldSnap(page);
+  await drain(page, ['puddle', 'sprout'], 120);
   const vis11 = await visibleIds(page);
-  const umbrella = await variantSeen(page, 'inspector', 'umbrellaOpen', 4000);
-  await check(page, 'I_umbrella', ws11 !== null && ws11.vents === true && umbrella, { vents: ws11?.vents ?? null, inspector: umbrella }, true);
   const era3PuddleSprout = ws11 !== null && ws11.puddle >= 1 && ws11.sprout >= 1 && vis11.includes('puddle') && vis11.includes('sprout');
 
   const f13 = await buyEra(page, S13.slice(S11.length));
@@ -921,6 +962,8 @@ async function caseI(page) {
   await check(page, 'I_s13_placed', f13.length === 0 && r13.ok, { buyFail: f13, problems: r13.problems }, true);
   // I_chladni (FX8, AD4 F7): the S13 standingWave buys raise the Chladni intensity; WORLD_CHLADNI.ringsByIntensity gives rings-3 at 1 and
   // rings-5 at 2. The visible `chladni` entry of livingWorld() shows one of them (rings-3 is polled for 3 s, else rings-5 for 0.5 s).
+  // WP24: the chladni ring transition runs before the read (the queue drains; the read is the variant as today).
+  await drain(page, ['chladni'], 60);
   const chladniState = await page.evaluate(() => window.__wedtmd.worldState()?.chladni ?? null);
   const rings = (await variantSeen(page, 'chladni', 'rings-3', 3000)) || (await variantSeen(page, 'chladni', 'rings-5', 500));
   await check(page, 'I_chladni', f13.length === 0 && chladniState !== null && chladniState >= 1 && rings, { buyFail: f13, chladni: chladniState, rings }, true);
@@ -973,6 +1016,7 @@ async function caseI(page) {
   await check(page, 'I_nothing_unhappens', risesOnly(progress), { progress }, true);
 
   const ws15 = await worldSnap(page);
+  await drain(page, ['puddle', 'sprout'], 120);
   const blackPuddle = await page.evaluate(() => (window.__wedtmd.livingWorld() ?? []).some((e) => e.id === 'puddle' && e.visible === true && /black/i.test(e.variant)));
   await check(page, 'I_puddle_sprout', era3PuddleSprout && ws15 !== null && ws15.sprout === 4 && blackPuddle,
     { era3: era3PuddleSprout, sprout15: ws15?.sprout ?? null, blackPuddle }, true);
@@ -1002,6 +1046,8 @@ async function caseI(page) {
       break;
     }
   }
+  // WP24: the dog takes a wander now, so its walk is on screen for the samples below.
+  const dogNext = await page.evaluate(() => window.__wedtmd.worldBehaviourNext('dog', 'wander'));
   const dogSamples = [];
   for (let i = 0; i < 24; i++) {
     await sleep(150);
@@ -1021,7 +1067,7 @@ async function caseI(page) {
   }
   const walkSeen = dogSamples.some((s) => s !== null && s.visible && /^walk/.test(s.variant));
   await check(page, 'I_stare_dog', stareOn === true && glides === 0 && walkSeen,
-    { stare: stareOn, glides, walkSeen, samples: dogSamples.map((s) => (s === null ? null : `${s.variant}@${s.x}`)) }, true);
+    { stare: stareOn, next: dogNext, glides, walkSeen, samples: dogSamples.map((s) => (s === null ? null : `${s.variant}@${s.x}`)) }, true);
 }
 
 // I_accent_still (FX8). The Inspector entry of livingWorld() sampled once per rendered frame (requestAnimationFrame) for ms of wall time:
@@ -1074,10 +1120,13 @@ async function caseM(page) {
   await dismissEraCard(page);
   await sleep(500);
   // I_virga_frozen (AD4 F3): S13 bought in one go from era I; the virga strip shows its frozen frame (it kept falling before FX1).
+  await drain(page, ['virga'], 120);
   const virgaFrozen = await variantSeen(page, 'virga', 'frozen', 3000);
   await check(page, 'I_virga_frozen', bought.length === 0 && virgaFrozen, { virgaFrozen }, true);
   // I_accent_still (FX8): the Inspector for 8 s before the stare (the stare comes up with observer-one, below). Under CPU load a
   // write / front accent may not land in 8 s, so the window grows in 4 s steps (up to 20 s) until one same-variant pair is seen.
+  // WP24: the conductor holds the still unison before the sampler (the Inspector stands still for the window).
+  const stillNext = await page.evaluate(() => window.__wedtmd.worldBehaviourNext('conductor', 'still'));
   const accBefore = await sampleInspector(page, 8000);
   for (let extra = 0; extra < 3 && accentPairs(accBefore).pairs === 0; extra++) accBefore.push(...(await sampleInspector(page, 4000)));
   await page.evaluate(() => window.__wedtmd.worldQuiet(false));
@@ -1111,6 +1160,8 @@ async function caseM(page) {
     }
   }
   // I_accent_still (FX8): the Inspector for 8 s after the stare is on (none when it is not on: the check fails on stareOn).
+  // WP24: after the stare the conductor switches to the beat, so the Inspector walks on its first downbeat (walkSeenAfter).
+  const beatNext = stareOn === true ? await page.evaluate(() => window.__wedtmd.worldBehaviourNext('conductor', 'beat')) : null;
   const accAfter = stareOn === true ? await sampleInspector(page, 8000) : [];
   let firstIns = null;
   let firstGrl = null;
@@ -1134,7 +1185,7 @@ async function caseM(page) {
   const accSample = (s) => `${s.variant}@${s.x}`;
   await check(page, 'I_accent_still', slideB.slides === 0 && slideA.slides === 0 && stareOn === true && accentCovered(accBefore) && accentCovered(accAfter) && slideB.pairs >= 1 && slideA.pairs >= 1 && walkSeenAfter,
     {
-      slidesBefore: slideB.slides, slidesAfter: slideA.slides, stareOn, pairsBefore: slideB.pairs, pairsAfter: slideA.pairs, walkSeenAfter,
+      slidesBefore: slideB.slides, slidesAfter: slideA.slides, stareOn, still: stillNext, beat: beatNext, pairsBefore: slideB.pairs, pairsAfter: slideA.pairs, walkSeenAfter,
       samplesBefore: accBefore.length, samplesAfter: accAfter.length, spanBeforeMs: accentSpanMs(accBefore), spanAfterMs: accentSpanMs(accAfter),
       samples: { before: accBefore.slice(0, 24).map(accSample), after: accAfter.slice(0, 24).map(accSample) },
     }, true);
@@ -1407,6 +1458,1011 @@ async function caseF23(page) {
     { buyFail, rounds }, true);
 }
 
+// ---- WP24 (T9a): the living-world v2 cases NV, NC, NT, NU, NK. One fresh context per case. The members read here are the WP24 debug
+// contract (C7): worldBehaviour, worldBehaviourLog, worldTransitions, worldProps and livingWorld with alpha and y. Samples run on the
+// scheduler clock (worldAdvance STEP_MS per sample); frames adds one rAF per sample so the living and prop rows are redrawn first.
+const WALKERS = ['inspector', 'dog', 'crow', 'girl'];
+// The walkers one crank click steps: visible in livingWorld() and not parked (the girl parks in the window stage and keeps step 0).
+const steppable = (visible, behaviour) => WALKERS.filter((id) => visible.includes(id)
+  && (behaviour.find((e) => e.id === id)?.activity ?? null) !== 'parked');
+const WALK_RE = /^walk/;
+const STEP_MS = 250;          // one sample = one worldAdvance step
+const VARIETY_STEPS = 2400;   // 10 min of scheduler time
+const CHANGE_STEPS = 720;     // 3 min of scheduler time
+const LOCK_MS = 125;          // V5: a start this close to another runner's start counts as lockstep
+const ALPHA_MOVE = 0.02;      // V4: alpha moves by this much (or x / y by PX_MOVE, or the variant differs) counts as a change
+const PX_MOVE = 1;
+const LIT_ALPHA = 0.02;       // a prop row is shown above this alpha
+const WALK_PX = 8;            // V6: the largest step on a walk variant
+const REST_PX = 4;            // V6: the largest step off a walk variant (the crow stutter hop, WORLD_ENV.crowStutterPx)
+const REPEAT_MAX = 2;         // V2b: an exact 4-activity run recurs at most this often in one window
+const WALK_SHARE_MAX = 0.3;   // V8
+const LOCK_REST_MAX = 0.12;   // V5 outside era IV
+const LOCK_IV_MIN = 0.9;      // V5 in era IV (the conductor's downbeat)
+// Rest frames a denizen may draw under the stare (WORLD_STARE_SAFE, src/data/worldBehaviour.ts; mirrored, this smoke is plain JS).
+const STARE_SAFE = {
+  inspector: ['front', 'talk'], dog: ['head', 'talk'], crow: ['head', 'talk'], girl: ['stand0', 'stand1', 'talk', 'lanternUp', 'tilt'],
+};
+// V1: the minimum distinct looks per 10 min window (the plan's V1 table). The crow is off-stage at s10 and is not checked there.
+const VARIETY_MIN = {
+  s7: { inspector: 6, dog: 5, crow: 2 },
+  s8: { inspector: 5, dog: 5, crow: 3, girl: 2 },
+  s9: { inspector: 6, dog: 5, crow: 3, girl: 2 },
+  s10: { inspector: 4, dog: 5, girl: 2 },
+  s11: { inspector: 7, dog: 6, crow: 3, girl: 2 },
+  s13b: { inspector: 5, dog: 5, crow: 5, girl: 5 },
+  s13a: { inspector: 4, dog: 4, crow: 4, girl: 4 },
+  s15: { inspector: 3, dog: 3, crow: 2, girl: 3 },
+};
+const VARIETY_TAILS = ['distinct', 'no_repeat', 'walk_share', 'lockstep'];
+const varietyNames = (s) => VARIETY_TAILS.map((t) => `N_${s}_${t}`);
+const changeNames = (s) => (s === 's13a' || s === 's15' ? [`N_${s}_changes`, `N_${s}_rendered`] : [`N_${s}_changes`]);
+// Stages that need era III or later (s13b / s13a: era IV; s15: era V). The demo edition cannot reach them.
+const ERA3_VARIETY = ['s10', 's11', 's13b', 's13a', 's15'];
+
+// Runs in the page. `steps` times: worldAdvance(stepMs), then (frames) one animation frame, then the runner snapshot. Returns the runner k
+// at the start, the walk and presence counts per runner, the behaviour log entries that ended inside the window (everything after the
+// last entry the log held at the start; cut when that entry has left the ring), the stare flag and, with frames, the compact rows per sample.
+// With micro (WP24 r2), each sample also carries d: the four micro flags [hitch, clockTwitch, lampDip, boothDip] of worldDay() (null
+// while the day clock is hidden).
+async function windowRunInPage(spec) {
+  const w = window.__wedtmd;
+  const logKey = (e) => `${e.id}|${e.atMs}`;
+  const behaviour = () => w.worldBehaviour() ?? [];
+  const k0 = {};
+  for (const e of behaviour()) k0[e.id] = e.k;
+  const logStart = w.worldBehaviourLog() ?? [];
+  const cursor = logStart.length > 0 ? logKey(logStart[logStart.length - 1]) : null;
+  const walking = {};
+  const present = {};
+  const samples = [];
+  for (let i = 0; i < spec.steps; i++) {
+    w.worldAdvance(spec.stepMs);
+    if (spec.frames) await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    const b = behaviour();
+    for (const e of b) {
+      present[e.id] = (present[e.id] ?? 0) + 1;
+      if (e.walking === true) walking[e.id] = (walking[e.id] ?? 0) + 1;
+    }
+    if (spec.frames || spec.micro) {
+      const row = {};
+      if (spec.frames) {
+        row.l = (w.livingWorld() ?? []).map((e) => [e.id, e.variant, e.x, e.y, e.alpha, e.visible === true]);
+        row.p = (w.worldProps() ?? []).map((r) => [r.id, r.frame, r.alpha, r.x, r.y]);
+        row.b = b.map((e) => [e.id, e.activity]);
+      }
+      if (spec.micro) {
+        const m = w.worldDay()?.micro;
+        row.d = m ? [m.hitch, m.clockTwitch, m.lampDip, m.boothDip] : null;
+      }
+      samples.push(row);
+    }
+  }
+  const log = w.worldBehaviourLog() ?? [];
+  let from = 0;
+  let cut = false;
+  if (cursor !== null) {
+    let at = -1;
+    for (let j = log.length - 1; j >= 0 && at < 0; j--) if (logKey(log[j]) === cursor) at = j;
+    if (at >= 0) from = at + 1;
+    else cut = true;
+  }
+  const entries = log.slice(from).map((e) => ({
+    id: e.id, activity: e.activity, atMs: e.atMs, durMs: e.durMs, walked: e.walked, reaction: e.reaction, look: e.look,
+  }));
+  return { k0, walking, present, log: entries, cut, steps: spec.steps, stare: w.worldState()?.stare === true, samples };
+}
+
+// Runs in the page. The living entries of the walkers, once per animation frame, for ms of wall time: [id, visible, variant, x] tuples.
+function teleportInPage(spec) {
+  return new Promise((resolve) => {
+    const out = [];
+    const t0 = performance.now();
+    const tick = () => {
+      out.push((window.__wedtmd.livingWorld() ?? []).filter((e) => spec.ids.includes(e.id)).map((e) => [e.id, e.visible === true, e.variant, e.x]));
+      if (performance.now() - t0 >= spec.ms) resolve(out);
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+// Advances the world 1 s at a time (one rAF per step) until worldTransitions() lists none of ids, at most capS seconds of advance.
+// Returns whether the ids drained.
+async function drain(page, ids, capS) {
+  const busy = () => page.evaluate((list) => (window.__wedtmd.worldTransitions() ?? []).some((t) => list.includes(t.id)), ids);
+  for (let s = 0; s < capS; s++) {
+    if (!(await busy())) return true;
+    await page.evaluate(() => window.__wedtmd.worldAdvance(1000));
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(null))));
+  }
+  return !(await busy());
+}
+// Ids of the transitions queued or running now: the set drain waits for.
+const transitionIds = (page) => page.evaluate(() => (window.__wedtmd.worldTransitions() ?? []).map((t) => t.id));
+
+// Buys a stage list (TECH INDEX, era card closed), keeps the world quiet (no lines, no glances) and drains the transition queue.
+// Returns the failed buys.
+async function stageSetup(page, list) {
+  const failed = await buyEra(page, list);
+  await page.evaluate(() => window.__wedtmd.worldQuiet(true));
+  await drain(page, await transitionIds(page), 120);
+  return failed;
+}
+
+// The observer-one log: quiet off for the reply, quiet back on once the stare is up (cap 120 s of scheduler time). Returns whether it is up.
+async function observerOne(page) {
+  await page.evaluate(() => window.__wedtmd.worldQuiet(false));
+  await page.evaluate(() => window.__wedtmd.worldLogShown('observer-one'));
+  let on = false;
+  for (let i = 0; i < 240 && !on; i++) {
+    await page.evaluate(() => window.__wedtmd.worldAdvance(500));
+    await sleep(120);
+    on = await page.evaluate(() => window.__wedtmd.worldState()?.stare === true);
+  }
+  await page.evaluate(() => window.__wedtmd.worldQuiet(true));
+  await drain(page, await transitionIds(page), 120);
+  return on;
+}
+
+// Groups log entries by runner id, in log order.
+function byActor(entries) {
+  const map = new Map();
+  for (const e of entries) {
+    const list = map.get(e.id) ?? [];
+    list.push(e);
+    map.set(e.id, list);
+  }
+  return map;
+}
+// V2a: adjacent entries of one runner with the same activity id. V2b: the largest count of one exact 4-activity run (ids and
+// durations rounded to 1 s) of one runner.
+function repeatsOf(actors) {
+  let adjacent = 0;
+  let maxGram = 0;
+  for (const list of actors.values()) {
+    const grams = new Map();
+    for (let j = 1; j < list.length; j++) if (list[j].activity === list[j - 1].activity) adjacent += 1;
+    for (let j = 0; j + 4 <= list.length; j++) {
+      const key = list.slice(j, j + 4).map((e) => `${e.activity}:${Math.round(e.durMs / 1000)}`).join('|');
+      const n = (grams.get(key) ?? 0) + 1;
+      grams.set(key, n);
+      maxGram = Math.max(maxGram, n);
+    }
+  }
+  return { adjacent, maxGram };
+}
+// V5: the share of starts within LOCK_MS of another runner's start (every runner in the window).
+function lockstepOf(entries) {
+  let near = 0;
+  for (const s of entries) {
+    if (entries.some((o) => o.id !== s.id && Math.abs(o.atMs - s.atMs) <= LOCK_MS)) near += 1;
+  }
+  return { starts: entries.length, near, share: entries.length > 0 ? near / entries.length : null };
+}
+
+// The N variety rows of one stage (C8: distinct looks, no repeats, walk share, lockstep). Every value carries the runner k at the
+// window start. extra.ok (the stage state) joins the distinct check; extra.buyFail lists the buys that failed on the way.
+function varietyRows(stage, win, extra) {
+  const actors = byActor(win.log);
+  const min = VARIETY_MIN[stage];
+  const distinct = {};
+  for (const id of Object.keys(min)) distinct[id] = new Set((actors.get(id) ?? []).map((e) => e.look)).size;
+  const rep = repeatsOf(actors);
+  const shares = {};
+  for (const id of Object.keys(win.present)) shares[id] = Math.round(((win.walking[id] ?? 0) / win.steps) * 1000) / 1000;
+  const lock = lockstepOf(win.log);
+  const base = { k0: win.k0, buyFail: extra.buyFail ?? [], stare: win.stare, cut: win.cut };
+  const era4 = stage === 's13b' || stage === 's13a';
+  return [
+    [`N_${stage}_distinct`, Object.entries(min).every(([id, m]) => distinct[id] >= m) && (extra.ok ?? true), { ...base, distinct, min }],
+    [`N_${stage}_no_repeat`, rep.adjacent === 0 && rep.maxGram <= REPEAT_MAX, { ...base, adjacent: rep.adjacent, maxGram: rep.maxGram }],
+    [`N_${stage}_walk_share`, Object.values(shares).every((v) => v <= WALK_SHARE_MAX), { ...base, shares }],
+    [`N_${stage}_lockstep`, lock.starts > 0 && (era4 ? lock.share >= LOCK_IV_MIN : lock.share <= LOCK_REST_MAX),
+      { ...base, starts: lock.starts, near: lock.near, share: lock.share }],
+  ];
+}
+
+// One stage of N variety: 10 min of scheduler time in one evaluate (no frames), then the rows.
+async function varietyStage(page, stage, extra = {}) {
+  const win = await page.evaluate(windowRunInPage, { steps: VARIETY_STEPS, stepMs: STEP_MS, frames: false });
+  for (const [name, cond, detail] of varietyRows(stage, win, extra)) await check(page, name, cond, detail, true);
+}
+
+// C8 required rows per stage: a row listed here must be shown in the window, so a missing row fails the changes check and does not pass
+// on no data. The four denizens stay checked by the `denizens` test.
+const CHANGE_REQUIRED = {
+  s9: ['receiver', 'lampGlow', 'boothHood', 'sensorLed', 'mote0', 'mote1', 'mote2', 'mote3', 'mote4', 'scrap0', 'scrap1', 'clockMinute'],
+  s11: ['receiver', 'lampGlow', 'boothHood', 'sensorLed', 'mote0', 'mote1', 'mote2', 'mote3', 'mote4', 'scrap0', 'sprout', 'clockMinute'],
+  s13a: ['lampGlow', 'boothHood', 'sensorLed', 'clockMinute'],
+  s15: ['boothHood', 'sensorLed', 'ring0', 'ring1', 'ring2', 'clockMinute'],
+};
+// The V4 rules of one stage: the element (a living entry or a prop row), its gap limit in seconds, whether the era IV hold action pauses its
+// clock (runners only) and whether the row is required (CHANGE_REQUIRED). Denizens 20 s (era V 30 s); receiver 10 s and motes 1 s (eras II-III);
+// lamp glow, booth hood and Sensor 7 LED 30 s while lit; scraps 60 s and sprout 30 s (era III); Chladni rings 20 s (era V); clock 120 s (from era II).
+function changeRules(stage) {
+  const early = stage === 's9' || stage === 's11';
+  const need = (key) => (CHANGE_REQUIRED[stage] ?? []).includes(key);
+  const rules = WALKERS.map((id) => ({ key: id, src: 'living', limitS: stage === 's15' ? 30 : 20, hold: true }));
+  if (early) rules.push({ key: 'receiver', src: 'living', limitS: 10, required: need('receiver') });
+  if (early) for (let i = 0; i < 5; i++) rules.push({ key: `mote${i}`, src: 'prop', limitS: 1, required: need(`mote${i}`) });
+  for (const key of ['lampGlow', 'boothHood', 'sensorLed']) rules.push({ key, src: 'prop', limitS: 30, required: need(key) });
+  if (early) for (let i = 0; i < 3; i++) rules.push({ key: `scrap${i}`, src: 'prop', limitS: 60, required: need(`scrap${i}`) });
+  if (stage === 's11') rules.push({ key: 'sprout', src: 'prop', limitS: 30, required: need('sprout') });
+  if (stage === 's15') for (let i = 0; i < 5; i++) rules.push({ key: `ring${i}`, src: 'prop', limitS: 20, required: need(`ring${i}`) });
+  rules.push({ key: 'clockMinute', src: 'prop', limitS: 120, required: need('clockMinute') });
+  return rules;
+}
+
+// Per sample: Maps of the living entries (first visible one wins a duplicate id), the prop rows (visible above LIT_ALPHA) and the runner
+// activities. The compact rows of windowRunInPage become Maps here.
+function indexSamples(samples) {
+  return samples.map((s) => {
+    const living = new Map();
+    for (const [id, variant, x, y, alpha, visible] of s.l) {
+      const prev = living.get(id);
+      if (prev === undefined || (visible && prev.visible !== true)) living.set(id, { variant, x, y, alpha, visible });
+    }
+    const props = new Map();
+    for (const [id, frame, alpha, x, y] of s.p) props.set(id, { variant: frame, x, y, alpha, visible: alpha >= LIT_ALPHA });
+    return { living, props, act: new Map(s.b) };
+  });
+}
+// The change test (V4 / C8): the variant differs, alpha moves by ALPHA_MOVE, or x or y moves by PX_MOVE world px (against the last change).
+const moved = (a, b) => a.variant !== b.variant || Math.abs(a.alpha - b.alpha) >= ALPHA_MOVE
+  || Math.abs(a.x - b.x) >= PX_MOVE || Math.abs(a.y - b.y) >= PX_MOVE;
+// The longest gap (ms) between two changes of one element, counted from the first sample it is shown. A hidden sample or a hold
+// sample pauses the clock: the gap ends there and restarts when the element shows again. null when the element is never shown.
+function worstGap(indexed, rule) {
+  let measured = false;
+  let ref = null;
+  let last = 0;
+  let worst = 0;
+  for (let i = 0; i < indexed.length; i++) {
+    const s = indexed[i];
+    const cur = (rule.src === 'living' ? s.living : s.props).get(rule.key) ?? null;
+    const paused = cur === null || !cur.visible || (rule.hold === true && s.act.get(rule.key) === 'hold');
+    if (paused) {
+      if (measured) worst = Math.max(worst, i - last);
+      last = i;
+      ref = null;
+      continue;
+    }
+    if (!measured || ref === null) {
+      measured = true;
+      ref = cur;
+      last = i;
+      continue;
+    }
+    if (moved(ref, cur)) {
+      worst = Math.max(worst, i - last);
+      last = i;
+      ref = cur;
+    }
+  }
+  return measured ? Math.max(worst, indexed.length - 1 - last) * STEP_MS : null;
+}
+// Per walker: the shown samples, the distinct (variant, round x, round y) states, and the non-walk variants outside the stare set.
+function renderedOf(indexed) {
+  const out = {};
+  for (const id of WALKERS) {
+    const states = new Set();
+    const variants = new Set();
+    let visible = 0;
+    for (const s of indexed) {
+      const e = s.living.get(id);
+      if (!e || !e.visible) continue;
+      visible += 1;
+      states.add(`${e.variant}|${Math.round(e.x)}|${Math.round(e.y)}`);
+      if (!WALK_RE.test(e.variant)) variants.add(e.variant);
+    }
+    out[id] = { visible, distinct: states.size, variants: [...variants].sort(), stray: [...variants].filter((v) => !STARE_SAFE[id].includes(v)) };
+  }
+  return out;
+}
+
+// One stage of N changes (C8 V4): 720 samples of worldAdvance(250) and one rAF each (180 s of scheduler time). The denizens must all be
+// shown, every required row too (a missing one lands in over as missing:<key>), and every element within its limit. The stare stages
+// (s13a, s15) also check N_<s>_rendered.
+async function changesStage(page, stage, extra = {}) {
+  const win = await page.evaluate(windowRunInPage, { steps: CHANGE_STEPS, stepMs: STEP_MS, frames: true });
+  const indexed = indexSamples(win.samples);
+  const worst = {};
+  const over = [];
+  for (const rule of changeRules(stage)) {
+    const ms = worstGap(indexed, rule);
+    if (ms === null) {
+      if (rule.required) over.push(`missing:${rule.key}`);
+      continue;
+    }
+    worst[rule.key] = ms / 1000;
+    if (ms > rule.limitS * 1000) over.push(rule.key);
+  }
+  const denizens = WALKERS.every((id) => worst[id] !== undefined);
+  await check(page, `N_${stage}_changes`, denizens && over.length === 0, { worstS: worst, over, stare: win.stare, buyFail: extra.buyFail ?? [] }, true);
+  if (stage === 's13a' || stage === 's15') {
+    const rendered = renderedOf(indexed);
+    const ok = win.stare === true && WALKERS.every((id) => rendered[id].visible > 0 && rendered[id].distinct >= 3 && rendered[id].stray.length === 0);
+    await check(page, `N_${stage}_rendered`, ok, { stare: win.stare, rendered }, true);
+  }
+}
+
+// N variety (C8, V1 / V2 / V5 / V8): the stages in one context. Each is sampled for 10 min after its setup; the era IV stages straddle ONE OBSERVER.
+async function caseNV(page) {
+  const demo = await isDemo(page);
+  await crankClicks(page, 45, 0);
+  await varietyStage(page, 's7', { buyFail: await stageSetup(page, S7) });
+  await varietyStage(page, 's8', { buyFail: await stageSetup(page, S8.slice(S7.length)) });
+  const buy9 = await stageSetup(page, S9.slice(S8.length));
+  if (!(await skipIfSilent(page, varietyNames('s9'), await demoSilence(page)))) await varietyStage(page, 's9', { buyFail: buy9 });
+  if (demo) {
+    for (const s of ERA3_VARIETY) skipAll(varietyNames(s));
+    return;
+  }
+  await varietyStage(page, 's10', { buyFail: await stageSetup(page, S10.slice(S9.length)) });
+  await varietyStage(page, 's11', { buyFail: await stageSetup(page, S11.slice(S10.length)) });
+  await varietyStage(page, 's13b', { buyFail: await stageSetup(page, S13.slice(S11.length)) });
+  const on = await observerOne(page);
+  await varietyStage(page, 's13a', { ok: on });
+  const buyFail = [...(await stageSetup(page, S14.slice(S13.length))), ...(await stageSetup(page, S15.slice(S14.length)))];
+  await varietyStage(page, 's15', { buyFail });
+}
+
+// N changes (C8 V4 and the rendered stare): S9, S11, S13 (after ONE OBSERVER) and S15.
+async function caseNC(page) {
+  const demo = await isDemo(page);
+  await crankClicks(page, 45, 0);
+  const buy9 = await stageSetup(page, S9);
+  if (!(await skipIfSilent(page, changeNames('s9'), await demoSilence(page)))) await changesStage(page, 's9', { buyFail: buy9 });
+  if (demo) {
+    for (const s of ['s11', 's13a', 's15']) skipAll(changeNames(s));
+    return;
+  }
+  await changesStage(page, 's11', { buyFail: await stageSetup(page, S11.slice(S9.length)) });
+  const buy13 = await stageSetup(page, S13.slice(S11.length));
+  await observerOne(page);
+  await changesStage(page, 's13a', { buyFail: buy13 });
+  const buy15 = [...(await stageSetup(page, S14.slice(S13.length))), ...(await stageSetup(page, S15.slice(S14.length)))];
+  await changesStage(page, 's15', { buyFail: buy15 });
+}
+
+// N_no_teleport (S9): a rAF sampler for 15 s; a line (INS-02) is forced at 2 s with quiet off, so a talk pause falls inside the window.
+// Per step: |dx| <= WALK_PX when either side of the step is a walk variant, REST_PX otherwise (the crow stutter hop).
+function teleportOf(frames) {
+  let steps = 0;
+  let walkSteps = 0;
+  let moving = 0;
+  const violations = [];
+  for (const id of WALKERS) {
+    let prev = null;
+    for (const f of frames) {
+      const cur = f.find((t) => t[0] === id);
+      if (cur === undefined || cur[1] !== true) {
+        prev = null;
+        continue;
+      }
+      if (prev !== null) {
+        const dx = Math.abs(cur[3] - prev[3]);
+        const walk = WALK_RE.test(cur[2]) || WALK_RE.test(prev[2]);
+        steps += 1;
+        if (walk) walkSteps += 1;
+        if (dx > 0) moving += 1;
+        if (dx > (walk ? WALK_PX : REST_PX)) violations.push({ id, dx: Math.round(dx), from: prev[2], to: cur[2] });
+      }
+      prev = cur;
+    }
+  }
+  return { steps, walkSteps, moving, violations: violations.slice(0, 10), violationCount: violations.length };
+}
+async function caseNT(page) {
+  await crankClicks(page, 45, 0);
+  await stageSetup(page, S9);
+  if (await skipIfSilent(page, ['N_no_teleport'], await demoSilence(page))) return;
+  await page.evaluate(() => window.__wedtmd.worldQuiet(false));
+  const sampling = page.evaluate(teleportInPage, { ms: 15000, ids: WALKERS });
+  await sleep(2000);
+  const said = await worldSay(page, 'INS-02');
+  const frames = await sampling;
+  const res = teleportOf(frames);
+  await check(page, 'N_no_teleport', res.violationCount === 0 && res.steps > 0 && said === true, { said, ...res }, true);
+}
+
+// N_umbrella and N_umbrella_talk (S11, vents): 1 s steps until the Inspector opens the umbrella. The same step starts INS-08 (quiet off,
+// the umbrella still open); the bubble then shows the talkUmbrella variant. The umbrella must end and be logged after the sighting.
+async function caseNU(page) {
+  if (await isDemo(page)) {
+    skipCheck('N_umbrella');
+    skipCheck('N_umbrella_talk');
+    return;
+  }
+  await crankClicks(page, 45, 0);
+  await stageSetup(page, S11);
+  let hit = null;
+  for (let i = 0; i < 180 && hit === null; i++) {
+    hit = await page.evaluate(() => {
+      const w = window.__wedtmd;
+      w.worldAdvance(1000);
+      const open = (w.worldBehaviour() ?? []).some((e) => e.id === 'inspector' && e.activity === 'umbrella');
+      if (!open) return null;
+      const log = w.worldBehaviourLog() ?? [];
+      const last = log.length > 0 ? log[log.length - 1] : null;
+      w.worldQuiet(false);
+      return { said: w.worldSay('INS-08'), cursor: last === null ? null : `${last.id}|${last.atMs}` };
+    });
+  }
+  let talkSeen = false;
+  for (let i = 0; i < 20 && hit !== null && !talkSeen; i++) {
+    await sleep(150);
+    talkSeen = await page.evaluate(() => {
+      const w = window.__wedtmd;
+      const inspector = (w.livingWorld() ?? []).find((e) => e.id === 'inspector');
+      return w.worldBubble()?.visible === true && inspector?.variant === 'talkUmbrella';
+    });
+  }
+  await page.evaluate(() => window.__wedtmd.worldQuiet(true));
+  let ended = false;
+  for (let i = 0; i < 180 && hit !== null && !ended; i++) {
+    ended = await page.evaluate((cursor) => {
+      const w = window.__wedtmd;
+      w.worldAdvance(1000);
+      const log = w.worldBehaviourLog() ?? [];
+      let from = 0;
+      for (let j = log.length - 1; cursor !== null && j >= 0; j--) {
+        if (`${log[j].id}|${log[j].atMs}` === cursor) {
+          from = j + 1;
+          break;
+        }
+      }
+      return log.slice(from).some((e) => e.id === 'inspector' && e.activity === 'umbrella');
+    }, hit.cursor);
+  }
+  await check(page, 'N_umbrella', hit !== null && ended, { seen: hit !== null, ended }, true);
+  await check(page, 'N_umbrella_talk', hit !== null && hit.said === true && talkSeen, { said: hit?.said ?? null, talkSeen }, true);
+}
+
+// N_crank (S0, a fresh page, no purchase): one crank click steps every visible walker by 1, and the walkers' snapshot holds for 2 s
+// without clicks (crank mode has no real-time progress).
+async function crankCheck(page) {
+  const before = await page.evaluate(() => ({
+    b: window.__wedtmd.worldBehaviour() ?? [],
+    vis: (window.__wedtmd.livingWorld() ?? []).filter((e) => e.visible === true).map((e) => e.id),
+  }));
+  await crankClicks(page, 1, 0);
+  await sleep(400);
+  const after = await page.evaluate(() => window.__wedtmd.worldBehaviour() ?? []);
+  await sleep(2000);
+  const later = await page.evaluate(() => window.__wedtmd.worldBehaviour() ?? []);
+  const walkers = steppable(before.vis, before.b);
+  const pick = (list) => list.filter((e) => walkers.includes(e.id));
+  const stepOf = (list, id) => list.find((e) => e.id === id)?.step ?? null;
+  const stepped = walkers.length > 0 && walkers.every((id) => {
+    const a = stepOf(before.b, id);
+    return a !== null && stepOf(after, id) === a + 1;
+  });
+  const still = JSON.stringify(pick(later)) === JSON.stringify(pick(after));
+  await check(page, 'N_crank', stepped && still, { walkers, before: pick(before.b), after: pick(after), still }, true);
+}
+
+// The micro flags that reduced motion switches off (WorldClocks reducedOff): each must read false on every sample (WP24 r2).
+const MICRO_FLAGS = ['hitch', 'clockTwitch', 'lampDip', 'boothDip'];
+// N_reduced (S9, S11 and S13 under reduced motion, 10 min each): the receiver is 'hang' on every shown sample; the micro flags (read from
+// worldDay(), not a proxy) are never true; every runner shows at least three activities, the girl at S9 two (the mini has two before the
+// vents). The Sensor 7 double blink is canon under reduced motion, so its head is not checked here.
+async function reducedStage(page, stage) {
+  const win = await page.evaluate(windowRunInPage, { steps: VARIETY_STEPS, stepMs: STEP_MS, frames: true, micro: true });
+  const indexed = indexSamples(win.samples);
+  let receiverVisible = 0;
+  let receiverHang = 0;
+  for (const s of indexed) {
+    const r = s.living.get('receiver');
+    if (r && r.visible) {
+      receiverVisible += 1;
+      if (r.variant === 'hang') receiverHang += 1;
+    }
+  }
+  const micro = { samples: 0, hitch: 0, clockTwitch: 0, lampDip: 0, boothDip: 0 };
+  for (const row of win.samples) {
+    if (!Array.isArray(row.d)) continue;
+    micro.samples += 1;
+    MICRO_FLAGS.forEach((flag, j) => {
+      if (row.d[j] === true) micro[flag] += 1;
+    });
+  }
+  const actors = byActor(win.log);
+  const activities = {};
+  for (const id of WALKERS) activities[id] = new Set((actors.get(id) ?? []).map((e) => e.activity)).size;
+  const need = (id) => (stage === 's9' && id === 'girl' ? 2 : 3);
+  const ok = receiverVisible > 0 && receiverHang === receiverVisible && micro.samples > 0
+    && MICRO_FLAGS.every((flag) => micro[flag] === 0) && WALKERS.every((id) => activities[id] >= need(id));
+  return { stage, ok, receiver: { visible: receiverVisible, hang: receiverHang }, micro, activities };
+}
+// N_crank (s0) and N_reduced (S9, S11, S13 with reduced motion, one page after the crank check). The stage lists are cumulative (S9 is a
+// prefix of S11, S11 of S13), so each stage buys only the rest of its list.
+async function caseNK(page) {
+  await crankCheck(page);
+  if (await isDemo(page)) {
+    skipCheck('N_reduced');
+    return;
+  }
+  await page.evaluate(() => window.__wedtmd.session.updateSettings({ reducedMotion: true }));
+  await sleep(300);
+  await crankClicks(page, 45, 0);
+  const buyS9 = await stageSetup(page, S9);
+  const s9 = await reducedStage(page, 's9');
+  const buyS11 = await stageSetup(page, S11.slice(S9.length));
+  const s11 = await reducedStage(page, 's11');
+  const buyS13 = await stageSetup(page, S13.slice(S11.length));
+  const s13 = await reducedStage(page, 's13');
+  const buyFail = [...buyS9, ...buyS11, ...buyS13];
+  await check(page, 'N_reduced', buyFail.length === 0 && s9.ok && s11.ok && s13.ok, { buyFail, s9, s11, s13 }, true);
+}
+
+// --- WP24 T9b: the defer (ND), era (NE), day (NY) and settle (NS) cases. The constants mirror src/data (WORLD_TRANSITIONS, WORLD_DAY,
+// WORLD_ENV, WORLD_AMBIENT); this smoke is plain JS, so they are copied here and move with the data.
+const LAMP_BUZZ_MS = 3000;             // WORLD_TRANSITIONS.rows.lamp.buzzMs: the buzz-on stutter, then the glow (from the lamp's first start)
+const LAMP_GLOW_MS = 4000;             // WORLD_TRANSITIONS.rows.lamp.glowMs: the glow after the buzz
+const LAMP_FADE_WINDOW_MS = LAMP_BUZZ_MS + LAMP_GLOW_MS + 2000;   // N_flicker_reduced: buzz and glow, with 2 s of slack for the start and the frames
+const FADE_GLOW_MIN = 0.2;             // N_flicker_reduced: the lamp glow reaches this alpha inside the window
+const FADE_TOL = 0.01;                 // N_flicker_reduced: a fall of this much or less keeps the fade non-decreasing
+const LAMP_SETTLE_MIN_MS = 2500;       // N_lamp_buzz: the lamp reads lit for good from this long after its first start
+const DEFER_START_MIN_MS = 1000;       // WORLD_TRANSITIONS.startAfterCloseMs
+const DEFER_GAP_MIN_MS = 600;          // WORLD_TRANSITIONS.staggerMs[0]
+const FRAME_SLACK_MS = 150;            // the samplers read wall time once per frame (a headless frame is 100-150 ms)
+const DEFER_WINDOW_MS = 50000;         // the rAF sampler after the TECH INDEX closes: six windows start 3-6 s apart after a 1 s delay (19-37 s)
+const WINDOWS_SPREAD_MIN_MS = 15000;   // N_windows_stagger: the first and the last window to light are this far apart
+const WINDOW_FULL = 0.95;              // a window reads lit at this share of its own peak (the dim level is WORLD_ENV.windowDimLevel, 0.85)
+const WINDOW_RISE_MIN = 0.05;          // N_windows_stagger: a window is lit only when its series rises by this much (peak minus its first sample)
+const FLICKER_MAX = 3;                 // N_flicker: on-to-off toggles per 1 s window (the toggle gap keeps a stutter at this rate)
+const FLICKER_WINDOW_MS = 1000;
+const ERA_FADE_CAP_STEPS = 120;        // N_era_fade: 30 s of advance at most (1 s queued, then the 8 s ramp; every step adds its own rAF step on top)
+const ERA_FADE_MIN_MS = 8000;          // WORLD_TRANSITIONS.rows.eraRow.ms
+const ERA_DONE_K = 0.95;               // the last live sample before the era row leaves the list
+const DAY_BANDS = { s0: [540, 660], s9: [660, 780], s11: [780, 880], s15: [950, 1001] };   // WORLD_DAY.bands (eras I, II, III, V)
+const DAY_TINT_MINUTES = [540, 780, 950, 1001];   // WORLD_DAY.tintKeys: one hold each
+const DAY_MIN_BRIGHTNESS = 0.86;       // WORLD_DAY.minBrightness
+const DAY_HELD_MIN = 1001;             // WORLD_DAY.heldMin
+const DAY_HELD_TINT = 0xdcc3a6;        // WORLD_DAY.tintKeys: the 16:41 key
+const DEMO_DAY_MAX = 780;              // WORLD_DAY.demoMaxMin (13:00)
+const HELD_SETTLE_STEPS = 10;          // N_day_held: 10 s of advance before the sampling (the minute and the tint ease into the key)
+const HELD_STEPS = 60;                 // N_day_held: 60 s of advance sampled, one per second
+const NE_NAMES = ['N_era_fade'];
+const NS_NAMES = ['N_settle'];
+const NH_NAMES = ['N_demo_hold'];
+const NH_IDS = ['PAY-05', 'INS-07', 'GRL-06', 'DOG-12'];   // the post-cap lines in order; DOG-12 is the line that holds the dog
+const NH_CARD_CAP_MS = 70000;   // the teaser and the END OF DEMO card after the S9 buys
+const NH_LEAD_MS = 21000;       // PAY-05 is seen 21 s after the card (demo.mjs POST_CAP_FIRST_MS)
+const NH_GAP_MS = 125000;       // each later line 125 s after the one before (demo.mjs POST_CAP_GAP_MS)
+const NH_SEEN_CAP_MS = 10000;   // the seen mark of each line, polled every 250 ms
+const NH_RUN_STEPS = 4;         // one run: 4 steps of 20 s (80 s of advance)
+const NH_STEP_MS = 20000;
+const NH_INSPECTOR_MIN = 3;     // the Inspector's k grows by at least 3 in a run
+const NH_CROW_MIN = 2;          // the crow's k grows by at least 2 in a run
+const NY_DEMO_SKIP = ['N_day_tint', 'N_day_held'];
+const DEFER_IDS = ['lamp', 'booth', 'windows'];   // the transition rows the S9 power buy queues behind the TECH INDEX
+const DEFER_WINDOWS = ['window0', 'window1', 'window2', 'window3', 'window4', 'window5'];
+
+// One worldAdvance step of ms and one animation frame (the drain loop's step).
+const stepFrame = (page, ms) => page.evaluate(async (stepMs) => {
+  window.__wedtmd.worldAdvance(stepMs);
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+}, ms);
+
+// A second page in a fresh context of the same browser (its own save and settings), with the hook. The caller closes ctx.
+async function freshPage(page) {
+  const ctx = await page.context().browser().newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+  const p = await ctx.newPage();
+  watchPage(p, errors, tag);
+  await p.goto(target, { waitUntil: 'load' });
+  await waitReady(p);
+  return { ctx, page: p };
+}
+
+// Runs in the page. One sample per animation frame for ms of wall time: the TECH INDEX state, the transition queue ([id, startedAtMs, k]),
+// the prop rows ([id, alpha]) and the lamp entry of livingWorld() ([variant, alpha, visible], null without it).
+function deferSampleInPage(spec) {
+  return new Promise((resolve) => {
+    const out = [];
+    const t0 = performance.now();
+    const tick = () => {
+      const w = window.__wedtmd;
+      const lamp = (w.livingWorld() ?? []).find((e) => e.id === 'lamp');
+      out.push({
+        t: performance.now(),
+        open: w.techTreeOpen() === true,
+        tr: (w.worldTransitions() ?? []).map((x) => [x.id, x.startedAtMs, x.k]),
+        props: (w.worldProps() ?? []).map((r) => [r.id, r.alpha]),
+        lamp: lamp === undefined ? null : [lamp.variant, lamp.alpha, lamp.visible === true],
+      });
+      if (performance.now() - t0 >= spec.ms) resolve(out);
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+// Runs in the page: the lamp entry's variant and the ids the transition queue lists (queued or running).
+function deferHoldInPage() {
+  const w = window.__wedtmd;
+  const lamp = (w.livingWorld() ?? []).find((e) => e.id === 'lamp');
+  return { lamp: lamp === undefined ? null : lamp.variant, ids: (w.worldTransitions() ?? []).map((t) => t.id) };
+}
+
+// One defer run on a page: the S8 state, the TECH INDEX open with the rest of S9 bought inside and 3 s held, then the close (Escape).
+// The sampler starts before the close, so the close shows in its samples. The silence is read twice (WP24 r2): right after the buys, and
+// again after the sampling window, because the demo cap puts the world to sleep during the 3 s hold. The first non-null read counts.
+async function deferRun(page) {
+  await crankClicks(page, 45, 0);
+  const setup = await stageSetup(page, S8);
+  await page.keyboard.press('t');
+  await sleep(400);
+  const buyFail = await buyList(page, S9.slice(S8.length));
+  const silenceAfterBuys = await demoSilence(page);
+  await sleep(3000);
+  const hold = await page.evaluate(deferHoldInPage);
+  const sampling = page.evaluate(deferSampleInPage, { ms: DEFER_WINDOW_MS });
+  await sleep(200);
+  await page.keyboard.press('Escape');
+  const samples = await sampling;
+  const silence = silenceAfterBuys ?? (await demoSilence(page));
+  return { setup, buyFail, silence, hold, samples };
+}
+
+const startedRows = (s) => s.tr.filter((row) => typeof row[1] === 'number');
+const lampStartOf = (samples) => samples.findIndex((s) => s.tr.some((row) => row[0] === 'lamp' && typeof row[1] === 'number'));
+// The alpha of one prop row per sample (0 when the row is not listed).
+const alphaSeries = (samples, id) => samples.map((s) => s.props.find((row) => row[0] === id)?.[1] ?? 0);
+
+// N_defer (C8): the queue starts after the close (DEFER_START_MIN_MS, one frame of slack, wall time), its starts sit DEFER_GAP_MIN_MS apart or
+// more on the queue's own clock (startedAtMs, exact), none starts while the index is open, and the lamp, booth and windows all start.
+function deferStartsOf(samples) {
+  const closeIdx = samples.findIndex((s) => !s.open);
+  const startIdx = samples.findIndex((s) => startedRows(s).length > 0);
+  const starts = new Map();
+  for (const s of samples) for (const [id, at] of startedRows(s)) if (!starts.has(id)) starts.set(id, at);
+  const sorted = [...starts.values()].sort((a, b) => a - b);
+  const gaps = sorted.slice(1).map((v, i) => v - sorted[i]);
+  return {
+    ids: [...starts.keys()],
+    firstMs: closeIdx >= 0 && startIdx >= 0 ? samples[startIdx].t - samples[closeIdx].t : null,
+    minGapMs: gaps.length > 0 ? Math.min(...gaps) : null,
+    startedWhileOpen: samples.some((s) => s.open && startedRows(s).length > 0),
+  };
+}
+// N_windows_stagger: a window is lit when its series rises by WINDOW_RISE_MIN or more (peak minus its first sample) and reaches WINDOW_FULL of
+// its peak at a sample after the first (the rise sample). All six windows must light, one at a time: the rise samples strictly increase in
+// window order and are distinct, and the first and the last rise are WINDOWS_SPREAD_MIN_MS apart. det gives [id, rise sample, ms, peak].
+function windowLitOf(samples) {
+  const lit = [];
+  for (const id of DEFER_WINDOWS) {
+    const series = alphaSeries(samples, id);
+    if (series.length < 2) continue;
+    const peak = Math.max(...series);
+    if (peak - series[0] < WINDOW_RISE_MIN) continue;
+    const idx = series.findIndex((a, i) => i > 0 && a >= WINDOW_FULL * peak);
+    if (idx < 1) continue;
+    lit.push({ id, idx, t: samples[idx].t, peak });
+  }
+  const times = lit.map((l) => l.t);
+  const t0 = samples.length > 0 ? samples[0].t : 0;
+  return {
+    lit: lit.map((l) => l.id),
+    det: lit.map((l) => [l.id, l.idx, Math.round(l.t - t0), Math.round(l.peak * 1000) / 1000]),
+    spreadMs: times.length > 0 ? Math.max(...times) - Math.min(...times) : 0,
+    oneAtATime: lit.length >= 2 && lit.every((l, i) => i === 0 || l.idx > lit[i - 1].idx) && new Set(lit.map((l) => l.idx)).size === lit.length,
+  };
+}
+// The most event times (ascending, ms) inside any FLICKER_WINDOW_MS.
+function mostInWindow(times) {
+  let most = 0;
+  for (let i = 0; i < times.length; i++) {
+    let n = 0;
+    for (let j = i; j >= 0 && times[i] - times[j] < FLICKER_WINDOW_MS; j--) n += 1;
+    most = Math.max(most, n);
+  }
+  return most;
+}
+// N_flicker: an on-to-off toggle is a series falling through half its peak. The most toggles in any FLICKER_WINDOW_MS, per series (lamp glow,
+// booth hood, the six windows); a series that never shows is not counted (checked must be > 0). lampToggles (informational only) is the most
+// lamp variant changes (dead, lit, warm) inside one FLICKER_WINDOW_MS.
+function flickerOf(samples) {
+  const worst = {};
+  let checked = 0;
+  for (const id of ['lampGlow', 'boothHood', ...DEFER_WINDOWS]) {
+    const series = alphaSeries(samples, id);
+    const peak = Math.max(0, ...series);
+    if (peak < LIT_ALPHA) continue;
+    checked += 1;
+    const half = peak / 2;
+    const offs = [];
+    for (let i = 1; i < series.length; i++) if (series[i - 1] >= half && series[i] < half) offs.push(samples[i].t);
+    worst[id] = mostInWindow(offs);
+  }
+  const changes = [];
+  for (let i = 1; i < samples.length; i++) {
+    const a = samples[i - 1].lamp;
+    const b = samples[i].lamp;
+    if (a !== null && b !== null && a[0] !== b[0]) changes.push(samples[i].t);
+  }
+  return { checked, worst, lampToggles: mostInWindow(changes), ok: checked > 0 && Object.values(worst).every((n) => n <= FLICKER_MAX) };
+}
+// N_lamp_buzz: the lamp reads lit for good (the trailing run of lit samples) from LAMP_SETTLE_MIN_MS after its first start.
+function lampOf(samples) {
+  const startIdx = lampStartOf(samples);
+  let settleIdx = -1;
+  for (let i = samples.length - 1; i >= 0 && samples[i].lamp !== null && samples[i].lamp[0] === 'lit'; i--) settleIdx = i;
+  const settleMs = startIdx >= 0 && settleIdx >= 0 ? samples[settleIdx].t - samples[startIdx].t : null;
+  return { settleMs, ok: settleMs !== null && settleMs >= LAMP_SETTLE_MIN_MS - FRAME_SLACK_MS };
+}
+// N_flicker_reduced: under reduced motion the buzz is a plain fade. From the lamp's first start over LAMP_FADE_WINDOW_MS (the buzz and the
+// glow): the lamp glow (the lampGlow prop row) reaches FADE_GLOW_MIN, never falls by more than FADE_TOL from its first sample above LIT_ALPHA,
+// and the lamp variant changes at most once. The top sprite alpha of the lamp entry is not read (it stays near 1).
+function fadeOf(samples) {
+  const startIdx = lampStartOf(samples);
+  if (startIdx < 0) return { ok: false, n: 0, peak: null, monotone: false, variantChanges: null, variants: [] };
+  const t0 = samples[startIdx].t;
+  const win = samples.slice(startIdx).filter((s) => s.t - t0 <= LAMP_FADE_WINDOW_MS);
+  const glow = alphaSeries(win, 'lampGlow');
+  const first = glow.findIndex((a) => a > LIT_ALPHA);
+  const monotone = first >= 0 && glow.slice(first).every((a, i, arr) => i === 0 || a >= arr[i - 1] - FADE_TOL);
+  const peak = Math.max(0, ...glow);
+  const variants = win.map((s) => (s.lamp === null ? null : s.lamp[0]));
+  let variantChanges = 0;
+  for (let i = 1; i < variants.length; i++) if (variants[i] !== variants[i - 1]) variantChanges += 1;
+  return {
+    ok: win.length >= 3 && peak >= FADE_GLOW_MIN && monotone && variants.every((v) => v !== null) && variantChanges <= 1,
+    n: win.length,
+    peak: Math.round(peak * 1000) / 1000,
+    monotone,
+    variantChanges,
+    variants: [...new Set(variants)],
+  };
+}
+
+// ND (C8 N defer, WP24 D-T): the TECH INDEX holds the lamp, booth and windows. They start after the close, 600 ms apart or more; the lamp
+// buzzes before it glows; the windows light one by one; nothing flickers more than 3 times a second. Reduced motion turns the buzz into a fade.
+// Demo cap (A10): when the world is silent after the S9 buys the motion checks record value.skipped (N_defer_hold stays strict).
+async function caseND(page) {
+  const run = await deferRun(page);
+  const holdOk = run.hold.lamp === 'dead' && DEFER_IDS.every((id) => run.hold.ids.includes(id));
+  await check(page, 'N_defer_hold', run.buyFail.length === 0 && holdOk, { buyFail: run.buyFail, lamp: run.hold.lamp, ids: run.hold.ids }, true);
+  const silentRun = await skipIfSilent(page, ['N_defer_start', 'N_windows_stagger', 'N_lamp_buzz', 'N_flicker'], run.silence);
+  if (!silentRun) {
+    const d = deferStartsOf(run.samples);
+    const startOk = d.firstMs !== null && d.firstMs >= DEFER_START_MIN_MS - FRAME_SLACK_MS && d.minGapMs !== null
+      && d.minGapMs >= DEFER_GAP_MIN_MS && !d.startedWhileOpen && DEFER_IDS.every((id) => d.ids.includes(id));
+    await check(page, 'N_defer_start', startOk, { firstMs: d.firstMs, minGapMs: d.minGapMs, startedWhileOpen: d.startedWhileOpen, ids: d.ids }, true);
+    const win = windowLitOf(run.samples);
+    const staggerOk = win.lit.length === DEFER_WINDOWS.length && win.oneAtATime && win.spreadMs >= WINDOWS_SPREAD_MIN_MS;
+    await check(page, 'N_windows_stagger', staggerOk, { lit: win.lit, spreadMs: win.spreadMs, det: win.det }, true);
+    const lamp = lampOf(run.samples);
+    await check(page, 'N_lamp_buzz', lamp.ok, { settleMs: lamp.settleMs }, true);
+    const flick = flickerOf(run.samples);
+    await check(page, 'N_flicker', flick.ok, { worst: flick.worst, checked: flick.checked, lampToggles: flick.lampToggles }, true);
+  }
+
+  // The reduced-motion page: the same buys on a fresh save, then the lamp glow over the buzz-and-glow window.
+  const fresh = await freshPage(page);
+  try {
+    await fresh.page.evaluate(() => window.__wedtmd.session.updateSettings({ reducedMotion: true }));
+    await sleep(300);
+    const red = await deferRun(fresh.page);
+    if (!(await skipIfSilent(page, ['N_flicker_reduced'], red.silence))) {
+      const fade = fadeOf(red.samples);
+      await check(page, 'N_flicker_reduced', fade.ok && red.buyFail.length === 0,
+        { buyFail: red.buyFail, n: fade.n, peak: fade.peak, monotone: fade.monotone, variantChanges: fade.variantChanges, variants: fade.variants }, true);
+    }
+  } finally {
+    await fresh.ctx.close();
+  }
+}
+
+// N_era_fade: the eraRow entry per 250 ms step ({ k, durMs }; null once the row has left the list). From 0 (queued), k starts at 0.05 or
+// less, never falls, and reaches ERA_DONE_K before the row leaves. durMs, read at the first positive sample, is the ramp length and must be
+// at least ERA_FADE_MIN_MS. The ramp is not timed on the step grid: every step adds a real rAF step on top of the 250 ms.
+function eraFadeOf(rows) {
+  const ks = rows.map((r) => (r === null ? null : r.k));
+  const first = ks.findIndex((k) => k !== null);
+  if (first < 0) return { ok: false, seen: 0, monotone: false, durMs: null };
+  const rowEnd = ks.findIndex((k, i) => i > first && k === null);
+  const endIdx = rowEnd < 0 ? ks.length : rowEnd;
+  const live = ks.slice(first, endIdx);
+  const monotone = live.every((k, i) => i === 0 || k >= live[i - 1] - 1e-9);
+  const pos = ks.findIndex((k) => k !== null && k > 0);
+  const durMs = pos < 0 ? null : rows[pos].durMs;
+  const last = live[live.length - 1];
+  return {
+    seen: live.length, from: live[0] ?? null, last: last ?? null, monotone, durMs,
+    ok: live.length >= 3 && live[0] <= 0.05 && monotone && last >= ERA_DONE_K && durMs !== null && durMs >= ERA_FADE_MIN_MS,
+  };
+}
+
+// NE (C8 N era, WP24 D-T): S9, then one era III keystone bought in the TECH INDEX and the era card dismissed. The era row crossfades from 0 to 1
+// once the queue starts it; the eraRow entry is read after every 250 ms of advance.
+async function caseNE(page) {
+  if (await isDemo(page)) { skipAll(NE_NAMES); return; }
+  await crankClicks(page, 45, 0);
+  await stageSetup(page, S9);
+  const bought = await buyEra(page, ['@substationBlueprint', 'boiler']);
+  const rows = [];
+  for (let i = 0; i < ERA_FADE_CAP_STEPS; i++) {
+    await stepFrame(page, STEP_MS);
+    const row = await page.evaluate(() => {
+      const t = (window.__wedtmd.worldTransitions() ?? []).find((x) => x.id === 'eraRow');
+      return t === undefined ? null : { k: t.k, durMs: t.durMs };
+    });
+    rows.push(row);
+    if (row === null && rows.slice(0, -1).some((v) => v !== null)) break;
+  }
+  const fade = eraFadeOf(rows);
+  await check(page, 'N_era_fade', bought.length === 0 && fade.ok, { buyFail: bought, ...fade }, true);
+}
+
+// NS (C8 N settle, WP24 settle mode): S9, worldSettle(true), one era III keystone bought and the era card dismissed. The queue is empty
+// within 1 s, no runner steps for 3 s, and the day minute equals its target.
+async function caseNS(page) {
+  if (await isDemo(page)) { skipAll(NS_NAMES); return; }
+  await crankClicks(page, 45, 0);
+  await stageSetup(page, S9);
+  await page.evaluate(() => window.__wedtmd.worldSettle(true));
+  const bought = await buyEra(page, ['@substationBlueprint', 'boiler']);
+  await stepFrame(page, 1000);
+  const queued = await transitionIds(page);
+  const steps = () => page.evaluate(() => (window.__wedtmd.worldBehaviour() ?? []).map((e) => [e.id, e.step]));
+  const start = await steps();
+  let held = true;
+  for (let i = 0; i < 12; i++) {   // 3 s on the 250 ms grid
+    await stepFrame(page, STEP_MS);
+    if (JSON.stringify(await steps()) !== JSON.stringify(start)) held = false;
+  }
+  const day = await page.evaluate(() => window.__wedtmd.worldDay());
+  const dayOk = day !== null && day.min === day.target;
+  await check(page, 'N_settle', bought.length === 0 && queued.length === 0 && start.length > 0 && held && dayOk,
+    { buyFail: bought, queued, runners: start.length, held, day }, true);
+}
+
+// Day read: one advance step of ms, then the presented minute and its target (null without the layer).
+async function dayRead(page, ms) {
+  return page.evaluate(async (stepMs) => {
+    const w = window.__wedtmd;
+    w.worldAdvance(stepMs);
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    const d = w.worldDay();
+    return d ? { min: d.min, target: d.target } : null;
+  }, ms);
+}
+// The tint at one hold of the minute: 3 s of advance so the presented tint eases to its key (the hold pins the minute).
+async function holdTint(page, min) {
+  return page.evaluate(async (m) => {
+    const w = window.__wedtmd;
+    w.worldDayHold(m);
+    for (let i = 0; i < 12; i++) {
+      w.worldAdvance(250);
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    }
+    const d = w.worldDay();
+    return d ? { hold: m, min: d.min, tint: d.tint } : null;
+  }, min);
+}
+// R >= G >= B (no blue cast) and max(R, G, B) / 255 >= DAY_MIN_BRIGHTNESS (at most 14 % darker than neutral).
+function tintOk(rgb) {
+  const r = (rgb >> 16) & 255;
+  const g = (rgb >> 8) & 255;
+  const b = rgb & 255;
+  return r >= g && g >= b && Math.max(r, g, b) / 255 >= DAY_MIN_BRIGHTNESS;
+}
+
+// NY (C8 N day, WP24 D3 / A4): the target rises through the bands from the recorded Tuesday toward 16:41 and the minute never falls. The
+// demo edition refuses era III, so there the target stays at or under the demo cap and the tint checks are skipped.
+async function caseNY(page) {
+  const demo = await isDemo(page);
+  const s0 = await dayRead(page, 1000);   // no crank and no purchase yet: a cranked ME moves the day
+  await crankClicks(page, 45, 0);
+  const f9 = await stageSetup(page, S9);
+  const s9 = await dayRead(page, 5000);
+  const f11 = await stageSetup(page, S11.slice(S9.length));
+  const s11 = await dayRead(page, 5000);
+  if (demo) {
+    await check(page, 'N_day_bands', s11 !== null && s11.target <= DEMO_DAY_MAX, { demoMax: DEMO_DAY_MAX, s0, s9, s11, buyFail: f11 }, true);
+    skipAll(NY_DEMO_SKIP);
+    return;
+  }
+  const f15 = [...(await stageSetup(page, S13.slice(S11.length))), ...(await stageSetup(page, S14.slice(S13.length))),
+    ...(await stageSetup(page, S15.slice(S14.length)))];
+  const s15 = await dayRead(page, 5000);
+  const reads = [s0, s9, s11, s15];
+  const inBand = (r, [lo, hi]) => r !== null && r.target >= lo && r.target <= hi;
+  const bands = inBand(s0, DAY_BANDS.s0) && inBand(s9, DAY_BANDS.s9) && inBand(s11, DAY_BANDS.s11) && inBand(s15, DAY_BANDS.s15);
+  const rising = reads.every((r, i) => r !== null && (i === 0 || (reads[i - 1] !== null && r.target > reads[i - 1].target)));
+  const mins = reads.map((r) => (r === null ? null : r.min));
+  const minsOk = mins.every((m, i) => m !== null && (i === 0 || (mins[i - 1] !== null && m >= mins[i - 1])));
+  await check(page, 'N_day_bands', bands && rising && minsOk && f9.length === 0 && f11.length === 0 && f15.length === 0,
+    { s0, s9, s11, s15, buyFail: [...f9, ...f11, ...f15] }, true);
+
+  const tints = [];
+  for (const m of DAY_TINT_MINUTES) tints.push(await holdTint(page, m));
+  await page.evaluate(() => window.__wedtmd.worldDayHold(null));
+  const tintsOk = tints.every((t) => t !== null && tintOk(t.tint));
+  await check(page, 'N_day_tint', tintsOk,
+    { tints: tints.map((t) => (t === null ? null : { hold: t.hold, min: t.min, tint: `0x${t.tint.toString(16).padStart(6, '0')}` })) }, true);
+
+  // N_day_held: the postgame on a fresh save (KEEP IT RUNNING after the skipped film, as case K): the minute holds 1001, the tint is the 16:41
+  // key and the wind is 0 over HELD_STEPS seconds of advance (after the settle steps).
+  const fresh = await freshPage(page);
+  try {
+    await toChoice(fresh.page, false);
+    await fresh.page.locator('button', { hasText: 'KEEP IT RUNNING' }).first().click({ timeout: 8000 });
+    for (let i = 0; i < HELD_SETTLE_STEPS; i++) await stepFrame(fresh.page, 1000);
+    const held = [];
+    for (let i = 0; i < HELD_STEPS; i++) {
+      await stepFrame(fresh.page, 1000);
+      held.push(await fresh.page.evaluate(() => window.__wedtmd.worldDay()));
+    }
+    const heldOk = held.every((d) => d !== null && d.min === DAY_HELD_MIN && d.tint === DAY_HELD_TINT && Math.abs(d.wind) < 1e-6);
+    await check(page, 'N_day_held', heldOk, { samples: held.length, last: held[held.length - 1] ?? null }, true);
+  } finally {
+    await fresh.ctx.close();
+  }
+}
+
+// NH (WP24 r3, demo hold guard): DOG-12 suspends the dog runner only. Demo edition: the S9 buys open the END OF DEMO card, KEEP TINKERING,
+// then PAY-05, INS-07, GRL-06 and DOG-12 are seen (worldAdvance, as demo.mjs case G). Over 80 s of advance the Inspector and the crow keep
+// stepping (worldBehaviour k) and the dog reads `lie`: right away, and again after a save and a reload (the seen state comes back from the save).
+async function caseNH(page) {
+  if (!(await isDemo(page))) { skipAll(NH_NAMES, 'full edition: the demo hold exists only in the demo build'); return; }
+  const advance = (ms) => page.evaluate((m) => window.__wedtmd.worldAdvance(m), ms);
+  const seenEver = () => page.evaluate(() => window.__wedtmd.worldState()?.seenEver ?? []);
+  const read = () => page.evaluate(() => {
+    const w = window.__wedtmd;
+    const beh = w.worldBehaviour() ?? [];
+    const k = (id) => beh.find((e) => e.id === id)?.k ?? null;
+    return { inspector: k('inspector'), crow: k('crow'), dog: (w.livingWorld() ?? []).find((e) => e.id === 'dog')?.variant ?? null };
+  });
+  // One run: the readings before and after the 80 s of advance (4 x 20 s, 400 ms settle after each step).
+  const run = async () => {
+    const before = await read();
+    for (let i = 0; i < NH_RUN_STEPS; i++) {
+      await advance(NH_STEP_MS);
+      await sleep(400);
+    }
+    return { before, after: await read() };
+  };
+
+  await crankClicks(page, 45, 0);
+  const buyFail = await buyList(page, [...S9, '@substationBlueprint']);
+  // The cap: the teaser runs, then the END OF DEMO card (phase 'card') opens. Polled every 100 ms up to NH_CARD_CAP_MS.
+  const cardDeadline = Date.now() + NH_CARD_CAP_MS;
+  let phase = await page.evaluate(() => window.__wedtmd.demoState()?.phase ?? null);
+  while (phase !== 'card' && Date.now() < cardDeadline) {
+    await sleep(100);
+    phase = await page.evaluate(() => window.__wedtmd.demoState()?.phase ?? null);
+  }
+  if (phase !== 'card') {
+    await check(page, 'N_demo_hold', false, { cardOpened: false, phase, buyFail }, true);
+    return;
+  }
+  await page.evaluate(() => document.getElementById('demo-keep').click());
+  await advance(NH_LEAD_MS);
+  for (let i = 0; i < NH_IDS.length; i++) {
+    if (i > 0) await advance(NH_GAP_MS);
+    const seenDeadline = Date.now() + NH_SEEN_CAP_MS;
+    while (!(await seenEver()).includes(NH_IDS[i]) && Date.now() < seenDeadline) await sleep(250);
+  }
+  const seenNow = await seenEver();
+  const seen = NH_IDS.filter((id) => seenNow.includes(id));
+
+  const first = await run();
+  // Save and reload: the seen state comes back from the save, and the dog must still hold in the second run.
+  await page.evaluate(() => window.__wedtmd.saveNow());
+  await page.reload({ waitUntil: 'load' });
+  await waitReady(page);
+  const second = await run();
+  const grew = (a, b, min) => a !== null && b !== null && b - a >= min;
+  const holds = (r) => grew(r.before.inspector, r.after.inspector, NH_INSPECTOR_MIN) && grew(r.before.crow, r.after.crow, NH_CROW_MIN)
+    && r.after.dog === 'lie';
+  await check(page, 'N_demo_hold', holds(first) && holds(second), {
+    seen, buyFail, before: first.before, after: first.after, reload: { before: second.before, after: second.after },
+  }, true);
+}
+
 // One fresh context per case. Errors are tagged with the case key that is current when they happen.
 // An exception becomes FAILED:<case>:<message> in fail. viewport defaults to 1280x720 (F23 runs at 1280x800).
 async function runCase(browser, key, fn, viewport = { width: 1280, height: 720 }) {
@@ -1426,8 +2482,8 @@ async function runCase(browser, key, fn, viewport = { width: 1280, height: 720 }
   }
 }
 
-// ONLY (env): a comma list of case keys to run alone (A B C D E F G H I M J JR K L F23); unset runs every case. An unknown key exits 2.
-const CASE_KEYS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'M', 'J', 'JR', 'K', 'L', 'F23'];
+// ONLY (env): a comma list of case keys to run alone (A B C D E F G H I M J JR K L NV NC NT NU NK ND NE NY NS NH F23); unset runs every case. An unknown key exits 2.
+const CASE_KEYS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'M', 'J', 'JR', 'K', 'L', 'NV', 'NC', 'NT', 'NU', 'NK', 'ND', 'NE', 'NY', 'NS', 'NH', 'F23'];
 const ONLY = (process.env.ONLY ?? '').split(',').map((k) => k.trim()).filter((k) => k !== '');
 const badKey = ONLY.find((k) => !CASE_KEYS.includes(k));
 if (badKey !== undefined) {
@@ -1454,6 +2510,16 @@ try {
   if (runs('JR')) await runCase(browser, 'JR', caseJR);
   if (runs('K')) await runCase(browser, 'K', caseK);
   if (runs('L')) await runCase(browser, 'L', caseL);
+  if (runs('NV')) await runCase(browser, 'NV', caseNV);
+  if (runs('NC')) await runCase(browser, 'NC', caseNC);
+  if (runs('NT')) await runCase(browser, 'NT', caseNT);
+  if (runs('NU')) await runCase(browser, 'NU', caseNU);
+  if (runs('NK')) await runCase(browser, 'NK', caseNK);
+  if (runs('ND')) await runCase(browser, 'ND', caseND);
+  if (runs('NE')) await runCase(browser, 'NE', caseNE);
+  if (runs('NY')) await runCase(browser, 'NY', caseNY);
+  if (runs('NS')) await runCase(browser, 'NS', caseNS);
+  if (runs('NH')) await runCase(browser, 'NH', caseNH);
   if (runs('F23')) await runCase(browser, 'F23', caseF23, { width: 1280, height: 800 });
 } catch (e) {
   fail.push(`FAILED:setup:${firstLine(e)}`);

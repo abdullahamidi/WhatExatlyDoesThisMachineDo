@@ -188,6 +188,7 @@ try {
     const buyFailed = (await fastForward(S15)).filter(x => x.endsWith(':false'));
     check(buyFailed.length === 0, `showcase_A buys failed: ${buyFailed.join(',')}`);
     // Era V sky (skyViolet) fades for ~12 s after the instant buy list
+    await page.evaluate(() => window.__wedtmd?.worldSettle?.(true));
     await page.waitForTimeout(15000);
     const entered = await photoMode(true, { hint: false });
     await page.waitForTimeout(1200);
@@ -214,6 +215,7 @@ try {
     await open();
     const buyFailed = failedBuys(await fastForward(GREEDY));
     check(buyFailed.length === 0, `showcase_B buys failed: ${buyFailed.join(',')}`);
+    await page.evaluate(() => window.__wedtmd?.worldSettle?.(true));
     await page.waitForTimeout(15000);
     const primaryFunction = await buyList(['primaryFunction']);
     check(primaryFunction.includes('primaryFunction:true'), `showcase_B primaryFunction ${primaryFunction.join(',')}`);

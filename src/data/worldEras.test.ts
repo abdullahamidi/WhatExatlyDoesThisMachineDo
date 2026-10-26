@@ -24,7 +24,7 @@ const ENDING_SRC = readFileSync(new URL('./worldEnding.ts', import.meta.url), 'u
 const KNOWN_TECH: readonly string[] = TECH_IDS;
 const onSheet = (sheet: WorldSheetId, frame: string): boolean => WORLD_FRAMES[sheet].includes(frame);
 // Face-on or hidden Inspector frames: no clipboard overlay on them (AD3a notes, scripts/art/world/README.md).
-const FACE_ON_FRAMES = ['front', 'talk', 'frontUmbrella', 'talkUmbrella', 'shield', 'umbrellaOpen'];
+const FACE_ON_FRAMES = ['front', 'talk', 'frontUmbrella', 'talkUmbrella', 'shield', 'umbrellaOpen', 'umbrellaHalf'];
 // The segment that covers second s of a 90 s loop (fromS <= s < toS), and the segments that move (dx or dy change).
 const segAt = (segs: readonly PostgameSegment[], s: number): PostgameSegment | undefined => segs.find((seg) => s >= seg.fromS && s < seg.toS);
 const movingOf = (segs: readonly PostgameSegment[]): PostgameSegment[] => segs.filter((seg) => seg.dxFrom !== seg.dxTo || seg.dyFrom !== seg.dyTo);
@@ -141,7 +141,7 @@ describe('worldEras: tech rules', () => {
   });
 
   it('pins the era IV rise, the era V shadow slide and the downbeat era', () => {
-    expect(WORLD_ERA_ENV.riseWorldPx).toBe(1);
+    expect(WORLD_ERA_ENV.riseWorldPx).toBe(2);
     expect(WORLD_ERA_ENV.shadowSlideWorldPx).toBe(4);
     expect(WORLD_ERA_ENV.shadowSlideMs).toBe(500);
     expect(WORLD_ERA_ENV.downbeatEra).toBe(4);

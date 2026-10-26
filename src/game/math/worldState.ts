@@ -115,10 +115,18 @@ export function girlStepsOf(levels: TechLevels): number {
   return WORLD_GIRL.steps.filter((rule) => ruleMet(levels, rule)).length;
 }
 
-// Hole stage (bible §10): none before the load-beneath EE; then motorRetrofit tier - tierOffset, kept in minStage..maxStage.
-// NaN EE means no hole; a non-finite tier counts as 0.
-function holeStageOf(lifetimeEe: number, tier: number): number {
-  if (!(lifetimeEe >= WORLD_HOLE.loadBeneathEe)) return 0;
+const GATE_EE = 1;   // lifetime EE >= WORLD_HOLE.loadBeneathEe
+const GATE_PR = 2;   // lifetime PR >= WORLD_VIRGA.minLifetimePr
+
+// The only lifetime thresholds deriveWorldState reads; the director's plan memo keys on it. NaN passes neither gate.
+export function lifetimeGatesOf(ee: number, pr: number): number {
+  return (ee >= WORLD_HOLE.loadBeneathEe ? GATE_EE : 0) | (pr >= WORLD_VIRGA.minLifetimePr ? GATE_PR : 0);
+}
+
+// Hole stage (bible §10): none unless the GATE_EE bit is set; then motorRetrofit tier - tierOffset, kept in minStage..maxStage.
+// A non-finite tier counts as 0.
+function holeStageOf(loaded: boolean, tier: number): number {
+  if (!loaded) return 0;
   const t = Number.isFinite(tier) ? Math.floor(tier) : 0;
   return Math.min(WORLD_HOLE.maxStage, Math.max(WORLD_HOLE.minStage, t - WORLD_HOLE.tierOffset));
 }
@@ -193,9 +201,9 @@ function chladniOf(levels: TechLevels, era: WorldEra, tiers: PartTiers | undefin
   return tierEntry(levels, WORLD_CHLADNI.techId, tiers, WORLD_CHLADNI.intensityByTier)?.intensity ?? 0;
 }
 
-// Virga: the lifetime PR gate, from era III; falls, then freezes (era IV), then fades (era V).
-function virgaOf(era: WorldEra, lifetimePr: number): VirgaMode {
-  if (era < WORLD_VIRGA.minEra || !(lifetimePr >= WORLD_VIRGA.minLifetimePr)) return 'off';
+// Virga: the lifetime PR gate (GATE_PR), from era III; falls, then freezes (era IV), then fades (era V).
+function virgaOf(era: WorldEra, gated: boolean): VirgaMode {
+  if (era < WORLD_VIRGA.minEra || !gated) return 'off';
   return era === WORLD_VIRGA.minEra ? 'fall' : era === WORLD_VIRGA.frozenEra ? 'frozen' : 'fade';
 }
 
@@ -212,7 +220,8 @@ export function deriveWorldState(i: WorldStateInput): WorldVisualState {
   const generator = owned(levels, 'generator');
   const powerLines = owned(levels, 'powerLines');
   const vents = era >= WORLD_VENTS.minEra && owned(levels, WORLD_VENTS.techId);
-  const holeStage = holeStageOf(i.lifetimeEe, i.motorRetrofitTier);
+  const gates = lifetimeGatesOf(i.lifetimeEe, i.lifetimePr ?? 0);
+  const holeStage = holeStageOf((gates & GATE_EE) !== 0, i.motorRetrofitTier);
   const girlStage = girlStageOf(era, cycle);
   const girlStageName = WORLD_GIRL.stageNames[girlStage];
   const windowsLit = windowsLitOf(levels, era);
@@ -262,7 +271,7 @@ export function deriveWorldState(i: WorldStateInput): WorldVisualState {
       chladni: chladniOf(levels, era, tiers),
       chladniViolet: era === WORLD_ERA_RULES.chladniVioletEra,
       pages: era >= WORLD_PAGES.startEra,
-      virga: virgaOf(era, i.lifetimePr ?? 0),
+      virga: virgaOf(era, (gates & GATE_PR) !== 0),
     },
     sensor: {
       led: generator ? 'amber' : 'red',

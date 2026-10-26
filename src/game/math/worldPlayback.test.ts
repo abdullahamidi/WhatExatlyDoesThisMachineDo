@@ -1,14 +1,15 @@
 // Tests for worldPlayback (WP23a, WP23b): the playback ladder (mode, fps, cast alpha, shadow scale), the tape clock (crank and fps
 // modes, fractions, freeze, reset), loop frames with the seam skip and the reverse mirror (WP23b), sheet frame indices (era rows and
-// fixed sheets), the window flicker, the mote orbit, the Sensor 7 head, the downbeat edge (WP23b) and the tally marks. Pure maths, no Phaser.
+// fixed sheets), the window flicker, the Sensor 7 head, the downbeat edge (WP23b) and the tally marks. Pure maths, no Phaser.
+// The mote orbit moved to worldDay (WP24 r1-FX3): its tests live in worldDay.test.ts.
 import { describe, it, expect } from 'vitest';
 import {
   playbackMode, playbackFps, castAlpha, shadowScale, createTapeClock, loopFrameAt, sheetFrameIndex, windowFlicker,
-  moteOrbit, sensorHead, isDownbeat, tallyRects,
+  sensorHead, isDownbeat, tallyRects,
 } from './worldPlayback';
 import type { Rect } from './worldPlacement';
-import { WORLD_ENV, WORLD_ERA_ROW_SHEETS, WORLD_FRAMES, WORLD_LOOPS, WORLD_MARKS } from '../../data/livingWorld';
-import type { LoopFrame } from '../../data/livingWorld';
+import { WORLD_ENV, WORLD_ERA_ROW, WORLD_ERA_ROW_SHEETS, WORLD_FRAMES, WORLD_LOOPS, WORLD_MARKS } from '../../data/livingWorld';
+import type { LoopFrame, WorldSheetId } from '../../data/livingWorld';
 
 describe('playbackMode', () => {
   it('is crank in era I until wornMotor is owned (level 0 is not owned)', () => {
@@ -254,11 +255,13 @@ describe('sheetFrameIndex', () => {
     expect(sheetFrameIndex('inspector', 'talk', 0)).toBe(10);
   });
 
-  it('offsets by row × frames per row (inspector 19 frames, dog 20)', () => {
-    expect(sheetFrameIndex('inspector', 'idleA', 1)).toBe(19);
-    expect(sheetFrameIndex('inspector', 'talk', 1)).toBe(29);
-    expect(sheetFrameIndex('dog', 'sit0', 2)).toBe(40);
-    expect(sheetFrameIndex('inspector', 'idleA', 5)).toBe(95);
+  it('offsets by row × frames per row (the sheet frame count from WORLD_FRAMES)', () => {
+    const inspector = WORLD_FRAMES.inspector.length;
+    const dog = WORLD_FRAMES.dog.length;
+    expect(sheetFrameIndex('inspector', 'idleA', 1)).toBe(inspector);
+    expect(sheetFrameIndex('inspector', 'talk', 1)).toBe(inspector + WORLD_FRAMES.inspector.indexOf('talk'));
+    expect(sheetFrameIndex('dog', 'sit0', 2)).toBe(2 * dog);
+    expect(sheetFrameIndex('inspector', 'idleA', 5)).toBe(5 * inspector);
   });
 
   it('reads every era-row sheet in every row (first and last frame)', () => {
@@ -274,10 +277,26 @@ describe('sheetFrameIndex', () => {
   });
 
   it('clamps the era row to 0..5 and floors fractions', () => {
-    expect(sheetFrameIndex('inspector', 'idleA', 9)).toBe(95);
+    const inspector = WORLD_FRAMES.inspector.length;
+    expect(sheetFrameIndex('inspector', 'idleA', 9)).toBe(5 * inspector);
     expect(sheetFrameIndex('inspector', 'idleA', -2)).toBe(0);
-    expect(sheetFrameIndex('inspector', 'idleA', 1.9)).toBe(19);
-    expect(sheetFrameIndex('inspector', 'idleA', Infinity)).toBe(95);
+    expect(sheetFrameIndex('inspector', 'idleA', 1.9)).toBe(inspector);
+    expect(sheetFrameIndex('inspector', 'idleA', Infinity)).toBe(5 * inspector);
+  });
+
+  it('matches an inline indexOf reference for every frame of every sheet, every era row and NaN', () => {
+    const eraRowSheets: readonly string[] = WORLD_ERA_ROW_SHEETS;
+    for (const sheet of Object.keys(WORLD_FRAMES) as WorldSheetId[]) {
+      const frames = WORLD_FRAMES[sheet];
+      for (const name of frames) {
+        for (const eraRow of [0, 1, 2, 3, 4, 5, Number.NaN]) {
+          const column = frames.indexOf(name);
+          const want = Number.isNaN(eraRow) ? 0 : Math.floor(eraRow);
+          const row = eraRowSheets.includes(sheet) ? Math.min(WORLD_ERA_ROW.whole, Math.max(0, want)) : 0;
+          expect(sheetFrameIndex(sheet, name, eraRow), `${sheet} ${name} ${eraRow}`).toBe(row * frames.length + column);
+        }
+      }
+    }
   });
 
   it('keeps a fixed sheet in row 0 whatever the era row', () => {
@@ -285,6 +304,13 @@ describe('sheetFrameIndex', () => {
     expect(sheetFrameIndex('clock', 'restored', 5)).toBe(1);
     expect(sheetFrameIndex('girlWindow', 'dark', 3)).toBe(2);
     expect(sheetFrameIndex('windowLit', 'breathe', 2)).toBe(1);
+  });
+
+  it('names the sheet and the frame in the unknown-frame error, also for names an object inherits', () => {
+    expect(() => sheetFrameIndex('dog', 'nope', 0)).toThrow("sheetFrameIndex: 'nope' is not a frame of 'dog'");
+    for (const name of ['constructor', 'toString', '__proto__']) {
+      expect(() => sheetFrameIndex('dog', name, 0), name).toThrow(`sheetFrameIndex: '${name}' is not a frame of 'dog'`);
+    }
   });
 
   it('throws on an unknown frame name', () => {
@@ -342,40 +368,6 @@ describe('windowFlicker', () => {
     for (let k = 0; k < 20; k++) holds.add(windowFlicker(k, seed).holdMs);
     expect(holds.size).toBeGreaterThan(1);
     expect(windowFlicker(3, seed).holdMs).not.toBe(windowFlicker(3, seed + 1).holdMs);
-  });
-});
-
-describe('moteOrbit', () => {
-  const { orbitRadiusPx: rx, count, periodMs } = WORLD_ENV.motes;
-
-  it('puts mote 0 on the right end of the ellipse at t 0', () => {
-    expect(moteOrbit(0, 0)).toEqual({ dx: rx, dy: 0 });
-  });
-
-  it('spaces the motes evenly by phase i / count', () => {
-    expect(moteOrbit(1, 0)).toEqual({ dx: 4, dy: 7 });
-    expect(moteOrbit(2, 0)).toEqual({ dx: -11, dy: 4 });
-  });
-
-  it('gives whole numbers and never -0', () => {
-    expect(moteOrbit(0, periodMs / 4)).toEqual({ dx: 0, dy: 7 });
-    expect(moteOrbit(0, (3 * periodMs) / 4)).toEqual({ dx: 0, dy: -7 });
-  });
-
-  it('stays inside the ellipse (half radius up and down)', () => {
-    for (let i = 0; i < count; i++) {
-      for (let t = 0; t <= periodMs; t += 250) {
-        const { dx, dy } = moteOrbit(i, t);
-        expect(Math.abs(dx)).toBeLessThanOrEqual(rx);
-        expect(Math.abs(dy)).toBeLessThanOrEqual(rx / 2);
-      }
-    }
-  });
-
-  it('repeats every period', () => {
-    for (const t of [0, 500, 1000, 2000]) {
-      expect(moteOrbit(2, t + periodMs)).toEqual(moteOrbit(2, t));
-    }
   });
 });
 

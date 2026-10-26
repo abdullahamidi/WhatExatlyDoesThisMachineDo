@@ -1,6 +1,6 @@
 // World playback maths (WP23a): the playback ladder per era (mode, fps, cast alpha, shadow scale), the tape clock that steps the
-// loops (crank or fps, with freeze), loop frame (seam, reverse) and sheet column lookups, the window flicker hold, the mote
-// orbit, the Sensor 7 head and downbeat edge, and the tally marks on the booth pane. Why: the renderers draw these; the tape
+// loops (crank or fps, with freeze), loop frame (seam, reverse) and sheet column lookups, the window flicker hold, the Sensor 7
+// head and downbeat edge, and the tally marks on the booth pane. Why: the renderers draw these; the tape
 // grammar is one tested rule (bible §3.0, DENIZEN_ART §1.6 and §5), and every number comes from src/data/livingWorld.ts.
 // Pure: no Phaser, no DOM. Art px unless a name says world px.
 import type { TechId } from '../../data/types';
@@ -19,10 +19,6 @@ const MAX_ERA_ROW: number = Math.max(...Object.values(WORLD_ERA_ROW));
 function hash01(a: number, b: number): number {
   const f = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
   return f - Math.floor(f);
-}
-// Whole number, never -0 (Math.round of a small negative gives -0).
-function roundZero(v: number): number {
-  return Math.round(v) + 0;
 }
 // Non-negative finite number, else 0.
 function nonNeg(v: number): number {
@@ -125,14 +121,27 @@ export function isDownbeat(prevLow: boolean, low: boolean): boolean {
   return prevLow && !low;
 }
 
+// Column of each frame name in a sheet: the first column of a name (what indexOf finds). Built once from WORLD_FRAMES.
+function frameColumns(frames: readonly string[]): Map<string, number> {
+  const columns = new Map<string, number>();
+  frames.forEach((name, column) => {
+    if (!columns.has(name)) columns.set(name, column);
+  });
+  return columns;
+}
+// Column maps per sheet and the era-row sheets as a set. sheetFrameIndex runs about a dozen times a frame, so it reads these.
+const SHEET_COLUMNS = new Map<WorldSheetId, Map<string, number>>();
+for (const sheet of Object.keys(WORLD_FRAMES) as WorldSheetId[]) SHEET_COLUMNS.set(sheet, frameColumns(WORLD_FRAMES[sheet]));
+const ERA_ROW_SHEET_SET = new Set<WorldSheetId>(WORLD_ERA_ROW_SHEETS);
+
 // Index of a named frame in a sheet: row × frames per row + column. Era-row sheets take eraRow (floored, clamped to 0..5);
 // other sheets are one row (row 0). An unknown frame name throws.
 export function sheetFrameIndex(sheet: WorldSheetId, name: string, eraRow: number): number {
+  const column = SHEET_COLUMNS.get(sheet)?.get(name);
+  if (column === undefined) throw new Error(`sheetFrameIndex: '${name}' is not a frame of '${sheet}'`);
   const frames = WORLD_FRAMES[sheet];
-  const column = frames.indexOf(name);
-  if (column < 0) throw new Error(`sheetFrameIndex: '${name}' is not a frame of '${sheet}'`);
   const want = Number.isNaN(eraRow) ? 0 : Math.floor(eraRow);
-  const row = WORLD_ERA_ROW_SHEETS.includes(sheet) ? Math.min(MAX_ERA_ROW, Math.max(0, want)) : 0;
+  const row = ERA_ROW_SHEET_SET.has(sheet) ? Math.min(MAX_ERA_ROW, Math.max(0, want)) : 0;
   return row * frames.length + column;
 }
 
@@ -142,16 +151,6 @@ export function windowFlicker(k: number, seed: number): { holdMs: number; frame:
   const holdMs = lo + (hi - lo) * hash01(k, seed);
   const parity = ((Math.floor(k) % 2) + 2) % 2;
   return { holdMs, frame: parity === 0 ? 'flickerA' : 'flickerB' };
-}
-
-// Mote i on the lamp's ellipse (radius orbitRadiusPx across, half of it up and down) at time tMs: period periodMs, phase i / count.
-export function moteOrbit(i: number, tMs: number): { dx: number; dy: number } {
-  const { orbitRadiusPx, count, periodMs } = WORLD_ENV.motes;
-  const angle = 2 * Math.PI * (tMs / periodMs + i / count);
-  return {
-    dx: roundZero(orbitRadiusPx * Math.cos(angle)),
-    dy: roundZero((orbitRadiusPx / 2) * Math.sin(angle)),
-  };
 }
 
 // Sensor 7 head pose from the camera centre x: right of the sensor by more than the range looks right, left by more looks left,

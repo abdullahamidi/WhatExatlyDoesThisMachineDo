@@ -19,7 +19,7 @@
   "bundle": {
     "appRawKb": 500,
     "phaserKb": 1500,
-    "lazyWorldKb": 120,
+    "lazyWorldKb": 210,
     "cssKb": 45,
     "publicAssetsKb": 8000
   },
@@ -30,7 +30,7 @@
     "appGzipKb": "report-only since WP15R (program D7: raw sizes only; desktop build)",
     "appRawKb": "raised 340->400 (D7: WP17 + demo UI), 400->460 (Director 2026-10-23: WP18-WP21 showcase/shell/UX/demo; desktop build loads from local asar, bootMs is the real gate); WP23a measured 402.8 -> 438.3 KB (+35.5; WP23 A12 estimated +15 before the director was split into a lazy chunk; total JS +104 KB raw, still under 460, bootMs 543 ms); 460->500 (Director 2026-10-25, WP22 + WP23a merge: 471.4 KB measured = WP22 tiers +32 and WP23a world glue +36 on 402.8; WP23b adds era III-V data; bootMs stays the real gate)",
     "cssKb": "raised 30->40 (WP19 shell css: title, credits, crash overlay, splash, storage warning), 40->44 (Director 2026-10-23, WP21 D10 sign-off: dist-demo counts the lazy demoEnd css chunk 2.75 KB; full dist 39.0 KB), 44->45 (Director 2026-10-24, WP23 DD3: world voice bubble css ~0.8 KB; demo was 42.8); WP23a worldVoice.css about 1.0 KB: full 41.0, demo 43.7 KB",
-    "lazyWorldKb": "WP23a (Director 2026-10-25): the living world director, cast / prop renderers and bubble controller load as the lazy chunk LivingWorldDirector-*.js (68.7 KB measured, limit 80); the app chunk keeps only the data, maths, save and UI glue; WP23b (raised 80 -> 120 by the WP23b EM in review round 2; Director confirmed 2026-10-25: lazy chunk, loaded after create from the local asar, bootMs unaffected): the eras III-V cast / props / atmos renderers, the finale film, the postgame loop and CastExtras grew the chunk to 113.7 KB measured; limit 80 -> 120. It loads with the World scene off the boot critical path; appRawKb (483 / 500) and bootMs (652 ms / 3000) stay gated",
+    "lazyWorldKb": "WP23a (Director 2026-10-25): the living world director, cast / prop renderers and bubble controller load as the lazy chunk LivingWorldDirector-*.js (68.7 KB measured, limit 80); the app chunk keeps only the data, maths, save and UI glue; WP23b (raised 80 -> 120 by the WP23b EM in review round 2; Director confirmed 2026-10-25: lazy chunk, loaded after create from the local asar, bootMs unaffected): the eras III-V cast / props / atmos renderers, the finale film, the postgame loop and CastExtras grew the chunk to 113.7 KB measured; limit 80 -> 120. It loads with the World scene off the boot critical path; appRawKb (483 / 500) and bootMs (652 ms / 3000) stay gated; WP24 (Director 2026-10-26, plan D13): 120 -> 140 for the behaviour runners, day clock and transition queue (116.6 KB measured before WP24); WP24 (raised 140 -> 210 by the WP24 EM in round 4; Director confirmed 2026-10-26, plan Revision 5); measured 202.7 KB at round 4 and 204.6 KB after fixes F1-F3, in both dist and dist-demo: behaviour runners, transition queue, day and weather clocks, micro schedules and the era-row renderers live in the lazy chunk, off the boot path; appRawKb (485.2 / 500) and bootMs (about 663 ms of 3000) stay gated",
     "cycleDisplayPct": "vs the pre-cycle display list (parts are hidden, not destroyed)"
   }
 }

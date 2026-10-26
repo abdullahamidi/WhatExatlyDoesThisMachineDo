@@ -1,12 +1,11 @@
-// Living world cast renderer (WP23a, WP23b): the Inspector, the Dog, the Crow and the Girl (ground stage) as pooled sprites on the back
-// and front ground rows, Sensor 7 (tripod, head, readout, lens fog and the LED), their flat shadows, and the tape playback of their loops
-// with the turn, glance, failed-sync, notice and ripple effects. Eras III-V (WP23b) follow the visual state: vent, shake, roam and perch
-// loops, the stare, the reverse in era V, the downbeat accents and the ripples. The finale film (setScript) draws every member from its
-// frame; snapAll holds the front poses; CastExtras draws the clipboard, red ball and double exposures. Why: the cast draws what the
-// tested maths decide
-// (worldPlayback, worldTurn, worldState, worldPlacement); every sprite, shadow and tracking texture is created once here and shown or
-// hidden afterwards (WP23 D5). Numbers come from src/data. Reduced motion follows STORY_BIBLE 7.7: no tracking line, no mains flicker,
-// no ripple, no crow beat rise; the beat-snapped accent poses, the crank stepping, the ambient loops and the notices stay.
+// Living world cast renderer (WP23a, WP23b, WP24): the Inspector, the Dog, the Crow and the Girl (ground stage) as pooled sprites on the back
+// and front ground rows, Sensor 7 (tripod, head, readout, lens fog and the LED) and their flat shadows. Each walker draws its behaviour
+// runner frame (WP24 C2), stared through stareFrame, with the umbrella pose set under the open umbrella (R9); the turn, glance,
+// failed-sync, notice and ripple effects sit on top, and busy() tells the director when a runner must hold. The finale film (setScript)
+// draws every member from its frame; snapAll holds the front poses; CastExtras draws the clipboard, red ball and double exposures.
+// Why: the cast draws what the tested maths decide (worldBehaviour, worldTransitions, worldState, worldPlacement); every sprite, shadow
+// and tracking texture is created once here and shown or hidden afterwards (WP23 D5). Numbers come from src/data. Reduced motion follows
+// STORY_BIBLE 7.7: no tracking line, no mains flicker, no ripple, no crow beat rise; the snap poses, the notices and the runners stay.
 // Rendering only: no economy state is read or written.
 import Phaser from 'phaser';
 import { ASSET_MANIFEST } from '../../assets/manifest';
@@ -14,18 +13,24 @@ import type { AssetId } from '../../assets/assetIds';
 import { AUDIO } from '../../data/audio';
 import { PALETTE } from '../../data/palette';
 import { MACHINE_ANCHOR, PIXEL_SCALE } from '../../data/world';
-import { WORLD_DEPTH_OFFSETS, WORLD_ENV, WORLD_LOOPS, WORLD_PLAYBACK, WORLD_ROWS, WORLD_SHADOW_WIDTHS, WORLD_SHEET_KEYS } from '../../data/livingWorld';
-import type { DenizenId, GroundId, LoopFrame, WorldPlacement, WorldRow } from '../../data/livingWorld';
+import { WORLD_DEPTH_OFFSETS, WORLD_ENV, WORLD_FRAMES, WORLD_PLAYBACK, WORLD_ROWS, WORLD_SHADOW_WIDTHS, WORLD_SHEET_KEYS } from '../../data/livingWorld';
+import type { DenizenId, GroundId, WorldPlacement, WorldRow } from '../../data/livingWorld';
 import { WORLD_ERA_ENV, WORLD_ERA_LOOPS } from '../../data/worldEras';
+import { WORLD_AMBIENT } from '../../data/worldDay';
+import { WORLD_STARE_SAFE } from '../../data/worldBehaviour';
 import type { CameraPose } from '../math/finale';
-import { createTapeClock, isDownbeat, loopFrameAt, sensorHead, sheetFrameIndex, shadowScale } from '../math/worldPlayback';
-import type { PlaybackMode, TapeClock } from '../math/worldPlayback';
+import type { Ambient } from '../math/worldDay';
+import { restFlip, stareFrame } from '../math/worldBehaviour';
+import type { BehaviourFrame } from '../math/worldBehaviour';
+import { isDownbeat, sensorHead, sheetFrameIndex, shadowScale } from '../math/worldPlayback';
 import { failedSyncSchedule, glancePose, glanceTimeline, talkPose, talkTimeline } from '../math/worldTurn';
 import type { GlanceTimeline, TalkTimeline } from '../math/worldTurn';
+import { stareActive } from '../math/worldTransitions';
+import type { Blend, WorldTween } from '../math/worldTransitions';
 import { screenOfWorld } from '../math/worldPlacement';
 import type { SpeakerAnchor } from '../math/worldPlacement';
 import type { CastScriptPose, WorldScriptFrame } from '../math/worldScript';
-import type { DogPose, WorldVisualState } from '../math/worldState';
+import type { WorldVisualState } from '../math/worldState';
 import { CastExtras } from './CastExtras';
 import type { ExtraPose } from './CastExtras';
 import { sortWorldRows } from './worldRows';
@@ -35,25 +40,26 @@ import type { WorldRows } from './worldRows';
 export type LivingId = 'inspector' | 'dog' | 'crow' | 'girl' | 'sensor7';
 /** The walking members (Sensor 7 is static on its post; the girl walks on the ground stage only). */
 type WalkerId = 'inspector' | 'dog' | 'crow' | 'girl';
-/** Frame names of one member's poses: front (to camera at rest), talk (mouth open), glance (head turn); accent = the era IV downbeat frame. */
-interface PoseNames { front: string; talk: string; glance: string; accent?: string }
+/** Frame names of one member's poses: front (to camera at rest), talk (mouth open), glance (head turn). */
+interface PoseNames { front: string; talk: string; glance: string }
+
+// A walker's camera-facing front: the first frame of its stare set (WORLD_STARE_SAFE), so the front and the stare cannot diverge.
+function frontOf(actor: WalkerId): string {
+  return WORLD_STARE_SAFE[actor][0] ?? '';
+}
 
 // Frame names per member (DENIZEN_ART 2.1-2.4, 2.6 and 4.3).
 const POSE_FRAMES: Record<LivingId, PoseNames> = {
-  inspector: { front: 'front', talk: 'talk', glance: 'glance', accent: 'write0' },
-  dog: { front: 'head', talk: 'talk', glance: 'head', accent: 'wag' },
-  crow: { front: 'head', talk: 'talk', glance: 'head' },
-  girl: { front: 'stand0', talk: 'talk', glance: 'stand0', accent: 'stand1' },
+  inspector: { front: frontOf('inspector'), talk: 'talk', glance: 'glance' },
+  dog: { front: frontOf('dog'), talk: 'talk', glance: 'head' },
+  crow: { front: frontOf('crow'), talk: 'talk', glance: 'head' },
+  girl: { front: frontOf('girl'), talk: 'talk', glance: 'stand0' },
   sensor7: { front: 'headC', talk: 'headC', glance: 'headC' },
 };
-// The lying dog (demo hold image, DENIZEN_ART 2.2): one static frame.
-const LIE_LOOP: readonly LoopFrame[] = [{ frame: 'lie', dx: 0 }];
-// The dog's state loops (WP23b): every pose except the roam, which reverses in era V (dogLoopOf).
-const DOG_LOOPS: Record<Exclude<DogPose, 'roam'>, readonly LoopFrame[]> = {
-  lie: LIE_LOOP, dig: WORLD_LOOPS.dogDig, loop: WORLD_LOOPS.dog, shake: WORLD_ERA_LOOPS.dogShake, still: WORLD_ERA_LOOPS.dogStill,
-};
-// The crow perched and still (era V under reduced motion; the stutter is one static pose there, STORY_BIBLE 7.7).
-const PERCH_STILL: readonly LoopFrame[] = [{ frame: 'perch0', dx: 0 }];
+// The Inspector under the open umbrella (R9): its front and talk poses carry the umbrella.
+const UMBRELLA_POSE_NAMES: PoseNames = { front: 'frontUmbrella', talk: 'talkUmbrella', glance: 'glance' };
+// The lying dog (demo hold image, DENIZEN_ART 2.2): one static frame, drawn without a runner.
+const LIE_FRAME = 'lie';
 // Sensor 7 foot dots: art px from the feet, each dot 2 art px wide and 1 high (DENIZEN_ART 1.4).
 const SENSOR_DOT_ART_X: readonly number[] = [-6, 0, 6];
 // Shadow bake: three ellipse rows of art px, the top and bottom rows inset at each end.
@@ -72,6 +78,14 @@ const BLINK_STEPS = 4;
 const TIMING_WINDOW = 120;
 // Unlit LED colour (palette).
 const LED_DIM = PALETTE.rustDark;
+// Sensor 7 LED frame names by crossfade level (0 red, 1 amber); the sensorRows frame of a lit LED.
+const LED_FRAMES: readonly string[] = ['red', 'amber'];
+// The cycle 2+ crow trace pose (WORLD_ERA_LOOPS.crowHigh, one frame at dx 0): the crow holds it while state.traces.crowHigh (D7).
+const CROW_HIGH_POSE = WORLD_ERA_LOOPS.crowHigh[0];
+// Alpha steps of the 8-bit grid (writeAlpha quantizes to them) and the era crossfade midpoint (the to row takes over the lens fog).
+// Both are structural, not tuning.
+const ALPHA_LEVELS = 255;
+const CROSS_MIDPOINT = 0.5;
 
 /**
  * A snap-turn to camera. talk runs open until release (tl holds the bubble window, blips the mouth alternation of the line);
@@ -83,15 +97,40 @@ type Turn =
 
 /** A timed frame sequence (failed-sync pose, notice): frames[i] shows for stepMs from startMs. flip mirrors the frame. */
 interface Beat { startMs: number; endMs: number; stepMs: number; frames: readonly string[]; flip: boolean }
-/** A loop pick: the loop, and whether it plays backwards (the route and the roam in era V). */
-interface LoopPick { loop: readonly LoopFrame[]; reverse: boolean }
-/** The idle frame of a walker this frame: the frame name, the loop dx (world px) and the mirror. */
-interface IdleFrame { frame: string; dx: number; flip: boolean }
+
+/**
+ * The last runner frame of a walker, held while its runner is parked or the member is busy (R5). frame is the raw clip frame
+ * (stareFrame applies at draw); x is the runner x in world px (null until the first draw); umbrella is the Inspector's pose set.
+ */
+interface RunHold {
+  x: number | null;
+  frame: string;
+  walking: boolean;
+  flip: boolean;
+  alpha: number;
+  rise: number;
+  umbrella: boolean;
+}
+
+/**
+ * The rest pose of a walker derived from its runner (refreshRestLook): the stared frame and the mirror a rest frame draws with, kept with
+ * the inputs they came from. stareFrame and restFlip are pure in those inputs, so a kept pose is the one the derivation gives.
+ */
+interface RestLook {
+  valid: boolean;
+  frame: string;       // runner frame read
+  walking: boolean;    // runner walk read
+  flip: boolean;       // runner mirror read
+  stared: boolean;     // the stare read
+  placementX: number;  // the placement x read (restFlip's home)
+  shown: string;       // stareFrame of the runner frame: the frame drawn
+  mirror: boolean;     // the mirror drawn: the runner's on a walk, restFlip on a rest frame
+}
 
 interface Walker {
   readonly id: WalkerId;
   readonly body: Phaser.GameObjects.Sprite;
-  readonly blend: Phaser.GameObjects.Sprite;   // the film's crossfade row over the body (script mode only)
+  readonly blend: Phaser.GameObjects.Sprite;   // the crossfade row over the body: the film's blend, or the era twin (the to row at alpha k)
   readonly shadow: Phaser.GameObjects.Image | null;
   feetY: number;                      // rest feet y, world px (crow: lifted for its perch; girl: placement row + dy)
   anchorY: number;                    // feet y the speech tail follows: the film's feet y in script mode, else feetY
@@ -99,26 +138,39 @@ interface Walker {
   home: WorldRow;                     // the row without a film: the construction row (the girl: her placement row)
   placement: WorldPlacement | null;   // null while hidden
   visible: boolean;
-  feetX: number;                      // world px: placement x + loop dx (+ ripple nudge)
+  feetX: number;                      // world px: runner x (held while busy) + ripple nudge
   frame: string;                      // frame name shown
   flip: boolean;
-  dx: number;                         // last applied loop dx; held while a pose runs
-  accentUntil: number;                // era IV downbeat: the accent frame (or the crow's rise) runs until this time
+  dx: number;                         // runner x minus the placement x (world px)
+  run: RunHold;
+  readonly look: RestLook;             // the derived rest pose (refreshRestLook), kept while its inputs hold
+  readonly memo: { body: SheetMemo; twin: SheetMemo };   // the sheet index of the body and of the era twin (paintFrame)
   turn: Turn | null;
   beat: Beat | null;
   talking: boolean;
 }
 
+// The Sensor 7 sprites that look up a sheet frame each frame (the keys of Sensor.memo).
+type SensorPart = 'head' | 'headTwin' | 'tripod' | 'tripodTwin' | 'glyph' | 'glyphTwin' | 'fog';
+
 interface Sensor {
   readonly feetY: number;
   readonly dots: Phaser.GameObjects.Graphics;
   readonly tripod: Phaser.GameObjects.Sprite;
+  readonly tripodBlend: Phaser.GameObjects.Sprite;  // the tripod's era twin (the to row at alpha k), over the tripod
   readonly head: Phaser.GameObjects.Sprite;
-  readonly headBlend: Phaser.GameObjects.Sprite;  // the head's crossfade row (script only), over the head, under the readout
-  readonly glyph: Phaser.GameObjects.Sprite;
-  readonly fog: Phaser.GameObjects.Sprite;     // lens fog: shown while state.sensor.fog (era III with vents)
+  readonly headBlend: Phaser.GameObjects.Sprite;  // the head's crossfade row (film blend or era twin), over the head, under the readout
+  readonly glyph: Phaser.GameObjects.Sprite;   // the readout: the from row through a crossfade
+  readonly glyphBlend: Phaser.GameObjects.Sprite;  // the readout's era twin (the to row at alpha k), over the glyph
+  readonly fog: Phaser.GameObjects.Sprite;     // lens fog: alpha tween.sensorFog (era III with vents)
+  readonly memo: Record<SensorPart, SheetMemo>;  // sheet index memos of the parts (paintFrame)
   readonly led: Phaser.GameObjects.Rectangle;
   ledColor: number;
+  ledFrame: string;                            // sensorRows frame of the LED: red, amber, dark or green (the film)
+  ledAlpha: number;                            // sensorRows alpha: 1, or the dim factor while the reading dip runs
+  followTarget: string;                        // the camera side the head is heading for (the Sensor 7 lag)
+  followSince: number;                         // nowMs when followTarget last changed
+  followShown: string;                         // the head frame on screen
   placement: WorldPlacement | null;
   visible: boolean;
   feetX: number;
@@ -128,10 +180,40 @@ interface Sensor {
   talking: boolean;
 }
 
+/** One sensorRows entry (the same shape as the other renderers' prop rows): presented frame, alpha and rounded world position. */
+interface PropRow { id: string; frame: string; alpha: number; x: number; y: number }
+
+/** The era crossfade read from a Blend: main = the row the body shows, twin = the row the twin shows at alpha k (k 0 = no twin). */
+interface Cross { main: number; twin: number; k: number }
+
+// The sheet index each sprite last showed through paint(), so a still pose is not parsed back from its frame name on every frame.
+const paintedIndex = new WeakMap<Phaser.GameObjects.Sprite, number>();
+
 // Points a sprite at a sheet frame: texture and frame change only when they differ (no per-frame work for a still pose).
 function paint(sprite: Phaser.GameObjects.Sprite, key: string, index: number): void {
+  if (sprite.texture.key === key && paintedIndex.get(sprite) === index) return;
   if (sprite.texture.key !== key) sprite.setTexture(key, index);
-  else if (Number(sprite.frame.name) !== index) sprite.setFrame(index);
+  else sprite.setFrame(index);
+  paintedIndex.set(sprite, index);
+}
+
+// The last sheet lookup of one sprite: the frame name and era row it was asked for, and the index sheetFrameIndex gave them. The row
+// -1 never matches an era row, so the first lookup always runs.
+interface SheetMemo { frame: string; row: number; index: number }
+
+function newSheetMemo(): SheetMemo {
+  return { frame: '', row: -1, index: 0 };
+}
+
+// paint() of a frame of sheet id: sheetFrameIndex runs only when the frame name or the era row changed (a still pose costs no lookup).
+function paintFrame(sprite: Phaser.GameObjects.Sprite, key: string, id: LivingId, frame: string, row: number, memo: SheetMemo): void {
+  if (memo.frame !== frame || memo.row !== row) {
+    const index = sheetFrameIndex(id, frame, row);
+    memo.frame = frame;
+    memo.row = row;
+    memo.index = index;
+  }
+  paint(sprite, key, memo.index);
 }
 
 // Frame size of a sheet, from the manifest (the registry is the one source of sheet dims).
@@ -170,6 +252,18 @@ function turnActive(turn: Turn, now: number): boolean {
   return now < turn.endMs;
 }
 
+// The frame names of each walker's sheet as sets, built once (sheetHas runs for every walker every frame).
+const WALKER_FRAME_SETS: Readonly<Record<WalkerId, ReadonlySet<string>>> = {
+  inspector: new Set(WORLD_FRAMES.inspector), dog: new Set(WORLD_FRAMES.dog), crow: new Set(WORLD_FRAMES.crow),
+  girl: new Set(WORLD_FRAMES.girl),
+};
+
+// True when a runner frame is a frame of the walker's sheet. sheetFrameIndex throws on any other name, so such a frame is ignored
+// and the walker holds its last runner frame (a scheduler bug never breaks the render loop).
+function sheetHas(id: WalkerId, frame: string): boolean {
+  return WALKER_FRAME_SETS[id].has(frame);
+}
+
 // Pose of a turn at now: a frame name, or null while the loop runs (before the snap, after the hold).
 function turnPose(turn: Turn, now: number, names: PoseNames): string | null {
   const t = now - turn.snapMs;
@@ -178,6 +272,23 @@ function turnPose(turn: Turn, now: number, names: PoseNames): string | null {
   if (pose === 'profile') return null;
   if (t >= turn.tl.bubbleHideAtMs) return names.front;
   return pose === 'talk' ? names.talk : names.front;
+}
+
+// The rest pose of a walker: stareFrame of its runner frame, and the mirror a rest frame draws with (restFlip; a walk keeps the runner's).
+// Derived again only when one of its inputs changed (the runner frame, walk, mirror, stare or placement x). Both functions are pure in
+// those inputs, so a kept pose is the one the derivation gives; NaN never matches and so always derives.
+function refreshRestLook(look: RestLook, id: WalkerId, run: RunHold, stared: boolean, placementX: number): void {
+  if (look.valid && look.frame === run.frame && look.walking === run.walking && look.flip === run.flip && look.stared === stared
+    && look.placementX === placementX) return;
+  const shown = stareFrame(id, run.frame, run.walking, stared);
+  look.valid = true;
+  look.frame = run.frame;
+  look.walking = run.walking;
+  look.flip = run.flip;
+  look.stared = stared;
+  look.placementX = placementX;
+  look.shown = shown;
+  look.mirror = run.walking ? run.flip : restFlip(id, shown, false, placementX);
 }
 
 // Blips of a talk line: the count given to setTalking, or AUDIO.world.maxBlips when it is omitted or not finite.
@@ -205,42 +316,93 @@ function crowLiftArtOf(state: WorldVisualState): number {
   return state.era >= 3 ? WORLD_ERA_ENV.crowPerchLiftArtPx : WORLD_ENV.crowLiftArtPx;
 }
 
-// Inspector loop: the vent umbrella in era III with vents, the route walk when it has a route, else the static idle.
-function inspectorLoopOf(placement: WorldPlacement, state: WorldVisualState): LoopPick {
-  if (state.era === 3 && state.vents) return { loop: WORLD_ERA_LOOPS.inspectorVent, reverse: false };
-  if (placement.route === undefined) return { loop: WORLD_LOOPS.inspectorStatic, reverse: false };
-  return { loop: WORLD_LOOPS.inspector, reverse: state.reverse };
-}
-
-// Dog loop: the state's pose; the roam (era V) plays backwards when the state reverses.
-function dogLoopOf(state: WorldVisualState): LoopPick {
-  if (state.dogPose === 'roam') return { loop: WORLD_ERA_LOOPS.dogRoam, reverse: state.reverse };
-  return { loop: DOG_LOOPS[state.dogPose], reverse: false };
-}
-
-// Crow loop: high while it flies (cycle 2+), perched from era III (era V stutters in place; one pose under reduced motion).
-function crowLoopOf(state: WorldVisualState, reduced: boolean): LoopPick {
-  if (state.traces.crowHigh) return { loop: WORLD_ERA_LOOPS.crowHigh, reverse: false };
-  if (state.era === 3 || state.era === 4) return { loop: WORLD_ERA_LOOPS.crowPerch, reverse: false };
-  if (state.era === 5) return { loop: reduced ? PERCH_STILL : WORLD_ERA_LOOPS.crowStutterV, reverse: false };
-  return { loop: state.era === 2 && !reduced ? WORLD_LOOPS.crowStutter : WORLD_LOOPS.crow, reverse: false };
-}
-
 // Shadow alpha of the film: the era's scale, whatever state.shadows says (the dog fade drives the pose alpha).
 function filmShadowAlpha(state: WorldVisualState): number {
   return WORLD_PLAYBACK.shadowAlpha * shadowScale(state.era);
 }
 
+// The era crossfade of a Blend into c: a settled blend (from = to, or k 1) shows its to row alone; a blend at k 0 shows its from row alone;
+// between, main = the from row and twin = the to row at k.
+function crossInto(c: Cross, b: Blend): void {
+  if (b.from === b.to || b.k >= 1) {
+    c.main = b.to;
+    c.twin = b.to;
+    c.k = 0;
+  } else if (b.k <= 0) {
+    c.main = b.from;
+    c.twin = b.from;
+    c.k = 0;
+  } else {
+    c.main = b.from;
+    c.twin = b.to;
+    c.k = b.k;
+  }
+}
+
+function clamp01(v: number): number {
+  return Math.min(1, Math.max(0, v));
+}
+
+// One channel of a 0xRRGGBB mix: a + (b - a) x t, rounded, placed at shift.
+function channelMix(a: number, b: number, t: number, shift: number): number {
+  const ca = (a >> shift) & 0xff;
+  const cb = (b >> shift) & 0xff;
+  return Math.round(ca + (cb - ca) * t) << shift;
+}
+
+// Mix of two 0xRRGGBB colours: t 0 is a, t 1 is b.
+function mixRgb(a: number, b: number, t: number): number {
+  return channelMix(a, b, t, 16) | channelMix(a, b, t, 8) | channelMix(a, b, t, 0);
+}
+
+// Alpha of the layer on top of a crossfade pair: the twin when it shows and has the higher alpha, else the main sprite.
+function topAlpha(main: Phaser.GameObjects.Sprite, twin: Phaser.GameObjects.Sprite): number {
+  return twin.visible && twin.alpha > main.alpha ? twin.alpha : main.alpha;
+}
+
+// Shadow width: the cached ellipse scales on x only (WORLD_AMBIENT.shadowWidth); written only when it changes.
+function setShadowWidth(shadow: Phaser.GameObjects.Image, widthScale: number): void {
+  if (shadow.scaleX !== widthScale) shadow.setScale(widthScale, 1);
+}
+
+// Guarded writes: Phaser is called only when the stored value would change, so a still pose costs no call. Alpha is quantized to the
+// 8-bit grid first (ALPHA_LEVELS steps, the one a frame can show), so a change under one step costs no call and the stored value is
+// the one compared. Object.is keeps -0 and NaN exact.
+function writeAlpha(o: { alpha: number; setAlpha(value: number): unknown }, alpha: number): void {
+  writeAlphaLevel(o, alphaLevel(alpha));
+}
+// writeAlpha of a value already on the grid (alphaLevel): several sprites that share one alpha quantize it once.
+function writeAlphaLevel(o: { alpha: number; setAlpha(value: number): unknown }, a: number): void {
+  if (!Object.is(o.alpha, a)) o.setAlpha(a);
+}
+// The 8-bit grid value of an alpha: clamped, then rounded to ALPHA_LEVELS steps.
+function alphaLevel(alpha: number): number {
+  return Math.round(clamp01(alpha) * ALPHA_LEVELS) / ALPHA_LEVELS;
+}
+function writeVisible(o: Phaser.GameObjects.Components.Visible, on: boolean): void {
+  if (o.visible !== on) o.setVisible(on);
+}
+function writePosition(o: Phaser.GameObjects.Components.Transform, x: number, y: number): void {
+  if (!Object.is(o.x, x) || !Object.is(o.y, y)) o.setPosition(x, y);
+}
+function writeFlip(o: Phaser.GameObjects.Components.Flip, flip: boolean): void {
+  if (o.flipX !== flip) o.setFlipX(flip);
+}
+
+// A host pose record before its first frame (hidden): the extras read it only while the host is shown.
+function blankExtraPose(): ExtraPose {
+  return { x: 0, feetY: 0, frame: '', flip: false, visible: false, alpha: 0, row: 'back' };
+}
+
 /**
  * The living world cast. Built once per scene: every sprite, shadow and texture exists from the constructor on and is shown or
- * hidden afterwards. apply() takes the visual state and the placements; update() steps the tape and draws the poses.
+ * hidden afterwards. apply() takes the visual state and the placements; update() draws the poses from the runner frames.
  */
 export class LivingWorld {
   private readonly scene: Phaser.Scene;
   private readonly rows: WorldRows;
   private readonly heartbeatLow: (nowMs: number) => boolean;
   private readonly beatLow: (nowMs: number) => boolean;
-  private readonly clock: TapeClock = createTapeClock();
   private readonly objects: Phaser.GameObjects.GameObject[] = [];
   private readonly ownedTextures: string[] = [];
   private readonly tracks: Record<LivingId, string | null>;
@@ -256,8 +418,9 @@ export class LivingWorld {
   private placements: Readonly<Record<GroundId, WorldPlacement | null>> | null = null;
   private script: WorldScriptFrame | null = null;   // the finale film frame, or null for the state-driven drawing
   private snapped = false;                          // snapAll: every member holds its front pose
-  private mode: PlaybackMode = 'crank';
-  private eraRow = 0;
+  private readonly eraCross: Cross = { main: 0, twin: 0, k: 0 };   // this frame's era crossfade (update)
+  private readonly ledRow: PropRow = { id: 'sensorLed', frame: 'dark', alpha: 0, x: 0, y: 0 };
+  private readonly ledRows: readonly PropRow[] = [this.ledRow];
   private reduced = false;
   private forceHidden = false;
   private destroyed = false;
@@ -271,6 +434,25 @@ export class LivingWorld {
   private risePending = false;        // era IV ripple: the walkers rise on the next downbeat
   private riseUntilMs = Number.NEGATIVE_INFINITY;
   private shadowShiftUntilMs = Number.NEGATIVE_INFINITY;
+  // The extras' host poses: one record per walker, rewritten by extraPoseOf each frame (CastExtras reads the latest pose of a host).
+  private readonly extraPoses: Record<WalkerId, ExtraPose> = {
+    inspector: blankExtraPose(), dog: blankExtraPose(), crow: blankExtraPose(), girl: blankExtraPose(),
+  };
+  // poseOf for the extras without an allocation per host: the walker's record is rewritten (null while hidden and for Sensor 7).
+  private readonly extraPoseOf = (id: LivingId): ExtraPose | null => {
+    if (id === 'sensor7') return null;
+    const w = this.walkerOf(id);
+    if (!w.visible) return null;
+    const pose = this.extraPoses[id];
+    pose.x = w.body.x;
+    pose.feetY = w.body.y;
+    pose.frame = w.frame;
+    pose.flip = w.body.flipX;
+    pose.visible = true;
+    pose.alpha = w.body.alpha;
+    pose.row = w.row;
+    return pose;
+  };
 
   constructor(scene: Phaser.Scene, rows: WorldRows, heartbeatLow: (nowMs: number) => boolean,
     beatLow: (nowMs: number) => boolean = () => false) {
@@ -300,8 +482,6 @@ export class LivingWorld {
     this.state = state;
     this.placements = placements;
     this.reduced = opts.reducedMotion;
-    this.mode = state.mode;
-    this.eraRow = state.eraRow;
     this.forceHidden = false;
     this.extras.apply(state, { reducedMotion: opts.reducedMotion });
     this.applyAll();
@@ -332,12 +512,27 @@ export class LivingWorld {
     if (on && !quiet) this.trackUntilMs = this.nowMs + WORLD_ENV.trackingFrameMs;
   }
 
-  /** A walker's pose for its extras: feet, frame, mirror and alpha of the body; null while hidden and for Sensor 7 (no extras). */
+  /**
+   * A walker's pose for its extras: feet, frame, mirror and alpha of the body; null while hidden and for Sensor 7 (no extras). The record is
+   * the walker's shared one (extraPoseOf, WP24 r6-F3): it is rewritten by the next call, so a caller reads it at once and keeps nothing.
+   */
   poseOf(id: LivingId): ExtraPose | null {
-    if (id === 'sensor7') return null;
+    return this.extraPoseOf(id);
+  }
+
+  /**
+   * True while the member holds a pose its runner must not move under (the director pauses the runner then): a turn or a beat still
+   * running, snapAll, or a film. Sensor 7 is busy while its turn or its blink runs.
+   */
+  busy(id: LivingId): boolean {
+    const now = this.nowMs;
+    if (this.snapped || this.script !== null) return true;
+    if (id === 'sensor7') {
+      const turn = this.sensor.turn;
+      return (turn !== null && turnActive(turn, now)) || blinkRunning(this.sensor.blinkStart, now);
+    }
     const w = this.walkerOf(id);
-    if (!w.visible) return null;
-    return { x: w.body.x, feetY: w.body.y, frame: w.frame, flip: w.body.flipX, visible: true, alpha: w.body.alpha, row: w.row };
+    return (w.turn !== null && turnActive(w.turn, now)) || (w.beat !== null && now < w.beat.endMs);
   }
 
   /** Starts a host's era V double-exposure flash (refused under reduced motion and in a script). Sensor 7 has none. */
@@ -350,7 +545,10 @@ export class LivingWorld {
     return this.extras.flashCount();
   }
 
-  /** Debug probe of the extras: the clipboard, the red ball and each host's flash. */
+  /**
+   * Debug probe of the extras: the clipboard, the red ball, each host's flash and the crow's ruffle drip. The entries also carry the
+   * presented alpha and y at runtime; the declared shape stays the T6a public one (the director's default spread reads them).
+   */
   extrasProbe(): { id: string; variant: string; x: number; visible: boolean; speaking: boolean }[] {
     return this.extras.probe();
   }
@@ -368,26 +566,31 @@ export class LivingWorld {
     this.applySensor(placements.sensor7, state);
   }
 
-  /** One frame: steps the tape by dtMs and crankSteps, then draws every member at nowMs from the camera pose cam. */
-  update(dtMs: number, crankSteps: number, nowMs: number, cam: CameraPose): void {
+  /**
+   * One frame: draws every member at nowMs from the camera pose cam. frames holds each walker's runner frame (null: the girl hides,
+   * the others hold their last frame); tween carries the presented stare, alpha, era crossfade, shadows and LED; ambient the shadow
+   * offset and width, the micro flags and the mains clock (the era II flicker). dtMs advances the extras.
+   */
+  update(dtMs: number, frames: Readonly<Record<'inspector' | 'dog' | 'crow' | 'girl', BehaviourFrame | null>>, tween: WorldTween,
+    nowMs: number, cam: CameraPose, ambient: Ambient): void {
     if (this.destroyed) return;
     const t0 = performance.now();
     this.nowMs = nowMs;
-    this.clock.advance(dtMs, this.mode, crankSteps);
     this.stepBeat(nowMs);
     const state = this.state;
     if (state !== null && !this.forceHidden) {
-      const tick = this.clock.tick();
+      // The mains flicker runs on the mains clock (ambient.mainsMs), which the tape freeze holds with the windows and the lamp.
       const flicker = state.era === 2 && !this.reduced
-        ? 1 + WORLD_ENV.mainsFlicker.amp * Math.sin(2 * Math.PI * nowMs / WORLD_ENV.mainsFlicker.periodMs)
+        ? 1 + WORLD_ENV.mainsFlicker.amp * Math.sin(2 * Math.PI * ambient.mainsMs / WORLD_ENV.mainsFlicker.periodMs)
         : 1;
-      this.drawWalker(this.inspector, nowMs, tick, state, flicker);
-      this.drawWalker(this.dog, nowMs, tick, state, flicker);
-      this.drawWalker(this.crow, nowMs, tick, state, flicker);
-      this.drawWalker(this.girl, nowMs, tick, state, flicker);
-      this.drawSensor(nowMs, cam, state, flicker);
+      crossInto(this.eraCross, tween.eraRow);
+      this.drawWalker(this.inspector, nowMs, frames.inspector, state, flicker, tween, ambient);
+      this.drawWalker(this.dog, nowMs, frames.dog, state, flicker, tween, ambient);
+      this.drawWalker(this.crow, nowMs, frames.crow, state, flicker, tween, ambient);
+      this.drawWalker(this.girl, nowMs, frames.girl, state, flicker, tween, ambient);
+      this.drawSensor(nowMs, cam, state, flicker, tween, ambient);
     }
-    this.extras.update(dtMs, nowMs, (id) => this.poseOf(id));
+    this.extras.update(dtMs, nowMs, this.extraPoseOf);
     this.nudgeId = null;
     this.gust = false;
     this.recordTiming(performance.now() - t0);
@@ -468,9 +671,11 @@ export class LivingWorld {
     }
   }
 
-  /** Tape freeze (the crossed-line and wornMotor beats): the clock stops and every sprite shows the tracking line for one frame. */
+  /**
+   * Tape freeze (the crossed-line and wornMotor beats): every sprite shows the tracking line for one frame. No clock is frozen any more
+   * (the runners hold through busy()), so ms is not read here.
+   */
   tapeFreeze(ms: number): void {
-    this.clock.freeze(ms);
     if (!this.reduced) this.trackUntilMs = this.nowMs + WORLD_ENV.trackingFrameMs;
   }
 
@@ -518,16 +723,36 @@ export class LivingWorld {
     return speakerAnchor(x, w.anchorY, frameOf(id).height * PIXEL_SCALE, cam);
   }
 
-  /** Debug probe: every cast member's frame, feet x (world px), visibility and speaking flag. */
-  probe(): { id: string; variant: string; x: number; visible: boolean; speaking: boolean }[] {
+  /**
+   * Debug probe: every cast member's frame, feet x (world px), presented feet y (the rise, hover and bob included), presented alpha
+   * (the layer on top during an era crossfade; 0 while hidden), visibility and speaking flag.
+   */
+  probe(): { id: string; variant: string; x: number; y: number; alpha: number; visible: boolean; speaking: boolean }[] {
     const walker = (id: WalkerId, w: Walker) => (
-      { id, variant: this.variantOf(id, w.frame), x: w.feetX, visible: w.visible, speaking: w.talking }
+      {
+        id, variant: this.variantOf(id, w.frame), x: w.feetX, y: w.visible ? Math.round(w.body.y) : 0,
+        alpha: w.visible ? topAlpha(w.body, w.blend) : 0, visible: w.visible, speaking: w.talking,
+      }
     );
     const s = this.sensor;
     return [
       walker('inspector', this.inspector), walker('dog', this.dog), walker('crow', this.crow), walker('girl', this.girl),
-      { id: 'sensor7', variant: this.variantOf('sensor7', s.frame), x: s.feetX, visible: s.visible, speaking: s.talking },
+      {
+        id: 'sensor7', variant: this.variantOf('sensor7', s.frame), x: s.feetX, y: s.visible ? Math.round(s.head.y) : 0,
+        alpha: s.visible ? topAlpha(s.head, s.headBlend) : 0, visible: s.visible, speaking: s.talking,
+      },
     ];
+  }
+
+  /** Sensor 7 rows for the probes: the LED ('sensorLed': frame red, amber, dark or green; alpha; rounded world position). Reused rows. */
+  sensorRows(): readonly PropRow[] {
+    const s = this.sensor;
+    const row = this.ledRow;
+    row.frame = s.ledFrame;
+    row.alpha = s.visible ? s.ledAlpha : 0;
+    row.x = s.visible ? Math.round(s.led.x) : 0;
+    row.y = s.visible ? Math.round(s.led.y) : 0;
+    return this.ledRows;
   }
 
   /** Hides every member and every extra until the next apply(). */
@@ -580,7 +805,7 @@ export class LivingWorld {
   private makeWalker(id: WalkerId, row: WorldRow, feetY: number, depth: number, shadowWidth: number | null): Walker {
     const body = this.track(this.scene.add.sprite(0, 0, WORLD_SHEET_KEYS[id], 0));
     body.setOrigin(0.5, 1).setScale(PIXEL_SCALE).setDepth(depth).setVisible(false);
-    // The crossfade body: pooled hidden, drawn over the body by the film only (added after it, so it sits above it in the row).
+    // The crossfade body: pooled hidden, drawn over the body by the film and by the era crossfade (added after it, so it sits above it).
     const blend = this.track(this.scene.add.sprite(0, 0, WORLD_SHEET_KEYS[id], 0));
     blend.setOrigin(0.5, 1).setScale(PIXEL_SCALE).setDepth(depth).setVisible(false);
     this.rowOf(row).add(body);
@@ -593,13 +818,17 @@ export class LivingWorld {
     this.rowOf(row).add(blend);
     return {
       id, body, blend, shadow, feetY, anchorY: feetY, row, home: row, placement: null, visible: false, feetX: 0,
-      frame: POSE_FRAMES[id].front, flip: false, dx: 0, accentUntil: Number.NEGATIVE_INFINITY, turn: null, beat: null, talking: false,
+      frame: POSE_FRAMES[id].front, flip: false, dx: 0,
+      run: { x: null, frame: POSE_FRAMES[id].front, walking: false, flip: false, alpha: 1, rise: 0, umbrella: false },
+      look: { valid: false, frame: '', walking: false, flip: false, stared: false, placementX: 0, shown: '', mirror: false },
+      memo: { body: newSheetMemo(), twin: newSheetMemo() },
+      turn: null, beat: null, talking: false,
     };
   }
 
   private makeSensor(row: Phaser.GameObjects.Container, feetY: number): Sensor {
     const depth = WORLD_DEPTH_OFFSETS.sensor;
-    // Creation order is the draw order within the row: dots, tripod, head, readout, fog, LED.
+    // Creation order is the draw order within the row: dots, tripod, tripod twin, head, head twin, readout, readout twin, fog, LED.
     const dots = this.track(this.scene.add.graphics());
     dots.fillStyle(PALETTE.ink, 1);
     for (const x of SENSOR_DOT_ART_X) dots.fillRect((x - 1) * PIXEL_SCALE, -PIXEL_SCALE, 2 * PIXEL_SCALE, PIXEL_SCALE);
@@ -612,17 +841,25 @@ export class LivingWorld {
       return sprite;
     };
     const tripod = part();
+    const tripodBlend = part();
     const head = part();
     const headBlend = part();
     const glyph = part();
+    const glyphBlend = part();
     const fog = part();
     const ledColor = WORLD_ENV.sensor7.ledColors.red;
     const led = this.track(this.scene.add.rectangle(0, 0, PIXEL_SCALE, PIXEL_SCALE, ledColor));
     led.setOrigin(0, 0).setDepth(depth).setVisible(false);
     row.add(led);
     return {
-      feetY, dots, tripod, head, headBlend, glyph, fog, led, ledColor, placement: null, visible: false, feetX: 0,
+      feetY, dots, tripod, tripodBlend, head, headBlend, glyph, glyphBlend, fog, led, ledColor, ledFrame: 'red', ledAlpha: 1,
+      followTarget: POSE_FRAMES.sensor7.front, followSince: Number.NEGATIVE_INFINITY, followShown: POSE_FRAMES.sensor7.front,
+      placement: null, visible: false, feetX: 0,
       frame: POSE_FRAMES.sensor7.front, turn: null, blinkStart: null, talking: false,
+      memo: {
+        head: newSheetMemo(), headTwin: newSheetMemo(), tripod: newSheetMemo(), tripodTwin: newSheetMemo(),
+        glyph: newSheetMemo(), glyphTwin: newSheetMemo(), fog: newSheetMemo(),
+      },
     };
   }
 
@@ -691,10 +928,8 @@ export class LivingWorld {
     }
     w.body.setVisible(shown);
     w.blend.setVisible(false);
-    if (w.shadow !== null) {
-      w.shadow.setVisible(state !== null && shown && state.shadows);
-      if (state !== null) w.shadow.setAlpha(WORLD_PLAYBACK.shadowAlpha * state.shadowScale);
-    }
+    // The shadow's alpha, width and visibility are drawn every update() from the presented tween and ambient.
+    if (w.shadow !== null) w.shadow.setVisible(false);
     return shown;
   }
 
@@ -742,16 +977,18 @@ export class LivingWorld {
       s.head.setVisible(shown);
       s.headBlend.setVisible(false);
       s.tripod.setVisible(shown);
+      s.tripodBlend.setVisible(false);
       s.glyph.setVisible(shown);
+      s.glyphBlend.setVisible(false);
       s.dots.setVisible(shown);
       s.led.setVisible(shown);
-      s.fog.setVisible(state !== null && shown && state.sensor.fog);
-      if (state !== null) s.dots.setAlpha(WORLD_PLAYBACK.shadowAlpha * state.shadowScale);
+      // The lens fog and the foot shadow are drawn every update() (tween.sensorFog, the presented shadow).
+      s.fog.setVisible(false);
     }
     if (shown && placement !== null) {
       s.feetX = placement.x;
       const { ledArt } = WORLD_ENV.sensor7;
-      for (const part of [s.tripod, s.head, s.headBlend, s.glyph, s.fog]) part.setPosition(placement.x, s.feetY);
+      for (const part of [s.tripod, s.tripodBlend, s.head, s.headBlend, s.glyph, s.glyphBlend, s.fog]) part.setPosition(placement.x, s.feetY);
       s.dots.setPosition(placement.x, s.feetY);
       s.led.setPosition(placement.x + ledArt.x * PIXEL_SCALE, s.feetY + ledArt.y * PIXEL_SCALE);
     }
@@ -759,7 +996,13 @@ export class LivingWorld {
 
   // ---- update ----
 
-  private drawWalker(w: Walker, now: number, tick: number, state: WorldVisualState, flicker: number): void {
+  // Walker draw (not the film), in priority: snapAll, the beat, the turn, the lying dog, the crow trace pose (cycle 2+), then the
+  // runner frame. The runner frame sets the pose, the mirror, the alpha, the rise and the x. While the member is busy the runner is
+  // paused by the director and the x holds (R5); a null, parked or off-sheet frame holds the last runner frame and x. The girl is
+  // hidden without a runner frame. The body alpha is the presented cast alpha x the flicker x the runner alpha; the era crossfade
+  // draws the from row on the body and the to row on the twin.
+  private drawWalker(w: Walker, now: number, f: BehaviourFrame | null, state: WorldVisualState, flicker: number, tween: WorldTween,
+    ambient: Ambient): void {
     const placement = w.placement;
     if (placement === null) return;
     const pose = this.script === null ? null : this.script.cast[w.id];
@@ -767,40 +1010,119 @@ export class LivingWorld {
       this.drawScriptWalker(w, pose, placement, state, now);
       return;
     }
+    if (w.id === 'girl' && f === null) {
+      this.hideWalker(w);
+      return;
+    }
+    if (!w.visible) this.showWalker(w);
     this.placeInRow(w, w.home);
     if (w.turn !== null && !turnActive(w.turn, now)) w.turn = null;
     if (w.beat !== null && now >= w.beat.endMs) w.beat = null;
-    // Era IV downbeat: the accent frame (inspector, dog, girl) starts now in every motion setting; the crow's beat rise is gated in bobOf.
-    if (this.downbeat && state.era === WORLD_ERA_ENV.downbeatEra) w.accentUntil = now + WORLD_ERA_ENV.accentMs;
+    const held = this.busy(w.id);
+    const lying = w.id === 'dog' && state.dogPose === 'lie';
+    const trace = w.id === 'crow' && state.traces.crowHigh ? CROW_HIGH_POSE : undefined;
+    const stared = stareActive(w.id, state.stare, tween.stareK);
+    if (f !== null && f.frame !== '' && sheetHas(w.id, f.frame)) {
+      const run = w.run;
+      run.frame = f.frame;
+      run.walking = f.walking;
+      run.flip = f.flip;
+      run.alpha = f.alpha;
+      run.rise = f.risePx;
+      run.umbrella = f.poseSet === 'umbrella';
+      if (!held) run.x = f.x;
+    }
+    if (lying && !held) w.run.x = placement.x;
+    const x = w.run.x ?? placement.x;
+    w.run.x = x;
+    const names = this.poseNamesOf(w);
     const beat = w.beat;
     const beatName = beat !== null ? beatFrame(beat, now) : null;
-    const turnName = w.turn !== null ? turnPose(w.turn, now, POSE_FRAMES[w.id]) : null;
+    const turnName = w.turn !== null ? turnPose(w.turn, now, names) : null;
     let frame: string;
     let flip = false;
-    let dx = w.dx;
+    let at = x;          // feet x: the runner's x, or the trace pose's placement x plus its loop dx
+    let traced = false;  // the trace pose: no runner, so no rise and full alpha
     if (this.snapped) {
-      frame = POSE_FRAMES[w.id].front;
-      dx = 0;
+      frame = names.front;
     } else if (beat !== null && beatName !== null) {
       frame = beatName;
       flip = beat.flip;
     } else if (turnName !== null) {
       frame = turnName;
+    } else if (lying) {
+      frame = LIE_FRAME;
+    } else if (trace !== undefined) {
+      frame = stareFrame(w.id, trace.frame, false, stared);
+      at = placement.x + trace.dx;
+      traced = true;
     } else {
-      const idle = this.idleFrame(w, placement, state, tick, now);
-      frame = idle.frame;
-      dx = idle.dx;
-      flip = idle.flip;
+      // A walk keeps the runner's mirror; a rest frame faces away from the machine as it is drawn, so the stare onset flips with its frame.
+      refreshRestLook(w.look, w.id, w.run, stared, placement.x);
+      frame = w.look.shown;
+      flip = w.look.mirror;
     }
     const nudge = this.gust || this.nudgeId === w.id ? RIPPLE_NUDGE_WORLD_PX : 0;
-    w.dx = dx;
+    w.dx = at - placement.x;
     w.frame = frame;
     w.flip = flip;
-    w.feetX = placement.x + dx + nudge;
+    w.feetX = at + nudge;
     w.anchorY = w.feetY;
-    paint(w.body, this.keyOf(w.id, this.trackOn(w.turn, now)), sheetFrameIndex(w.id, frame, this.eraRow));
-    w.body.setFlipX(flip).setPosition(w.feetX, w.feetY - this.bobOf(w, state, now)).setAlpha(state.alpha * flicker);
-    if (w.shadow !== null) w.shadow.setPosition(w.feetX + this.shadowShiftOf(w, now), w.feetY);
+    // The Inspector's tracking hitch (era II micro): its tracking-line texture for this frame, never under reduced motion.
+    const hitch = w.id === 'inspector' && ambient.micro.hitch && !this.reduced;
+    const key = this.keyOf(w.id, hitch || this.trackOn(w.turn, now));
+    // The lying frame and the crow trace pose have no runner: no rise, full alpha.
+    const bare = lying || traced;
+    const alpha = bare ? 1 : w.run.alpha;
+    const rise = bare ? 0 : w.run.rise;
+    const bodyY = w.feetY - this.bobOf(w, state, now, rise);
+    const bodyAlpha = tween.alpha * flicker * alpha;
+    paintFrame(w.body, key, w.id, frame, this.eraCross.main, w.memo.body);
+    writeFlip(w.body, flip);
+    writePosition(w.body, w.feetX, bodyY);
+    writeAlpha(w.body, bodyAlpha);
+    this.eraTwin(w, key, frame, flip, bodyY, bodyAlpha);
+    if (w.shadow !== null) {
+      const shadowAlpha = WORLD_PLAYBACK.shadowAlpha * tween.shadowScale * tween.shadows;
+      writePosition(w.shadow, w.feetX + ambient.shadowDx + this.shadowShiftOf(w, now), w.feetY);
+      writeAlpha(w.shadow, shadowAlpha);
+      writeVisible(w.shadow, shadowAlpha > 0);
+      setShadowWidth(w.shadow, ambient.shadowWidth);
+    }
+  }
+
+  // The era crossfade twin of a walker: the to row at alpha x k over the body (the body keeps the from row at its full alpha); hidden
+  // when no crossfade runs. Same frame, flip and position as the body.
+  private eraTwin(w: Walker, key: string, frame: string, flip: boolean, y: number, bodyAlpha: number): void {
+    const k = this.eraCross.k;
+    if (k <= 0) {
+      writeVisible(w.blend, false);
+      return;
+    }
+    paintFrame(w.blend, key, w.id, frame, this.eraCross.twin, w.memo.twin);
+    writeFlip(w.blend, flip);
+    writePosition(w.blend, w.feetX, y);
+    writeAlpha(w.blend, bodyAlpha * k);
+    writeVisible(w.blend, true);
+  }
+
+  // The girl with no runner frame: body, twin and shadow hidden until a frame draws again (showWalker).
+  private hideWalker(w: Walker): void {
+    w.visible = false;
+    writeVisible(w.body, false);
+    writeVisible(w.blend, false);
+    if (w.shadow !== null) writeVisible(w.shadow, false);
+  }
+
+  // Shows a walker hidden by hideWalker; apply() sets the body visibility the rest of the time and update() the shadow.
+  private showWalker(w: Walker): void {
+    w.visible = true;
+    writeVisible(w.body, true);
+  }
+
+  // The pose names of a walker this frame: the Inspector's umbrella set while its runner has the umbrella open (R9).
+  private poseNamesOf(w: Walker): PoseNames {
+    return w.id === 'inspector' && w.run.umbrella ? UMBRELLA_POSE_NAMES : POSE_FRAMES[w.id];
   }
 
   // Film mode: the member's pose from the frame (row, frame, offset, mirror, alpha, shadow, crossfade) on its home feet line. The crow's
@@ -822,25 +1144,41 @@ export class LivingWorld {
     w.feetX = x;
     w.anchorY = feetY;
     paint(w.body, key, sheetFrameIndex(w.id, frame, pose.row));
-    w.body.setFlipX(flip).setPosition(x, feetY).setAlpha(pose.alpha).setVisible(shown);
+    writeFlip(w.body, flip);
+    writePosition(w.body, x, feetY);
+    writeAlpha(w.body, pose.alpha);
+    writeVisible(w.body, shown);
     // The crossfade: blendRow over the body at pose.blend (its opacity times the pose alpha), hidden without one.
     if (pose.blendRow !== null) {
       paint(w.blend, key, sheetFrameIndex(w.id, frame, pose.blendRow));
-      w.blend.setFlipX(flip).setPosition(x, feetY).setAlpha(pose.alpha * pose.blend).setVisible(shown && pose.blend > 0);
+      writeFlip(w.blend, flip);
+      writePosition(w.blend, x, feetY);
+      writeAlpha(w.blend, pose.alpha * pose.blend);
+      writeVisible(w.blend, shown && pose.blend > 0);
     } else {
-      w.blend.setVisible(false);
+      writeVisible(w.blend, false);
     }
-    if (w.shadow !== null) w.shadow.setPosition(x, feetY).setAlpha(filmShadowAlpha(state) * pose.alpha).setVisible(shown && pose.shadow);
+    // The film's shadow is never widened: the state's shadow width (drawWalker) resets here.
+    if (w.shadow !== null) {
+      setShadowWidth(w.shadow, 1);
+      writePosition(w.shadow, x, feetY);
+      writeAlpha(w.shadow, filmShadowAlpha(state) * pose.alpha);
+      writeVisible(w.shadow, shown && pose.shadow);
+    }
   }
 
-  private drawSensor(now: number, cam: CameraPose, state: WorldVisualState, flicker: number): void {
+  // Sensor 7 draw. The head shows the camera side through the follow lag (followHead); the era crossfade runs on the head and the tripod
+  // (their twins at alpha k); the readout keeps the from row under its twin, which fades the to row in; the lens fog takes the to row at the
+  // midpoint with its alpha through 0 there; the foot dots are the shadow.
+  private drawSensor(now: number, cam: CameraPose, state: WorldVisualState, flicker: number, tween: WorldTween, ambient: Ambient): void {
     const s = this.sensor;
     const placement = s.placement;
     if (placement === null) return;
     if (s.turn !== null && !turnActive(s.turn, now)) s.turn = null;
     const script = this.script;
     const pose = script === null ? null : script.cast.sensor7;
-    const row = pose === null ? this.eraRow : pose.row;
+    const cross = this.eraCross;
+    const row = pose === null ? cross.main : pose.row;
     const shown = pose === null || pose.visible;
     s.visible = shown;
     if (pose !== null) {
@@ -848,60 +1186,133 @@ export class LivingWorld {
       const { ledArt } = WORLD_ENV.sensor7;
       const x = placement.x + pose.dx;
       const y = s.feetY + pose.dy;
-      for (const part of [s.tripod, s.head, s.headBlend, s.glyph, s.fog]) part.setPosition(x, y);
-      s.dots.setPosition(x, y);
-      s.led.setPosition(x + ledArt.x * PIXEL_SCALE, y + ledArt.y * PIXEL_SCALE);
+      for (const part of [s.tripod, s.tripodBlend, s.head, s.headBlend, s.glyph, s.glyphBlend, s.fog]) writePosition(part, x, y);
+      writePosition(s.dots, x, y);
+      writePosition(s.led, x + ledArt.x * PIXEL_SCALE, y + ledArt.y * PIXEL_SCALE);
     }
+    // The follow runs every frame, so a turn or a blink never leaves it behind.
+    const follow = this.followHead(s, placement.x, cam, now);
     const turnName = s.turn !== null ? turnPose(s.turn, now, POSE_FRAMES.sensor7) : null;
     let head: string;
     if (this.snapped) head = POSE_FRAMES.sensor7.front;
     else if (pose !== null) head = pose.frame;
     else if (turnName !== null) head = turnName;
     else if (blinkRunning(s.blinkStart, now)) head = POSE_FRAMES.sensor7.front;
-    else head = sensorHead(placement.x, cam.centerX);
+    else head = follow;
     s.frame = head;
     const key = this.keyOf('sensor7', this.trackOn(s.turn, now));
-    const alpha = pose === null ? state.alpha * flicker : pose.alpha;
-    paint(s.head, key, sheetFrameIndex('sensor7', head, row));
-    paint(s.tripod, key, sheetFrameIndex('sensor7', 'tripod', row));
-    // The readout: the film's glyph, or the state's readout at 'stage'.
+    const alpha = pose === null ? tween.alpha * flicker : pose.alpha;
+    // The head, tripod and readout share this alpha: quantized once.
+    const level = alphaLevel(alpha);
+    paintFrame(s.head, key, 'sensor7', head, row, s.memo.head);
+    paintFrame(s.tripod, key, 'sensor7', 'tripod', row, s.memo.tripod);
+    writeAlphaLevel(s.head, level);
+    writeVisible(s.head, shown);
+    writeAlphaLevel(s.tripod, level);
+    writeVisible(s.tripod, shown);
+    // The head and tripod crossfades: the film's head blend (blendRow over the head at pose.blend), or the era twins (the to row at k).
+    if (pose !== null && pose.blendRow !== null) {
+      paintFrame(s.headBlend, key, 'sensor7', head, pose.blendRow, s.memo.headTwin);
+      writeAlpha(s.headBlend, alpha * pose.blend);
+      writeVisible(s.headBlend, shown && pose.blend > 0);
+      writeVisible(s.tripodBlend, false);
+    } else if (pose === null && cross.k > 0) {
+      paintFrame(s.headBlend, key, 'sensor7', head, cross.twin, s.memo.headTwin);
+      writeAlpha(s.headBlend, alpha * cross.k);
+      writeVisible(s.headBlend, true);
+      paintFrame(s.tripodBlend, key, 'sensor7', 'tripod', cross.twin, s.memo.tripodTwin);
+      writeAlpha(s.tripodBlend, alpha * cross.k);
+      writeVisible(s.tripodBlend, true);
+    } else {
+      writeVisible(s.headBlend, false);
+      writeVisible(s.tripodBlend, false);
+    }
+    // The readout: the film's glyph, or the state's readout at 'stage'. Through the era crossfade the glyph keeps the from row and the
+    // glyph twin fades the to row in over it (alpha k), as the head and tripod do: no instant row swap.
     const glyph = script === null ? 'stage' : script.props.sensorGlyph;
     const readout = glyph === 'stage' ? state.sensor.readout : glyph;
-    paint(s.glyph, key, sheetFrameIndex('sensor7', readout === 'one' ? 'glyphOne' : 'glyphDash', row));
-    s.head.setAlpha(alpha).setVisible(shown);
-    s.tripod.setAlpha(alpha).setVisible(shown);
-    s.glyph.setAlpha(alpha).setVisible(shown);
-    // The head's crossfade (the film only): blendRow over the head at pose.blend.
-    if (pose !== null && pose.blendRow !== null) {
-      paint(s.headBlend, key, sheetFrameIndex('sensor7', head, pose.blendRow));
-      s.headBlend.setAlpha(alpha * pose.blend).setVisible(shown && pose.blend > 0);
-    } else {
-      s.headBlend.setVisible(false);
+    const glyphName = readout === 'one' ? 'glyphOne' : 'glyphDash';
+    paintFrame(s.glyph, key, 'sensor7', glyphName, row, s.memo.glyph);
+    writeAlphaLevel(s.glyph, level);
+    writeVisible(s.glyph, shown);
+    const glyphCross = pose === null && cross.k > 0;
+    if (glyphCross) {
+      paintFrame(s.glyphBlend, key, 'sensor7', glyphName, cross.twin, s.memo.glyphTwin);
+      writeAlpha(s.glyphBlend, alpha * cross.k);
     }
-    // The lens fog (era III with vents), over the head; shown only while state.sensor.fog and no film runs.
-    paint(s.fog, key, sheetFrameIndex('sensor7', 'fog', row));
-    s.fog.setAlpha(alpha).setVisible(pose === null && state.sensor.fog);
-    // The foot dots are the shadow: the film's shadow flag, else the state's (applied in apply()).
+    writeVisible(s.glyphBlend, glyphCross);
+    // The lens fog (era III with vents): alpha tween.sensorFog over the head; the film has none. Through the era crossfade the fog takes the
+    // from row below the midpoint and the to row from it, with its alpha scaled by |1 - 2k|: the row swap happens at alpha 0.
+    const fogCross = pose === null && cross.k > 0;
+    const fog = pose === null ? tween.sensorFog * (fogCross ? Math.abs(1 - 2 * cross.k) : 1) : 0;
+    const fogRow = fogCross && cross.k >= CROSS_MIDPOINT ? cross.twin : row;
+    paintFrame(s.fog, key, 'sensor7', 'fog', fogRow, s.memo.fog);
+    writeAlpha(s.fog, fog);
+    writeVisible(s.fog, fog > 0);
+    // The foot dots are the shadow: the film's shadow flag, else the presented shadow (alpha) shifted by shadowDx.
     if (pose !== null) {
-      s.dots.setVisible(shown && pose.shadow).setAlpha(filmShadowAlpha(state) * pose.alpha);
+      writeVisible(s.dots, shown && pose.shadow);
+      writeAlpha(s.dots, filmShadowAlpha(state) * pose.alpha);
+    } else {
+      const dotsAlpha = WORLD_PLAYBACK.shadowAlpha * tween.shadowScale * tween.shadows;
+      writePosition(s.dots, placement.x + ambient.shadowDx, s.feetY);
+      writeAlpha(s.dots, dotsAlpha);
+      writeVisible(s.dots, dotsAlpha > 0);
     }
-    s.led.setVisible(shown);
+    writeVisible(s.led, shown);
     // The LED: the film's colour (dead dim, green) or the state colour at 'stage'.
     const sensorLed = script === null ? 'stage' : script.props.sensorLed;
-    const colour = sensorLed === 'dead' ? LED_DIM
-      : sensorLed === 'green' ? WORLD_ENV.sensor7.ledColors.green : this.ledStateColour(s, state, now);
+    let colour: number;
+    if (sensorLed === 'dead') {
+      colour = LED_DIM;
+      s.ledFrame = 'dark';
+      s.ledAlpha = 1;
+    } else if (sensorLed === 'green') {
+      colour = WORLD_ENV.sensor7.ledColors.green;
+      s.ledFrame = 'green';
+      s.ledAlpha = 1;
+    } else {
+      colour = this.ledStateColour(s, state, ambient, tween, now);
+    }
     if (colour !== s.ledColor) {
       s.led.setFillStyle(colour);
       s.ledColor = colour;
     }
   }
 
-  // The state LED colour: dim while the blink is dark, the heartbeat is low or (era IV) on the downbeat, else the state colour.
-  private ledStateColour(s: Sensor, state: WorldVisualState, now: number): number {
+  // The Sensor 7 head's camera side through the lag: the target changes at once in the state, the shown frame only once the target has
+  // been stable for WORLD_AMBIENT.sensorLagMs (reduced motion snaps).
+  private followHead(s: Sensor, sensorX: number, cam: CameraPose, now: number): string {
+    const target = sensorHead(sensorX, cam.centerX);
+    if (target !== s.followTarget) {
+      s.followTarget = target;
+      s.followSince = now;
+    }
+    if (this.reduced || now - s.followSince >= WORLD_AMBIENT.sensorLagMs) s.followShown = target;
+    return s.followShown;
+  }
+
+  // The state LED colour and its sensorRows frame. Dark (LED_DIM) while the era I micro blink, the double blink, the heartbeat low or
+  // the downbeat pulse runs; else the presented red-to-amber crossfade (tween.led); dimmed to a mix with LED_DIM while the reading dip
+  // runs (never off; the row alpha is the dim factor).
+  private ledStateColour(s: Sensor, state: WorldVisualState, ambient: Ambient, tween: WorldTween, now: number): number {
     const low = this.heartbeatLow(now);
-    const dark = blinkDark(s.blinkStart, now) || low || (state.sensor.pulse && this.beatNow);
-    if (dark) return LED_DIM;
-    return state.sensor.led === 'red' ? WORLD_ENV.sensor7.ledColors.red : WORLD_ENV.sensor7.ledColors.amber;
+    if (ambient.micro.ledBlink || blinkDark(s.blinkStart, now) || low || (state.sensor.pulse && this.beatNow)) {
+      s.ledFrame = 'dark';
+      s.ledAlpha = 1;
+      return LED_DIM;
+    }
+    const { ledColors } = WORLD_ENV.sensor7;
+    const { from, to, k } = tween.led;
+    const level = clamp01(from + (to - from) * k);
+    const base = mixRgb(ledColors.red, ledColors.amber, level);
+    s.ledFrame = LED_FRAMES[Math.round(level)] ?? 'red';
+    if (!ambient.micro.ledDim) {
+      s.ledAlpha = 1;
+      return base;
+    }
+    s.ledAlpha = WORLD_AMBIENT.dipFactor;
+    return mixRgb(base, LED_DIM, 1 - WORLD_AMBIENT.dipFactor);
   }
 
   // Downbeat edge of the beat, once per frame: the era IV rise starts on it, and the Sensor 7 pulse reads the beat level.
@@ -916,34 +1327,12 @@ export class LivingWorld {
     }
   }
 
-  // Loop of a walker for this state (eras I-V). The girl stands on her one loop (stand1 accents are the downbeat frame).
-  private loopPickOf(w: Walker, placement: WorldPlacement, state: WorldVisualState): LoopPick {
-    if (w.id === 'inspector') return inspectorLoopOf(placement, state);
-    if (w.id === 'dog') return dogLoopOf(state);
-    if (w.id === 'crow') return crowLoopOf(state, this.reduced);
-    return { loop: WORLD_ERA_LOOPS.girlStill, reverse: false };
-  }
-
-  // Idle frame of a walker: its loop, then the era IV downbeat accent and the stare. The accent and the stare replace rest steps only;
-  // walk steps keep their profile frame and x (a walker in motion never slides in the accent pose or glides in the front pose).
-  private idleFrame(w: Walker, placement: WorldPlacement, state: WorldVisualState, tick: number, now: number): IdleFrame {
-    const pick = this.loopPickOf(w, placement, state);
-    const step = loopFrameAt(pick.loop, tick, state.seam, pick.reverse);
-    const names = POSE_FRAMES[w.id];
-    const walking = step.frame.startsWith('walk');
-    const accent = names.accent;
-    const frame = accent !== undefined && now < w.accentUntil && !walking ? accent : step.frame;
-    if (state.stare && !walking) return { frame: names.front, dx: step.dx, flip: false };
-    return { frame, dx: step.dx, flip: step.flip === true };
-  }
-
-  // Lift of the body above its feet, world px: the era IV rise (every walker, the ripple) and, for the perched crow in era IV,
-  // its static hover and its beat rise. Shadows stay on the ground.
-  private bobOf(w: Walker, state: WorldVisualState, now: number): number {
-    let bob = now < this.riseUntilMs ? WORLD_ERA_ENV.riseWorldPx : 0;
+  // Lift of the body above its feet, world px: the runner's rise (its unison beat; none under reduced motion), the era IV ripple rise and,
+  // for the perched crow in era IV, its static hover. Shadows stay on the ground.
+  private bobOf(w: Walker, state: WorldVisualState, now: number, rise: number): number {
+    let bob = (this.reduced ? 0 : rise) + (now < this.riseUntilMs ? WORLD_ERA_ENV.riseWorldPx : 0);
     if (w.id === 'crow' && state.era === WORLD_ERA_ENV.downbeatEra && !state.traces.crowHigh) {
       bob += WORLD_ERA_ENV.crowHoverPx * PIXEL_SCALE;
-      if (!this.reduced && now < w.accentUntil) bob += WORLD_ERA_ENV.crowBeatRisePx * PIXEL_SCALE;
     }
     return bob;
   }

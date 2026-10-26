@@ -1990,3 +1990,93 @@ system"; the Factorio DamageIndicator mod changelog; a Last Epoch forum thread o
 | Pool the labels | created once |
 | A fixed spawn spot per source | per-era offset |
 | Do not let a steady small number sink under bigger, more frequent ones | the machine popup is drawn at the gain block's size, and its number is 5-15x the click's |
+
+## WP24 — living world v2 audit
+
+Art Director AD2, plan gate A12. Round 1 (2026-10-26, build 616b9c3): **FIXES REQUIRED** (1 high, 2 medium, 6 notes). Round 2
+(2026-10-27, build 9b7f3f1, Revision 6): **RELEASE-READY**. The scene reads as a living place moving through a recorded Tuesday: every
+denizen keeps doing different, canon-true things on its own clock (no repeat, no lockstep, no teleport), purchases and eras arrive over
+seconds (crossfades, staggers, buzz-ons), the far ruins drift from a grey morning to an amber 16:41, and eras IV and V read uncanny but
+alive (unison choreography, the stare, moonwalks, the breathing dust and Chladni lines), never static and never looping. No art changed
+in AD2; the three fixes were data and renderer code (EM / workers).
+
+Method: Playwright at 1920x1080 (and 1280x720 UI 150), one browser at a time, `?debug=1`. Long watches use `worldAdvance` (2 s steps
+of world time, a probe of the cast, props, behaviour and day per step, a PNG per step, the behaviour log at the end); real-time strips
+use a CDP screencast (9-16 fps) plus an in-page rAF sampler of `livingWorld()`, `worldProps()` and `worldTransitions()`; forced states
+use `worldBehaviourNext` and `worldDayHold`. Round 1 served `dist` on :4175 and `dist-demo` on :4176; round 2 used the EM's :4174
+(left running) and `dist-demo` on :4176 (stopped after). Evidence root `<A>` =
+`C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP24/ad2/`:
+`run/{full,demo,reduced,ui150,post,day}/` (round 1 long watches and strips), `motion/full/` (round 1 screencasts + rAF),
+`r2/{full,reduced,demo}/` (round 2), `shots/` (boards and crops), `user/` (three images for the user, `captions.txt`), `work/`
+(`lib.mjs`, `audit.mjs`, `motion.mjs`, `r2.mjs`, `analyze.py`, `group.py`, `timeline.py`, `mot.py`, `halo.py`, `halo2.py`,
+`rise.py`).
+
+### Round 1: variety per state (1920x1080, quiet, world time)
+| state (watch) | Inspector | dog | crow | girl | evidence |
+|---|---|---|---|---|---|
+| S7 era I (5 min) | 7 activities / 7 looks | 6 / 6 | frozen <-> tipTry (canon era I) | window (flicker, dims) | `run/full/s7-long/`, `run/full/sheet-s7-long-*.png`, `run/full/poses-s7-*.png` |
+| S9 era II (5 min) | 7 / 8 | 7 / 8 (dig bouts, sleep, scratch) | 4 / 3 (stutter, skip, freeze, tipTry) | mini flicker / dim | `run/full/s9-long/`, `run/full/sheet-s9-long-dog.png` |
+| S11 era III vents (5 min) | 8 / 9 (umbrella on vent puffs) | 7 / 7 (shake on puffs) | 4 / 4 (perch, ruffle, peck, shift) | mini 3 (palm) | `run/full/s11-long/`, `run/full/poses-s11-*.png` |
+| S13 before ONE OBSERVER (5 min) | unison 6 actions, 6 looks | 6 | 6 | 6 (lanternUp, tilt) | `run/full/s13b-long/`, `run/full/poses-s13b-girl.png` |
+| S13 after ONE OBSERVER (10 min) | unison 5 actions, 4 looks, 18 beat walks | 4 | 4 | 5 (the hum) | `run/full/s13a-long/`, `run/full/group-s13a-rt.png` |
+| S15 era V (10 min) | 4 / 4 (reversed backsteps, sensor walks, mouthing) | 4 / 4 | 3 / 3 | 4 / 4 | `run/full/s15-long/`, `run/full/group-s15-long.png` |
+
+Every state: 0 A->A, top exact 4-run <= 2 per window. Real-time rAF steps: walks 8 world px per drawn frame, the crow stutter 4,
+0 at rest: no teleport in any stage (`motion/full/*/motion.json`, `work/mot.py`). Demo (`run/demo/`): S7 and post-cap S9 keep the same
+variety after KEEP TINKERING, day held at 13:00 (`shots/demo-card-and-postcap.png`). Reduced motion (`run/reduced/`): activities still
+vary (umbrella, shake), receiver `hang`, micro flags off, motes static, walks rare (D15). 1280x720 UI 150: the cast stays readable
+under the HUD in eras II-V (`shots/ui150-1280x720-grid.png`).
+
+### Round 1: transitions and time
+| item | result | evidence |
+|---|---|---|
+| generator (S7 -> S8) | era row 0 -> 1 over 8.5 s, cast alpha and shadow 4 s, LED 3 s, girl window out 4 s, motes one at a time, windows staggered about 5 s apart; **halo plates popped all at once (F1)** | `run/full/tr-s8-generator/`, `shots/F1-halo-pop.png` |
+| powerLines | lamp buzz-on about 1.25 Hz for 3 s (limit 3 Hz), glow 0 -> .4, booth hood stutter-on after the lamp, pylon cables, windows dim -> lit one by one | `run/full/tr-s9-powerlines/`, `work/tr-powerlines-sheet.png`, `motion/full/tr-s9-powerlines/` |
+| era III / IV entries | era row crossfade 8.6 s / 8 s; scrap burn, puddle 45 s, sprout 40 s, virga 20 s, fog 30 s; era IV fog clears, virga freezes, Chladni rings arrive | `run/full/tr-s10-era3/`, `run/full/tr-s11-pressure/`, `run/full/tr-s13-era4/`, `shots/era4-crossfade-strip.png` |
+| era V entry | lamp flickers out about 2 s, windows dark one by one over 12 s, shadows 10 s | `run/full/tr-s15-era5/` |
+| day tint | 09:00 `0xe6e1d8`, 13:00 white, 16:41 `0xdcc3a6` on the ruin layers only (ground, machine, cast untouched); subtle, R >= G >= B; drifts with progress inside each band | `run/day/`, `work/day-s9-sheet.png`, `user/02-day-clock-0900-1300-1641.png` |
+| postgame / finale | postgame holds 16:41, wind 0, the restored twins untinted; finale k12 against the §R set (`<S>/R/finale`) differs only by the warm key on the ruins before the wave, k40 and postgame match | `run/post/`, `shots/postgame-grid.png`, `shots/finale-R-vs-wp24.png` |
+| new cells | palette and alpha 0/255 PASS (`worldSheets.test.ts`, painters 38/38); lookUp, crouch, umbrellaHalf, scratch, dog lookUp, frozenTip, ruffle, lanternUp, tilt and the mini palm read at in-game size; lanternUp holds the lantern at the chest, never the raised shield | `run/full/poses-s7-inspector.png`, `run/full/poses-s11-*.png`, `run/full/poses-s13b-girl.png` |
+
+### Round 1 findings
+- **F1 (high, an instant change).** At the generator buy all six window halo plates appeared together at about t 9.3 s while the window
+  sprites rose one by one; plates stood empty up to about 10 s and read as flat orange boxes (the era V lights-out had the mirror case).
+  Cause: `WorldProps.drawHalo(count)` drew the committed `windowsLit` count with one alpha (the brightest window). Fix (Revision 6):
+  `WorldProps.paintHalo` fills each window's halo at that window's own presented level and redraws only while a level moves by 1/255.
+  Evidence `shots/F1-halo-pop.png`, `shots/gen-windows-strip.png`.
+- **F2 (medium, eras IV-V read flatter than measured).** `WORLD_ERA_ENV.riseWorldPx` 1 = half an art px (`PIXEL_SCALE` 2); at zoom 0.5
+  with `roundPixels` it rounded away: stare -> rise changed crow 0 px, girl 3, dog 15 (the leash line only), so after ONE OBSERVER the dog
+  and crow showed only head <-> talk. Fix: `riseWorldPx` 2 (one art px; the bible's "rises 1 px"). Evidence `shots/F2-rise-subpixel.png`.
+- **F3 (medium, AD1b-3 H1).** Crouch at the `scrap` spot looked at bare ground (e1/s9 x 1496 facing left, the 1530 scrap behind his
+  heel; s11 x 808, the 830 / 960 scraps already burned). Moving spots or scraps fails (any target 28 px ahead of the spot lies under
+  `mid`; the cycle 3+ girl stands at 1538). Fix: crouch travels to `sensor` (e1/s9 1448 with the 1420 scrap 28 px ahead; s11 760 at
+  Sensor 7's foot; s8 none). Evidence `shots/h1-crouch-live-vs-mock.png`, `shots/h1-s11-live-vs-mock.png`.
+
+### Round 2 (build 9b7f3f1)
+| check | result | evidence |
+|---|---|---|
+| F1 generator, 1080p, screencast 16 fps, 250 ms grid over 44 s | PASS. Halo + window pixels switch in six clusters at 9.9 / 15.9 / 19.4 / 23.5 / 28.9 / 33.2 s = the six window onsets (alpha > 0.05); no plate lights before its window. Earlier small clusters are the girl's window going out (8.9 s, canon 4 s) and machine-assembly noise | `r2/full/gen/`, `shots/F1-r2-halo-fixed.png`, `shots/r2-gen-right-tower-x5.png`, `work/halo2.py` |
+| F1 era V lights-out | PASS. Each plate flickers and fades with its own window (w3 4.3 s, w2 5.3 s, w1 8.5 s, w0 flickers 11.2 / 11.5 s then fades to 13.2 s); the 1.1 s cluster is the horizon-glow sky stage | `r2/full/vout/`, `shots/F1-r2-era5-lightsout.png` |
+| F1 demo generator (:4176) | PASS. Same six clusters at 10.0 / 15.9 / 19.2 / 23.6 / 28.8 / 33.2 s | `r2/demo/gen/` |
+| F2 S13 after ONE OBSERVER, conductor pinned stare -> rise x3 | PASS. Same frames, y -2 world: changed px dog 350, crow 322-365, girl 176, Inspector 468-484 (round 1: 15 / 0 / 3); the lift shows a 1 px gap over the shadow ("things fall up") | `shots/F2-r2-rise.png`, `r2/full/s13a-*.png` |
+| F2 reduced motion | PASS. Rise 0 px on all four bodies, y unchanged | `shots/F2-r2-rise-reduced.png`, `r2/reduced/` |
+| F3 crouch e1 / s9 / s11 | PASS. e1 and s9 kneel at 1448 over the 1420 scrap just past the boot; s11 kneels at 760 at Sensor 7's foot, inspecting the instrument | `shots/F3-r2-crouch.png`, `r2/full/crouch-*.png` |
+| variety after the fixes (S11, 5 min) | unchanged: Inspector 8 / 9, dog 7, crow 4, girl 3, 0 A->A | `r2/full/s11-long/` |
+| finale / postgame frames | PASS. `val6` (9b7f3f1) against `val5` (pre-fix): same composition; differences are animation phase (dust, steam, parts, crow), about 1 % of pixels outside the timing-sensitive wave frames k41.5 and world-k38 | `shots/finale-r2-prefix-vs-fix.png` |
+
+User images refreshed from 9b7f3f1 (01 shows the new crouch at Sensor 7; 03 the era IV crossfade); 02 (day holds on a fully lit S9
+scene) is unaffected by the halo fix.
+
+### Notes (accepted, no fix)
+- N1 The mains flicker is one 1.7 s sine on every lit light (`WorldProps.mainsOf`), canon "slow mains flicker"; it moves the glow area
+  about +-1 % in luminance, not perceptible as a loop. Its comment says era II only; the code runs from era II on.
+- N2 From era III the Sensor 7 LED blinks every 2.4 s: the WP22 MK V heartbeat (`heartbeatLow`), a deliberate machine sync. The D10
+  "reading" dims (8-20 s) and the era I irregular blink (2.2-5.7 s) work.
+- N3 The crow's `head` / `talk` cells are the hover body with the head to the camera (WP23 art), so an era III glance flares the perched
+  crow for about 1 s; glances are out of WP24 scope and it reads as a startle.
+- N4 The cycle 3+ ground girl at 1538 stands on the 1530 scrap (pre-existing, WP23b data).
+- N5 `src/assets/painters/world.test.ts` hit the 5 s default timeout once under CPU load (passes alone; 8.1 s file).
+- N6 Cycle 2 crow `crowHigh` held through eras I-II: canon uncanny stillness (Revision 5 (b)); not re-captured.
+
+### Verdict
+**RELEASE-READY** (round 2, 9b7f3f1). F1-F3 fixed and verified in new captures; no new defect found.

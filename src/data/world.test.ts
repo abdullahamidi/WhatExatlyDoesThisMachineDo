@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_FEEDBACK, CRANK_PULSE, CAMERA, DEPTH, PARALLAX_FADE_MS, PARALLAX_BOTTOM_MARGIN, PYLON_LINE, PYLON_FEEDS, MACHINE_ANCHOR, PIXEL_SCALE, DUST, DUST_RISING, PATTERN_ORIGIN_X, VIEW, ECLIPSE, APERTURE_BEAM } from './world';
+import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_FEEDBACK, CRANK_PULSE, CAMERA, DEPTH, PARALLAX_FADE_MS, PARALLAX_BOTTOM_MARGIN, PYLON_LINE, PYLON_FEEDS, MACHINE_ANCHOR, PIXEL_SCALE, DUST, DUST_RISING, PATTERN_ORIGIN_X, VIEW, ECLIPSE, APERTURE_BEAM, PYLONS_LIT_FADE_MS, DAY_TINT_LAYERS, DAY_TINT_TAU_MS, DUST_WIND } from './world';
 import type { ParallaxLayerDef } from './world';
 import { PALETTE } from './palette';
 import { TOAST_CONFIG } from './notifications';
@@ -466,6 +466,41 @@ describe('FLOATING_TEXT and CRANK_PULSE', () => {
     expect(CRANK_PULSE.alphaPeak).toBe(0.9);
     expect(CRANK_PULSE.outlineArtPx).toBe(1);
     expect(CRANK_PULSE.outlineColor).toBe(PALETTE.ink);
+  });
+});
+
+describe('WP24 day tint, pylon fade and dust wind (C1)', () => {
+  const RESTORED_IDS: readonly string[] = ['skyRestored', 'mountainsRestored', 'skylineRestored'];
+
+  it('the lit pylons fade over PYLONS_LIT_FADE_MS, 6000 ms, and pylonsLit carries it', () => {
+    expect(PYLONS_LIT_FADE_MS).toBe(6000);
+    expect(layer('pylonsLit').fadeMs).toBe(PYLONS_LIT_FADE_MS);
+  });
+
+  it('no layer other than pylonsLit sets fadeMs, so every other layer keeps PARALLAX_FADE_MS', () => {
+    for (const l of PARALLAX_LAYERS) {
+      if (l.id === 'pylonsLit') continue;
+      expect(l.fadeMs, l.id).toBeUndefined();
+    }
+  });
+
+  it('the day tint takes the four ruin layers and no restored twin, skyViolet or horizonGlow', () => {
+    expect([...DAY_TINT_LAYERS]).toEqual(['sky', 'mountains', 'skyline', 'pylons']);
+    const ids = PARALLAX_LAYERS.map((l) => l.id);
+    for (const id of DAY_TINT_LAYERS) {
+      expect(ids, id).toContain(id);
+      expect(RESTORED_IDS, id).not.toContain(id);
+      expect(['skyViolet', 'horizonGlow'], id).not.toContain(id);
+    }
+  });
+
+  it('the day tint eases with a 1500 ms time constant', () => {
+    expect(DAY_TINT_TAU_MS).toBe(1500);
+  });
+
+  it('the dust wind write deadbands are positive', () => {
+    expect(DUST_WIND.epsilon).toBeGreaterThan(0);
+    expect(DUST_WIND.driftEpsilon).toBeGreaterThan(0);
   });
 });
 

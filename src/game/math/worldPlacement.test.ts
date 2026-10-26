@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   framingPose, framingKey, framingKeyOfPose, viewRectOf, isOnScreen, screenOfWorld, placeCast, unseenChangeOk, farPlaneLiterals,
+  actorBand, usableX,
 } from './worldPlacement';
 import type { Rect } from './worldPlacement';
 import { visibleMachineBounds, boundsToWorld } from './machineBounds';
@@ -500,6 +501,71 @@ describe('farPlaneLiterals', () => {
       pylonTileTopY: WORLD_FAR_PLANES.pylon.tileTopY,
       pylonNearTileOriginX: WORLD_FAR_PLANES.girlMiniNear.tileOriginX,
     });
+  });
+});
+
+describe('actorBand (WP24 T1)', () => {
+  const BAND_CASES: { name: string; buys: readonly string[]; framing: FramingKey }[] = [
+    { name: 'S7', buys: S7, framing: 'e1' }, { name: 'S9', buys: S9, framing: 's9' },
+    { name: 'S11', buys: S11, framing: 's11' }, { name: 'S15', buys: S15, framing: 's15' },
+  ];
+
+  it.each(BAND_CASES)('$name: the Inspector and the dog band contains the placement x', (s) => {
+    const levels = levelsOf(s.buys);
+    for (const actor of ['inspector', 'dog'] as const) {
+      const base = WORLD_PLACEMENTS[s.framing][actor];
+      const band = actorBand(s.framing, undefined, levels, actor);
+      expect(base, actor).toBeDefined();
+      expect(band, actor).not.toBeNull();
+      if (band === null || base === undefined) continue;
+      expect(band.min <= base.x && base.x <= band.max, actor).toBe(true);
+    }
+  });
+
+  it('the inner dog at s15 stays inside the inner gap of the machine edges', () => {
+    const levels = levelsOf(S15);
+    const machine = boundsToWorld(visibleMachineBounds(levels));
+    expect(WORLD_PLACEMENTS.s15?.dog?.inner).toBe(true);
+    const band = actorBand('s15', undefined, levels, 'dog');
+    expect(band).not.toBeNull();
+    if (band === null) return;
+    expect(band.min).toBeGreaterThanOrEqual(machine.left + WORLD_LAYOUT.innerClearPx);
+    expect(band.max).toBeLessThanOrEqual(machine.right - WORLD_LAYOUT.innerClearPx);
+  });
+
+  it('is null for an actor with no placement at the framing (the lamp at s10) and for an unusable placement x (the s10 hole)', () => {
+    expect(actorBand('s10', undefined, levelsOf(S10), 'lamp')).toBeNull();
+    expect(actorBand('s10', undefined, levelsOf(S10), 'hole')).toBeNull();
+  });
+
+  it('usableX is true at the band min and max and false one px outside', () => {
+    for (const s of BAND_CASES) {
+      const levels = levelsOf(s.buys);
+      const view = viewRectOf(framingPose(levels));
+      const machine = boundsToWorld(visibleMachineBounds(levels));
+      for (const actor of ['inspector', 'dog'] as const) {
+        const band = actorBand(s.framing, undefined, levels, actor);
+        const inner = WORLD_PLACEMENTS[s.framing][actor]?.inner === true;
+        expect(band, `${s.name} ${actor}`).not.toBeNull();
+        if (band === null) continue;
+        expect(usableX(band.min, view, machine, inner), `${s.name} ${actor} min`).toBe(true);
+        expect(usableX(band.max, view, machine, inner), `${s.name} ${actor} max`).toBe(true);
+        expect(usableX(band.min - 1, view, machine, inner), `${s.name} ${actor} min - 1`).toBe(false);
+        expect(usableX(band.max + 1, view, machine, inner), `${s.name} ${actor} max + 1`).toBe(false);
+      }
+    }
+  });
+
+  it.each(STAGES)('$name: the band is null exactly where placeCast drops the Inspector or the dog, and holds the placed x', (s) => {
+    const levels = levelsOf(s.buys);
+    const framing = framingKey(levels);
+    const placed = placeCast(levels, framing);
+    for (const actor of ['inspector', 'dog'] as const) {
+      const band = actorBand(framing, undefined, levels, actor);
+      const p = placed[actor];
+      expect(band === null, actor).toBe(p === null);
+      if (band !== null && p !== null) expect(band.min <= p.x && p.x <= band.max, actor).toBe(true);
+    }
   });
 });
 

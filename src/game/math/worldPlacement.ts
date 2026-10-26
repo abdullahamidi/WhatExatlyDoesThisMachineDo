@@ -86,7 +86,7 @@ type Usable = (x: number, inner?: true) => boolean;
 // True when a world x is usable for a cast member: outside the hub clearance and the screen centre third. An inner entry sits
 // inside the view by wingClearPx and between the machine edges by innerClearPx. Any other entry keeps its wing (DENIZEN_ART §3):
 // left of the anchor from the view edge to the machine left, right of it from the machine right to the view edge.
-function usableX(x: number, view: Rect, machine: Bounds, inner: boolean): boolean {
+export function usableX(x: number, view: Rect, machine: Bounds, inner: boolean): boolean {
   if (Math.abs(x - MACHINE_ANCHOR.x) < HUB_CLEAR_PX) return false;
   const third = view.w / 3;
   if (x >= view.x + third && x <= view.x + 2 * third) return false;
@@ -162,6 +162,27 @@ export function placeCast(
     sprout: placeOne(base.sprout, usable),
     lantern: placeOne(base.lantern, usable),
   };
+}
+
+// The x band an actor may walk in at a framing (WP24 T1, the spots rule): scanned outward from the placement x one world px at a time while
+// usableX holds (WORLD.width px each way at most). null when the actor has no placement there or its placement x is not usable.
+export function actorBand(
+  framing: FramingKey,
+  pose: CameraPose | undefined,
+  levels: Readonly<Record<TechId, number>>,
+  actor: GroundId,
+): { min: number; max: number } | null {
+  const base = WORLD_PLACEMENTS[framing][actor];
+  if (base === undefined) return null;
+  const view = viewRectOf(pose ?? framingPose(levels));
+  const machine = boundsToWorld(visibleMachineBounds(levels));
+  const inner = base.inner === true;
+  if (!usableX(base.x, view, machine, inner)) return null;
+  let min = base.x;
+  while (base.x - min < WORLD.width && usableX(min - 1, view, machine, inner)) min -= 1;
+  let max = base.x;
+  while (max - base.x < WORLD.width && usableX(max + 1, view, machine, inner)) max += 1;
+  return { min, max };
 }
 
 // A change the player may not see is safe: the TECH INDEX is open, or the old and new places are both off-screen.

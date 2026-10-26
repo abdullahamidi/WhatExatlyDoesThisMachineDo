@@ -9,7 +9,8 @@ import type { ChainId, SpeakerId, WorldLine, WorldOffer, WorldSaveState } from '
 import { LIVING_WORLD, WORLD_CHAINS, WORLD_LINES, WORLD_UNISON, WORLD_VOICE_CONFIG } from '../../data/livingWorld';
 import type { TechId } from '../../data/types';
 import {
-  countedSeen, idleReady, lineEligible, momentGate, newMomentLog, noteMomentStart, priorityOf, triggerGate, ttlOf,
+  countedSeen, idleReady, lineEligible, momentGate, momentWindowOpen, newMomentLog, noteMomentStart, priorityOf,
+  triggerGate, ttlOf,
 } from './worldVoiceRules';
 import type { OfferKind, WorldCue, WorldMomentLog, WorldRuleConfig, WorldSchedulerCtx } from './worldVoiceRules';
 
@@ -384,7 +385,8 @@ export function createWorldScheduler(
       });
     }
     // The table scan (idle, demoNear, postgame) is skipped under OFF: it could only find lines the setting refuses.
-    if (!beatsOnly) {
+    // Safe skip: table kinds are idle/demoNear/postgame, so momentWindowOpen('idle') is their R7 gate; a toast fails triggerGate for all.
+    if (!beatsOnly && !ctx.toastUp && momentWindowOpen('idle', log, ctx, cfg)) {
       for (const [order, line] of lines.entries()) {
         const kind = line.trigger.kind;
         if (kind !== 'idle' && kind !== 'demoNear' && kind !== 'postgame') continue;
