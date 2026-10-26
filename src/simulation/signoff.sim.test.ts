@@ -138,6 +138,7 @@ beforeAll(() => {
         ],
         ['B', formatMmSs(b.firstAt.primaryFunction), formatMmSs(b.firstAt.primaryFunction), '<= 300 min', pass(b.firstAt.primaryFunction <= 300 * MINUTE)],
         ['C', formatMmSs(pfC), formatMmSs(pfC), '<= 480 min', pass(pfC <= 480 * MINUTE)],
+        ['C (WP25)', formatMmSs(pfC), formatMmSs(pfC), '<= 360 min', pass(pfC <= 360 * MINUTE)],
         [
           'D',
           formatMmSs(d.firstAt.primaryFunction),
@@ -240,6 +241,10 @@ describe('signoff: profile primaryFunction', () => {
 
   it('C: primaryFunction at or before 480 min (no offline)', () => {
     expect(c.firstAt.primaryFunction).toBeLessThanOrEqual(480 * MINUTE);
+  });
+
+  it('C: primaryFunction at or before 360 min (passive-first, WP25)', () => {
+    expect(c.firstAt.primaryFunction).toBeLessThanOrEqual(360 * MINUTE);
   });
 
   it('D: active primaryFunction at or before C active and at or before 480 min; wall time reported', () => {

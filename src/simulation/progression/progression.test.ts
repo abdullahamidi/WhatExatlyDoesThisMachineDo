@@ -109,7 +109,7 @@ describe('getTechStatus', () => {
   });
 
   it('milestone is never available even when its conditions are met', () => {
-    const s = withMe(withLevels({ pistonArray: 1, flywheel: 1 }), 0, 200000);
+    const s = withMe(withLevels({ pistonArray: 1, flywheel: 1 }), 0, 240000);
     expect(getTechStatus(s, 'generatorBlueprint')).toBe('locked');
   });
 });
@@ -121,8 +121,8 @@ describe('getTechView', () => {
     expect(v.level).toBe(2);
     expect(v.nextCost).toBe(26);
     expect(v.affordable).toBe(true);
-    expect(v.currentEffectText).toBe('+2 ME/click');
-    expect(v.nextEffectText).toBe('+3 ME/click');
+    expect(v.currentEffectText).toBe('+1 ME/click');
+    expect(v.nextEffectText).toBe('+1.5 ME/click');
   });
 
   it('gearRatio at level 2 with 25 ME is not affordable', () => {
@@ -132,13 +132,13 @@ describe('getTechView', () => {
   it('gearRatio at level 0', () => {
     const v = getTechView(createInitialState(0), 'gearRatio');
     expect(v.currentEffectText).toBe('None');
-    expect(v.nextEffectText).toBe('+1 ME/click');
+    expect(v.nextEffectText).toBe('+0.5 ME/click');
     expect(v.nextCost).toBe(15);
   });
 
   it('owned wornMotor', () => {
     const v = getTechView(withLevels({ wornMotor: 1 }), 'wornMotor');
-    expect(v.currentEffectText).toBe('+1 ME/s');
+    expect(v.currentEffectText).toBe('+17 ME/s');
     expect(v.nextCost).toBeNull();
     expect(v.nextEffectText).toBeNull();
     expect(v.status).toBe('purchased');
@@ -147,8 +147,8 @@ describe('getTechView', () => {
   it('unowned reinforcedCrank', () => {
     const v = getTechView(createInitialState(0), 'reinforcedCrank');
     expect(v.currentEffectText).toBe('None');
-    expect(v.nextEffectText).toBe('×2 manual production');
-    expect(v.nextCost).toBe(2000);
+    expect(v.nextEffectText).toBe('×1.5 manual production');
+    expect(v.nextCost).toBe(2500);
   });
 
   it('flywheel at level 2 shows cumulative effects', () => {
@@ -181,7 +181,7 @@ describe('getTechView', () => {
 
   it('generatorBlueprint requirement labels and met flags', () => {
     const v = getTechView(createInitialState(0), 'generatorBlueprint');
-    expect(v.requirements.map((r) => r.label)).toEqual(['Piston Array', 'Flywheel Lv 1', '200K lifetime ME']);
+    expect(v.requirements.map((r) => r.label)).toEqual(['Piston Array', 'Flywheel Lv 1', '240K lifetime ME']);
     expect(v.requirements.every((r) => r.met === false)).toBe(true);
   });
 
@@ -337,9 +337,9 @@ describe('purchase success', () => {
     if (result.ok) expect(result.state.res.me).toBe(0);
   });
 
-  it('buys reinforcedCrank for 2000 ME once gearRatio is 3', () => {
-    const first = purchase(withMe(withLevels({ gearRatio: 3 }), 2000, 2000), 'reinforcedCrank');
-    expect(first).toMatchObject({ ok: true, cost: 2000, newLevel: 1 });
+  it('buys reinforcedCrank for 2500 ME once gearRatio is 3', () => {
+    const first = purchase(withMe(withLevels({ gearRatio: 3 }), 2500, 2500), 'reinforcedCrank');
+    expect(first).toMatchObject({ ok: true, cost: 2500, newLevel: 1 });
     if (!first.ok) return;
     expect(first.state.res.me).toBe(0);
     expect(first.state.techLevels.reinforcedCrank).toBe(1);
@@ -388,14 +388,14 @@ describe('purchase success', () => {
 
 describe('evaluateMilestones', () => {
   it('does nothing below the lifetime threshold', () => {
-    const s = withMe(withLevels({ pistonArray: 1, flywheel: 1 }), 0, 199999);
+    const s = withMe(withLevels({ pistonArray: 1, flywheel: 1 }), 0, 239999);
     const result = evaluateMilestones(s);
     expect(result.unlocked).toEqual([]);
     expect(result.state).toBe(s);
   });
 
   it('unlocks generatorBlueprint at the threshold, idempotently', () => {
-    const s = withMe(withLevels({ pistonArray: 1, flywheel: 1 }), 5, 200000);
+    const s = withMe(withLevels({ pistonArray: 1, flywheel: 1 }), 5, 240000);
     const first = evaluateMilestones(s);
     expect(first.unlocked).toEqual(['generatorBlueprint']);
     expect(first.state.techLevels.generatorBlueprint).toBe(1);
@@ -408,12 +408,12 @@ describe('evaluateMilestones', () => {
   });
 
   it('needs flywheel', () => {
-    const s = withMe(withLevels({ pistonArray: 1 }), 0, 200000);
+    const s = withMe(withLevels({ pistonArray: 1 }), 0, 240000);
     expect(evaluateMilestones(s).unlocked).toEqual([]);
   });
 
   it('needs pistonArray', () => {
-    const s = withMe(withLevels({ flywheel: 1 }), 0, 200000);
+    const s = withMe(withLevels({ flywheel: 1 }), 0, 240000);
     expect(evaluateMilestones(s).unlocked).toEqual([]);
   });
 
@@ -454,11 +454,11 @@ describe('scripted two-branch run', () => {
       spent += buy(id);
     }
     spent += buy('pistonArray');
-    expect(spent).toBe(18645);
+    expect(spent).toBe(19145);
 
     const result = evaluateMilestones(s);
     expect(result.unlocked).toEqual(['generatorBlueprint']);
-    expect(result.state.res.me).toBe(1e6 - 18645);
+    expect(result.state.res.me).toBe(1e6 - 19145);
     expect(result.state.lifetime.me).toBe(1e6);
   });
 });

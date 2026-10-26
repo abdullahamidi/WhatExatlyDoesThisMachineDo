@@ -59,3 +59,23 @@ describe('HUD_TEXT view machine button', () => {
     expect(HUD_TEXT.viewMachineTitle).toBe('View the whole machine (photo mode)');
   });
 });
+
+describe('HUD_TEXT click worth and auto-crank output (WP25 C4)', () => {
+  it('has the exact worth separator, worth, worth floor, worth title and auto-crank output strings', () => {
+    expect(HUD_TEXT.worthSep).toBe(' · ');
+    expect(HUD_TEXT.clickWorth).toBe('{s}s');
+    expect(HUD_TEXT.worthFloor).toBe('<0.01');
+    expect(HUD_TEXT.clickWorthTitle).toBe('One turn of the crank = {s} s of machine output');
+    expect(HUD_TEXT.autoCrankOutput).toBe('+{v} {res}/s');
+  });
+
+  it('keeps the {s} placeholder in the worth strings', () => {
+    expect(HUD_TEXT.clickWorth).toContain('{s}');
+    expect(HUD_TEXT.clickWorthTitle).toContain('{s}');
+  });
+
+  it('keeps the {v} and {res} placeholders in the auto-crank output string', () => {
+    expect(HUD_TEXT.autoCrankOutput).toContain('{v}');
+    expect(HUD_TEXT.autoCrankOutput).toContain('{res}');
+  });
+});

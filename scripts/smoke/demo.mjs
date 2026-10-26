@@ -267,8 +267,8 @@ async function caseA(page) {
   kit.ok('A_demo_row_hidden', !(await kit.visible(page, '#sys-demo-end')));
   await page.click('#sys-tab-records', { timeout: 3000 }).catch(() => {});
   await sleep(300);
-  // the demo edition lists 18 records; the full game lists more
-  kit.ok('A_records_18', /\/18 /.test((await kit.text(page, '.ach-counter')) ?? ''));
+  // the demo edition lists 20 records; the full game lists more
+  kit.ok('A_records_20', /\/20 /.test((await kit.text(page, '.ach-counter')) ?? ''));
   await kit.shot(page, 'demo-A3-menu');
 }
 

@@ -166,16 +166,17 @@ describe('greedy balance simulation (WP5 pacing targets)', () => {
     expect(a.firstAt.generatorBlueprint).toBeLessThanOrEqual(1800);
   });
 
+  // re-pinned once for WP25 (wornMotor on: passive-first retune)
   it('era I exact first-purchase times (EXACT: era I must not drift)', () => {
     expect(a.firstAt.handCrank).toBe(0);
     expect(a.firstAt.gearRatio).toBe(4);
-    expect(a.firstAt.wornMotor).toBe(13);
-    expect(a.firstAt.motorTuning).toBe(20);
-    expect(a.firstAt.reinforcedCrank).toBe(196);
-    expect(a.firstAt.flywheel).toBe(289);
-    expect(a.firstAt.pistonArray).toBe(722);
-    expect(a.firstAt.improvedPistons).toBe(758);
-    expect(a.firstAt.generatorBlueprint).toBe(1326);
+    expect(a.firstAt.wornMotor).toBe(18);
+    expect(a.firstAt.motorTuning).toBe(23);
+    expect(a.firstAt.reinforcedCrank).toBe(205);
+    expect(a.firstAt.flywheel).toBe(297);
+    expect(a.firstAt.pistonArray).toBe(730);
+    expect(a.firstAt.improvedPistons).toBe(761);
+    expect(a.firstAt.generatorBlueprint).toBe(1327);
   });
 
   it('maxValue is finite and below the design ceiling', () => {

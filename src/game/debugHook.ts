@@ -23,6 +23,7 @@ import type { FinaleState } from './rendering/FinaleDirector';
 import type { FinaleFrame } from './math/finale';
 import type { CycleTransitionState } from './rendering/CycleTransition';
 import type { WorldDebugApi, WorldDebugState } from './rendering/LivingWorldDirector';
+import { OutputTicker } from './rendering/OutputTicker';
 import type { NewCycleController } from './newCycle';
 import type { DemoEndDebugState } from '../ui/demoEndModel';
 
@@ -96,6 +97,9 @@ declare global {
       // WP22: part tier probes (World machine)
       partTiers(): Partial<Record<TechId, number>> | null;
       tierBeatsActive(): number;
+      // WP25: machine output popups (OutputTicker). outputStats is null without a World scene or ticker.
+      outputStats(): { shown: number; visible: number; y: number | null; rising: boolean; last: string | null; meanMs: number } | null;
+      setOutputTicks(on: boolean): void;
     };
   }
 }
@@ -264,6 +268,10 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     game.scene.getScene<WorldScene>('World')?.getMachine()?.partTiers() ?? null;
   /** Tier-up beats in flight (WP22, D7 unit); 0 without a World machine. */
   const tierBeatsActive = (): number => game.scene.getScene<WorldScene>('World')?.getMachine()?.tierBeatsActive() ?? 0;
+  /** WP25: output popup counters and timing; null without a World scene or ticker. */
+  const outputStats = (): { shown: number; visible: number; y: number | null; rising: boolean; last: string | null; meanMs: number } | null => OutputTicker.of(game.scene.getScene('World'))?.stats() ?? null;
+  /** WP25: turns the machine output popups on or off (off also hides the visible ones). */
+  const setOutputTicks = (on: boolean): void => { OutputTicker.of(game.scene.getScene('World'))?.setEnabled(on); };
   window.__wedtmd = {
     session,
     crankClientPoint,
@@ -308,5 +316,7 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     plateCap,
     partTiers,
     tierBeatsActive,
+    outputStats,
+    setOutputTicks,
   };
 }

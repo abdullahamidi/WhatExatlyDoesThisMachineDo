@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { ONBOARDING, NEXT_GOAL, AFFORDABLE_BADGE, ERA_CARD, ASSEMBLY_QUEUE, CAMERA_NUDGE, TOAST_BURST, CRANK_SPARKS, HUD_BUMP } from './ux';
+import { ONBOARDING, NEXT_GOAL, AFFORDABLE_BADGE, ERA_CARD, ASSEMBLY_QUEUE, CAMERA_NUDGE, TOAST_BURST, CRANK_SPARKS, HUD_BUMP, OUTPUT_TICK } from './ux';
 import { TECHNOLOGIES } from './technologies';
 import { ERA_KEYSTONES } from './eras';
+import { MACHINE_COMPONENT_IDS } from './machineComponents';
 
 // The WP20 constants are a contract imported by eight files: a broken tech id, a rename or a retune of a
 // player-facing string fails here instead of in the browser.
@@ -70,6 +71,43 @@ describe('WP20 player-facing copy', () => {
   it('the affordable badge caps at 99 and overflows as 99+', () => {
     expect(AFFORDABLE_BADGE.max).toBe(99);
     expect(AFFORDABLE_BADGE.overflow).toBe('99+');
+  });
+});
+
+// WP25 machine output popups: the anchors must be real machine parts, or the ticker has nothing to point at.
+describe('WP25 machine output popups (OUTPUT_TICK)', () => {
+  it('every anchor is a real machine component, keyed by era 1..5', () => {
+    expect(Object.keys(OUTPUT_TICK.anchor).sort()).toEqual(['1', '2', '3', '4', '5']);
+    for (const id of Object.values(OUTPUT_TICK.anchor)) expect(MACHINE_COMPONENT_IDS).toContain(id);
+  });
+
+  it('the period is at least a second and the fade fits inside one period', () => {
+    expect(OUTPUT_TICK.periodMs).toBeGreaterThanOrEqual(1000);
+    expect(OUTPUT_TICK.fadeMs).toBeGreaterThan(0);
+    expect(OUTPUT_TICK.fadeMs).toBeLessThanOrEqual(OUTPUT_TICK.periodMs);
+  });
+
+  it('the rise, alpha, font scale and pool size are in range', () => {
+    expect(OUTPUT_TICK.riseWorldPx).toBeGreaterThanOrEqual(0);
+    expect(OUTPUT_TICK.alpha).toBeGreaterThan(0);
+    expect(OUTPUT_TICK.alpha).toBeLessThanOrEqual(1);
+    expect(OUTPUT_TICK.fontScale).toBeGreaterThan(0);
+    expect(OUTPUT_TICK.fontScale).toBeLessThanOrEqual(1);
+    expect(OUTPUT_TICK.poolSize).toBeGreaterThanOrEqual(2);
+  });
+
+  it('every era 1..5 has a finite offset that lifts the text or leaves it level (y <= 0)', () => {
+    expect(Object.keys(OUTPUT_TICK.offset).sort()).toEqual(['1', '2', '3', '4', '5']);
+    for (const o of Object.values(OUTPUT_TICK.offset)) {
+      expect(Number.isFinite(o.x)).toBe(true);
+      expect(Number.isFinite(o.y)).toBe(true);
+      expect(o.y).toBeLessThanOrEqual(0);
+    }
+  });
+
+  it('the hold fits inside the fade (0 <= holdMs < fadeMs)', () => {
+    expect(OUTPUT_TICK.holdMs).toBeGreaterThanOrEqual(0);
+    expect(OUTPUT_TICK.holdMs).toBeLessThan(OUTPUT_TICK.fadeMs);
   });
 });
 

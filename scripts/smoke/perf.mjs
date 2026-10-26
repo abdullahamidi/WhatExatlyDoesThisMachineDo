@@ -118,9 +118,9 @@ const buyFn = (buys) => {
   const jump = () => { t += 8 * 3600 * 1000; s.update(t); };
   for (const id of buys) {
     if (id.startsWith('@') && id.includes(':')) {
-      // '@<techId>:<n>' marker: buy that tech until its level is n (up to 128 rounds, 8 h jump after a round that ends below n)
+      // '@<techId>:<n>' marker: buy that tech until its level is n (up to 512 rounds, 8 h jump after a round that ends below n)
       const [tech, nStr] = id.slice(1).split(':'); const n = +nStr;
-      for (let k = 0; k < 128 && s.state.techLevels[tech] < n; k++) {
+      for (let k = 0; k < 512 && s.state.techLevels[tech] < n; k++) {
         let r = s.purchase(tech);
         while (r.ok && s.state.techLevels[tech] < n) r = s.purchase(tech);
         if (s.state.techLevels[tech] < n) jump();

@@ -139,7 +139,7 @@ export function achievementMessage(
   };
 }
 
-// New-cycle toast (WP14 T8a): `CYCLE 0043` / `+3 ECHOES (+90% ALL/S)`. The bonus is the all-rate multiplier after the
+// New-cycle toast (WP14 T8a): `CYCLE 0043` / `+3 ECHOES (+45% ALL/S)`. The bonus is the all-rate multiplier after the
 // gain (counts earned Echoes only, so perks do not change it). Shown after the reset, so it survives the toast clear.
 export function cycleMessage(event: SessionEvents['cycle']): ToastMessage {
   const bonusPct = Math.round((echoMultiplier({ cycle: event.cycle, echoesEarned: event.echoesEarned, perks: [] }) - 1) * 100);

@@ -1,5 +1,7 @@
 import type { TechId } from './types';
 import type { AssetId } from '../assets/assetIds';
+import type { MachineComponentId } from './machineComponents';
+import type { EraNumber } from './eras';
 
 // WP20 first-impression UX tuning. Pure data: every number the onboarding, guidance, era-card, toast,
 // camera-nudge, fly-in and click-juice code reads lives here. Keys and values are a contract for those files.
@@ -32,3 +34,7 @@ export const CRANK_SPARKS = { texture: 'fx.dust' as AssetId, count: 4, speed: { 
   lifespanMs: 260, scale: { start: 0.6, end: 0 }, alpha: { start: 0.9, end: 0 }, gravityY: 320, tint: 0xffd27a, maxAlive: 32 } as const;
 // HUD counter bump on gain: peak scale and time to settle back.
 export const HUD_BUMP = { scale: 1.08, durationMs: 120 } as const;
+// WP25 machine output popups (OutputTicker): one line of the frontier gain every periodMs from the first click on, full alpha for holdMs, then a linear fade to 0 at fadeMs. World px unless noted. offset is per era, from the anchor's resolved position (wornMotor / generator: centre; boiler / spireTower / nullChamber: base); the Art Director tunes these numbers (AD1 F1; round 2 F3: era III sits right of the HUD panel at UI 150, between it and the piston rack).
+export const OUTPUT_TICK = { periodMs: 3000, fadeMs: 2400, holdMs: 1000, riseWorldPx: 36, alpha: 0.9, fontScale: 1, poolSize: 3,
+  anchor: { 1: 'wornMotor', 2: 'generator', 3: 'boiler', 4: 'spireTower', 5: 'nullChamber' } satisfies Record<EraNumber, MachineComponentId>,
+  offset: { 1: { x: 0, y: -32 }, 2: { x: 0, y: -90 }, 3: { x: 190, y: -216 }, 4: { x: 190, y: -160 }, 5: { x: 240, y: -116 } } satisfies Record<EraNumber, { x: number; y: number }> } as const;

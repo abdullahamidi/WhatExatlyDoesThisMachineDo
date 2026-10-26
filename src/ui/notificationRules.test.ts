@@ -290,19 +290,19 @@ describe('welcomeBackMessage with the xf reveal (WP13 D4)', () => {
 });
 
 describe('cycleMessage (WP14 T8a)', () => {
-  it('cycle 2 with 3 Echoes: CYCLE 0043 and +3 ECHOES (+90% ALL/S), system tone', () => {
+  it('cycle 2 with 3 Echoes: CYCLE 0043 and +3 ECHOES (+45% ALL/S), system tone', () => {
     expect(cycleMessage({ cycle: 2, echoesGained: 3, echoesEarned: 3 })).toEqual({
       key: 'cycle',
       title: 'CYCLE 0043',
-      body: '+3 ECHOES (+90% ALL/S)',
+      body: '+3 ECHOES (+45% ALL/S)',
       tone: 'system',
       durationMs: TOAST_CONFIG.durationMs,
     });
   });
 
   it('bonus follows the earned total, capped at 30 counted Echoes', () => {
-    expect(cycleMessage({ cycle: 3, echoesGained: 3, echoesEarned: 6 }).body).toBe('+3 ECHOES (+180% ALL/S)');
-    expect(cycleMessage({ cycle: 9, echoesGained: 4, echoesEarned: 40 }).body).toBe('+4 ECHOES (+900% ALL/S)');
+    expect(cycleMessage({ cycle: 3, echoesGained: 3, echoesEarned: 6 }).body).toBe('+3 ECHOES (+90% ALL/S)');
+    expect(cycleMessage({ cycle: 9, echoesGained: 4, echoesEarned: 40 }).body).toBe('+4 ECHOES (+450% ALL/S)');
   });
 
   it('title counts the cycle with the CYCLE label', () => {

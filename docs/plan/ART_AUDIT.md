@@ -1772,3 +1772,221 @@ Re-check after F2 + F3 (Director / EM, no AD round if all hold): fresh preview, 
 
 **Row 11 release art sign-off (v0.10.0):** in-game PASS (unchanged). Store set: not final. F1 PASS; PENDING F2 + F3; PASS when the
 `store-final3` run meets the re-check above (as in `proto/set5/`).
+
+## WP25 — passive-first audit
+
+Art Director AD1, round 1, 2026-10-26. Verdict: **FIXES REQUIRED** (1 S1, 1 S2, 3 notes; both fixes are code, owner worker via EM;
+no asset, balance or simulation change). The economy is right: in a real-time 10 min era II run at 0.5 clicks/s the machine makes
+91 % of the EE and 98.5 % of the ME. The HUD says it (CLICK worth in seconds, AUTO-CRANK output). The machine output popups, the one
+on-screen sign of the machine's output, do not: they start dim, fade from the first frame, are drawn small, and sit on the part
+bodies. The click's gain block reads stronger than the machine's 5x larger number, and from era III on the popups are illegible.
+Both fixes are prototyped on the live build and checked in new screenshots (`proto1/`, `proto3/`, `proto*u150/`, `tree/`).
+
+Build under audit: `dist` 04:47 (`index-E1NyXld9.js`, `index-cyaZ_Ykl.css`), `dist-demo` 04:47; `find src public -newer
+dist/index.html` prints nothing. :4175 = the package's `vite preview` of `dist`. :4176 was started for the demo teaser check only and
+killed after it (netstat empty). One Playwright browser at a time. Evidence root `<A>` =
+`C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP25/ad1/`:
+`run10/` (10 min era II run, frame + numbers every minute, `run10.json`), `stills/` (shipped build: eras I-V, servo MK I-III,
+HUD per resolution and UI scale, reduced motion, bubble + gain block, photo, zoom 0.5, showcase, finale, postgame), `demo/` (demo
+teaser, card, KEEP TINKERING), `proto1/`, `proto3/`, `proto1u150/`, `proto3u150/` (F1 prototype: the `OUTPUT_TICK` numbers and the
+two code lines patched into the served bundle in flight with a Playwright route; repo untouched), `tree/` (F2 prototype: the detour
+path written into the one SVG edge), `crops/` (1:1 to 6x nearest crops and boards), `tools/` (`run10.mjs`, `stills.mjs`,
+`stills-proto.mjs`, `teaser.mjs`, `tree.mjs`, `tree3.mjs`, `crop.py`, `board.py`).
+
+### 10 min era II run at 0.5 clicks/s (the R1 check)
+Phase 0 (synthetic clock): fresh game, 4 clicks/s, the `runGreedy` buy rule (cheapest available per resource, every 1 s) until the
+Generator: owned at 1556 s = T1's 25:56, so the in-page player is profile P1 at the era II entry. Phase 1 (real time, 1280x720,
+UI 100): real mouse clicks on the crank every 2 s, the same buy rule every 1 s, 10 min.
+
+| min | ME/s | EE/s | HUD CLICK | HUD AUTO-CRANK | EE from clicks (cum.) | popup |
+|---|---|---|---|---|---|---|
+| 0 | 261 | 6.1 | `+12 ME · 0.05s` | — | — | — |
+| 2 | 346 | 31.8 | `+7.9 EE · 0.25s` (Dynamo Crank at 1:13) | — | 6.0 % | `+95 EE` |
+| 5 | 455 | 130 | `+25 EE · 0.2s` | `1/s · +25 EE/s` (Crank Servo at 4:38) | 9.6 % | `+389 EE` |
+| 10 | 595 | 265 | `+52 EE · 0.2s` | `1/s · +52 EE/s` | 9.2 % | `+793 EE` |
+
+Totals: EE +77.8K (clicks 7.1K = 9.2 %), ME +270K (clicks 4.2K = 1.5 %); 300 clicks, 28 buys (one per 21 s), 200 popups (exactly
+one per 3 s, never two on screen), `meanMs` <= 0.0073 (limit 0.05). A 4-click/s player would add about 8 x 7.1K = 57K EE here
+(early era II, servo level 1, is the click-heaviest stretch; the plan's integrated era II share for A is 31 %). Progress comes from
+the machine: PASS on the numbers and the HUD. On screen the popups fail it (F1): `run10/run10-m02.png`, `run10-m10.png`,
+`crops/run10-m02-gen-x3.png`, `crops/run10-m10-gen-x3.png` (a faint number on the generator yoke, through the crow).
+Board: `crops/run10-hud-m00-m05-m10.png`.
+
+### Checks
+| item | result | evidence (`<A>`) |
+|---|---|---|
+| HUD CLICK / AUTO-CRANK at 1280x720 UI 100 / 125 / 150, 1920x1080 UI 100 / 125 / 150, Deck 1280x800 UI 150 | PASS. One line each, inside the panel at every size (`CLICK +78 EE · 0.09S`, `+5.6 ME`, `AUTO-CRANK 7/S · +551 EE/S`; panel right edge 437 at 720p UI 150). The worth reads as seconds next to the `/S` rates; the row title explains it. Strings exact (C4) | `stills/hud-*.png`, `crops/hud-board-720.png`, `crops/hud-board-1080.png` |
+| Crank Servo in era II, MK I / II / III (levels 1 / 4 / 7), framings s8 (generator entry) and s9 | PASS (art note N1). Under the crank inside the frame, iron + copper like the generator's windings, so it reads as era II kit; MK II lamp, MK III copper coil block read as steps. Mechanics right: a parallel crank (rod R1 from the servo arm pin to the crank pin, both throws 19 art px, same phase, both `driven` ratio -1.75), so the rod stays vertical at 32 art px | `stills/s8-servo{1,4,7}.png`, `stills/s9-servo7.png`, `crops/servo-mk-board-x4.png`, `crops/run10-m05-servo-x4.png` |
+| Output popups, era I (Worn Motor) | readable at birth, gone after about 0.7 s (alpha 0.7, linear fade from frame 0) | `crops/e1-burst-board-x3.png` |
+| Output popups, eras II-V | **FAIL (F1)**: on the generator yoke and the perched crow (II), inside the boiler barrel (III), on the spire lattice (IV), inside the null chamber cage (V); 10-13 px at the era III-V default zoom 0.5 | `crops/s9-burst-board-x3.png`, `crops/e3-boiler-x4.png`, `crops/e4-spire-x4.png`, `stills/e5-popup.png`, `crops/s9-zoom05-gen-x4.png` |
+| Hierarchy vs the crank gain block | **FAIL (F1)**: 6 clicks `+472 EE / +33 ME` bright and bold above the frame, the machine's `+2.59K EE` a ghost on the generator | `stills/s9-bubble-click-popup.png`, `stills/e1-c-click-popup.png` |
+| Placement vs gain block, denizen bubbles, HUD | PASS: no overlap with the gain block (crank +116 / -128) or the bubbles (INS-01 at the left wing, dog line at the ground) | `stills/s9-bubble-click-popup.png`, `proto1/s8-servo7.png` |
+| Palette | PASS: crank gain colours (`#ffd27a`, cyanLight, steam, verdigrisLight, violetPale) + ink stroke; era V reads `???` before the reveal | `stills/e5-popup.png` |
+| Not spammy | PASS: one line per 3 s, never two on screen (run10 200 / 200) | `run10/run10.json` |
+| Gates: before the first click, photo, finale, postgame | PASS: shown 0 before the click; photo shown 23 -> 23, visible 0; finale shown 9 frozen, visible 0 for 6 s; postgame (KEEP, 6 crank clicks) shown 9 frozen, visible 0 | `stills/stills.json`, `stills/s9-photo.png`, `stills/e5-finale.png`, `stills/e5-postgame.png` |
+| Gates: demo teaser, card, KEEP TINKERING | PASS: teaser 10 samples visible 0, shown 3 frozen; card visible 0; popups resume after KEEP | `demo/teaser.json`, `demo/demo-teaser-{2,6}.png`, `demo/demo-card.png`, `demo/demo-afterkeep.png` |
+| Full-build showcase (`showcasePlay`) | PASS on screen (World asleep, not drawn). `outputStats()` keeps reporting `visible: 1` for the popup frozen when the World slept (N3) | `stills/s9-showcase.png` |
+| Reduced motion | PASS on the rule (`rising` false, y 1572 constant, fade only); the static number sits on the generator yoke (F1) | `crops/rm-burst-board-x3.png` |
+| Tab II tree, Crank Servo at (2,2) | **FAIL (F2)**: the Motor Retrofit -> Power Lines edge runs behind the Crank Servo node, so it reads Motor Retrofit -> Crank Servo -> Power Lines (Power Lines needs Motor Retrofit 5 + Transformer 3, not the servo). Same defect, older, in tab III: Condenser -> Vessel Blueprint behind Turbine | `crops/tree-tab2-edge-x2.png`, `crops/F2-tree-before-after-100.png`, `crops/F2-tree3-before-after-100.png` |
+
+### F1 (S1, the WP25 message): machine output popups illegible and placed on the parts
+Cause: `OUTPUT_TICK` alpha 0.7 with a linear fade from frame 0 (readable about 0.6 s of 3 s), `fontScale` 0.8 (10-13 px at zoom 0.5,
+the default from late era II on), and one shared `offset` from anchors with different origins: wornMotor / generator resolve to
+their centre, boiler / spireTower / nullChamber to their base, so a single y cannot clear every part. Data alone cannot fix the
+placement; it needs a per-era offset (code) plus a short hold before the fade (code).
+
+Fix (owner: worker via EM; files `src/data/ux.ts`, `src/data/ux.test.ts`, `src/game/math/outputTick.ts`,
+`src/game/math/outputTick.test.ts`, `src/game/rendering/OutputTicker.ts`):
+- `OUTPUT_TICK`: `fadeMs` 1800 -> 2400; new `holdMs: 1000`; `alpha` 0.7 -> 0.9; `fontScale` 0.8 -> 1; `offset` `{ x: 0, y: -24 }`
+  -> per era `{ 1: { x: 0, y: -32 }, 2: { x: 0, y: -90 }, 3: { x: 30, y: -200 }, 4: { x: 190, y: -160 }, 5: { x: 240, y: -116 } }`
+  (world px from the anchor's resolved position; `satisfies Record<EraNumber, { x: number; y: number }>`). `periodMs` 3000,
+  `riseWorldPx` 36, `poolSize` 3 and `anchor` unchanged. Comment "one dim line" -> "one line".
+- `outputTick.ts`: `outputTickAlpha(ageMs, holdMs, fadeMs): number` = 1 while `ageMs <= holdMs`, then linear to 0 at `fadeMs`
+  (`min(1, max(0, (fadeMs - ageMs) / (fadeMs - holdMs)))`; non-finite or `fadeMs <= holdMs` -> 0 past `holdMs`).
+- `OutputTicker.step`: alpha = `OUTPUT_TICK.alpha * outputTickAlpha(slot.ageMs, OUTPUT_TICK.holdMs, OUTPUT_TICK.fadeMs)` (the rise
+  keeps its ease-out over `fadeMs`). `startPopup`: `const off = OUTPUT_TICK.offset[era]`, start = anchor + `off` (the crank
+  fallback during an anchor fly-in uses the same offset; transient).
+- Tests: every era 1-5 has a finite offset with `y <= 0`; `0 <= holdMs < fadeMs <= periodMs`; `outputTickAlpha` at 0, holdMs, the
+  midpoint of the fade, fadeMs, NaN.
+Where it lands (prototype): era I above the motor; era II above the generator yoke and the crow; era III above the steam manifold,
+between the chimney and the frame, and below the HUD panel at 720p / 800p UI 150 (servo owned, the tall panel); era IV right of
+the spire between coil rings 1 and 2, on the sky; era V right of the null chamber cage on the violet sky. Same size as the click's
+gain block, slightly dimmer (0.9 vs 1), readable (alpha >= 0.45) for about 1.7 s of every 3 s, still one at a time.
+Proof: `crops/F1-before-after-eras-x2.png` (eras I-V, shipped left / fix right), `crops/F1-before-after-rm-zoom-x2.png` (reduced
+motion at 1.2 s, zoom 0.5), `proto1/s9-bubble-click-popup.png` (machine `+2.59K EE` now level with the click's `+472 EE`),
+`proto1/s8-servo7.png`, `crops/proto1-e1-burst-x3.png`, `crops/F1-e3-proto3-board.png` (era III y -200 at UI 100 and 150; y -240
+and -220 rejected: hidden under the 720p UI 150 panel, `crops/F1-e3-proto2-board.png`), `proto1u150/e{4,5}-u150-*.png`.
+
+### F2 (S2, demo-visible): tree edges run behind a node on their row
+Fix (owner: worker via EM; files `src/ui/techTreeView.ts`, `src/ui/techTreeView.test.ts`): export
+`edgePathAround(from, to, nodes, layout = TECH_TREE_LAYOUT)`. It returns `edgePath(from, to)` unless `from.y === to.y` and another
+node on that row lies strictly between them (`n.y === from.y`, `from.x < n.x < to.x`). Then it routes through the row gap:
+`g = layout.colGap / 2`, `yc = from.y - layout.rowGap / 2` (top row: `from.y + from.height + layout.rowGap / 2`),
+`M x1 y1 C x1+g y1, x1+g yc, x1+2g yc L x2-2g yc C x2-g yc, x2-g y2, x2 y2` (x1 / y1 = from right-middle, x2 / y2 = to
+left-middle). `buildTechTreeView` uses it for every edge. Data: exactly two edges change. Tab II `motorRetrofit->powerLines` =
+`M 320 244 C 327 244, 327 196, 334 196 L 636 196 C 643 196, 643 244, 650 244`; tab III `condenser->pressureVesselBlueprint` =
+`M 636 148 C 643 148, 643 100, 650 100 L 952 100 C 959 100, 959 148, 966 148`. Every other edge of eras I-V equals `edgePath`.
+No data change: every 3-row slot for Crank Servo in tab II sits on an edge or makes a backward edge, so (2,2) stays.
+Proof (DOM prototype, those exact strings): `crops/F2-tree-before-after-100.png`, `crops/F2-tree-150-after.png`,
+`crops/F2-tree3-before-after-100.png`. The line now arcs over Crank Servo and Turbine into Power Lines and the Vessel Blueprint.
+
+### Notes (no block)
+- N1 (D16 follow-up, art): the servo arm (dark iron) is lost against the frame's X-brace behind it at 1:1 in era II (it was in era IV
+  too); only the base, lamp and rod read. Follow-up for the servo-tier repaint after WP24: a lighter rim on the arm's lit side
+  (`#7d8286`) or a dark backing plate behind the hub. Recorded per D16; not a WP25 fix.
+- N2: the CLICK worth (`0.09S`) is honest and fits. Under R1 it is meant to be small; it reads well next to the `/S` rates.
+- N3: `outputStats()` keeps the sleeping World's popup counted as visible during `showcasePlay`; nothing shows on screen. Smokes
+  that assert `visible: 0` during the showcase would need `setOutputTicks(false)` first. No fix needed.
+
+### Re-check for round 2 (after F1 + F2, EM rebuild)
+`economy.mjs` full + demo fail [] errors [] (`D_reduced`, `G_output_cost` included); `tools/stills.mjs` cases e1, e2, e3, e4, e5
+on the rebuilt `dist` = the `proto*` frames (era III with the servo owned at 1280x720 / 1280x800 UI 150 below the panel); tab II and
+tab III edges as `tree/*-after.png`; `store-shots` `_no_output_tick` unchanged. RELEASE-READY when those hold.
+
+## WP25 — passive-first audit, round 2
+
+Art Director AD1, round 2, 2026-10-26. Verdict: **RELEASE-READY**. F1 and F2 hold on the rebuilt build. Round 2 found one new
+S2 (F3: at UI 150 the era III popup rose under the HUD panel). The Art Director fixed it in `OUTPUT_TICK` data (plan C5: "the AD
+tunes the numbers") and checked it on a rebuilt `dist` / `dist-demo`. Open: no fix. N1 stays the D16 follow-up.
+
+R1 check (task): in a real-time 10 min era II run at 0.5 clicks/s the machine makes 90.8 % of the EE and 98.5 % of the ME. On
+screen, a bright `+95 EE` → `+793 EE` rises above the generator every 3 s, next to a HUD CLICK worth of `+7.9 EE · 0.25S` →
+`+52 EE · 0.2S`. A player can see that the machine carries progression and that clicking is a bonus.
+
+Build under audit:
+- Rounds 1 → 2: `dist` 06:11 (`index-D1RA_kKX.js`); `find src public -newer dist/index.html` printed nothing.
+- After F3: `dist` `index-SR9b44Ys.js` (488.98 KB) and `dist-demo` `index-CeG4X6aB.js` (489.58 KB), both built 07:27 local.
+  bundle-budget PASS on both: CSS 41.0 / 43.8 KB, unchanged; lazy world 116.6 KB.
+- The served bundle carries `3:{x:190,y:-216}`.
+- `src/data/ux.test.ts` + `src/game/math/outputTick.test.ts`: 35 / 35 pass (`--maxWorkers=1`); `tsc --noEmit` runs inside the build.
+- Ports: :4175 = the package preview of `dist`. :4176 was started for the demo pass only, killed after it (netstat empty).
+- Load: one Playwright browser at a time. The build waited until WP24's `perf.mjs` / `world.mjs` had ended.
+
+Evidence root `<A2>` = `C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP25/ad2/`.
+| folder | contents |
+|---|---|
+| `economy/`, `economy-demo/`, `rebuilt/economy/` | economy.mjs full, demo, full after F3 |
+| `stills/` | round-1 `stills.mjs`: eras I-V, servo MK I-III, HUD per size, reduced motion, gates |
+| `stills2/` | eras III-V at 720p / 800p / 1080p and UI 100 / 150; era II hierarchy |
+| `run10/` | the 10 min era II run |
+| `e3time*/`, `rebuilt/e3-s10/`, `rebuilt/e3-s11/` | era III popup over its whole life against the panel; `ship` vs route-patched variants |
+| `tree/` | tab II / III on the build |
+| `demo/` | teaser, card, KEEP |
+| `crops/` | boards at 1:1 to 4x nearest |
+| `tools/` | `stills.mjs`, `stills2.mjs`, `run10.mjs`, `sum10.cjs`, `e3time.mjs`, `tree2.mjs`, `teaser.mjs`, `crop.py`, `board.py` |
+
+### 10 min era II run at 0.5 clicks/s (round 2, same protocol as round 1)
+| min | ME/s | EE/s | HUD CLICK | HUD AUTO-CRANK | EE from clicks (cum.) | popup |
+|---|---|---|---|---|---|---|
+| 0 | 261 | 6.1 | `+12 ME · 0.05s` | — | — | — |
+| 2 | 346 | 31.8 | `+7.9 EE · 0.25s` | — | 6.0 % | `+95 EE` |
+| 5 | 455 | 130 | `+25 EE · 0.2s` | `1/s · +25 EE/s` (servo at 4:38) | 9.6 % | `+389 EE` |
+| 10 | 595 | 265 | `+52 EE · 0.2s` | `1/s · +52 EE/s` | 9.2 % | `+793 EE` |
+
+Totals: EE +78.1K (clicks 7.1K = 9.2 %), ME +271K (clicks 4.2K = 1.5 %); 300 clicks, 28 buys (the same list as round 1), 199
+popups (one per 3 s, never two on screen), `meanMs` 0.009. The economy is equal to round 1 to rounding: F1 / F2 / F3 change no
+balance.
+Evidence:
+- `run10/run10-m02.png`, `run10-m05.png`, `run10-m10.png`;
+- `crops/run10-popups-m02-m10-x3.png`;
+- `crops/run10-hud-popup-m00-m10-x2.png`;
+- before / after (round 1 ghost on the yoke behind the crow → round 2 crisp on open sky): `crops/run10-m02-before-after-x3.png`.
+
+### Round-1 items re-checked
+| item | result | evidence (`<A2>`) |
+|---|---|---|
+| F1 output popups, eras I-V (offset per era, hold 1 s, alpha 0.9, fontScale 1) | PASS. Era I `+51 ME` above the motor. Era II above the generator, crow clear. Era III above the steam manifold. Era IV right of the spire. Era V right of the null chamber cage on the violet sky. Each popup draws at the click gain block's size, fully readable for its 1 s hold, gone by 2.4 s, at most one on screen | `stills/e1-b-popup.png`, `stills/s8-servo1.png`, `stills/s9-servo7.png`, `stills/e3-popup.png`, `stills/e4-popup.png`, `stills/e5-popup.png`, `crops/e2-popup-board-x3.png`, `crops/e345-popup-board-x4.png`, `crops/s9-burst-board-x3.png` |
+| Hierarchy vs the click gain block | PASS. Era I: `+51 ME` (machine) next to `+5` / `+1` (clicks), same size | `stills/e1-c-click-popup.png`, `stills2/h2-720-100.png` |
+| F2 tree edges | PASS. Tab II `motorRetrofit->powerLines` and tab III `condenser->pressureVesselBlueprint` equal the spec strings in the DOM (`tree2.json` `ok: true` at UI 100 / 150). On screen the lines arc over Crank Servo / Turbine | `tree/tree-tab2-100.png`, `tree/tree-tab2-150.png`, `tree/tree-tab3-100.png` |
+| HUD CLICK / AUTO-CRANK, 720p UI 100 / 125 / 150, 1080p UI 100 / 125 / 150, 800p UI 150, eras II-V | PASS. One line each, inside the panel (`F_hud_fit` full + demo; `stills2.json` panel boxes). Strings exact: `+90 PR · 0.14s`, `AUTO-CRANK 3/s · +655 RS/s`, `+17.1K ??? · 0.23s` | `crops/hud-board-720.png`, `stills/hud-*.png`, `stills2/e*-*.png` |
+| Crank Servo in era II, MK I / II / III | PASS as art, N1 open (D16 follow-up). Unchanged from round 1 | `crops/servo-mk-board-x4.png`, `stills/s8-servo{1,4,7}.png` |
+| Reduced motion | PASS. `rising` false, y 1506 constant across 9 frames, fade only. The number now sits on the sky, not on the yoke | `crops/rm-burst-board-x3.png` |
+| Gates | PASS on screen and in stats. Photo: shown 27 frozen, visible 0. Finale: 12 samples 9/0. Postgame (6 clicks): 12 samples 9/0. Full showcase: nothing drawn (N3) | `crops/gates-board.png`, `stills/stills.json` |
+| Demo (`dist-demo`) | economy.mjs fail [] errors [] (`G_output_cost` 0.011). Teaser and card: shown 3 frozen, nothing drawn. KEEP TINKERING: popups resume (`+1.78K EE` above the generator) | `economy-demo.json`, `demo/demo-teaser-2.png`, `demo/demo-card.png`, `demo/demo-afterkeep.png` |
+| Palette | PASS. Crank gain colours + ink stroke; era V `???` | `crops/e345-popup-board-x4.png` |
+
+### F3 (S2, fixed in data by the AD): era III popup rose under the HUD panel at UI 150
+Defect: with the servo owned (the tall era III panel) at 1280x720, 1280x800 and 1920x1080 UI 150, the era III popup was born 3 px
+below the panel's bottom edge (panel bottom 430, popup top ≈ 433 at 720p). It rises 18 screen px, and the DOM panel covers the
+canvas. Result: readable at 0.8 s, half hidden at 1.5 s, gone under the panel at 2.3 s; about 1 s of its 2.4 s life.
+Round 1 sampled only 300-400 ms ages and missed it. UI 100 / 125 and the era III entry framing (zoom 0.75) were fine.
+Fix (applied, `src/data/ux.ts`): `OUTPUT_TICK.offset[3]` `{ x: 30, y: -200 }` → `{ x: 190, y: -216 }`, plus the comment line.
+- The popup now spawns right of the boiler, over the manifold run, between the HUD panel and the piston rack. Gaps at UI 150:
+  720p ≈ 11 px to the panel / 6 px to the rack; 800p ≈ 11 / 8; 1080p ≈ 11 / 8 (9-char worst case `+1.89K PR`).
+- y −216 also lifts it 8 px off the manifold pipe it was born on (round-1 placement).
+- The era III entry framing (boiler only, zoom 0.75) puts it over the boiler's outlet pipe, left of the piston rack, below the panel.
+- Other eras, `periodMs`, the hold / fade, the font and the pool are unchanged. The demo never reaches era III, so it only gains
+  the literal.
+Tuning: route-patched trials (repo untouched): x 180 / y −216 left about 4 px to the panel at 720p, so x 190 was chosen.
+Proof:
+- before / after at 720p UI 150 over the popup's life: `crops/F3-e3-ui150-before-after-x2.png` (ship 0.8 / 1.5 / 2.3 s vs x 190 at
+  0.9 / 1.5 / 2.2 s; also 800p / 1080p);
+- rebuilt build, every size: `crops/F3-rebuilt-e3-allsizes-x2.png`; full frame `rebuilt/e3-s11/ship-1280x720-100-a100.png`;
+- entry framing: `e3time-s10/x190y-216-1280x720-150-a500.png`;
+- numbers: `rebuilt/e3-s11/e3time.json` (visible 1 at 0.7 / 1.7 s at every size).
+Owner note: `src/data/ux.ts` is a WP25 file (T8 / T11, data). The diff is one number pair + one comment. No EM rebuild is needed:
+`dist` / `dist-demo` are already rebuilt. economy.mjs full on the rebuilt `dist`: fail [] errors [] (`G_output_cost` 0.017).
+store-shots turn popups off, so their `_no_output_tick` checks are unaffected.
+
+### Notes (no block)
+- N1 (unchanged, D16 follow-up): the servo arm (dark iron) is lost against the frame's X-brace in era II. Needs a lighter lit-side
+  rim (`#7d8286`) or a dark backing plate behind the hub in the servo-tier repaint after WP24.
+- N3 (extended): `outputStats().visible` keeps one frozen popup counted while the World sleeps. Seen in the full showcase and now
+  also in the demo teaser and on the END OF DEMO card (round 1 read 0 there; the 1 s hold makes a popup more likely to be on screen
+  when the World falls asleep). Nothing is drawn, `shown` stays frozen, and the slot finishes its fade after KEEP. A smoke that
+  asserts `visible: 0` during the teaser or card must call `setOutputTicks(false)` first, or read `shown`. No fix needed.
+- N4: the HUD worth suffix renders upper-case (`0.14S`) like every HUD unit (`/S`). It stays honest under R1 (0.09-0.25 s). Its
+  row title reads "One turn of the crank = 0.14 s of machine output".
+- N5 (smoke artifact, not a defect): the synthetic-clock buy lists trigger the offline-return lines (DOG-07 "He waited the whole
+  time. Good boy.", the WELCOME BACK toast) in the era framings.
+
+### Reference rules used (web, floating-number readability)
+Sources: bugnet.io "how to fix floating damage numbers overlapping into an unreadable blob" and "how to build a damage number
+system"; the Factorio DamageIndicator mod changelog; a Last Epoch forum thread on floating combat text.
+| rule | how WP25 meets it |
+|---|---|
+| Aggregate a continuous source into one number per window (no per-tick spam) | `periodMs` 3000 |
+| Cap what is visible | pool 3; never two on screen in 200 popups |
+| Pool the labels | created once |
+| A fixed spawn spot per source | per-era offset |
+| Do not let a steady small number sink under bigger, more frequent ones | the machine popup is drawn at the gain block's size, and its number is 5-15x the click's |
