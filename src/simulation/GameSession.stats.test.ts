@@ -267,7 +267,7 @@ describe('GameSession stats', () => {
       const session = new GameSession({
         state: withLevels(
           { pistonArray: 1, flywheel: 1 },
-          { lastSimTime: 0, lifetime: { ...createInitialState(0).lifetime, me: 200_000 } },
+          { lastSimTime: 0, lifetime: { ...createInitialState(0).lifetime, me: 240_000 } },
         ),
         now: () => 0,
       });

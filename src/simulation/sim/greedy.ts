@@ -1,14 +1,17 @@
 import { TECHNOLOGIES } from '../../data/technologies';
 import { RESOURCE_IDS, TECH_IDS } from '../../data/types';
-import type { GameState, ResourceId, TechDefinition, TechId, TechStatus } from '../../data/types';
+import type { GameState, ResourceId, ResourceMap, TechDefinition, TechId, TechStatus } from '../../data/types';
+import type { EraNumber } from '../../data/eras';
 import { canAfford, costAt } from '../economy/cost';
 import { applyClick, advance, applyOffline } from '../production/tick';
 import { computeRates } from '../production/rates';
 import { getTechStatus } from '../progression/status';
 import { purchase } from '../progression/purchase';
+import { currentEra } from '../progression/era';
 import { evaluateMilestones } from '../progression/milestones';
 import type { EraCap } from '../progression/edition';
 import { createInitialState } from '../state';
+import { emptyResourceMap } from '../resources';
 
 // Reusable deterministic greedy-player harness for balance simulations. Pure: no clock, no
 // randomness, no console, no timers. Policy: per resource, buy the cheapest available
@@ -22,6 +25,12 @@ import { createInitialState } from '../state';
 export interface GreedySchedule {
   activeSeconds: number;
   offlineSeconds: number;
+}
+
+/** One era's income in one run: `manual` = click gains, `passive` = automation (auto-cranks incl.) + offline credit. */
+export interface IncomeSplit {
+  manual: ResourceMap;
+  passive: ResourceMap;
 }
 
 export interface GreedyOptions {
@@ -40,6 +49,13 @@ export interface GreedyOptions {
   schedule?: GreedySchedule;
   /** Demo edition era cap: techs above it are never bought, milestones above it never unlock. Absent = full game. */
   maxEra?: EraCap;
+  /**
+   * Clicks per second for the step ending at t, read from the state at the start of that step (before its clicks).
+   * Overrides clicksPerSecond. A result that is not finite or is < 0 throws RangeError.
+   */
+  clickRate?: (state: Readonly<GameState>, t: number) => number;
+  /** Split income into manual (clicks) and passive (automation + offline) per era. Bookkeeping only: the run is unchanged. */
+  trackIncome?: boolean;
 }
 
 export interface GreedyResult {
@@ -53,6 +69,8 @@ export interface GreedyResult {
   snapshots?: Partial<Record<TechId, GameState>>;
   /** Wall-clock seconds simulated (active + offline). Present only when `schedule` is set. */
   wallSeconds?: number;
+  /** Present only when `trackIncome` is true. All five eras exist; era = currentEra at the start of each step. */
+  income?: Record<EraNumber, IncomeSplit>;
 }
 
 /** One purchase with its price and the level it brought the tech to. */
@@ -104,6 +122,22 @@ function pickCheapest(list: readonly Candidate[], res: ResourceId): Candidate | 
   return pick;
 }
 
+/** All five eras with zero income, so a tracked run always has every era key (also the never-visited ones). */
+function emptyIncome(): Record<EraNumber, IncomeSplit> {
+  const split = (): IncomeSplit => ({ manual: emptyResourceMap(), passive: emptyResourceMap() });
+  return { 1: split(), 2: split(), 3: split(), 4: split(), 5: split() };
+}
+
+/** Adds `delta` into `into` in place. Only bookkeeping maps owned by one run are passed here, never game state. */
+function addInto(into: ResourceMap, delta: Readonly<ResourceMap>): void {
+  for (const id of RESOURCE_IDS) into[id] += delta[id];
+}
+
+/** Adds the per-resource change `after - before` into `into` in place (same ownership rule as addInto). */
+function addDelta(into: ResourceMap, before: Readonly<ResourceMap>, after: Readonly<ResourceMap>): void {
+  for (const id of RESOURCE_IDS) into[id] += after[id] - before[id];
+}
+
 export function runGreedy(o: GreedyOptions): GreedyResult {
   const techs = o.techs ?? TECHNOLOGIES;
   const maxEra = o.maxEra ?? null;
@@ -141,6 +175,7 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
   }
 
   const steps = Math.floor(o.seconds / o.stepSeconds);
+  const incomeByEra = o.trackIncome === true ? emptyIncome() : undefined;
   let clickDebt = 0;
   let maxValue = 0;
   let activeT = 0;
@@ -162,13 +197,26 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
   for (let k = 1; k <= steps; k++) {
     const t = k * o.stepSeconds;
     activeT = t;
+    // Era at the start of the step (before its clicks, advance and buys): the income bookkeeping key.
+    const era = currentEra(state.techLevels);
 
-    clickDebt += o.clicksPerSecond * o.stepSeconds;
+    // WHY: the rate is read before this step's clicks, so a rule reacts to what was bought in earlier steps.
+    const rate = o.clickRate !== undefined ? o.clickRate(state, t) : o.clicksPerSecond;
+    if (o.clickRate !== undefined && (!Number.isFinite(rate) || rate < 0)) {
+      throw new RangeError(`runGreedy: clickRate must be finite and >= 0 (got ${rate} at t = ${t})`);
+    }
+    clickDebt += rate * o.stepSeconds;
     const clicks = Math.floor(clickDebt + 1e-9);
     clickDebt -= clicks;
-    for (let i = 0; i < clicks; i++) state = applyClick(state, techs).state;
+    for (let i = 0; i < clicks; i++) {
+      const click = applyClick(state, techs);
+      state = click.state;
+      if (incomeByEra !== undefined) addInto(incomeByEra[era].manual, click.gainedAll);
+    }
 
+    const lifeBeforeAdvance = state.lifetime;
     state = advance(state, o.stepSeconds, techs);
+    if (incomeByEra !== undefined) addDelta(incomeByEra[era].passive, lifeBeforeAdvance, state.lifetime);
     state = evaluateMilestones(state, techs, maxEra).state;
 
     const ratio = t / o.buyIntervalSeconds;
@@ -195,8 +243,12 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
     if (schedule !== undefined && schedule.offlineSeconds > 0 && k < steps) {
       const ratio = t / schedule.activeSeconds;
       if (Math.abs(ratio - Math.round(ratio)) < 1e-9) {
+        const lifeBeforeOffline = state.lifetime;
+        // WHY: era taken just before the credit, so buys made earlier in this step already count.
+        const offlineEra = currentEra(state.techLevels);
         const offline = applyOffline({ ...state, lastSimTime: 0 }, schedule.offlineSeconds * 1000, techs);
         state = { ...offline.state, lastSimTime: state.lastSimTime };
+        if (incomeByEra !== undefined) addDelta(incomeByEra[offlineEra].passive, lifeBeforeOffline, state.lifetime);
         offlineTotal += schedule.offlineSeconds;
         state = evaluateMilestones(state, techs, maxEra).state;
         record(t);
@@ -213,6 +265,7 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
     ...(snapshotIds === undefined ? {} : { snapshots }),
   };
   if (schedule !== undefined) result.wallSeconds = activeT + offlineTotal;
+  if (incomeByEra !== undefined) result.income = incomeByEra;
   return result;
 }
 
@@ -294,4 +347,17 @@ export function spendShare(
     if (entry.res === res && entry.t > fromT && entry.t <= toT) spent += entry.cost;
   }
   return spent / produced;
+}
+
+/**
+ * Share of `res` income that came from manual clicks in `era`: manual / (manual + passive). 0 when the era has no
+ * income entry, or the total is 0 or not finite.
+ */
+export function manualShare(income: Record<EraNumber, IncomeSplit>, era: EraNumber, res: ResourceId): number {
+  const split: IncomeSplit | undefined = income[era];
+  if (split === undefined) return 0;
+  const manual = split.manual[res];
+  const total = manual + split.passive[res];
+  if (!Number.isFinite(total) || total === 0) return 0;
+  return manual / total;
 }

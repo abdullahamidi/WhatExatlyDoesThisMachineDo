@@ -255,7 +255,7 @@ describe('createSaveController', () => {
     const session = new GameSession({
       state: {
         ...base,
-        lifetime: { ...base.lifetime, me: 200000 },
+        lifetime: { ...base.lifetime, me: 240000 },
         techLevels: { ...base.techLevels, pistonArray: 1, flywheel: 1 },
       },
       now: () => t0,

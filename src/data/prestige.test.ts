@@ -94,10 +94,57 @@ describe('perk table', () => {
   });
 });
 
+// WP25 guard: every number in a PERKS description equals its effect, so the text cannot drift from the data.
+// The first capture group of `pattern` in `text`, as a number (NaN when the pattern does not match).
+function capturedNumber(text: string, pattern: RegExp): number {
+  const match = pattern.exec(text);
+  return Number(match?.[1]);
+}
+
+describe('PERKS descriptions match their effects (WP25)', () => {
+  it('Muscle Memory names the start levels of Worn Motor and Gear Ratio', () => {
+    const start = PERKS.muscleMemory.effect;
+    expect(start.type).toBe('startLevels');
+    if (start.type !== 'startLevels') return;
+    const text = PERKS.muscleMemory.description;
+    expect(capturedNumber(text, /Worn Motor (\d+)/)).toBe(start.levels.wornMotor);
+    expect(capturedNumber(text, /Gear Ratio (\d+)/)).toBe(start.levels.gearRatio);
+  });
+
+  it('Residual Charge percent equals the convertPct percent', () => {
+    const effect = PERKS.residualCharge.effect;
+    expect(effect.type).toBe('convertPct');
+    if (effect.type !== 'convertPct') return;
+    expect(capturedNumber(PERKS.residualCharge.description, /(\d+(?:\.\d+)?) %/)).toBe(effect.percent);
+  });
+
+  it('Long Silence hours equal the offlineHours hours', () => {
+    const effect = PERKS.longSilence.effect;
+    expect(effect.type).toBe('offlineHours');
+    if (effect.type !== 'offlineHours') return;
+    expect(capturedNumber(PERKS.longSilence.description, /\+(\d+(?:\.\d+)?) hours/)).toBe(effect.hours);
+  });
+
+  it('Servo Recall clicks per second equal the autoClick perSecond', () => {
+    const effect = PERKS.servoRecall.effect;
+    expect(effect.type).toBe('autoClick');
+    if (effect.type !== 'autoClick') return;
+    expect(capturedNumber(PERKS.servoRecall.description, /\+(\d+(?:\.\d+)?) click/)).toBe(effect.perSecond);
+  });
+
+  it('Ledger says "half" and its costMult factor is 0.5', () => {
+    const effect = PERKS.ledger.effect;
+    expect(effect.type).toBe('costMult');
+    if (effect.type !== 'costMult') return;
+    expect(PERKS.ledger.description).toContain('half');
+    expect(effect.factor).toBe(0.5);
+  });
+});
+
 describe('echo rules', () => {
-  it('base 3, +30 % per Echo, counted up to 30', () => {
+  it('base 3, +15 % per Echo, counted up to 30', () => {
     expect(ECHO_RULES.base).toBe(3);
-    expect(ECHO_RULES.allPctPerEcho).toBe(30);
+    expect(ECHO_RULES.allPctPerEcho).toBe(15);
     expect(ECHO_RULES.maxCountedEchoes).toBe(30);
   });
 

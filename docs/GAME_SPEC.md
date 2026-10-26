@@ -243,3 +243,13 @@ Append-only note. Nothing above this line was changed.
 - Shipped in 0.10.0: evolving parts (3 or 5 visual MK tiers per repeatable part, with a tier-up beat; rendering only, no balance change) and the living world (six denizens, environment changes each era, WORLD VOICES ON / RARE / OFF, the finale and postgame layer, traces across cycles).
 - Budgets raised for the release: app JS 500 KB raw, lazy living-world chunk 120 KB, CSS 45 KB (`scripts/smoke/perf-budget.json`). Timing rows wait for a quiet PC.
 - Player-facing details: `CHANGELOG.md` (0.10.0). Release evidence: `docs/STEAM_RELEASE.md` §15.
+
+### 18.4 User playtest (2026-10-25): passive-first economy (WP25)
+The player said clicking felt mandatory and passive income a small add-on. WP25 retunes data only (no formula, no save change):
+click echoes cut (Dynamo / Steam Hammer 0.25 s, Echo Crank 0.5 s, Inversion 0.75 s; Spark Gap ×1.5, Echo Crank ×2), the
+Crank Servo moves to era II (motorRetrofit 1, 30K ME), passive output tilted per energy, Echo bonus 30 → 15 % per Echo. A player
+who drops to 0.5 clicks/s after era I reaches every gate in about 1.17–1.2× the always-clicking time (was 1.7–2.15×); clicks are
+25–31 % of income for the 4-cps player (was 74–80 %). The HUD shows what a click is worth in seconds of output, the machine shows
+its own output in popups, and a SYSTEM line notes "Manual operation no longer required." Director calls: generator.baseCost
+25000 → 25500 (keeps the era-I windows; outside the planned lever list) and no new ME-priced tech in era IV (ME keeps being spent:
+continuity 92 %, dead time 4.0 min ≤ 5).

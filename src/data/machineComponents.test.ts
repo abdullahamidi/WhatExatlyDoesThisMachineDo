@@ -75,7 +75,7 @@ function contains(box: { left: number; right: number; top: number; bottom: numbe
   return p.x >= box.left && p.x <= box.right && p.y >= box.top && p.y <= box.bottom;
 }
 
-/** Bearings, the flywheel pedestal and the era-IV servo base are the supports of driven parts. */
+/** Bearings, the flywheel pedestal and the servo base are the supports of driven parts. */
 const SUPPORTS: readonly MachineComponentId[] = ['bearingM', 'bearingP', 'flywheelPedestal', 'servoBase'];
 
 /** Driven parts carried by another box instead of a support: the motor pulley and the generator pulley (on the generator hub). */
@@ -124,10 +124,11 @@ function hasVisibleSupport(def: MachineComponentDefinition, visible: ReadonlySet
   return SUPPORTS.some((s) => visible.has(s) && contains(boundsOf(MACHINE_COMPONENTS[s]), p));
 }
 
-/** Era II unlock steps in order; copperWinding is set to each coil stage level in turn (1, 10, 20). */
+/** Era II unlock steps in order; copperWinding is set to each coil stage level in turn (1, 10, 20). crankServo (moved from era IV in WP25) is last. */
 const ERA_TWO_STEPS: readonly (readonly [TechId, number])[] = [
   ['generator', 1], ['copperWinding', 1], ['copperWinding', 10], ['copperWinding', 20],
   ['motorRetrofit', 1], ['dynamoCrank', 1], ['capacitorBank', 1], ['sparkGap', 1], ['transformer', 1], ['powerLines', 1],
+  ['crankServo', 1],
 ];
 
 /** All era-I techs at their stage levels, then the first n era-II steps applied. */
@@ -884,6 +885,18 @@ describe('era II prefixes', () => {
       if (visible.has('motorRetrofitKit')) expect(visible.has('wornMotor')).toBe(true);
     }
   });
+
+  it('crank servo parts show from the last era-II step, on their support, and servoArm implies servoBase at every prefix', () => {
+    expect(visibleAt(levelsEraTwo(STEPS - 1)).has('servoArm')).toBe(false);
+    const full = visibleAt(levelsEraTwo(STEPS));
+    expect(full.has('servoBase')).toBe(true);
+    expect(full.has('servoArm')).toBe(true);
+    expect(hasVisibleSupport(MACHINE_COMPONENTS.servoArm, full)).toBe(true);
+    for (let n = 0; n <= STEPS; n++) {
+      const visible = visibleAt(levelsEraTwo(n));
+      if (visible.has('servoArm')) expect(visible.has('servoBase')).toBe(true);
+    }
+  });
 });
 
 /** One era-III row of the WP9 component table (contract C3). depthBias undefined = no bias. */
@@ -1160,13 +1173,16 @@ describe('era III prefixes', () => {
 /** Era-IV component ids: the 16 appended after the era-III block (contract C3). */
 const ERA_FOUR_COMPONENT_IDS: readonly MachineComponentId[] = MACHINE_COMPONENT_IDS.slice(45, 61);
 
+/** Era-IV ids without the crank servo parts: crankServo moved to era II (WP25), so servoBase and servoArm show from era II on. */
+const ERA_FOUR_ONLY_IDS: readonly MachineComponentId[] = ERA_FOUR_COMPONENT_IDS.filter((id) => id !== 'servoBase' && id !== 'servoArm');
+
 /** Era-V component ids: the 38 appended after the era-IV block (WP11 contract C3), then WP22 ring1Bead2 (the last id of the list). The five WP17 legacy feeds follow at index 99. */
 const ERA_FIVE_COMPONENT_IDS: readonly MachineComponentId[] = [...MACHINE_COMPONENT_IDS.slice(61, 99), 'ring1Bead2'];
 
 /** Unlock steps of era IV in order; harmonicCoil is set to each coil ring level in turn (1, 8, 16, 25). */
 const ERA_FOUR_STEPS: readonly (readonly [TechId, number])[] = [
   ['resonatorSpire', 1], ['harmonicCoil', 1], ['harmonicCoil', 8], ['harmonicCoil', 16], ['harmonicCoil', 25],
-  ['pressureResonator', 1], ['crankServo', 1], ['echoCrank', 1], ['phaseLock', 1], ['standingWave', 1], ['crystalLattice', 1],
+  ['pressureResonator', 1], ['echoCrank', 1], ['phaseLock', 1], ['standingWave', 1], ['crystalLattice', 1],
 ];
 
 /** All era-I to era-III techs at their stage levels, then the first n era-IV steps applied. */
@@ -1358,18 +1374,18 @@ describe('era IV prefixes', () => {
     for (const id of MACHINE_COMPONENT_IDS.slice(0, 61)) expect(visible.has(id), id).toBe(true);
   });
 
-  it('no era-IV component is visible before resonatorSpire', () => {
+  it('no era-IV component is visible before resonatorSpire (the servo parts are era II now)', () => {
     const visible = visibleAt(levelsForEra4(0));
-    for (const id of ERA_FOUR_COMPONENT_IDS) expect(visible.has(id), id).toBe(false);
+    for (const id of ERA_FOUR_ONLY_IDS) expect(visible.has(id), id).toBe(false);
   });
 
-  it('each era-IV part appears at its unlock step (1 spire, 2 coil 1, 3 coil 8, 4 coil 16, 5 coil 25, 6 pressure resonator, 7 crank servo, 8 echo crank, 9 phase lock, 10 standing wave, 11 crystal lattice)', () => {
+  it('each era-IV part appears at its unlock step (1 spire, 2 coil 1, 3 coil 8, 4 coil 16, 5 coil 25, 6 pressure resonator, 7 echo crank, 8 phase lock, 9 standing wave, 10 crystal lattice)', () => {
     const unlockStep: [MachineComponentId, number][] = [
       ['spireTower', 1], ['spireExciter', 1], ['coilRing1', 2], ['coilRing2', 3], ['coilRing3', 4], ['coilRing4', 5], ['calliope', 6],
-      ['servoBase', 7], ['servoArm', 7], ['koenigFork', 8], ['emitterDishL', 9], ['emitterDishR', 9], ['dishWavesL', 9], ['dishWavesR', 9],
-      ['spireWave', 10], ['crystal', 11],
+      ['koenigFork', 7], ['emitterDishL', 8], ['emitterDishR', 8], ['dishWavesL', 8], ['dishWavesR', 8],
+      ['spireWave', 9], ['crystal', 10],
     ];
-    expect(unlockStep.map(([id]) => id).sort()).toEqual([...ERA_FOUR_COMPONENT_IDS].sort());
+    expect(unlockStep.map(([id]) => id).sort()).toEqual([...ERA_FOUR_ONLY_IDS].sort());
     for (const [id, step] of unlockStep) {
       expect(visibleAt(levelsForEra4(step - 1)).has(id), `${id} before step ${step}`).toBe(false);
       expect(visibleAt(levelsForEra4(step)).has(id), `${id} at step ${step}`).toBe(true);

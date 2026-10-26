@@ -43,7 +43,8 @@ export const PERK_LIST: readonly PerkDefinition[] = PERK_IDS.map((id) => PERKS[i
 
 // Echo formula (tunable): base + one per threshold reached by this cycle's lifetime Restoration Flux.
 // Bonus = allPctPerEcho × min(echoesEarned, maxCountedEchoes) percent on every per-second rate (clicks unaffected).
-export const ECHO_RULES = { base: 3, bonusAtXf: [2e9, 8e9, 3.2e10], allPctPerEcho: 30, maxCountedEchoes: 30 } as const;
+// WP25: 30 -> 15 % per Echo. WHY: the faster passive economy would otherwise push cycle 2 out of its 0.50-0.65 pace band.
+export const ECHO_RULES = { base: 3, bonusAtXf: [2e9, 8e9, 3.2e10], allPctPerEcho: 15, maxCountedEchoes: 30 } as const;
 
 // Starting tech (always level 1) that carries the memory effects (rateMult, autoClick, offline) in the derived tech table.
 export const MEMORY_SOURCE_TECH = 'handCrank' as const;
@@ -76,9 +77,9 @@ export const PRESTIGE_TEXT = {
   buy: 'RECALL',
   cost: 'COST',              // status `COST 2 ECHOES`
   need: 'NEED',              // status `NEED 2 ECHOES`
-  echoes: 'ECHOES',          // header `ECHOES 3 (+90% ALL/S)`, gain `+3 ECHOES`
+  echoes: 'ECHOES',          // header `ECHOES 3 (+45% ALL/S)`, gain `+3 ECHOES`
   unspent: 'UNSPENT',        // header `UNSPENT 1`
-  allPerSecond: 'ALL/S',     // bonus suffix `(+90% ALL/S)`
+  allPerSecond: 'ALL/S',     // bonus suffix `(+45% ALL/S)`
   nextCycle: 'NEXT CYCLE',   // panel line once the run is revealed
   begin: 'BEGIN',            // dialog title `BEGIN CYCLE 0043?` (view appends `?`), button `BEGIN CYCLE 0043`
   cancel: 'CANCEL',

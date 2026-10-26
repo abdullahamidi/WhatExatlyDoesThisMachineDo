@@ -162,8 +162,18 @@ async function main() {
     const got = await page.evaluate((c) => (typeof window.__wedtmd?.setPlateCap === 'function' ? window.__wedtmd.setPlateCap(c) : 'missing'), cap);
     report.check(`${size}_${id}_plate_cap`, got === cap, got);
   };
-  /** WP23a: the living world stays quiet for the store set (no bubble, blip or glance). Optional calls: a build without the hook skips it. */
-  const quietWorld = (page) => page.evaluate(() => { window.__wedtmd?.worldQuiet?.(true); });
+  /** WP23a + WP25: the living world stays quiet and the machine output popups stop for the store set. outputBase keeps each page's
+   *  popup count at the call (the _no_output_tick baseline). Optional calls: a build without the hook skips them. */
+  const outputBase = new WeakMap();
+  const quietWorld = async (page) => {
+    const shown = await page.evaluate(() => {
+      window.__wedtmd?.worldQuiet?.(true);
+      window.__wedtmd?.setOutputTicks?.(false);
+      window.__wedtmd?.worldSettle?.(true);
+      return window.__wedtmd?.outputStats?.()?.shown ?? null;
+    });
+    outputBase.set(page, shown);
+  };
   /** AD R: opens and closes the TECH INDEX once right after a buy list, then waits out the rest of totalMs (the shot timing, and the
    *  stem 03 milestone toast, stay as before). The fly-ins started with the tree closed, so the close releases nothing and the camera
    *  does not nudge; the open lets the living world commit the new cast placements (unseenChangeOk). */
@@ -192,6 +202,10 @@ async function main() {
     const { width, height } = pngSize(file);
     const px = SIZE_CFG[size].png;
     report.check(`${size}_${id}_${variant}_png`, width === px.width && height === px.height, `${width}x${height}`);
+    // WP25: the machine output popups stay off for the store set; a build without the hook passes.
+    const outStats = await page.evaluate(() => window.__wedtmd?.outputStats?.() ?? null);
+    const outBase = outputBase.get(page);
+    report.check(`${size}_${id}_${variant}_no_output_tick`, outStats === null || (outStats.visible === 0 && (outBase === undefined || outBase === null || outStats.shown === outBase)), outStats);
     if (spoil !== null) report.check(`${size}_${id}_${variant}_no_spoiler`, spoil.frame !== null && spoil.frame <= PLATE_CAP_FRAME && spoil.hits.length === 0 && (spoil.plaque === null || !SPOILER_RE.test(spoil.plaque)), spoil);
     shots.push({ file, size, stem: name, variant, width, height });
   };

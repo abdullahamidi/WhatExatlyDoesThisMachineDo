@@ -14,7 +14,8 @@ import { isRevealedLabel, resourceShort } from './revealRules';
 // Pure HUD view model (WP17). No DOM, no Phaser.
 
 export interface HudResourceRow { id: ResourceId; label: string; value: string; rate: string; feeds: string | null; visible: boolean; frontier: boolean }
-export interface HudClickLine { primary: string; secondary: string | null }
+/** `title` is the click row's tooltip (the worth explained), null when there is no worth suffix. */
+export interface HudClickLine { primary: string; secondary: string | null; title: string | null }
 /** `viewMachine` is true only in postgame (VIEW MACHINE button shown). */
 export interface HudView { title: string; rows: HudResourceRow[]; click: HudClickLine; autoCrank: string | null; plaque: string; cycle: string | null; viewMachine: boolean }
 
@@ -47,6 +48,57 @@ export function hudTitle(era: EraNumber, phase: EndingPhase, revealed: boolean):
   return HUD_TEXT.eraTitles[era - 1] ?? HUD_TEXT.eraTitles[0];
 }
 
+/** Shown instead of a worth below this many seconds (display precision, not balance). */
+const WORTH_MIN_SECONDS = 0.01;
+
+/** Drops trailing zeros and a dangling '.' (`2.50` -> `2.5`, `10.0` -> `10`). */
+function trimFixed(text: string): string {
+  return text.includes('.') ? text.replace(/\.?0+$/, '') : text;
+}
+
+/**
+ * Number text of a click's worth in seconds of output, without the unit (WP25 C4).
+ * >= 10 whole, >= 1 one decimal, >= 0.01 two decimals; below that, 0, negative or not finite: `<0.01`.
+ */
+export function formatWorth(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < WORTH_MIN_SECONDS) return HUD_TEXT.worthFloor;
+  if (seconds >= 10) return String(Math.round(seconds));
+  if (seconds >= 1) return trimFixed(seconds.toFixed(1));
+  return trimFixed(seconds.toFixed(2));
+}
+
+/**
+ * Seconds of machine output one manual click is worth: perClick / perSecond of the click resource (WP25 C4).
+ * Null without a positive perSecond (no output to compare with) or when the worth is not a finite number >= 0.
+ */
+function clickWorthSeconds(rates: Readonly<ProductionRates>, res: ResourceId): number | null {
+  const perSecond = rates.perSecond[res];
+  if (!Number.isFinite(perSecond) || perSecond <= 0) return null;
+  const worth = rates.perClick[res] / perSecond;
+  return Number.isFinite(worth) && worth >= 0 ? worth : null;
+}
+
+/** CLICK line (WP25 C4): the click resource's gain, then its worth in seconds when one is known; ME is the secondary line. */
+function clickLine(rates: Readonly<ProductionRates>, clickRes: ResourceId): HudClickLine {
+  const worth = clickWorthSeconds(rates, clickRes);
+  const gain = `+${formatCompact(rates.perClick[clickRes])} ${resourceShort(clickRes)}`;
+  return {
+    primary: worth === null ? gain : gain + HUD_TEXT.worthSep + HUD_TEXT.clickWorth.replace('{s}', formatWorth(worth)),
+    secondary: clickRes !== 'me' ? `+${formatCompact(rates.perClick.me)} ${resourceShort('me')}` : null,
+    title: worth === null ? null : HUD_TEXT.clickWorthTitle.replace('{s}', formatWorth(worth)),
+  };
+}
+
+/** AUTO-CRANK text (WP25 C4): the auto-cranks per second, then their output per second when that shows a non-zero value. */
+function autoCrankText(autoPerSecond: number, perClick: number, res: ResourceId): string {
+  const head = `${HUD_TEXT.autoCrank} ${formatCompact(autoPerSecond)}/s`;
+  const output = autoPerSecond * perClick;
+  if (!Number.isFinite(output) || output <= 0) return head;
+  const shown = formatCompact(output);
+  if (shown === '0') return head;
+  return head + HUD_TEXT.worthSep + HUD_TEXT.autoCrankOutput.replace('{v}', shown).replace('{res}', resourceShort(res));
+}
+
 /** The resource that feeds `id` (RESOURCES[x].source === id), or undefined for the last one (xf). */
 function fedBy(id: ResourceId): ResourceId | undefined {
   return RESOURCE_IDS.find((x) => RESOURCES[x].source === id);
@@ -57,7 +109,8 @@ function fedBy(id: ResourceId): ResourceId | undefined {
  * A row is visible for ME, for the frontier, or once its lifetime or per-second rate is positive.
  * `feeds` names the resource fed by this row when that row is visible.
  * CLICK line: the frontier's per-click gain when positive, otherwise ME; ME is the secondary line for any other click.
- * AUTO-CRANK line: automatic crank clicks per second, null when none.
+ * The CLICK line also shows the click's worth in seconds of output when the click resource has a positive perSecond (WP25 C4).
+ * AUTO-CRANK line: automatic crank clicks per second, null when none, plus their output per second when non-zero.
  */
 export function buildHudView(
   state: Pick<GameState, 'res' | 'lifetime' | 'techLevels' | 'ending'>,
@@ -88,11 +141,8 @@ export function buildHudView(
         frontier: id === frontier,
       };
     }),
-    click: {
-      primary: `+${formatCompact(rates.perClick[clickRes])} ${resourceShort(clickRes)}`,
-      secondary: clickRes !== 'me' ? `+${formatCompact(rates.perClick.me)} ${resourceShort('me')}` : null,
-    },
-    autoCrank: autoPerSecond > 0 ? `${HUD_TEXT.autoCrank} ${formatCompact(autoPerSecond)}/s` : null,
+    click: clickLine(rates, clickRes),
+    autoCrank: autoPerSecond > 0 ? autoCrankText(autoPerSecond, rates.perClick[clickRes], clickRes) : null,
     plaque: plaqueText(state.techLevels),
     cycle: cycleLine(prestige.cycle),
     viewMachine: state.ending.phase === 'postgame',

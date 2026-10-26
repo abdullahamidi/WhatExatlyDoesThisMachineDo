@@ -30,9 +30,9 @@ const logState = (createdAt: number, overrides: Partial<ResourceMap> = {}) => ({
 });
 
 describe('SYSTEM_LOGS table', () => {
-  it('has 8 to 22 entries with unique ids', () => {
+  it('has 8 to 23 entries with unique ids', () => {
     expect(SYSTEM_LOGS.length).toBeGreaterThanOrEqual(8);
-    expect(SYSTEM_LOGS.length).toBeLessThanOrEqual(22);
+    expect(SYSTEM_LOGS.length).toBeLessThanOrEqual(23);
     const ids = new Set(SYSTEM_LOGS.map((e) => e.id));
     expect(ids.size).toBe(SYSTEM_LOGS.length);
   });
@@ -59,12 +59,25 @@ describe('SYSTEM_LOGS table', () => {
   });
 });
 
-// WP23b optional machine logs (bible §5.4): 22 entries, the two new slots pinned by table position, text and trigger.
+// WP23b optional machine logs (bible §5.4): 23 entries (WP25 adds manual-optional), the new slots pinned by table position, text and trigger.
 describe('SYSTEM_LOGS WP23b slots', () => {
   const indexOf = (id: string): number => SYSTEM_LOGS.findIndex((e) => e.id === id);
 
-  it('has 22 entries', () => {
-    expect(SYSTEM_LOGS).toHaveLength(22);
+  it('has 23 entries', () => {
+    expect(SYSTEM_LOGS).toHaveLength(23);
+  });
+
+  // WP25 slot: manual-optional (lifetime EE 500K) sits between load-beneath and copper-memory.
+  it('puts manual-optional between load-beneath and copper-memory (lifetime EE 500K)', () => {
+    const i = indexOf('manual-optional');
+    expect(i).toBeGreaterThan(0);
+    expect(SYSTEM_LOGS[i - 1]?.id).toBe('load-beneath');
+    expect(SYSTEM_LOGS[i + 1]?.id).toBe('copper-memory');
+    expect(SYSTEM_LOGS[i]).toEqual({
+      id: 'manual-optional',
+      text: 'Manual operation no longer required. Still detected.',
+      trigger: { kind: 'lifetime', res: 'ee', atLeast: 500000 },
+    });
   });
 
   it('puts perimeter-umbrella directly before steam-rain (lifetime PR 100K)', () => {

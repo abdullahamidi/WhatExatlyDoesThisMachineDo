@@ -78,19 +78,19 @@ describe('GameSession', () => {
       const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
       session.applyOffline(0);
       session.update(5000);
-      expect(session.state.res.me).toBeCloseTo(5, 9);
+      expect(session.state.res.me).toBeCloseTo(85, 9);
       expect(session.state.lastSimTime).toBe(5000);
       session.update(5000);
-      expect(session.state.res.me).toBeCloseTo(5, 9);
+      expect(session.state.res.me).toBeCloseTo(85, 9);
     });
 
     it('routes a first update through offline progress, capped at the offline limit', () => {
       const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
       const log = record(session);
       session.update(36_000_000);
-      expect(session.state.res.me).toBeCloseTo(28800, 9);
+      expect(session.state.res.me).toBeCloseTo(489600, 9);
       expect(session.state.lastSimTime).toBe(36_000_000);
-      expect(log).toEqual(['offline:28800']);
+      expect(log).toEqual(['offline:489600']);
     });
 
     it('advances normally for a gap equal to the offline threshold, without an offline event', () => {
@@ -98,7 +98,7 @@ describe('GameSession', () => {
       session.applyOffline(0);
       const log = record(session);
       session.update(OFFLINE_REPORT_THRESHOLD_SECONDS * 1000);
-      expect(session.state.res.me).toBeCloseTo(OFFLINE_REPORT_THRESHOLD_SECONDS, 9);
+      expect(session.state.res.me).toBeCloseTo(OFFLINE_REPORT_THRESHOLD_SECONDS * 17, 9);
       expect(session.state.lastSimTime).toBe(OFFLINE_REPORT_THRESHOLD_SECONDS * 1000);
       expect(log).toEqual([]);
     });
@@ -118,7 +118,7 @@ describe('GameSession', () => {
       session.applyOffline(0);
       const log = record(session);
       session.update(500);
-      expect(session.state.res.me).toBeCloseTo(0.5, 9);
+      expect(session.state.res.me).toBeCloseTo(8.5, 9);
       expect(log).toEqual([]);
     });
 
@@ -129,8 +129,8 @@ describe('GameSession', () => {
       session.update(2000);
       const log = record(session);
       session.update(2000 + 300_000);
-      expect(log).toEqual(['offline:300']);
-      expect(session.state.res.me).toBeCloseTo(302, 9);
+      expect(log).toEqual(['offline:5100']);
+      expect(session.state.res.me).toBeCloseTo(5134, 9);
     });
 
     it('does not double-count: applyOffline(t) then update(t) adds nothing', () => {
@@ -165,11 +165,11 @@ describe('GameSession', () => {
       let t = 3000;
       const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => t });
       session.update();
-      expect(session.state.res.me).toBeCloseTo(3, 9);
+      expect(session.state.res.me).toBeCloseTo(51, 9);
       expect(session.state.lastSimTime).toBe(3000);
       t = 4000;
       session.update();
-      expect(session.state.res.me).toBeCloseTo(4, 9);
+      expect(session.state.res.me).toBeCloseTo(68, 9);
     });
   });
 
@@ -280,7 +280,7 @@ describe('GameSession', () => {
     it('is recomputed after a purchase changes tech levels', () => {
       const session = new GameSession({ state: withMe(withLevels({}), costAt(TECHNOLOGIES.gearRatio, 0)), now: () => 0 });
       expect(session.purchase('gearRatio').ok).toBe(true);
-      expect(session.rates.perClick.me).toBe(2);
+      expect(session.rates.perClick.me).toBe(1.5);
     });
   });
 
@@ -295,14 +295,14 @@ describe('GameSession', () => {
       expect(report).toEqual({
         elapsedSeconds: 3600,
         cappedSeconds: 3600,
-        gained: { ...emptyResourceMap(), me: 21600 },
+        gained: { ...emptyResourceMap(), me: 120600 },
       });
-      expect(session.state.res.me).toBeCloseTo(21600, 9);
+      expect(session.state.res.me).toBeCloseTo(120600, 9);
       expect(session.state.lastSimTime).toBe(3_600_000);
 
       session.update(3_600_000);
-      expect(session.state.res.me).toBeCloseTo(21600, 9);
-      expect(log).toEqual(['offline:21600']);
+      expect(session.state.res.me).toBeCloseTo(120600, 9);
+      expect(log).toEqual(['offline:120600']);
     });
 
     it('reports only ME for a motor save and credits res and lifetime', () => {
@@ -311,13 +311,13 @@ describe('GameSession', () => {
         now: () => 0,
       });
       const report = session.applyOffline(10_000);
-      expect(report.gained.me).toBeCloseTo(10, 9);
+      expect(report.gained.me).toBeCloseTo(170, 9);
       expect(report.gained.ee).toBe(0);
       expect(report.gained.pr).toBe(0);
       expect(report.gained.rs).toBe(0);
       expect(report.gained.xf).toBe(0);
-      expect(session.state.res.me).toBeCloseTo(10, 9);
-      expect(session.state.lifetime.me).toBeCloseTo(10, 9);
+      expect(session.state.res.me).toBeCloseTo(170, 9);
+      expect(session.state.lifetime.me).toBeCloseTo(170, 9);
       expect(session.state.res.ee).toBe(0);
     });
 
@@ -328,8 +328,8 @@ describe('GameSession', () => {
       });
       const report = session.applyOffline(10 * 3_600_000);
       expect(report.cappedSeconds).toBe(28800);
-      expect(report.gained.me).toBeCloseTo(172800, 9);
-      expect(session.state.res.me).toBeCloseTo(172800, 9);
+      expect(report.gained.me).toBeCloseTo(964800, 9);
+      expect(session.state.res.me).toBeCloseTo(964800, 9);
     });
 
     it('still emits offline when nothing is gained', () => {
@@ -372,12 +372,12 @@ describe('GameSession', () => {
       const first = session.purchase('gearRatio');
       expect(first).toMatchObject({ ok: true, cost: firstCost, newLevel: 1 });
       expect(session.state.res.me).toBe(0);
-      expect(session.rates.perClick.me).toBe(2);
+      expect(session.rates.perClick.me).toBe(1.5);
       expect(log).toEqual([`purchase:gearRatio:1:${firstCost}`, 'unlock:gearRatio']);
 
       const secondCost = costAt(TECHNOLOGIES.gearRatio, 1);
       while (session.state.res.me < secondCost) session.click();
-      expect(session.state.res.me).toBe(secondCost);
+      expect(session.state.res.me).toBeGreaterThanOrEqual(secondCost);
 
       log.length = 0;
       const second = session.purchase('gearRatio');
@@ -398,7 +398,7 @@ describe('GameSession', () => {
         state: withMe(
           withLevels({ gearRatio: 3, reinforcedCrank: 1, wornMotor: 1, motorTuning: 5, pistonArray: 1 }, { lastSimTime: 0 }),
           5000,
-          200000,
+          240000,
         ),
         now: () => 0,
       });

@@ -12,6 +12,7 @@ import { SteamFx } from '../rendering/SteamFx';
 import { Terrain } from '../rendering/Terrain';
 import { DustField } from '../rendering/DustField';
 import { FloatingText } from '../rendering/FloatingText';
+import { OutputTicker } from '../rendering/OutputTicker';
 import { CameraController } from '../rendering/CameraController';
 import { Eclipse } from '../rendering/Eclipse';
 import { ApertureBeam } from '../rendering/ApertureBeam';
@@ -161,6 +162,7 @@ export class WorldScene extends Phaser.Scene {
     this.steamFx = steamFx;
     const floatingText = new FloatingText(this);
     const crank = new HandCrank(this, this.ctx, machine, floatingText);
+    const outputTicker = new OutputTicker(this, { session: this.ctx.session, machine: () => this.machineView, photoActive: () => this.photo?.isActive() === true, finaleOrPostgame: () => this.ctx.session.state.ending.phase !== 'none', reducedMotion: () => this.ctx.session.settings.reducedMotion });
     const camera = new CameraController(this, this.ctx.session);
     const unsubscribeRefocus = this.ctx.commands.refocus.on(() => camera.refocus());
     // WP23a living world: after SteamFx, before the finale. Its ports read scene and UI state lazily, so the photo mode and the
@@ -312,6 +314,7 @@ export class WorldScene extends Phaser.Scene {
       () => camera.destroy(),
       () => crank.destroy(),
       () => floatingText.destroy(),
+      () => outputTicker.destroy(),
       // WP23a: the living world goes before SteamFx and the dust (and so before the display source, which is disposed last).
       ...worldDisposables,
       () => {
@@ -476,6 +479,7 @@ export class WorldScene extends Phaser.Scene {
     const hudStart = performance.now();
     if (this.ctx.session.revision !== this.lastRevision && hudStart - this.hudRenderedAtMs >= HUD_REFRESH_MS) this.renderHud();
     this.ui.techTree.update();
+    OutputTicker.of(this)?.update(delta);
     this.frameTimings.record((sessionEnd - sessionStart) + (performance.now() - hudStart));
     // Photo mode ends itself when another modal sits on top or the finale runs again.
     this.photo?.update();

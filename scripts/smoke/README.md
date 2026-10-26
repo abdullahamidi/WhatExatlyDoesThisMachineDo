@@ -155,7 +155,7 @@ PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/
 
 Stages s0_crank … s9_era2_full (era I / II), s10_boiler and s11_era3_full (era III; s10 / s11 also print the 16 Era III part visibilities), s12_spire and s13_era4_full (era IV; s12 / s13 also print `parts4`, the 16 Era IV part visibilities), s14_null (era V start; prints `parts5`), s15_era5_full and s16_postgame (era V; print `parts5`, the 38 Era V part visibilities; both click the crank 3x before the screenshot so the inversion ghost shows). `s16_postgame` = s15 buys + primaryFunction, then `skipFinale()`, click KEEP IT RUNNING, 2.5 s settle, shot (postgame world). Every stage prints its plaque text, camera state and `hud` (WP17 HUD state, see below).
 In a buy list, `@<techId>` jumps 8 h at a time (up to 8 jumps) until that tech is owned; `@blueprint` is an alias of `@generatorBlueprint`.
-`@<techId>:<n>` buys that tech until its level is `n` (a rejected buy gets an 8 h jump and a retry, up to 128 rounds), then pushes `@<techId>:<n>:true|false`; e.g. `@resonantSiphon:20`.
+`@<techId>:<n>` buys that tech until its level is `n` (a rejected buy gets an 8 h jump and a retry, up to 512 rounds), then pushes `@<techId>:<n>:true|false`; e.g. `@resonantSiphon:20`.
 `PERF=1` (stages.mjs): for s13_era4_full and s15_era5_full, waits 3 s after the screenshot and prints `machineStats` (`{ meanMs, maxMs, components }`, or `null` when the hook is missing).
 `CLICK_SHOT=1` (stages.mjs): clicks the crank 3x before every stage shot so the gain block is in the screenshot.
 An `#era-card` shown at screenshot time is clicked away first (WP20).
@@ -404,7 +404,7 @@ PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/
 
 | case | what |
 |---|---|
-| `A` | fresh start: title (`#title-version` = `v<version> · DEMO · SAVE v2`), tech tree (5 tabs, eras III to V FULL GAME), SYSTEM menu (footer, no MEMORY tab, no DEMO ENDING row, RECORDS `/18`) |
+| `A` | fresh start: title (`#title-version` = `v<version> · DEMO · SAVE v2`), tech tree (5 tabs, eras III to V FULL GAME), SYSTEM menu (footer, no MEMORY tab, no DEMO ENDING row, RECORDS `/20`) |
 | `B` | reach the cap (S9 list + Substation Blueprint): waiting, teaser, card, wishlist, keep, tree after, SYSTEM row |
 | `C` | same page as B: reload with the cap owned, boot card, replay and skip |
 | `D` | reduced motion: portrait teaser and card |
@@ -412,7 +412,7 @@ PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/
 | `F` | boot where the offline catch-up crosses the cap: the stored save has the cap reset (`substationBlueprint` 0) and lifetime EE just under 4M, saved 1 h ago, so the boot teaser plays (`F_cap_not_yet` is read from the stored save) |
 
 Checks `A`: `A_title_demo`, `A_tabs_full_game`, `A_era3_refused` (`purchase('boiler')` reason `demo`), `A_footer_demo`,
-`A_memory_hidden`, `A_demo_row_hidden`, `A_records_18`.
+`A_memory_hidden`, `A_demo_row_hidden`, `A_records_20`.
 
 Checks `B`: `B_s9_buys`, `B_cap_owned`, `B_waiting`, `B_boiler_locked`, `B_teaser_started` (detail: ms since the cap, at
 least 3800), `B_caption` (`PRIMARY FUNCTION: RES?OR?`), `B_hud_hidden`, `B_no_spoiler`, `B_teaser_to_card`, `B_era3_seen`,
@@ -867,3 +867,36 @@ Existing checks changed under WP24:
 Settle lines (WP24, no wait, keyframe or check changed): `finale.mjs` calls `window.__wedtmd?.worldSettle?.(true)` before its 15 s sky wait, and `showcase.mjs` before each of its two 15 s sky waits (`showcase_A`, `showcase_B`).
 
 Debug members used by the WP24 checks: `worldBehaviour()`, `worldBehaviourLog()`, `worldBehaviourNext(actor, activity)`, `worldDay()`, `worldDayHold(min)`, `worldTransitions()`, `worldSettle(on)`, `worldProps()`, `worldState()` (`silence`, `playMs`), and the `alpha` / `y` fields of `livingWorld()`.
+
+## Passive-first economy (WP25): `economy.mjs`
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/economy.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/economy
+```
+
+Fresh context per case, 1280x720, deviceScaleFactor 1. Case `A` has its own context; cases `B` to `G` share one fresh page (era II only). On the demo build the run first skips the cap teaser and presses KEEP TINKERING (step `B_demo`), then runs the same checks. Prints ONE JSON object `{ results, fail, errors }`; expect `fail` and `errors` to be `[]`. Each case waits for `componentState('handCrank')`. An exception adds `FAILED:<case>:<message>` to `fail` (on the shared page the key is the group: `B`, `C`, `D`, `E`, `F` or `G`) and the run goes on.
+
+| case | what it does | checks (names in `results` / `fail`) |
+|---|---|---|
+| `A` (fresh) | waits 5 s without a click, then 45 crank clicks and `wornMotor`; polls up to 4.5 s for the first popup | `A_no_tick_before_click` (`outputStats()` not null, `shown` 0 and `visible` 0), `A_buy` (the failed-buy list is empty), `A_tick` (`shown` >= 1 and the latest popup text is `+<n> ME`; value `{ shown, last }`) |
+| `B`-`G` (one shared page) | 45 crank clicks, the S9 list and `@crankServo:3` (`B_buy`: the failed-buy list is empty), the era card click-away, `B_demo`, 500 ms | (see the rows below) |
+| `B_demo` (step of `B`-`G`, demo build only) | when `demoState()` is not null: waits up to 8 s for the cap teaser, clicks `#demo-skip` if it runs, then clicks `#demo-keep` (KEEP TINKERING) on the card and waits for phase `idle`; 500 ms. On the full build `demoState()` is null and it returns at once | no check name; a throw adds `FAILED:B_demo:<message>` to `fail` |
+| `B` tab II | `t`, click `#tech-tab-2`, count the rendered `.tech-node[data-tech=crankServo]`, screenshot `economy-B-tab2.png`, then tab IV if it is enabled, Esc | `B_tab_two` (one rendered Crank Servo node on tab II, none on tab IV, the tree closed; value `{ onTwo, onFour, fourLocked }`) |
+| `B` AUTO-CRANK line | reads `#hud-auto` (polled up to 3 s) | `B_auto_line` (matches `^AUTO-CRANK 3/s · [+][^ ]+ EE/s$`; value is the text) |
+| `B` servo parts | reads `componentState('servoBase')` and `componentState('servoArm')` (polled up to 3 s) | `B_parts` (both visible; value `{ base, arm }`) |
+| `C` click worth | reads `#hud-per-click` (polled up to 3 s) and the `title` of the `.hud-click` row | `C_worth` (the text ends with ` · <n>s` or ` · <0.01s`), `C_title` (the title matches `^One turn of the crank = .+ s of machine output$`) |
+| `D` photo mode | `photoMode(true)`, 400 ms, then 6 s | `D_photo` (`shown` unchanged and `photoState().active` true; photo mode is turned off after) |
+| `D` reduced motion | `reducedMotion: true`; up to 3 attempts: wait for a visible popup (cap 8 s), 4 samples 250 ms apart; reduced motion off after | `D_reduced` (3 or more samples with `visible` >= 1, all with `rising` false and the same non-null `y`; value = the samples of the last attempt) |
+| `E` quiet | `setOutputTicks(false)`, 300 ms, then 12 samples 500 ms apart; ticks back on | `E_quiet` (`shown` frozen and `visible` 0 in every sample; value `{ s0, samples }`) |
+| `F` HUD fit | `uiScale` 100, 125, 150 (400 ms each; shot `economy-F-<ui>.png`); back to 100 | `F_hud_fit_100`, `F_hud_fit_125`, `F_hud_fit_150` (`#hud-per-click` and `#hud-auto` one line each, inside `#hud-panel`), `F_hud_fit` (all three) |
+| `G` output cost | ticks on, reduced motion off, 30 s of popups | `G_output_cost` (`shown` > 0 and `meanMs` <= 0.05; value `{ shown, meanMs }`) |
+
+Notes:
+- Tab IV is a disabled button until era IV is reached. The script clicks it only when it is enabled; `fourLocked: true` in the `B_tab_two` value means it was not clicked and `onFour` is 0 by lock.
+- Hidden tech nodes stay in the DOM (`hidden`), so the Crank Servo count only includes rendered nodes.
+
+Debug API used (WP25 C6): `outputStats()` returns `{ shown, visible, y, rising, last, meanMs }` or `null`: `shown` = popups started, `visible` = popups on screen, `y` = world y of the newest visible popup (`null` when none), `rising` = false under reduced motion, `last` = the latest popup text, `meanMs` = mean `update()` ms over the last 300 frames. `setOutputTicks(on)`: off also hides the visible popups at once. The checks also use `photoMode`, `photoState`, `componentState`, `techTreeOpen`, `hudState` and `session.updateSettings`. A build without the hook reads `null` and the checks fail by name.
+
+Store shots (`store-shots.mjs`, WP25 C7): every shot adds `<size>_<id>_<variant>_no_output_tick`. It passes when the page has no visible popup and `shown` is unchanged since that page's `quietWorld` call; it passes when the hook is missing.
+
+Expected run: `fail: []` and `errors: []` on `http://localhost:4175/?debug=1` (full) and on `http://localhost:4176/?debug=1` (demo). `G_output_cost` needs a quiet PC: 30 s of popups on a loaded machine can push `meanMs` past 0.05 without a real regression.

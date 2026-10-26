@@ -7,11 +7,11 @@ import type { AchievementsState } from '../../data/types';
 
 const none: AchievementsState['unlocked'] = {};
 
-// The 18 rows visible in the era-2 demo, in list order.
+// The 20 rows visible in the era-2 demo, in list order.
 const DEMO_IDS = [
   'firstTurn', 'steadyHand', 'tireless', 'unrelenting', 'shiftWorker', 'wornMotor', 'fullStroke', 'blueprint',
-  'tinkerer', 'engineer', 'eraElectric', 'noGrid', 'kilowatt', 'shortNap', 'longSilence', 'sevenDigits',
-  'thirteenDigits', 'bigNumber',
+  'tinkerer', 'engineer', 'eraElectric', 'noGrid', 'kilowatt', 'shortNap', 'longSilence', 'automation',
+  'servoChorus', 'sevenDigits', 'thirteenDigits', 'bigNumber',
 ] as const;
 
 function withCondition(condition: AchievementDefinition['condition']): AchievementDefinition {
@@ -151,13 +151,13 @@ describe('counterText', () => {
   });
 
   it('counts only the given ids', () => {
-    expect(counterText({ firstTurn: 1, restoration: 2 }, DEMO_IDS.length, DEMO_IDS)).toBe('1/18 LOGGED');
+    expect(counterText({ firstTurn: 1, restoration: 2 }, DEMO_IDS.length, DEMO_IDS)).toBe('1/20 LOGGED');
     expect(counterText({ firstTurn: 1, restoration: 2 })).toBe('2/33 LOGGED');
   });
 });
 
 describe('editionAchievements', () => {
-  it('demo (maxEra 2) keeps the 18 era-2 rows in list order', () => {
+  it('demo (maxEra 2) keeps the 20 era-2 rows in list order', () => {
     expect(editionAchievements(2).map((d) => d.id)).toEqual([...DEMO_IDS]);
   });
 
@@ -193,9 +193,9 @@ describe('achievementInEdition', () => {
     expect(achievementInEdition(withCondition({ type: 'lifetime', res: 'pr', atLeast: 1 }), 2)).toBe(false);
   });
 
-  it('techsOwned: the target must fit inside the cap (18 techs at era 2)', () => {
+  it('techsOwned: the target must fit inside the cap (19 techs at era 2)', () => {
     expect(achievementInEdition(ACHIEVEMENTS.fullIndex, 2)).toBe(false);
-    expect(achievementInEdition(withCondition({ type: 'techsOwned', atLeast: 18 }), 2)).toBe(true);
+    expect(achievementInEdition(withCondition({ type: 'techsOwned', atLeast: 19 }), 2)).toBe(true);
   });
 
   it('prestige rows are never in a capped edition', () => {
