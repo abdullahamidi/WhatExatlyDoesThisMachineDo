@@ -604,12 +604,14 @@ export function startsOf(log: readonly BehaviourLogEntry[]): number[] {
 }
 
 // The entries that ended on their own: not cut short by a reaction (the next entry is a reaction that starts at its end), and not an
-// activity that wakes on a cue (wakeIds: its end is the cue, the sleep).
+// activity that wakes on a cue (wakeIds: its end is the cue, the sleep). The last entry is never counted: the log writes an entry
+// when it closes, so a reaction still running at the window end (an open umbrella) is missing and its cut cannot be told.
 export function naturalEntries(log: readonly BehaviourLogEntry[], wakeIds: ReadonlySet<string>): BehaviourLogEntry[] {
   return log.filter((e, i) => {
     if (wakeIds.has(e.activity)) return false;
     const next = log[i + 1];
-    return !(next !== undefined && next.reaction && Math.abs(next.atMs - endOf(e)) < 1e-6);
+    if (next === undefined) return false;
+    return !(next.reaction && Math.abs(next.atMs - endOf(e)) < 1e-6);
   });
 }
 

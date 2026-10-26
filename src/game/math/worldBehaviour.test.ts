@@ -355,10 +355,10 @@ describe('pickNext over the real repertoire', () => {
 
 describe('travel', () => {
   it('drops a travel whose spot is missing from the framing', () => {
-    const env = envOf('inspector', 1, { spots: [{ id: 'sensor', x: 76 }, { id: 'mid', x: 100 }] });
+    const env = envOf('inspector', 1, { spots: [{ id: 'mid', x: 100 }, { id: 'scrap', x: 124 }] });
     const pool = eligible('inspector', 1, ctxOf({ sensor: true, scraps: true }));
     for (const seed of [1, 2]) {
-      const picks = playPicks(pool, env, seed, { minutes: 60, homeSpot: 1 });
+      const picks = playPicks(pool, env, seed, { minutes: 60, homeSpot: 0 });
       expect(picks.some((p) => p.seg.id === 'crouch')).toBe(false);
       expect(picks.length).toBeGreaterThan(0);
     }

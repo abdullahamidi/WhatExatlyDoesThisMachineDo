@@ -139,7 +139,7 @@ const INS_ROUNDS: readonly Activity[] = [
     emits: 'atSensor', emitsAt: 'start', interruptible: true },
   { id: 'watch', clip: one('watch'), holdMs: [2000, 4000], weight: 1, cooldownMs: 45000, follow: { write: 1.5 }, interruptible: true },
   { id: 'lookUp', clip: one('lookUp'), holdMs: [4000, 10000], weight: 2, cooldownMs: 30000, interruptible: true },
-  { id: 'crouch', clip: one('crouch'), holdMs: [5000, 12000], weight: 1.5, cooldownMs: 45000, travel: 'scrap', when: ['scraps'], interruptible: true },
+  { id: 'crouch', clip: one('crouch'), holdMs: [5000, 12000], weight: 1.5, cooldownMs: 45000, travel: 'sensor', when: ['scraps'], interruptible: true },
 ];
 // The umbrella (era III, vents): a reaction to ventPuff. The clip holds the first and last frame for edgeMs; poseSet switches the base pose.
 const INS_UMBRELLA: readonly Activity[] = [

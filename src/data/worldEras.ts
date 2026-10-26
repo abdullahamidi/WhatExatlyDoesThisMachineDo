@@ -129,7 +129,7 @@ export const WORLD_TRACES = {
 export const WORLD_ERA_ENV = {
   crowPerchLiftArtPx: 56, crowHoverPx: 2, crowBeatRisePx: 1, crowHighExtraArtPx: 8, accentMs: 250, girlSwayMs: 1200,
   // Era IV ripple: every walker rises this many world px for accentMs on the next downbeat.
-  riseWorldPx: 1,
+  riseWorldPx: 2,
   // Era V ripple: shadows slide this many world px toward the machine centre for shadowSlideMs.
   shadowSlideWorldPx: 4, shadowSlideMs: 500,
   // The era of the downbeat accents (walker accent frame, crow beat rise).

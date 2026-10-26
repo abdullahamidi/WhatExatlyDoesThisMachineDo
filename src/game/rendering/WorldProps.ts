@@ -56,6 +56,8 @@ const HAND_REDRAW_DEG = 1;
 const SHOWN_ALPHA = 0.01;
 // The 8-bit alpha maximum (0xff): alpha is compared on its 1/255 grid, the finest step a frame shows (structural, as CHANNEL_MAX in worldDay).
 const ALPHA_MAX = 0xff;
+// Halo redraw step: a window level that moved less than one 8-bit step (1/255) since the last halo draw is not redrawn (a render epsilon).
+const LEVEL_STEP = 1 / ALPHA_MAX;
 // Frame names by blend index: the lamp (dead, lit, warm; restored is script only) and the booth hood (dark, lit).
 const LAMP_STATES: readonly string[] = ['dead', 'lit', 'warm'];
 const BOOTH_HOOD: readonly string[] = ['dark', 'lit'];
@@ -301,7 +303,6 @@ export class WorldProps {
   private stale = true;
   private readonly lastWinAlpha = unsetList(WORLD_FAR_PLANES.windows.length);
   private lastWinBreathe = false;
-  private lastWinTop = NaN;
   private lastLampMain = NaN;
   private lastLampTwin = NaN;
   private lastLampK = NaN;
@@ -361,7 +362,10 @@ export class WorldProps {
   private breatheMs = 0;
   private pulseMs = 0;
   private puddleRingMs = 0;
-  private haloLit = -1;
+  // Halo (WP24 AD2 F1): each window's presented level without the mains flicker, written every paint, and the levels of the last halo draw
+  // (NaN = none yet). The halo redraws only when a level moved by LEVEL_STEP or more.
+  private readonly haloLevels = unsetList(WORLD_FAR_PLANES.windows.length);
+  private readonly haloDrawn = unsetList(WORLD_FAR_PLANES.windows.length);
   // Mote orbit clock (ms): advances at the rate the motes still move; frozen by the queue's freeze off script, full rate on script.
   // Static under reduced motion.
   private orbitMs = 0;
@@ -387,7 +391,7 @@ export class WorldProps {
     this.farPylon = scene.add.container(0, 0).setScrollFactor(far.pylon.sf).setDepth(far.pylon.depth);
     this.owned.push(this.farWindow, this.farPylon);
 
-    // The halo is one Graphics added before the windows, so it draws behind them; drawHalo() fills it per lit count.
+    // The halo is one Graphics added before the windows, so it draws behind them; paintHalo() fills it per window level.
     this.halo = this.graphicsIn(this.farWindow, 0);
 
     // Six lit windows: the 4x6 frame cropped to each window's art size (3x6, 4x6 and 2x4 entries).
@@ -782,7 +786,6 @@ export class WorldProps {
     this.girlWindow.setVisible(true);
     this.girlMini.setVisible(state.props.girlMini);
     this.girlMiniNear.setVisible(state.props.girlMiniNear);
-    if (state.props.windowsLit !== this.haloLit) this.drawHalo(state.props.windowsLit);
 
     // Lamp, glow and motes hang off the lamp placement; the glow and the orbit centre on the lamp head.
     const lamp = p.lamp;
@@ -927,7 +930,7 @@ export class WorldProps {
   }
 
   // Six lit windows: each at its tween level (the queue's one-by-one lights and dims) scaled by the mains flicker; the script keeps the
-  // state's count and the window target. The halo follows the brightest window. The breathe frame needs the breathe timer and its tween.
+  // state's count and the window target. The halo glows each window at the same level (paintHalo). The breathe frame needs the breathe timer.
   private paintWindows(state: WorldVisualState, tween: WorldTween): void {
     const script = this.propScript;
     const wa = script?.windowsAlpha ?? 1;
@@ -937,25 +940,21 @@ export class WorldProps {
     // A frame change (breathe flips, or a stale sprite) repaints every window; otherwise a window writes only when its alpha moved.
     const reframe = this.stale || breatheOn !== this.lastWinBreathe;
     this.lastWinBreathe = breatheOn;
-    let top = 0;
     for (let i = 0; i < this.windowSprites.length; i++) {
-      const w = this.windowSprites[i];
-      if (w === undefined) continue;
       let level = tween.windows[i] ?? 0;
       if (script !== null) level = i < state.props.windowsLit ? windowTargetOf(state.props.windows) : 0;
+      // The sprite's presented level without the mains flicker: its alpha is this times mainsMul (clamped). The halo draws this level.
+      this.haloLevels[i] = WORLD_ENV.windowAlpha * level * wa;
+      const w = this.windowSprites[i];
+      if (w === undefined) continue;
       const alpha = clamp01(WORLD_ENV.windowAlpha * level * this.mainsMul * wa);
-      top = Math.max(top, alpha);
       if (!reframe && alpha === this.lastWinAlpha[i]) continue;
       this.lastWinAlpha[i] = alpha;
       this.setFrame(w, 'windowLit', breathe, row);
       setVisibleIf(w, alpha > SHOWN_ALPHA);
       setAlphaIf(w, alpha);
     }
-    // The halo follows the brightest window: it writes only when that moved (or the frames did).
-    if (!reframe && top === this.lastWinTop) return;
-    this.lastWinTop = top;
-    setVisibleIf(this.halo, top > SHOWN_ALPHA);
-    setAlphaIf(this.halo, top);
+    this.paintHalo();
   }
 
   // Lamp (eras I-V): the lamp sprite shows the lamp Blend (dead, lit, warm) and its twin crossfades in (warm). The glow steps brighter on a
@@ -1182,19 +1181,40 @@ export class WorldProps {
     tex.refresh();
   }
 
-  // Halo behind the first count lit windows (WORLD_ENV.windowGlow); redrawn only when the count changes.
-  private drawHalo(count: number): void {
+  // Halo (WORLD_ENV.windowGlow): the glow of each window at its own presented level, so a plate fades in and out with its window (not all six
+  // at once). Redraws only while a level moved by LEVEL_STEP or more (no redraw, no allocation in the steady state). The object alpha carries
+  // the mains flicker, as the window sprites do; the halo shows while any window is above SHOWN_ALPHA.
+  private paintHalo(): void {
+    let moved = false;
+    let shown = false;
+    for (let i = 0; i < this.haloLevels.length; i++) {
+      const level = this.haloLevels[i] ?? 0;
+      // An undrawn level (NaN) fails the step test, so the first paint draws.
+      if (!(Math.abs(level - (this.haloDrawn[i] ?? NaN)) < LEVEL_STEP)) moved = true;
+      if (level > SHOWN_ALPHA) shown = true;
+    }
+    if (moved) this.drawHalo();
+    setVisibleIf(this.halo, shown);
+    setAlphaIf(this.halo, this.mainsMul);
+  }
+
+  // Draws one glow per window above SHOWN_ALPHA at windowGlow.alpha times its level, over the window's padded rect, and stores the levels it
+  // drew. With every level at 1 this is the count draw of all six windows: the same colour, alpha, rects and order.
+  private drawHalo(): void {
     const far = WORLD_FAR_PLANES;
     const pad = WORLD_ENV.windowGlow.padArtPx * PIXEL_SCALE;
     const g = this.halo;
     g.clear();
-    g.fillStyle(WORLD_ENV.windowGlow.color, WORLD_ENV.windowGlow.alpha);
-    for (const w of far.windows.slice(0, count)) {
+    for (let i = 0; i < far.windows.length; i++) {
+      const level = this.haloLevels[i] ?? 0;
+      this.haloDrawn[i] = level;
+      const w = far.windows[i];
+      if (w === undefined || level <= SHOWN_ALPHA) continue;
       const x = far.window.tileOriginX + PIXEL_SCALE * w.artX;
       const y = far.window.tileTopY + PIXEL_SCALE * w.artY;
+      g.fillStyle(WORLD_ENV.windowGlow.color, WORLD_ENV.windowGlow.alpha * level);
       g.fillRect(x - pad, y - pad, w.w * PIXEL_SCALE + 2 * pad, w.h * PIXEL_SCALE + 2 * pad);
     }
-    this.haloLit = count;
   }
 
   // Shows a sprite on a named frame of its sheet, or hides it when the name is undefined (no stage, no size). The frame is set on change only.

@@ -141,7 +141,7 @@ describe('worldEras: tech rules', () => {
   });
 
   it('pins the era IV rise, the era V shadow slide and the downbeat era', () => {
-    expect(WORLD_ERA_ENV.riseWorldPx).toBe(1);
+    expect(WORLD_ERA_ENV.riseWorldPx).toBe(2);
     expect(WORLD_ERA_ENV.shadowSlideWorldPx).toBe(4);
     expect(WORLD_ERA_ENV.shadowSlideMs).toBe(500);
     expect(WORLD_ERA_ENV.downbeatEra).toBe(4);
