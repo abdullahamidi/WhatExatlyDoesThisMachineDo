@@ -17,7 +17,7 @@ import {
   WORLD_MARKS, WORLD_PLACEMENTS, WORLD_PLAYBACK, WORLD_RIPPLES, WORLD_SHADOWS, WORLD_SHEET_KEYS, WORLD_LAYOUT, WORLD_SWEEP,
   WORLD_TIER_PROPS, WORLD_UNISON, WORLD_VOICE_CONFIG, seenKeyOf,
 } from './livingWorld';
-import type { ChainId, FramingKey, GroundId, LoopFrame, WorldLine, WorldLoopId, WorldPlacement, WorldSheetId } from './livingWorld';
+import type { ChainId, FramingKey, GroundId, WorldLine, WorldLoopId, WorldPlacement, WorldSheetId } from './livingWorld';
 
 const BIBLE = readFileSync(new URL('../../docs/plan/STORY_BIBLE.md', import.meta.url), 'utf8');
 const LIVING_SRC = readFileSync(new URL('./livingWorld.ts', import.meta.url), 'utf8');
@@ -494,9 +494,7 @@ describe('trigger wiring', () => {
 
 describe('sprite frames and loops (DENIZEN_ART §5.1)', () => {
   const SHEETS = Object.keys(WORLD_FRAMES) as WorldSheetId[];
-  const LOOP_SHEET: Record<WorldLoopId, WorldSheetId> = {
-    inspector: 'inspector', inspectorStatic: 'inspector', dog: 'dog', dogDig: 'dog', crow: 'crow', crowStutter: 'crow', receiver: 'receiver',
-  };
+  const LOOP_SHEET: Record<WorldLoopId, WorldSheetId> = { receiver: 'receiver' };
   // Asset registry lookup by key. The manifest is typed by AssetId, so index it as plain strings.
   const manifestEntry = (key: string): AssetEntry | undefined => (ASSET_MANIFEST as Record<string, AssetEntry | undefined>)[key];
 
@@ -535,11 +533,6 @@ describe('sprite frames and loops (DENIZEN_ART §5.1)', () => {
       }
     }
     expect(missing).toEqual([]);
-  });
-
-  it('keeps the inspector walk within dx -24..24 world px', () => {
-    const steps: readonly LoopFrame[] = WORLD_LOOPS.inspector;
-    expect(steps.filter((s) => s.dx < -24 || s.dx > 24)).toEqual([]);
   });
 
   it.each(SHEETS)('%s frame count equals the manifest (x6 era rows where stacked; one frame when the entry has no frame grid)', (sheet) => {
@@ -646,7 +639,24 @@ describe('WP23a layout, environment and audio pins (W1-C)', () => {
     expect(WORLD_ENV.motes.fallArtPx).toBe(24);
     expect(WORLD_ENV.receiverOnHookArt).toEqual({ x: 13, y: -34 });
     expect(WORLD_MARKS.fogColor).toBe(0xddc9a3);
-    expect(WORLD_GIRL_PLACEMENTS.e1?.ground).toEqual({ x: 1538, row: 'back' });
+    expect(WORLD_GIRL_PLACEMENTS.e1?.ground).toEqual({ x: 1552, row: 'back' });
+    expect(WORLD_GIRL_PLACEMENTS.s8?.ground).toEqual({ x: 1552, row: 'back' });
+    expect(WORLD_GIRL_PLACEMENTS.s9?.ground).toEqual({ x: 1552, row: 'back' });
+  });
+
+  it('cycle 3 girl clears the 1530 scrap by 6 px and the Inspector spots by 48 px', () => {
+    // Her boots reach 8 world px left of her x (the art origin is x 8 of 16). The scrap is 16 px wide, centred on its x.
+    const GIRL_BOOT_REACH = 8;
+    const SCRAP_HALF_WIDTH = 8;
+    const INSPECTOR_SPOTS = [1448, 1472, 1496];
+    for (const key of ['e1', 's8', 's9'] as const) {
+      const girlX = WORLD_GIRL_PLACEMENTS[key]?.ground?.x;
+      expect(girlX, key).toBeDefined();
+      if (girlX === undefined) continue;
+      const scrapRight = Math.max(...(WORLD_PLACEMENTS[key].scraps?.xs ?? [])) + SCRAP_HALF_WIDTH;
+      expect(girlX - GIRL_BOOT_REACH, key).toBeGreaterThanOrEqual(scrapRight + 6);
+      for (const spot of INSPECTOR_SPOTS) expect(Math.abs(girlX - spot), `${key} spot ${spot}`).toBeGreaterThanOrEqual(48);
+    }
   });
 
   it('pins the head reserve values and their shape', () => {

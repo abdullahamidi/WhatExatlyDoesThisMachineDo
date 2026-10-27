@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-  parallaxPosition, parallaxSpan, parallaxStrip, isLayerVisible, fadeStep,
+  parallaxPosition, parallaxSpan, parallaxStrip, isLayerVisible, fadeStep, layerFadeMs,
   patternShift, layerPhase, stageAlpha, stageFrame, skyPxToScrollZero,
 } from './parallax';
 import { clampCenter, effectiveMinZoom } from './camera';
-import { VIEW, WORLD, CAMERA, PARALLAX_LAYERS, PIXEL_SCALE, PATTERN_ORIGIN_X } from '../../data/world';
+import { VIEW, WORLD, CAMERA, PARALLAX_LAYERS, PARALLAX_FADE_MS, ERA5_SKY_FADE_IN_MS, PIXEL_SCALE, PATTERN_ORIGIN_X } from '../../data/world';
 import { TECH_IDS } from '../../data/types';
 import type { TechId } from '../../data/types';
 
@@ -183,6 +183,69 @@ describe('fadeStep', () => {
     expect(v).toBeGreaterThanOrEqual(0);
     expect(v).toBeLessThanOrEqual(1);
     expect(fadeStep(0.99, 2, 1e6, 1500)).toBe(1);
+  });
+});
+
+describe('layerFadeMs (WP26 C5)', () => {
+  const sky = { fadeInMs: ERA5_SKY_FADE_IN_MS };
+  const byId = (id: string) => {
+    const found = PARALLAX_LAYERS.find((l) => l.id === id);
+    if (!found) throw new Error(`missing parallax layer ${id}`);
+    return found;
+  };
+
+  it('a rising layer with the slow option on fades over fadeInMs', () => {
+    expect(layerFadeMs(sky, 0, 0.25, true)).toBe(ERA5_SKY_FADE_IN_MS);
+    expect(layerFadeMs(sky, 0.5, 0.75, true)).toBe(ERA5_SKY_FADE_IN_MS);
+  });
+
+  it('a falling layer keeps PARALLAX_FADE_MS, even with the slow option on', () => {
+    expect(layerFadeMs(sky, 0.5, 0.25, true)).toBe(PARALLAX_FADE_MS);
+    expect(layerFadeMs(sky, 1, 0, true)).toBe(PARALLAX_FADE_MS);
+  });
+
+  it('a layer already at its target keeps PARALLAX_FADE_MS', () => {
+    expect(layerFadeMs(sky, 0.25, 0.25, true)).toBe(PARALLAX_FADE_MS);
+  });
+
+  it('a layer without fadeInMs keeps fadeMs ?? PARALLAX_FADE_MS, even with the slow option on', () => {
+    expect(layerFadeMs({}, 0, 1, true)).toBe(PARALLAX_FADE_MS);
+    expect(layerFadeMs({ fadeMs: 6000 }, 0, 1, true)).toBe(6000);
+  });
+
+  it('with the slow option off every layer keeps fadeMs ?? PARALLAX_FADE_MS', () => {
+    expect(layerFadeMs(sky, 0, 0.25, false)).toBe(PARALLAX_FADE_MS);
+    expect(layerFadeMs({ fadeMs: 6000, fadeInMs: ERA5_SKY_FADE_IN_MS }, 0, 1, false)).toBe(6000);
+  });
+
+  it('a layer with both fadeMs and fadeInMs uses fadeInMs only when rising under the slow option', () => {
+    const both = { fadeMs: 6000, fadeInMs: ERA5_SKY_FADE_IN_MS };
+    expect(layerFadeMs(both, 0, 1, true)).toBe(ERA5_SKY_FADE_IN_MS);
+    expect(layerFadeMs(both, 1, 0, true)).toBe(6000);
+    expect(layerFadeMs(both, 0, 1, false)).toBe(6000);
+  });
+
+  it('the era V sky layers rise over fadeInMs and the skyline keeps PARALLAX_FADE_MS', () => {
+    expect(layerFadeMs(byId('skyViolet'), 0, 0.25, true)).toBe(ERA5_SKY_FADE_IN_MS);
+    expect(layerFadeMs(byId('horizonGlow'), 0, 0.35, true)).toBe(ERA5_SKY_FADE_IN_MS);
+    expect(layerFadeMs(byId('skyline'), 0, 1, true)).toBe(PARALLAX_FADE_MS);
+  });
+
+  it('a 0.25 stage fades in 16 ms frames without a jump and takes at least 4000 ms', () => {
+    const def = byId('skyViolet');
+    const frameMs = 16;
+    const maxStep = frameMs / ERA5_SKY_FADE_IN_MS + 1e-12;
+    let fade = 0;
+    let elapsed = 0;
+    while (fade < 0.25 && elapsed < 60000) {
+      const next = fadeStep(fade, 0.25, frameMs, layerFadeMs(def, fade, 0.25, true));
+      expect(next - fade).toBeGreaterThan(0);
+      expect(next - fade).toBeLessThanOrEqual(maxStep);
+      fade = next;
+      elapsed += frameMs;
+    }
+    expect(fade).toBe(0.25);
+    expect(elapsed).toBeGreaterThanOrEqual(4000);
   });
 });
 

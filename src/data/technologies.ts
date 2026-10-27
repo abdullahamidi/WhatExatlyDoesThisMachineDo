@@ -68,7 +68,7 @@ export const TECHNOLOGIES: Record<TechId, TechDefinition> = {
       { type: 'tech', id: 'wornMotor', minLevel: 1 },
     ],
     description: 'A heavy wheel that stores momentum. +10% automation production per level.',
-    tree: { col: 3, row: 0 },
+    tree: { col: 3, row: 1 },
   },
   wornMotor: {
     id: 'wornMotor',
@@ -84,7 +84,7 @@ export const TECHNOLOGIES: Record<TechId, TechDefinition> = {
     requires: [{ type: 'tech', id: 'handCrank', minLevel: 1 }],
     description: 'A salvaged motor that turns by itself. +17 ME/s.',
     flavor: 'Synchronization unsuccessful.',
-    tree: { col: 1, row: 2 },
+    tree: { col: 1, row: 1 },
   },
   motorTuning: {
     id: 'motorTuning',
@@ -517,7 +517,7 @@ export const TECHNOLOGIES: Record<TechId, TechDefinition> = {
     ],
     requires: [{ type: 'tech', id: 'harmonicCoil', minLevel: 3 }],
     description: 'A fork rings with every turn. Clicks echo 0.5s of RS; ×2 manual ME.',
-    tree: { col: 2, row: 0 },
+    tree: { col: 4, row: 0 },
   },
   phaseLock: {
     id: 'phaseLock',
@@ -649,7 +649,7 @@ export const TECHNOLOGIES: Record<TechId, TechDefinition> = {
     effects: [{ type: 'rateMult', factor: 1.1, res: 'all' }],
     requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
     description: 'Piles at both ends guy the crown to the ground. ×1.1 all production per level.',
-    tree: { col: 2, row: 2 },
+    tree: { col: 3, row: 2 },
   },
   inversionCrank: {
     id: 'inversionCrank',
@@ -664,7 +664,7 @@ export const TECHNOLOGIES: Record<TechId, TechDefinition> = {
     effects: [{ type: 'clickEcho', seconds: 0.75, res: 'xf' }],
     requires: [{ type: 'tech', id: 'containmentRing', minLevel: 3 }],
     description: 'Every turn leaves a turn going the other way. Clicks echo 0.75s of ???.',
-    tree: { col: 2, row: 0 },
+    tree: { col: 4, row: 0 },
   },
   lensArray: {
     id: 'lensArray',
@@ -792,7 +792,7 @@ export const TECHNOLOGIES: Record<TechId, TechDefinition> = {
     effects: [{ type: 'autoPct', percent: 6, res: 'xf' }],
     requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
     description: 'The grid runs backwards into the null gallery. +6% ??? production per level.',
-    tree: { col: 3, row: 2 },
+    tree: { col: 6, row: 0 },
   },
   steamLance: {
     id: 'steamLance',
@@ -807,7 +807,7 @@ export const TECHNOLOGIES: Record<TechId, TechDefinition> = {
     effects: [{ type: 'autoPct', percent: 6, res: 'xf' }],
     requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
     description: 'A riser carries live steam up the spire into the chamber. +6% ??? production per level.',
-    tree: { col: 4, row: 2 },
+    tree: { col: 6, row: 2 },
   },
 };
 

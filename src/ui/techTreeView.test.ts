@@ -26,6 +26,9 @@ import { TECH_IDS } from '../data/types';
 import { setDefaultNotation } from '../utils/format';
 import { setRevealed } from './revealRules';
 
+// Edges whose straight line ran behind a node: same-row ones (WP25 AD1 F2), cross-row ones (WP26 T9).
+const DETOURED = ['condenser->pressureVesselBlueprint', 'motorRetrofit->powerLines', 'nullChamber->mainsBackfeed', 'nullChamber->steamLance'];
+
 function stateWith(overrides: Partial<GameState>): GameState {
   return { ...createInitialState(0), ...overrides };
 }
@@ -373,9 +376,6 @@ describe('techTreeView', () => {
       return buildTechTreeView(views, emptyResourceMap(), null, era);
     }
 
-    // Edges whose straight line ran behind a node of their row before WP25 AD1 F2.
-    const DETOURED = ['condenser->pressureVesselBlueprint', 'motorRetrofit->powerLines'];
-
     /** Node at (x, y) with the default node size; edge routing reads only the geometry and the id. */
     function nodeAt(id: TechId, x: number, y: number): TechNodeView {
       return {
@@ -411,7 +411,7 @@ describe('techTreeView', () => {
       }
     });
 
-    it('detours exactly the two same-row edges that pass a node across eras I-V', () => {
+    it('detours exactly the same-row and cross-row edges that pass a node across eras I-V', () => {
       const detoured: string[] = [];
       for (const era of [1, 2, 3, 4, 5]) {
         const view = realEraView(era);
@@ -439,6 +439,204 @@ describe('techTreeView', () => {
       const beyond = nodeAt('wornMotor', 334, 18);
       const otherRow = nodeAt('motorTuning', 176, 114);
       expect(edgePathAround(from, to, [from, to, beyond, otherRow])).toBe(edgePath(from, to));
+    });
+
+    it('detours a cross-row edge through the outer channel below the grid when its curve clips a node', () => {
+      const from = nodeAt('handCrank', 18, 18);
+      const mid = nodeAt('gearRatio', 176, 114);
+      const to = nodeAt('wornMotor', 334, 114);
+      expect(edgePathAround(from, to, [from, mid, to])).toBe(
+        'M 162 52 C 169 52, 169 52, 169 59 L 169 184 C 169 191, 169 191, 176 191 L 320 191 C 327 191, 327 191, 327 184 L 327 155 C 327 148, 327 148, 334 148',
+      );
+    });
+
+    it('detours a cross-row edge that climbs to a target row above it through the outer channel above the grid', () => {
+      const from = nodeAt('handCrank', 18, 114);
+      const mid = nodeAt('gearRatio', 176, 18);
+      const to = nodeAt('wornMotor', 334, 18);
+      expect(edgePathAround(from, to, [from, mid, to])).toBe(
+        'M 162 148 C 169 148, 169 148, 169 141 L 169 16 C 169 9, 169 9, 176 9 L 320 9 C 327 9, 327 9, 327 16 L 327 45 C 327 52, 327 52, 334 52',
+      );
+    });
+
+    it('keeps the straight path for a cross-row edge whose curve clears every node', () => {
+      const from = nodeAt('handCrank', 18, 18);
+      const to = nodeAt('wornMotor', 334, 114);
+      const belowTarget = nodeAt('motorTuning', 176, 210);
+      const beyond = nodeAt('pistonArray', 500, 114);
+      expect(edgePathAround(from, to, [from, to, belowTarget, beyond])).toBe(edgePath(from, to));
+    });
+
+    it('routes Null Chamber to Mains Backfeed and Steam Lance through the outer channels in era V', () => {
+      const view = realEraView(5);
+      const pathOf = (key: string): string | undefined => view.edges.find((e) => e.key === key)?.d;
+      expect(pathOf('nullChamber->mainsBackfeed')).toBe('M 162 148 C 169 148, 169 148, 169 141 L 169 16 C 169 9, 169 9, 176 9 L 952 9 C 959 9, 959 9, 959 16 L 959 45 C 959 52, 959 52, 966 52');
+      expect(pathOf('nullChamber->steamLance')).toBe('M 162 148 C 169 148, 169 148, 169 155 L 169 280 C 169 287, 169 287, 176 287 L 952 287 C 959 287, 959 287, 959 280 L 959 251 C 959 244, 959 244, 966 244');
+    });
+  });
+
+  describe('no edge passes through a third node (WP26 Q6)', () => {
+    const CLEAR_PX = 4;            // layout px: the closest an edge may come to a node box that is not one of its two ends
+    const SAMPLES_PER_SEGMENT = 64; // points per L or C segment, the same sampling as the detour test in edgePathAround
+    type Pt = { x: number; y: number };
+
+    /** Tree view of one era built from the real techs, as the overlay builds it. */
+    function realEraView(era: number) {
+      const views = getAllTechViews(createInitialState(0)).filter((v) => v.def.era === era);
+      return buildTechTreeView(views, emptyResourceMap(), null, era);
+    }
+
+    /** Points along an absolute path of M, C and L commands: the only ones edgePath and edgePathAround emit. */
+    function samplePath(d: string): Pt[] {
+      const tokens = d.replace(/,/g, ' ').trim().split(/\s+/);
+      const pts: Pt[] = [];
+      let cur: Pt = { x: 0, y: 0 };
+      let i = 0;
+      const num = (): number => {
+        const token = tokens[i++];
+        if (token === undefined) throw new Error(`truncated path: ${d}`);
+        return Number(token);
+      };
+      const point = (): Pt => ({ x: num(), y: num() });
+      while (i < tokens.length) {
+        const cmd = tokens[i++];
+        if (cmd === 'M') {
+          cur = point();
+          pts.push(cur);
+        } else if (cmd === 'L') {
+          const end = point();
+          for (let s = 0; s <= SAMPLES_PER_SEGMENT; s++) {
+            const u = s / SAMPLES_PER_SEGMENT;
+            pts.push({ x: cur.x + (end.x - cur.x) * u, y: cur.y + (end.y - cur.y) * u });
+          }
+          cur = end;
+        } else if (cmd === 'C') {
+          const c1 = point();
+          const c2 = point();
+          const end = point();
+          for (let s = 0; s <= SAMPLES_PER_SEGMENT; s++) {
+            const u = s / SAMPLES_PER_SEGMENT;
+            const k = 1 - u;
+            const w0 = k * k * k;
+            const w1 = 3 * k * k * u;
+            const w2 = 3 * k * u * u;
+            const w3 = u * u * u;
+            pts.push({
+              x: w0 * cur.x + w1 * c1.x + w2 * c2.x + w3 * end.x,
+              y: w0 * cur.y + w1 * c1.y + w2 * c2.y + w3 * end.y,
+            });
+          }
+          cur = end;
+        } else {
+          throw new Error(`unsupported path command ${cmd ?? '(none)'} in ${d}`);
+        }
+      }
+      return pts;
+    }
+
+    /** Distance from a point to a node box, 0 inside the box. */
+    function distToBox(p: Pt, n: TechNodeView): number {
+      const dx = Math.max(n.x - p.x, 0, p.x - (n.x + n.width));
+      const dy = Math.max(n.y - p.y, 0, p.y - (n.y + n.height));
+      return Math.hypot(dx, dy);
+    }
+
+    it('samplePath follows a straight L segment', () => {
+      const pts = samplePath('M 0 0 L 10 0');
+      expect(pts[0]).toEqual({ x: 0, y: 0 });
+      expect(pts[pts.length - 1]).toEqual({ x: 10, y: 0 });
+      expect(pts).toContainEqual({ x: 5, y: 0 });
+      expect(pts.every((p) => p.y === 0)).toBe(true);
+    });
+
+    it('samplePath ends a C segment on its end point and passes the t = 0.5 point', () => {
+      // Symmetric cubic (0,0) (0,10) (10,10) (10,0): at t = 0.5 the point is (5, 7.5).
+      const pts = samplePath('M 0 0 C 0 10, 10 10, 10 0');
+      expect(pts[0]).toEqual({ x: 0, y: 0 });
+      expect(pts[pts.length - 1]).toEqual({ x: 10, y: 0 });
+      expect(pts).toContainEqual({ x: 5, y: 7.5 });
+    });
+
+    it('samplePath of a real edge runs from the right side of from to the left side of to', () => {
+      const view = realEraView(1);
+      const edge = view.edges[0];
+      const from = view.nodes.find((n) => n.id === edge?.from);
+      const to = view.nodes.find((n) => n.id === edge?.to);
+      if (edge === undefined || from === undefined || to === undefined) throw new Error('era I has no edge');
+      const pts = samplePath(edge.d);
+      expect(pts[0]).toEqual({ x: from.x + from.width, y: from.y + from.height / 2 });
+      expect(pts[pts.length - 1]).toEqual({ x: to.x, y: to.y + to.height / 2 });
+    });
+
+    it('distToBox is 0 inside a node and the Euclidean gap outside it', () => {
+      const node = realEraView(1).nodes.find((n) => n.id === 'gearRatio');
+      if (node === undefined) throw new Error('missing gearRatio node');
+      expect(distToBox({ x: node.x + 1, y: node.y + 1 }, node)).toBe(0);
+      expect(distToBox({ x: node.x - 3, y: node.y - 4 }, node)).toBe(5);
+      expect(distToBox({ x: node.x - 10, y: node.y + node.height / 2 }, node)).toBe(10);
+    });
+
+    it.each([1, 2, 3, 4, 5])('era %i: every edge keeps CLEAR_PX from every third node', (era) => {
+      const view = realEraView(era);
+      const bad: string[] = [];
+      for (const edge of view.edges) {
+        const pts = samplePath(edge.d);
+        for (const node of view.nodes) {
+          if (node.id === edge.from || node.id === edge.to) continue;
+          const min = Math.min(...pts.map((p) => distToBox(p, node)));
+          if (min < CLEAR_PX) bad.push(`${edge.key} -> ${node.id} (${min.toFixed(1)} px)`);
+        }
+      }
+      expect(bad).toEqual([]);
+    });
+
+    /** Consecutive point pairs of a sampled polyline. */
+    function segmentsOf(pts: Pt[]): [Pt, Pt][] {
+      const segments: [Pt, Pt][] = [];
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1];
+        const b = pts[i];
+        if (a && b) segments.push([a, b]);
+      }
+      return segments;
+    }
+
+    /** Proper crossing of segments ab and cd: each pair strictly on opposite sides. Touching and collinear pairs do not count. */
+    function segmentsCross(a: Pt, b: Pt, c: Pt, d: Pt): boolean {
+      const side = (p: Pt, q: Pt, r: Pt): number => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+      return side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0;
+    }
+
+    it('era V: no detoured edge crosses another edge', () => {
+      const view = realEraView(5);
+      const sampled = view.edges.map((edge) => ({ edge, segments: segmentsOf(samplePath(edge.d)) }));
+      const crossings: string[] = [];
+      for (const detour of sampled) {
+        if (!DETOURED.includes(detour.edge.key)) continue;
+        for (const other of sampled) {
+          // Edges out of the same source or into the same target share a port, so they meet there by design.
+          if (other === detour || other.edge.from === detour.edge.from || other.edge.to === detour.edge.to) continue;
+          const hit = detour.segments.some(([a, b]) => other.segments.some(([c, d]) => segmentsCross(a, b, c, d)));
+          if (hit) crossings.push(`${detour.edge.key} x ${other.edge.key}`);
+        }
+      }
+      expect(crossings).toEqual([]);
+    });
+  });
+
+  describe('tab width and height stay (WP26)', () => {
+    // Max tree col and row per era, and the tab width they give, before the WP26 slot moves.
+    it.each([
+      [1, 4, 2, 812],
+      [2, 5, 2, 970],
+      [3, 6, 2, 1128],
+      [4, 5, 2, 970],
+      [5, 6, 2, 1128],
+    ])('era %i keeps max col %i, max row %i and a %i px wide tab', (era, maxCol, maxRow, width) => {
+      const views = getAllTechViews(createInitialState(0)).filter((v) => v.def.era === era);
+      expect(Math.max(...views.map((v) => v.def.tree.col))).toBe(maxCol);
+      expect(Math.max(...views.map((v) => v.def.tree.row))).toBe(maxRow);
+      expect(buildTechTreeView(views, emptyResourceMap(), null, era).width).toBe(width);
     });
   });
 

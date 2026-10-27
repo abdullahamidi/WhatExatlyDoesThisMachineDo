@@ -228,8 +228,10 @@ export const WORLD_PLACEMENTS: Record<FramingKey, Partial<Record<GroundId, World
 };
 // The girl (DENIZEN_ART §2.4, §3): ground rows only. Cycle 3+ puts her on the ground at e1, s8 and s9 (ground); era V stands her
 // in the front band (era5; worldPlacement adds the step offset). Framings without a row place no girl.
+// WP26 Q4 moved the cycle 3+ ground girl from 1538 (on the 1530 scrap) to 1552, the largest x the wing rule allows (machine left
+// 1576 less wingClearPx 24). Her boots (8 px left of x) clear the scrap's right edge 1538 by 6 px.
 export const WORLD_GIRL_PLACEMENTS: Partial<Record<FramingKey, { ground?: WorldPlacement; era5?: WorldPlacement }>> = {
-  e1: { ground: { x: 1538, row: 'back' } }, s8: { ground: { x: 1538, row: 'back' } }, s9: { ground: { x: 1538, row: 'back' } },
+  e1: { ground: { x: 1552, row: 'back' } }, s8: { ground: { x: 1552, row: 'back' } }, s9: { ground: { x: 1552, row: 'back' } },
   s11: { ground: { x: 880, row: 'back' }, era5: { x: 976, row: 'front' } },
   s15: { era5: { x: 976, row: 'front', inner: true } }, portrait: { era5: { x: 976, row: 'front', inner: true } },
 };
@@ -338,32 +340,10 @@ export const WORLD_SHEET_KEYS: Record<WorldSheetId, string> = {
 export const WORLD_ERA_ROW = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, whole: 5 } as const;
 export const WORLD_ERA_ROW_SHEETS: readonly WorldSheetId[] = ['inspector', 'dog', 'crow', 'girl', 'payphone', 'receiver', 'sensor7'];
 
-export type WorldLoopId = 'inspector' | 'inspectorStatic' | 'dog' | 'dogDig' | 'crow' | 'crowStutter' | 'receiver';
-// Idle and locomotion loops: one entry per frame step (frame, dx in world px, flip).
+export type WorldLoopId = 'receiver';
+// The receiver swing loop (WorldProps): one entry per frame step (frame, dx in world px, flip).
+// The cast plays the WP24 behaviour runners, so the older walk and idle loops were pruned in WP26.
 export const WORLD_LOOPS: Record<WorldLoopId, readonly LoopFrame[]> = {
-  inspector: [
-    { frame: 'idleA', dx: -24, flip: true }, { frame: 'idleB', dx: -24, flip: true }, { frame: 'walk0', dx: -24 }, { frame: 'walk1', dx: -16 }, { frame: 'walk2', dx: -8 }, { frame: 'walk3', dx: 0 },
-    { frame: 'walk0', dx: 8 }, { frame: 'walk1', dx: 16 }, { frame: 'walk2', dx: 24 }, { frame: 'walk3', dx: 24 }, { frame: 'write0', dx: 24, flip: true }, { frame: 'write1', dx: 24, flip: true },
-    { frame: 'write0', dx: 24, flip: true }, { frame: 'write1', dx: 24, flip: true }, { frame: 'walk0', dx: 24, flip: true }, { frame: 'walk1', dx: 16, flip: true }, { frame: 'walk2', dx: 8, flip: true }, { frame: 'walk3', dx: 0, flip: true },
-    { frame: 'walk0', dx: -8, flip: true }, { frame: 'walk1', dx: -16, flip: true }, { frame: 'walk2', dx: -24, flip: true }, { frame: 'idleA', dx: -24, flip: true },
-  ],
-  inspectorStatic: [
-    { frame: 'idleA', dx: 0, flip: true }, { frame: 'idleB', dx: 0, flip: true }, { frame: 'idleA', dx: 0, flip: true }, { frame: 'idleB', dx: 0, flip: true }, { frame: 'write0', dx: 0, flip: true }, { frame: 'write1', dx: 0, flip: true },
-  ],
-  dog: [
-    { frame: 'sit0', dx: 0 }, { frame: 'sit1', dx: 0 }, { frame: 'sit0', dx: 0 }, { frame: 'sit1', dx: 0 }, { frame: 'sniff0', dx: 0 }, { frame: 'sniff1', dx: 0 },
-    { frame: 'sniff0', dx: 0 }, { frame: 'sniff1', dx: 0 }, { frame: 'sit0', dx: 0 }, { frame: 'sit1', dx: 0 }, { frame: 'sit0', dx: 0 }, { frame: 'sit1', dx: 0 },
-  ],
-  dogDig: [
-    { frame: 'sit0', dx: 0 }, { frame: 'sit1', dx: 0 }, { frame: 'dig0', dx: 0 }, { frame: 'dig1', dx: 0 }, { frame: 'dig0', dx: 0 }, { frame: 'dig1', dx: 0 },
-    { frame: 'dig0', dx: 0 }, { frame: 'dig1', dx: 0 }, { frame: 'sniff0', dx: 0 }, { frame: 'sniff1', dx: 0 }, { frame: 'sit0', dx: 0 }, { frame: 'sit1', dx: 0 },
-  ],
-  crow: [
-    { frame: 'frozen', dx: 0 },
-  ],
-  crowStutter: [
-    { frame: 'frozen', dx: 0 }, { frame: 'frozen', dx: 0 }, { frame: 'frozen', dx: 4 }, { frame: 'frozen', dx: 0 },
-  ],
   receiver: [
     { frame: 'hang', dx: 0 }, { frame: 'swing0', dx: 0 }, { frame: 'swing1', dx: 0 }, { frame: 'swing2', dx: 0 }, { frame: 'swing1', dx: 0 }, { frame: 'swing0', dx: 0 },
   ],

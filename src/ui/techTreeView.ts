@@ -53,20 +53,50 @@ export function techNodePosition(
   };
 }
 
+/** Right-middle of `from` and left-middle of `to`: the two ends of a tech edge. */
+function edgeEnds(from: TechNodeView, to: TechNodeView): { x1: number; y1: number; x2: number; y2: number } {
+  return { x1: from.x + from.width, y1: from.y + from.height / 2, x2: to.x, y2: to.y + to.height / 2 };
+}
+
 /** Cubic bezier from the right-middle of `from` to the left-middle of `to`. */
 export function edgePath(from: TechNodeView, to: TechNodeView): string {
-  const x1 = from.x + from.width;
-  const y1 = from.y + from.height / 2;
-  const x2 = to.x;
-  const y2 = to.y + to.height / 2;
+  const { x1, y1, x2, y2 } = edgeEnds(from, to);
   const mx = (x1 + x2) / 2;
   return `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
 }
 
+/** Straight-edge test of edgePathAround (WP26 T9): a curve closer than clearPx to a third node is routed around it. */
+const TECH_TREE_EDGE = { clearPx: 4, samples: 64 } as const;
+
+/** True when the straight edgePath curve comes within TECH_TREE_EDGE.clearPx of a node that is not one of its ends. */
+function straightEdgeClips(from: TechNodeView, to: TechNodeView, nodes: readonly TechNodeView[]): boolean {
+  const { x1, y1, x2, y2 } = edgeEnds(from, to);
+  const mx = (x1 + x2) / 2;
+  const others = nodes.filter((n) => n.id !== from.id && n.id !== to.id);
+  for (let i = 0; i <= TECH_TREE_EDGE.samples; i++) {
+    const t = i / TECH_TREE_EDGE.samples;
+    const s = 1 - t;
+    const w0 = s * s * s;
+    const w1 = 3 * s * s * t;
+    const w2 = 3 * s * t * t;
+    const w3 = t * t * t;
+    const px = w0 * x1 + w1 * mx + w2 * mx + w3 * x2;
+    const py = w0 * y1 + w1 * y1 + w2 * y2 + w3 * y2;
+    for (const n of others) {
+      const dx = Math.max(n.x - px, 0, px - (n.x + n.width));
+      const dy = Math.max(n.y - py, 0, py - (n.y + n.height));
+      if (Math.hypot(dx, dy) < TECH_TREE_EDGE.clearPx) return true;
+    }
+  }
+  return false;
+}
+
 /**
- * Edge path that avoids nodes on its row (WP25 AD1 F2): edgePath, unless from and to share a row and another node
- * of that row lies strictly between them. Then the line leaves from's right-middle, climbs into the row gap above
- * (the top row uses the gap below), runs along it and drops into to's left-middle, so no node is crossed.
+ * Edge path that keeps clear of the nodes its straight curve would cross (WP25 AD1 F2, WP26 T9): edgePath, unless the
+ * curve comes within TECH_TREE_EDGE.clearPx of a node that is not one of its ends. Same row: the line runs along the
+ * row gap above (the top row uses the gap below). Cross row: it runs along the outer channel in the padding above the
+ * top row (target above) or below the bottom row (target below). Why: the row gaps carry the diagonal edges, so a
+ * detour there reads as a junction, while no straight edge reaches the padding. Edges the slots already clear stay straight.
  */
 export function edgePathAround(
   from: TechNodeView,
@@ -74,16 +104,20 @@ export function edgePathAround(
   nodes: readonly TechNodeView[],
   layout: typeof TECH_TREE_LAYOUT = TECH_TREE_LAYOUT,
 ): string {
-  const blocked = from.y === to.y
-    && nodes.some((n) => n.id !== from.id && n.id !== to.id && n.y === from.y && n.x > from.x && n.x < to.x);
-  if (!blocked) return edgePath(from, to);
-  const x1 = from.x + from.width;
-  const y1 = from.y + from.height / 2;
-  const x2 = to.x;
-  const y2 = to.y + to.height / 2;
+  if (!straightEdgeClips(from, to, nodes)) return edgePath(from, to);
+  const { x1, y1, x2, y2 } = edgeEnds(from, to);
   const g = layout.colGap / 2;
-  const yc = from.y > layout.padding ? from.y - layout.rowGap / 2 : from.y + from.height + layout.rowGap / 2;
-  return `M ${x1} ${y1} C ${x1 + g} ${y1}, ${x1 + g} ${yc}, ${x1 + 2 * g} ${yc} L ${x2 - 2 * g} ${yc} C ${x2 - g} ${yc}, ${x2 - g} ${y2}, ${x2} ${y2}`;
+  if (from.y === to.y) {
+    const gapY = from.y > layout.padding ? from.y - layout.rowGap / 2 : from.y + from.height + layout.rowGap / 2;
+    return `M ${x1} ${y1} C ${x1 + g} ${y1}, ${x1 + g} ${gapY}, ${x1 + 2 * g} ${gapY} L ${x2 - 2 * g} ${gapY} C ${x2 - g} ${gapY}, ${x2 - g} ${y2}, ${x2} ${y2}`;
+  }
+  const yc = to.y < from.y
+    ? Math.min(...nodes.map((n) => n.y)) - layout.padding / 2
+    : Math.max(...nodes.map((n) => n.y + n.height)) + layout.padding / 2;
+  // d1, d2: each leg bends into the channel over a g-long corner, which keeps the vertical run in the middle of the column gap.
+  const d1 = Math.sign(yc - y1);
+  const d2 = Math.sign(yc - y2);
+  return `M ${x1} ${y1} C ${x1 + g} ${y1}, ${x1 + g} ${y1}, ${x1 + g} ${y1 + d1 * g} L ${x1 + g} ${yc - d1 * g} C ${x1 + g} ${yc}, ${x1 + g} ${yc}, ${x1 + 2 * g} ${yc} L ${x2 - 2 * g} ${yc} C ${x2 - g} ${yc}, ${x2 - g} ${yc}, ${x2 - g} ${yc - d2 * g} L ${x2 - g} ${y2 + d2 * g} C ${x2 - g} ${y2}, ${x2 - g} ${y2}, ${x2} ${y2}`;
 }
 
 /** WP20: primaryFunction when open, else the first open era keystone (table order). Open = available and not installed. Null when none. */

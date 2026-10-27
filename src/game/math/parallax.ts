@@ -1,6 +1,6 @@
 import type { Vec2 } from '../../data/machineComponents';
 import type { TechId } from '../../data/types';
-import { CAMERA, PATTERN_ORIGIN_X } from '../../data/world';
+import { CAMERA, PARALLAX_FADE_MS, PATTERN_ORIGIN_X } from '../../data/world';
 import type { Size } from './camera';
 
 /** Inputs of parallaxStrip: one tiled layer and the screen/world it is placed in. */
@@ -48,6 +48,13 @@ export function fadeStep(current: number, target: number, deltaMs: number, fadeM
   const maxMove = Math.max(0, deltaMs) / fadeMs;
   if (Math.abs(diff) <= maxMove) return goal;
   return clamp01(current + Math.sign(diff) * maxMove);
+}
+
+// Fade duration of one layer step: fadeInMs while the layer rises with the slow option on (WP26 Q3: the era V sky builds over
+// seconds, not a blink), else def.fadeMs. Falling fades and layers without fadeInMs keep their own duration (default PARALLAX_FADE_MS).
+export function layerFadeMs(def: { fadeMs?: number; fadeInMs?: number }, current: number, target: number, slow: boolean): number {
+  if (slow && def.fadeInMs !== undefined && target > current) return def.fadeInMs;
+  return def.fadeMs ?? PARALLAX_FADE_MS;
 }
 
 // position p = worldPos - (1 - sf) * (focus - view / 2) per axis: appears at worldPos when the camera is centred on focus

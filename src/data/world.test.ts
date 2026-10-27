@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_FEEDBACK, CRANK_PULSE, CAMERA, DEPTH, PARALLAX_FADE_MS, PARALLAX_BOTTOM_MARGIN, PYLON_LINE, PYLON_FEEDS, MACHINE_ANCHOR, PIXEL_SCALE, DUST, DUST_RISING, PATTERN_ORIGIN_X, VIEW, ECLIPSE, APERTURE_BEAM, PYLONS_LIT_FADE_MS, DAY_TINT_LAYERS, DAY_TINT_TAU_MS, DUST_WIND } from './world';
+import { PARALLAX_LAYERS, GROUND_SHADE, GROUND_Y, WORLD, FLOATING_TEXT, CRANK_FEEDBACK, CRANK_PULSE, CAMERA, DEPTH, PARALLAX_FADE_MS, PARALLAX_BOTTOM_MARGIN, PYLON_LINE, PYLON_FEEDS, MACHINE_ANCHOR, PIXEL_SCALE, DUST, DUST_RISING, PATTERN_ORIGIN_X, VIEW, ECLIPSE, APERTURE_BEAM, PYLONS_LIT_FADE_MS, ERA5_SKY_FADE_IN_MS, DAY_TINT_LAYERS, DAY_TINT_TAU_MS, DUST_WIND } from './world';
 import type { ParallaxLayerDef } from './world';
 import { PALETTE } from './palette';
 import { TOAST_CONFIG } from './notifications';
@@ -252,7 +252,7 @@ describe('WP11 sky layers (C3)', () => {
 
   it('skyViolet is a screen-fixed full-view layer at background + 1 with the four violet stages', () => {
     expect(layer('skyViolet')).toEqual({
-      id: 'skyViolet', assetId: 'bg.skyViolet', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 1, alpha: 1, underfill: null,
+      id: 'skyViolet', assetId: 'bg.skyViolet', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 1, alpha: 1, underfill: null, fadeInMs: ERA5_SKY_FADE_IN_MS,
       alphaStages: [{ techId: 'nullChamber', minLevel: 1, alpha: 0.25 }, { techId: 'lensArray', minLevel: 1, alpha: 0.5 }, { techId: 'horizonField', minLevel: 5, alpha: 0.75 }, { techId: 'skyAperture', minLevel: 1, alpha: 1 }],
       finale: { track: 'sky', dir: 'out' },
     });
@@ -260,7 +260,7 @@ describe('WP11 sky layers (C3)', () => {
 
   it('horizonGlow is a screen-fixed full-view layer at background + 3 with the three horizon stages', () => {
     expect(layer('horizonGlow')).toEqual({
-      id: 'horizonGlow', assetId: 'bg.horizonGlow', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 3, alpha: 1, underfill: null,
+      id: 'horizonGlow', assetId: 'bg.horizonGlow', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 3, alpha: 1, underfill: null, fadeInMs: ERA5_SKY_FADE_IN_MS,
       alphaStages: [{ techId: 'horizonField', minLevel: 1, alpha: 0.35 }, { techId: 'horizonField', minLevel: 10, alpha: 0.55 }, { techId: 'horizonField', minLevel: 20, alpha: 0.75 }],
       finale: { track: 'glow', dir: 'out' },
     });
@@ -510,5 +510,36 @@ describe('WP16b far plain (F5)', () => {
   });
   it('skyline has no underfill (bg/skyline.png rows 220-319 are transparent)', () => {
     expect(layer('skyline').underfill).toBeNull();
+  });
+});
+
+describe('WP26 era V sky slow fade (C5)', () => {
+  it('ERA5_SKY_FADE_IN_MS sits inside the 20000-40000 ms tuning band', () => {
+    expect(ERA5_SKY_FADE_IN_MS).toBeGreaterThanOrEqual(20000);
+    expect(ERA5_SKY_FADE_IN_MS).toBeLessThanOrEqual(40000);
+  });
+
+  it('only skyViolet and horizonGlow set fadeInMs, to ERA5_SKY_FADE_IN_MS', () => {
+    const withFadeIn = PARALLAX_LAYERS.filter((l) => l.fadeInMs !== undefined);
+    expect(withFadeIn.map((l) => l.id)).toEqual(['skyViolet', 'horizonGlow']);
+    for (const l of withFadeIn) expect(l.fadeInMs, l.id).toBe(ERA5_SKY_FADE_IN_MS);
+  });
+
+  it('every rising stage step of the two era V sky layers lasts at least 4000 ms', () => {
+    for (const id of ['skyViolet', 'horizonGlow']) {
+      const l = layer(id);
+      const fadeIn = l.fadeInMs ?? 0;
+      let prev = 0;
+      for (const s of l.alphaStages ?? []) {
+        const step = s.alpha - prev;
+        if (step > 0) expect(step * fadeIn, `${id} to ${s.alpha}`).toBeGreaterThanOrEqual(4000);
+        prev = s.alpha;
+      }
+    }
+  });
+
+  it('the lit pylons keep PYLONS_LIT_FADE_MS and set no fadeInMs', () => {
+    expect(layer('pylonsLit').fadeMs).toBe(PYLONS_LIT_FADE_MS);
+    expect(layer('pylonsLit').fadeInMs).toBeUndefined();
   });
 });

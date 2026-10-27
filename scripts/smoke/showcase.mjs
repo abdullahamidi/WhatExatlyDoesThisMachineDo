@@ -187,7 +187,7 @@ try {
     await open();
     const buyFailed = (await fastForward(S15)).filter(x => x.endsWith(':false'));
     check(buyFailed.length === 0, `showcase_A buys failed: ${buyFailed.join(',')}`);
-    // Era V sky (skyViolet) fades for ~12 s after the instant buy list
+    // Era V sky: WorldScene fades each rising stage over ERA5_SKY_FADE_IN_MS (WP26, ~6 s a stage). worldSettle(true) snaps it (settleFades), so the 15 s wait below is only a margin.
     await page.evaluate(() => window.__wedtmd?.worldSettle?.(true));
     await page.waitForTimeout(15000);
     const entered = await photoMode(true, { hint: false });

@@ -8,7 +8,7 @@ import { RESOURCES } from '../data/resources';
 import { TECHNOLOGIES, TECH_LIST } from '../data/technologies';
 import { RESOURCE_IDS, TECH_IDS } from '../data/types';
 import type { EndingPhase, ResourceId, TechId } from '../data/types';
-import type { LevelSnapshot } from './audioMath';
+import type { AmbientMix, LevelSnapshot, WeatherInput, WeatherMix } from './audioMath';
 import {
   ambientMix,
   ambientPeakSum,
@@ -32,11 +32,12 @@ import {
   servoGain,
   servoHz,
   stampPartials,
+  weatherMix,
   windAllowed,
 } from './audioMath';
 import { musicContribution } from './musicMath';
 
-const BEDS: BedId[] = ['hum', 'gear', 'mains', 'boiler', 'pad', 'servo', 'drone', 'wind'];
+const BEDS: BedId[] = ['hum', 'gear', 'mains', 'boiler', 'pad', 'servo', 'drone', 'wind', 'rain'];
 const ERAS = [1, 2, 3, 4, 5] as const;
 
 const SAMPLE_INPUTS = [0, -5, NaN, Infinity, 1e12, 0.001, 1];
@@ -567,7 +568,9 @@ describe('bedTrim', () => {
       let prev = Number.POSITIVE_INFINITY;
       for (const era of ERAS) {
         const trim = bedTrim(bed, era);
-        expect(trim).toBeGreaterThan(0);
+        // Rain is silent from era IV (trim 0: the virga is frozen in IV, gone in V); every other bed stays audible.
+        if (bed === 'rain') expect(trim).toBeGreaterThanOrEqual(0);
+        else expect(trim).toBeGreaterThan(0);
         expect(trim).toBeLessThanOrEqual(1);
         expect(trim).toBeLessThanOrEqual(prev);
         prev = trim;
@@ -584,6 +587,27 @@ describe('bedTrim', () => {
 });
 
 describe('ambientPeakSum', () => {
+  it('WP26 pins: eras I, II, IV, V keep their sums; era III with the rain bed and boiler re-trim is 0.446 (<= 0.45)', () => {
+    expect(ambientPeakSum(1)).toBeCloseTo(0.33, 9);
+    expect(ambientPeakSum(2)).toBeCloseTo(0.378, 9);
+    expect(ambientPeakSum(3)).toBeCloseTo(0.446, 9);
+    expect(ambientPeakSum(3)).toBeLessThanOrEqual(0.45);
+    expect(ambientPeakSum(4)).toBeCloseTo(0.441, 9);
+    expect(ambientPeakSum(5)).toBeCloseTo(0.435, 9);
+  });
+
+  it('era III counts the rain bed at its gain and the boiler at its re-trim; rain adds nothing from era IV', () => {
+    const era3 =
+      AUDIO.hum.maxGain * bedTrim('hum', 3) +
+      AUDIO.gearTick.gain * bedTrim('gear', 3) +
+      AUDIO.wind.gain +
+      AUDIO.mains.maxGain * bedTrim('mains', 3) +
+      AUDIO.boiler.maxGain * bedTrim('boiler', 3) +
+      AUDIO.rain.gain;
+    expect(ambientPeakSum(3)).toBeCloseTo(era3, 9);
+    expect(bedTrim('rain', 4)).toBe(0);
+  });
+
   it('era I is hum + gear + wind peaks (no trims applied yet)', () => {
     expect(ambientPeakSum(1)).toBeCloseTo(AUDIO.hum.maxGain + AUDIO.gearTick.gain + AUDIO.wind.gain, 9);
   });
@@ -596,6 +620,175 @@ describe('ambientPeakSum', () => {
         AUDIO.wind.gain,
       9,
     );
+  });
+});
+
+describe('weather audio data (WP26)', () => {
+  it('rain gain sits near -30 dB: 0.025-0.032 linear, -32..-28 dB', () => {
+    expect(AUDIO.rain.gain).toBeGreaterThanOrEqual(0.025);
+    expect(AUDIO.rain.gain).toBeLessThanOrEqual(0.032);
+    const db = 20 * Math.log10(AUDIO.rain.gain);
+    expect(db).toBeGreaterThanOrEqual(-32);
+    expect(db).toBeLessThanOrEqual(-28);
+  });
+
+  it('rain band runs upward and the readout references are alphaRef 0.7 and speedRef 1', () => {
+    expect(AUDIO.rain.hzMin).toBeLessThan(AUDIO.rain.hzMax);
+    expect(AUDIO.rain.alphaRef).toBe(0.7);
+    expect(AUDIO.rain.speedRef).toBe(1);
+  });
+
+  it('wind references: refWind > 0 and a 0.3 still-air floor', () => {
+    expect(AUDIO.wind.refWind).toBeGreaterThan(0);
+    expect(AUDIO.wind.floor).toBe(0.3);
+  });
+
+  it('weather push quantum is positive in both gain and Hz', () => {
+    expect(AUDIO.weatherStep.gain).toBeGreaterThan(0);
+    expect(AUDIO.weatherStep.hz).toBeGreaterThan(0);
+  });
+
+  it('rain trims are [1, 1, 1, 0, 0]; the boiler re-trims to 0.8 in era III', () => {
+    expect(AUDIO.bedTrim.rain).toEqual([1, 1, 1, 0, 0]);
+    expect(AUDIO.bedTrim.boiler[2]).toBe(0.8);
+  });
+});
+
+describe('weatherMix (WP26 wind and rain beds)', () => {
+  const live = (wind: number, virgaAlpha: number, virgaSpeed: number): WeatherInput => ({ live: true, wind, virgaAlpha, virgaSpeed });
+  const NOT_LIVE: WeatherInput = { live: false, wind: 1, virgaAlpha: 0.7, virgaSpeed: 1 };
+
+  it('no readout or live false: the v0.10.0 wind at full gain with the gust LFO, and no rain', () => {
+    for (const input of [null, NOT_LIVE]) {
+      expect(weatherMix(input, 1, false)).toEqual({ windGain: 0.05, windLfo: true, rainGain: 0, rainHz: AUDIO.rain.hzMin, live: false });
+    }
+  });
+
+  it('live wind 0: the bed drops to the floor (0.05 x 0.3), not to silence, and the LFO stops', () => {
+    const mix = weatherMix(live(0, 0, 0), 1, false);
+    expect(mix.windGain).toBeCloseTo(AUDIO.wind.gain * AUDIO.wind.floor, 12);
+    expect(mix.windLfo).toBe(false);
+    expect(mix.live).toBe(true);
+  });
+
+  it('live wind at or above refWind (1, 1.5, 99): the full wind gain', () => {
+    for (const wind of [1, 1.5, 99]) {
+      expect(weatherMix(live(wind, 0, 0), 1, false).windGain).toBeCloseTo(AUDIO.wind.gain, 12);
+    }
+  });
+
+  it('live wind gain is monotone non-decreasing over 0..1.5', () => {
+    let prev = Number.NEGATIVE_INFINITY;
+    for (let i = 0; i <= 30; i++) {
+      const gain = weatherMix(live(i * 0.05, 0, 0), 1, false).windGain;
+      expect(gain).toBeGreaterThanOrEqual(prev);
+      prev = gain;
+    }
+  });
+
+  it('NaN, -1 and infinite wind read as still air: the floor', () => {
+    for (const wind of [Number.NaN, -1, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(weatherMix(live(wind, 0, 0), 1, false).windGain).toBeCloseTo(AUDIO.wind.gain * AUDIO.wind.floor, 12);
+    }
+  });
+
+  it('rain needs both virga alpha and speed: zero alpha or zero speed gives no rain', () => {
+    expect(weatherMix(live(1, 0, 1), 3, false).rainGain).toBe(0);
+    expect(weatherMix(live(1, 0.7, 0), 3, false).rainGain).toBe(0);
+  });
+
+  it('full virga in era III plays the rain bed at its gain (about -30 dB)', () => {
+    const FULL: ReadonlyArray<{ alpha: number; speed: number }> = [
+      { alpha: 0.7, speed: 1 },
+      { alpha: 1, speed: 1 },
+      { alpha: 5, speed: 5 },
+    ];
+    for (const { alpha, speed } of FULL) {
+      expect(weatherMix(live(1, alpha, speed), 3, false).rainGain).toBeCloseTo(AUDIO.rain.gain, 12);
+    }
+  });
+
+  it('eras I and II (trim 1) play full rain at the gain when the readout shows virga', () => {
+    for (const era of [1, 2]) {
+      expect(weatherMix(live(1, 0.7, 1), era, false).rainGain).toBeCloseTo(AUDIO.rain.gain, 12);
+    }
+  });
+
+  it('eras IV and V (trim 0): no rain even with full virga, the wind bed stays', () => {
+    for (const era of [4, 5]) {
+      const mix = weatherMix(live(1, 0.7, 1), era, false);
+      expect(mix.rainGain).toBe(0);
+      expect(mix.windGain).toBeCloseTo(AUDIO.wind.gain, 12);
+    }
+  });
+
+  it('non-finite alpha or speed gives no rain', () => {
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(weatherMix(live(1, bad, 1), 3, false).rainGain).toBe(0);
+      expect(weatherMix(live(1, 0.7, bad), 3, false).rainGain).toBe(0);
+    }
+  });
+
+  it('rain pitch: hzMin at zero (or non-finite) speed or a trim of 0, hzMax at speedRef and above in era III, rising in between', () => {
+    expect(weatherMix(live(1, 0.7, 0), 3, false).rainHz).toBeCloseTo(AUDIO.rain.hzMin, 9);
+    expect(weatherMix(live(1, 0.7, Number.NaN), 3, false).rainHz).toBe(AUDIO.rain.hzMin);
+    expect(weatherMix(live(1, 0.7, AUDIO.rain.speedRef), 3, false).rainHz).toBeCloseTo(AUDIO.rain.hzMax, 9);
+    expect(weatherMix(live(1, 0.7, 2), 4, false).rainHz).toBe(AUDIO.rain.hzMin);
+    let prev = Number.NEGATIVE_INFINITY;
+    for (const speed of [0, 0.25, 0.5, 0.75, 1]) {
+      const hz = weatherMix(live(1, 0.7, speed), 3, false).rainHz;
+      expect(hz).toBeGreaterThanOrEqual(prev);
+      prev = hz;
+    }
+  });
+
+  it('era IV and V (trim 0): full virga and faster keep the rain at 0 and the pitch at hzMin, so the fade glides the hiss down', () => {
+    for (const era of [4, 5]) {
+      for (const speed of [1, 2]) {
+        const mix = weatherMix(live(1, 0.7, speed), era, false);
+        expect(mix.rainGain).toBe(0);
+        expect(mix.rainHz).toBe(AUDIO.rain.hzMin);
+      }
+    }
+  });
+
+  it('era III: full virga keeps the pitch at hzMax, zero speed at hzMin, and the era IV step from the same readout lowers it', () => {
+    expect(weatherMix(live(1, 0.7, 1), 3, false).rainHz).toBeCloseTo(AUDIO.rain.hzMax, 9);
+    expect(weatherMix(live(1, 0.7, 0), 3, false).rainHz).toBe(AUDIO.rain.hzMin);
+    expect(weatherMix(live(1, 0.7, 1), 4, false).rainHz).toBeLessThan(weatherMix(live(1, 0.7, 1), 3, false).rainHz);
+  });
+
+  it('muted: wind and rain gains are 0 and the LFO is off, whatever the readout; live is reported', () => {
+    for (const input of [live(1, 0.7, 1), NOT_LIVE, null]) {
+      const mix = weatherMix(input, 3, true);
+      expect(mix.windGain).toBe(0);
+      expect(mix.windLfo).toBe(false);
+      expect(mix.rainGain).toBe(0);
+      expect(mix.rainHz).toBe(AUDIO.rain.hzMin);
+    }
+    expect(weatherMix(live(1, 0.7, 1), 3, true).live).toBe(true);
+    expect(weatherMix(null, 3, true).live).toBe(false);
+  });
+
+  it('every output is finite and within the bed gains for NaN, infinite, negative, zero and huge inputs', () => {
+    const BAD = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -5, 0, 1e12];
+    const inputs: Array<WeatherInput | null> = [null];
+    for (const wind of BAD) {
+      for (const alpha of BAD) {
+        for (const speed of BAD) inputs.push(live(wind, alpha, speed));
+      }
+    }
+    for (const input of inputs) {
+      for (const era of [0, 1, 3, 5, Number.NaN]) {
+        for (const muted of [false, true]) {
+          const mix = weatherMix(input, era, muted);
+          expect([mix.windGain, mix.rainGain, mix.rainHz].every(Number.isFinite)).toBe(true);
+          expect(mix.windGain).toBeLessThanOrEqual(AUDIO.wind.gain);
+          expect(mix.rainGain).toBeLessThanOrEqual(AUDIO.rain.gain);
+          expect(typeof mix.windLfo).toBe('boolean');
+        }
+      }
+    }
   });
 });
 
@@ -792,17 +985,44 @@ describe('ambientMix', () => {
     expect(mix.padGain).toBe(0);
     expect(mix.droneGain).toBe(0);
     expect(mix.servoGain).toBe(0);
+    expect(mix.windGain).toBe(0);
+    expect(mix.rainGain).toBe(0);
     expect(mix.gearGain).toBe(1);
     expect(mix.servoHz).toBe(AUDIO.servo.minHz);
     expect(mix.humHz).toBeCloseTo(humFrequency(100), 12);
     expect(mix.era).toBe(5);
   });
 
+  /** The five wind and rain fields of an ambient mix, in the shape weatherMix returns. */
+  function weatherFields(mix: AmbientMix): WeatherMix {
+    return { windGain: mix.windGain, windLfo: mix.windLfo, rainGain: mix.rainGain, rainHz: mix.rainHz, live: mix.live };
+  }
+
+  it('wind and rain fields: with no readout they equal the not-live mix', () => {
+    const mix = ambientMix({ perSecond: RATES, techLevels: eraLevels(3), muted: false });
+    expect(weatherFields(mix)).toEqual(weatherMix(null, 3, false));
+  });
+
+  it.each(ERAS)('era %s: a live readout gives the wind and rain fields weatherMix returns for that era', (e) => {
+    const readout: WeatherInput = { live: true, wind: 0.6, virgaAlpha: 0.5, virgaSpeed: 1 };
+    const mix = ambientMix({ perSecond: RATES, techLevels: eraLevels(e), muted: false, weather: readout });
+    expect(weatherFields(mix)).toEqual(weatherMix(readout, e, false));
+  });
+
+  it('muted with a live readout: wind and rain gains are 0, live is still reported', () => {
+    const readout: WeatherInput = { live: true, wind: 1.2, virgaAlpha: 0.7, virgaSpeed: 2 };
+    const mix = ambientMix({ perSecond: RATES, techLevels: eraLevels(3), muted: true, weather: readout });
+    expect(mix.windGain).toBe(0);
+    expect(mix.rainGain).toBe(0);
+    expect(mix.live).toBe(true);
+    expect(weatherFields(mix)).toEqual(weatherMix(readout, 3, true));
+  });
+
   it('NaN, negative and Infinity rates: every output is finite; NaN and negative rates give zero gains', () => {
     for (const bad of [NaN, -5, Infinity]) {
       const rates = { me: bad, ee: bad, pr: bad, rs: bad, xf: bad };
       const mix = ambientMix({ perSecond: rates, techLevels: eraLevels(5), muted: false });
-      const values: number[] = Object.values(mix);
+      const values: number[] = Object.values(mix).filter((v): v is number => typeof v === 'number');
       for (const value of values) {
         expect(Number.isFinite(value), `${bad}`).toBe(true);
       }

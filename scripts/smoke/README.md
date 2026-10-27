@@ -900,3 +900,45 @@ Debug API used (WP25 C6): `outputStats()` returns `{ shown, visible, y, rising, 
 Store shots (`store-shots.mjs`, WP25 C7): every shot adds `<size>_<id>_<variant>_no_output_tick`. It passes when the page has no visible popup and `shown` is unchanged since that page's `quietWorld` call; it passes when the hook is missing.
 
 Expected run: `fail: []` and `errors: []` on `http://localhost:4175/?debug=1` (full) and on `http://localhost:4176/?debug=1` (demo). `G_output_cost` needs a quiet PC: 30 s of popups on a loaded machine can push `meanMs` past 0.05 without a real regression.
+
+## Weather audio (WP26): weather-audio.mjs
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/weather-audio.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/weather-audio
+```
+
+Levels only, never timing. Fresh context per case, 1280x720, deviceScaleFactor 1. Case `MAIN` runs one page (the full edition goes through eras I to V, the demo through eras I and II); `REDUCED` and `TEASER` each get a fresh page. Each page takes 45 real crank clicks (they unlock the audio and bank the ME that Worn Motor costs; as `economy.mjs`), then reads `audioStats()`: the last 200 ms ambient tick (`windGain`, `windLfo`, `rainGain`, `rainHz`, `live`) and `levels.wind`. Those reads are post-gate: zero when muted, in the choice and in the postgame. The windows advance the world in 1 s steps (`worldAdvance`). Prints ONE JSON object `{ edition, results, fail, errors, samples }` and writes `<outdir>/weather-audio.json`. Exit 1 when `fail` or `errors` is non-empty, 2 on usage.
+
+Expected run: fail [] and errors [] on http://localhost:4174/?debug=1 (full) and http://localhost:4177/?debug=1 (demo).
+
+Constants (mirrored by hand from `src/data/audio.ts`, one block at the top of the script): `WIND_GAIN` 0.05 (AUDIO.wind.gain), `WIND_FLOOR` 0.3 (AUDIO.wind.floor), `FLOOR_GAIN` = WIND_GAIN x WIND_FLOOR = 0.015, `TOL` 0.0005 (level tolerance). `RAIN_HZ_MIN` 1800 and `RAIN_HZ_MAX` 3200 mirror AUDIO.rain.hzMin / hzMax. A "zero" check passes when the value is within TOL of 0.
+
+Settle note: `worldSettle(true)` forces the gusts off (constant wind). Each stage therefore lands with settle on for 700 ms and then settle off before its variation window. Never read a wind window while settle is on.
+
+| check | what it means |
+|---|---|
+| `W_unlock` | 45 crank clicks set `audioUnlocked()` true (poll up to 3 s) |
+| `W_ambient_present` | `audioStats().ambient` is non-null after the first tick |
+| `S7_buys`, `S9_buys`, `S11_buys`, `S13_buys`, `S15_buys`, `FINALE_buys`, `REDUCED_buys` | the failed-buy list is empty (value = the failed entries) |
+| `S7_live`, `S9_live` | every 20 s window sample has `live` true (value = count of samples that are not live) |
+| `S7_wind_varies`, `S9_wind_varies` | max - min of the wind gain over the 20 s window is at least 0.1 x WIND_GAIN |
+| `S7_rain_zero`, `S9_rain_zero` | the max rain gain over the window is within TOL of 0 (no virga before era III) |
+| `S7_wind_range`, `S9_wind_range` | every wind gain is within [FLOOR_GAIN - TOL, WIND_GAIN + TOL] |
+| `S7_no_lfo`, `S9_no_lfo` | `windLfo` is false in the last sample |
+| `S11_rain_positive` | the rain gain goes above 0 within 5 s of landing era III (poll every 250 ms, no world step) |
+| `S11_virga_visible` | diagnostic only: `livingWorld()` has a visible `virga` entry; reported in results, never in fail |
+| `S11_rain_hz` | the rain pitch is within [1800, 3200] Hz |
+| `S13_rain_zero` | the max rain gain over the first 15 s of the 70 s window (era IV, no settle) is within TOL of 0 |
+| `S13_wind_floor` | the last wind gain of the 70 s window is within TOL of FLOOR_GAIN and `windLfo` is false (the base wind eases to zero over about 60 s) |
+| `S15_rain_zero`, `S15_wind_floor` | after landing era V: rain within TOL of 0, wind within TOL of FLOOR_GAIN |
+| `MUTE_zero` | muted for 600 ms: wind gain and rain gain within TOL of 0, `levels.wind` false (full at S15, demo at S9) |
+| `MUTE_restore` | unmuted for 700 ms: wind gain above 0 |
+| `FINALE_buys` | `primaryFunction` buys (full only) |
+| `FINALE_floor_before_stop` | `finaleSeek(10)`, 600 ms: wind gain within TOL of FLOOR_GAIN |
+| `FINALE_wind_stop` | `finaleSeek(20)`, 800 ms: wind gain within TOL of 0 and `levels.wind` false. When the seek does not fire the beat, the script seeks 18.5 and plays 2 s; the value has `fallback: true` |
+| `POSTGAME_wind_zero` | after `skipFinale()` and KEEP IT RUNNING, 1.5 s: wind gain within TOL of 0 and `levels.wind` false |
+| `S9_reduced_wind_varies` | reduced motion on, the 20 s window after S9: max - min of the wind gain is at least 0.1 x WIND_GAIN |
+| `TEASER_live_false` | `showcasePlay()` makes `ambient.live` false within 3 s |
+| `TEASER_back` | report only (boolean, never in fail): `ambient.live` is true again within 4 s after `showcaseStop()` |
+| `DEMO_rain_always_zero` | demo only: the max rain gain over the S7 and S9 windows is within TOL of 0 |
+| `FAILED:<case>:<message>` | a thrown error in that case (in `fail`) |

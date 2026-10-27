@@ -2,7 +2,7 @@
 // Times are in seconds unless the key ends in Ms. Gains are linear (0..1 scale).
 
 // Ambient beds that bedTrim scales per era (WP15).
-export type BedId = 'hum' | 'gear' | 'mains' | 'boiler' | 'pad' | 'servo' | 'drone' | 'wind';
+export type BedId = 'hum' | 'gear' | 'mains' | 'boiler' | 'pad' | 'servo' | 'drone' | 'wind' | 'rain';
 
 // One-shot cue on a purchase; chosen by the era of the paying resource (see AUDIO.purchaseCueByEra).
 export type PurchaseCue = 'purchase' | 'relay' | 'hiss' | 'forkPing' | 'swell';
@@ -44,8 +44,15 @@ export const AUDIO = {
   // Gear ticks in the background: rate in ticks/s rises with ME/s on the same log curve (the hum's maxPerSecond, WP15R D2).
   gearTick: { minPerSecond: 1.5, maxPerSecond: 14, gain: 0.12, hz: 240, decayMs: 30 },
 
-  // Wind bed: lowpassed noise with a slow gust LFO on its gain.
-  wind: { gain: 0.05, lowpassHz: 420, gustPeriodS: 9, gustDepth: 0.6 },
+  // Wind bed: lowpassed noise with a slow gust LFO on its gain (the LFO runs only on the v0.10.0 fallback, not while the world is live).
+  // refWind: world wind (0..1.5, WORLD_WEATHER.windMax) that plays the bed at full gain. floor: share of the bed that still plays in still air (eras IV-V and the finale before the wind stop; Director Q1, 2026-10-27).
+  wind: { gain: 0.05, lowpassHz: 420, gustPeriodS: 9, gustDepth: 0.6, refWind: 1, floor: 0.3 },
+  // Rain bed (WP26 Q2, era III): bandpassed noise, the hiss of the virga. gain 0.03 = -30.5 dB (bible: -30 dB). It plays only while the world is live.
+  // alphaRef: virga alpha (tween x era ambient, 0.35-0.7 in era III) that plays the bed at full gain. speedRef: virga speed (tween x era ambient) that plays it at full gain and at hzMax.
+  // hzMin / hzMax: bandpass centre in Hz; it falls to hzMin as the virga slows. q: bandpass Q. smoothS: setTargetAtTime time constant in seconds (slow, so the era IV trim step and the freeze fade out over seconds).
+  rain: { gain: 0.03, hzMin: 1800, hzMax: 3200, q: 0.7, alphaRef: 0.7, speedRef: 1, smoothS: 1.2 },
+  // Weather push quantum (WP26): gameAudio sends a new wind / rain level to the synth only when it moved by this much (gain) or this many Hz.
+  weatherStep: { gain: 0.0005, hz: 50 },
 
   // Mains hum (Era II): 50 Hz fundamental plus a 100 Hz harmonic; gain rises with EE/s on a log curve.
   // maxPerSecond is at least 3x the PF rate of EE (WP15R D2).
@@ -131,11 +138,14 @@ export const AUDIO = {
     hum: [1, 0.85, 0.65, 0.4, 0.3],
     gear: [1, 0.85, 0.65, 0.4, 0.3],
     mains: [1, 1, 0.8, 0.5, 0.4],
-    boiler: [1, 1, 1, 0.6, 0.5],
+    // Era III re-trim for the rain bed so ambientPeakSum(3) stays <= 0.45; the bible says the front builds, so the boiler gives way, not the wind.
+    boiler: [1, 1, 0.8, 0.6, 0.5],
     pad: [1, 1, 1, 1, 0.7],
     servo: [1, 1, 1, 1, 0.7],
     drone: [1, 1, 1, 1, 1],
     wind: [1, 1, 1, 1, 1],
+    // Silent from era IV: the virga is frozen in IV and gone in V.
+    rain: [1, 1, 1, 0, 0],
   } satisfies Record<BedId, readonly [number, number, number, number, number]>,
 
   // Master limiter (WP15 mix): catches peaks after the master gain. Attack and release in seconds.

@@ -1,11 +1,11 @@
 import Phaser from 'phaser';
-import { VIEW, WORLD, CAMERA, PARALLAX_LAYERS, PARALLAX_FADE_MS, PIXEL_SCALE, DAY_TINT_LAYERS, DAY_TINT_TAU_MS } from '../../data/world';
+import { VIEW, WORLD, CAMERA, PARALLAX_LAYERS, PIXEL_SCALE, DAY_TINT_LAYERS, DAY_TINT_TAU_MS } from '../../data/world';
 import type { ParallaxLayerDef } from '../../data/world';
 import type { FinaleTrackId } from '../../data/finale';
 import type { TechId } from '../../data/types';
 import { ASSET_MANIFEST } from '../../assets/manifest';
 import { effectiveMinZoom } from '../math/camera';
-import { parallaxSpan, parallaxStrip, isLayerVisible, fadeStep, layerPhase, stageAlpha } from '../math/parallax';
+import { parallaxSpan, parallaxStrip, isLayerVisible, fadeStep, layerFadeMs, layerPhase, stageAlpha } from '../math/parallax';
 
 // Any layer part: a game object that can change alpha and visibility.
 type FadePart = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.AlphaSingle & Phaser.GameObjects.Components.Visible;
@@ -60,13 +60,16 @@ function multiplyTint(a: number, b: number): number {
 // Layers with visibleWhen are hidden until their tech level is reached, then fade in (and out on a reset).
 // Layers with alphaStages take their stage alpha at load (no fade-in) and fade toward a new stage alpha later.
 // The ruin layers in DAY_TINT_LAYERS take the day tint (setDayTint), eased over DAY_TINT_TAU_MS in update().
+// slowFadeIn (WP26 Q3, WorldScene only): a rising layer with fadeInMs fades over that long per unit of fade (the era V sky builds over seconds); falling fades keep fadeMs.
 export class ParallaxBackground {
   private readonly layers: LayerState[] = [];
+  private readonly slowFadeIn: boolean; // WP26 Q3: rising layers fade over fadeInMs (see layerFadeMs)
   private readonly day = [CHANNEL_MAX, CHANNEL_MAX, CHANNEL_MAX]; // eased day tint, R G B
   private dayTarget = TINT_NONE;
   private dayPainted = TINT_NONE; // last integer day tint written to Phaser
 
-  constructor(scene: Phaser.Scene, techLevels: Readonly<Record<TechId, number>>) {
+  constructor(scene: Phaser.Scene, techLevels: Readonly<Record<TechId, number>>, options: { slowFadeIn?: boolean } = {}) {
+    this.slowFadeIn = options.slowFadeIn ?? false;
     const minZoom = effectiveMinZoom(VIEW, WORLD, CAMERA.minZoom);
     for (const def of PARALLAX_LAYERS) {
       const parts: FadePart[] = [];
@@ -140,14 +143,14 @@ export class ParallaxBackground {
     }
   }
 
-  // Moves every fading layer toward its target fade (def.fadeMs, default PARALLAX_FADE_MS) and eases the day tint over
+  // Moves every fading layer toward its target fade (layerFadeMs, default PARALLAX_FADE_MS) and eases the day tint over
   // deltaMs; objects are only touched while a value changes.
   update(techLevels: Readonly<Record<TechId, number>>, deltaMs: number): void {
     this.stepDayTint(deltaMs);
     for (const layer of this.layers) {
       if (!layer.fading) continue;
       layer.target = fadeTarget(layer.def, techLevels);
-      const next = fadeStep(layer.fade, layer.target, deltaMs, layer.def.fadeMs ?? PARALLAX_FADE_MS);
+      const next = fadeStep(layer.fade, layer.target, deltaMs, layerFadeMs(layer.def, layer.fade, layer.target, this.slowFadeIn));
       if (next === layer.fade) continue;
       layer.fade = next;
       this.paint(layer);

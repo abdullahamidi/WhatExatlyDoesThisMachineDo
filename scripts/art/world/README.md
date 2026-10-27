@@ -92,6 +92,7 @@ reverse playback (WORLD_PLAYBACK in `src/data/livingWorld.ts`).
 - Full 1 px ink ring on every denizen (DENIZEN_ART 1.3); the workbench reports it as `pillow` info: accepted.
 - Facing: masters face RIGHT (+x). `flip: true` in `WORLD_LOOPS` = faces left. Walk and write frames keep the head
   bowed (hat lowered over the face), so a figure walking toward the machine never looks at it.
+  (WP26: the WORLD_LOOPS inspector and dog loops were pruned; their frame names stay valid sheet cells.)
 - No text in art; eyes <= 2 px, mouth 1 px, and only from row III.
 - No green or blue anywhere before the finale. The restored-world colours (pal `RESTORED`: PALETTE green0-3, skyClear0-3)
   live in exactly two cells (WP23b AD3c): `world.puddle` frame 9 `whole` and `world.sprout` frame 4 `bloom`
@@ -218,6 +219,7 @@ light band on the sepia coat). Hole and stake sit in the front row with the dog:
 Front head (AD2c F6, it read as a cat): flat skull top, the torn ear folded down as a 1 px flap on the right skull side
 (never a second point), `t` bridge between the eyes, 3 px `u` muzzle one row below the eye line with the ink nose at its
 bottom centre, jaw 1 px wider, `u` chin; `u` not `t`, because `t` bakes to the same sepia as the lit coat `e` in rows I-II.
+(WP26: the `WORLD_LOOPS.dog` loop named above was pruned; its frame names stay valid sheet cells.)
 
 Crow notes (AD-c): frozen mid-flap, faces right (right wing, no flip): near wing iron 2 with 1 px primary fingers and a
 ragged trailing edge, far wing iron 0 behind it, fanned tail, ink beak with the hook down, feet hanging on the bottom row
@@ -902,8 +904,8 @@ Hand-offs (data owners through the EM; nothing blocks the art):
   minus 18 at the scrap spot. Options: per-framing `WORLD_SPOTS` (e1 / s8 / s9 scrap dx -34: feet 1438 over the 1420 scrap,
   if `actorBand` keeps it), or a scrap x in `WORLD_PLACEMENTS.<framing>.scraps.xs` at the spot minus 18 (e1 family
   1478, s11 / s15 790; both lie under his feet when he stands at `mid`, so AD2 picks). Art unchanged either way.
-- H2 info: the cycle 3+ ground girl (e1 / s8 / s9 x 1538) stands on the 1530 scrap; its edge shows at her left boot
-  (`comp/board-z1-e1-I-girl.png`). Pre-existing (WP23b data); AD2 judges.
+- H2 info, resolved: the cycle 3+ ground girl stood at x 1538 on the 1530 scrap; its edge showed at her left boot
+  (`comp/board-z1-e1-I-girl.png`, WP23b data). WP26: moved to x 1552, boots 6 px clear of the scrap.
 
 Decoded PNG total (276 PNGs under `public/assets/`, w x h x 4): 54.46 MiB (limit 56), unchanged.
 
