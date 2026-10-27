@@ -4,7 +4,7 @@ An idle game about an unexplained machine in a rust-coloured wasteland. Turn the
 
 ## Editions
 
-Version 0.10.0 (`package.json`). The full game and the Steam demo are built from one codebase.
+Version 0.10.1 (`package.json`). The full game and the Steam demo are built from one codebase.
 
 | | Full game | Demo |
 |---|---|---|

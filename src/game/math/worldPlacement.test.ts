@@ -276,13 +276,13 @@ describe('placeCast', () => {
     expect(placed.inspector?.route).toEqual([1448, 1496]);
   });
 
-  it('cycle 3 fills the girl at 1538 (ground) at e1, s8 and s9; puddles, sprout and lantern have no row there yet', () => {
+  it('cycle 3 fills the girl at 1552 (ground) at e1, s8 and s9; puddles, sprout and lantern have no row there yet', () => {
     const S8 = [...S7, '@blueprint', 'generator'];
-    expect(placeCast(levelsOf(S7), 'e1', undefined, 3)).toEqual({ ...WORLD_PLACEMENTS.e1, girl: { x: 1538, row: 'back' }, puddles: null, sprout: null, lantern: null });
+    expect(placeCast(levelsOf(S7), 'e1', undefined, 3)).toEqual({ ...WORLD_PLACEMENTS.e1, girl: { x: 1552, row: 'back' }, puddles: null, sprout: null, lantern: null });
     expect(placeCast(levelsOf(S8), 's8', undefined, 3)).toEqual({
-      ...placeCast(levelsOf(S8), 's8'), girl: { x: 1538, row: 'back' },
+      ...placeCast(levelsOf(S8), 's8'), girl: { x: 1552, row: 'back' },
     });
-    expect(placeCast(levelsOf(S9), 's9', undefined, 3).girl).toEqual({ x: 1538, row: 'back' });
+    expect(placeCast(levelsOf(S9), 's9', undefined, 3).girl).toEqual({ x: 1552, row: 'back' });
   });
 
   it('defaults the pose to the framing pose of the levels', () => {
@@ -405,13 +405,23 @@ describe('late framings and the girl (WP23b R6)', () => {
     expect(WORLD_GIRL_PLACEMENTS.s15?.era5?.x).toBe(WORLD_ENDING.homeX.lantern + 11);
   });
 
-  it('the girl stands on the ground only: cycle 3 puts her at 1538 (back) at e1, s8 and s9; cycle 2 keeps her a mini', () => {
+  it('the girl stands on the ground only: cycle 3 puts her at 1552 (back) at e1, s8 and s9; cycle 2 keeps her a mini', () => {
     const S8 = [...S7, '@blueprint', 'generator'];
-    expect(placeCast(levelsOf(S7), 'e1', undefined, 3).girl).toEqual({ x: 1538, row: 'back' });
-    expect(placeCast(levelsOf(S8), 's8', undefined, 3).girl).toEqual({ x: 1538, row: 'back' });
-    expect(placeCast(levelsOf(S9), 's9', undefined, 3).girl).toEqual({ x: 1538, row: 'back' });
+    expect(placeCast(levelsOf(S7), 'e1', undefined, 3).girl).toEqual({ x: 1552, row: 'back' });
+    expect(placeCast(levelsOf(S8), 's8', undefined, 3).girl).toEqual({ x: 1552, row: 'back' });
+    expect(placeCast(levelsOf(S9), 's9', undefined, 3).girl).toEqual({ x: 1552, row: 'back' });
     expect(placeCast(levelsOf(S7), 'e1', undefined, 2).girl).toBeNull();
     expect(placeCast(levelsOf(S9), 's9').girl).toBeNull();
+  });
+
+  it('cycle 3 places the girl at 1552 in every e1, s8 and s9 stage; cycles 1 and 2 place none', () => {
+    for (const s of STAGES) {
+      if (s.key !== 'e1' && s.key !== 's8' && s.key !== 's9') continue;
+      const lv = levelsOf(s.buys);
+      expect(placeCast(lv, s.key, undefined, 3).girl, s.name).toEqual({ x: 1552, row: 'back' });
+      expect(placeCast(lv, s.key, undefined, 2).girl, s.name).toBeNull();
+      expect(placeCast(lv, s.key, undefined, 1).girl, s.name).toBeNull();
+    }
   });
 
   it('era V steps: 8 px per met step (five steps at most, each step at most 12 px)', () => {

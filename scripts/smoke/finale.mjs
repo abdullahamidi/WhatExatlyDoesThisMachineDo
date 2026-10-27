@@ -218,7 +218,7 @@ try {
   // RUN 1: main flow (buy, keyframes, reload to choice, KEEP, reload postgame, menu, reset)
   await open();
   ok('finale_0_fastforward_failed', failedBuys(await fastForward()));
-  // Era V sky (skyViolet) fades for ~12 s after the instant buy list: wait it out so keyframes do not start on beige sky.
+  // Era V sky: WorldScene fades each rising stage over ERA5_SKY_FADE_IN_MS (WP26, ~6 s a stage). worldSettle(true) snaps it (settleFades), so the 15 s wait below is only a margin.
   await page.evaluate(() => window.__wedtmd?.worldSettle?.(true));
   await page.waitForTimeout(15000);
   const buy = await buyList(['primaryFunction']);

@@ -21,9 +21,12 @@ export type WorldSound =
   | { kind: 'blip'; speaker: 'inspector' | 'dog' | 'crow' | 'girl' | 'payphone'; count: number; reversed: boolean }
   | { kind: 'ring' }
   | { kind: 'dialTone'; on: boolean };
+/** WP26: the weather the living world shows this frame. A plain mutable readout (not a Signal): only LivingWorldDirector writes it, only gameAudio reads it. */
+export interface WorldWeather { live: boolean; wind: number; virgaAlpha: number; virgaSpeed: number }
 export interface GameFeedback {
   purchaseDenied: Signal<PurchaseFailure>; partLanded: Signal<MachineComponentId>; finaleBeat: Signal<FinaleBeat>;
   partEvolved: Signal<PartEvolvedEvent>; partTorqued: Signal<PartTorquedEvent>;
   worldSound: Signal<WorldSound>;
+  worldWeather: WorldWeather;
 }
 export interface GameContext { session: GameSession; commands: GameCommands; feedback: GameFeedback; modals: ModalStack; newCycle: NewCycleHook }

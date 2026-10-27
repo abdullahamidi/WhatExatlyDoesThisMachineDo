@@ -223,6 +223,7 @@ const BED_PEAK_GAIN: Record<BedId, number> = {
   servo: AUDIO.servo.maxGain,
   drone: AUDIO.drone.maxGain,
   wind: AUDIO.wind.gain,
+  rain: AUDIO.rain.gain,
 };
 
 /** Era in which each bed first arrives (the '-' cells of the WP15 bed table); a bed counts only from its arrival era on. */
@@ -235,6 +236,7 @@ const BED_ARRIVAL_ERA: Record<BedId, EraNumber> = {
   servo: 4,
   drone: 5,
   wind: 1,
+  rain: 3,
 };
 
 /** Sum of peak bed gain x era trim over the beds present in that era (WP15 C2 invariant: <= 0.45). */
@@ -247,11 +249,56 @@ export function ambientPeakSum(era: number): number {
   return sum;
 }
 
-/** Live inputs for the ambient mix: production per second per resource, owned tech levels and the mute flag. */
+/** Structural view of the world weather readout (GameFeedback.worldWeather in src/game/context.ts); no import from src/game. */
+export interface WeatherInput {
+  readonly live: boolean;
+  readonly wind: number;
+  readonly virgaAlpha: number;
+  readonly virgaSpeed: number;
+}
+
+/** Wind and rain levels for one update (gains already carry the era trim). */
+export interface WeatherMix {
+  readonly windGain: number;
+  readonly windLfo: boolean;
+  readonly rainGain: number;
+  readonly rainHz: number;
+  readonly live: boolean;
+}
+
+/**
+ * Wind and rain beds for one update (WP26). Muted: both gains 0 (live is still reported). Not live (no readout, or live false):
+ * the v0.10.0 wind at full gain with the gust LFO, and no rain. Live: wind = gain x (floor + (1 - floor) x clamp01(wind / refWind)),
+ * no LFO, so still air keeps the floor instead of silence; rain = gain x era trim x clamp01(alpha / alphaRef) x clamp01(speed / speedRef),
+ * its pitch rising from hzMin to hzMax with the speed, and falling to hzMin where the era trims the rain bed to 0 (the hiss drops
+ * as it fades). Non-finite readings count as 0.
+ */
+export function weatherMix(input: WeatherInput | null, era: number, muted: boolean): WeatherMix {
+  const live = input !== null && input.live === true;
+  if (muted) return { windGain: 0, windLfo: false, rainGain: 0, rainHz: AUDIO.rain.hzMin, live };
+  if (input === null || !live) {
+    return { windGain: AUDIO.wind.gain * bedTrim('wind', era), windLfo: true, rainGain: 0, rainHz: AUDIO.rain.hzMin, live: false };
+  }
+  const wind = Number.isFinite(input.wind) ? input.wind : 0;
+  const windLevel = AUDIO.wind.floor + (1 - AUDIO.wind.floor) * clampRange(wind / AUDIO.wind.refWind, 0, 1);
+  const alpha = Number.isFinite(input.virgaAlpha) ? clampRange(input.virgaAlpha / AUDIO.rain.alphaRef, 0, 1) : 0;
+  const speed = Number.isFinite(input.virgaSpeed) ? clampRange(input.virgaSpeed / AUDIO.rain.speedRef, 0, 1) : 0;
+  const rainTrim = bedTrim('rain', era); // a trim of 0 (era IV+) also pins the pitch to hzMin, so the fade glides the hiss down
+  return {
+    windGain: AUDIO.wind.gain * bedTrim('wind', era) * windLevel,
+    windLfo: false,
+    rainGain: AUDIO.rain.gain * rainTrim * alpha * speed,
+    rainHz: lerp(AUDIO.rain.hzMin, AUDIO.rain.hzMax, rainTrim > 0 ? speed : 0),
+    live: true,
+  };
+}
+
+/** Live inputs for the ambient mix: production per second per resource, owned tech levels and the mute flag. `weather` is the world readout (WP26); null or absent means no world. */
 export interface AmbientInput {
   readonly perSecond: Readonly<Record<ResourceId, number>>;
   readonly techLevels: Readonly<Record<TechId, number>>;
   readonly muted: boolean;
+  readonly weather?: WeatherInput | null;
 }
 
 /** Ambient bed parameters for one update. Gains already carry the era trim; gearGain is the scale passed to synth.scheduleGearTicks. */
@@ -268,16 +315,23 @@ export interface AmbientMix {
   readonly droneGain: number;
   readonly servoGain: number;
   readonly servoHz: number;
+  readonly windGain: number;
+  readonly windLfo: boolean;
+  readonly rainGain: number;
+  readonly rainHz: number;
+  readonly live: boolean;
 }
 
 /**
  * Ambient bed mix (WP15R): era from the owned era techs (simulation currentEra), each bed driven by its own resource rate, era trims from AUDIO.bedTrim.
  * Muted: every gain and rate is 0 except the hum pitch (still follows ME/s), the servo pitch (minHz) and the neutral gearGain 1.
+ * Wind and rain (WP26) come from weatherMix with the same era and mute flag, so muting silences them too.
  */
 export function ambientMix(input: AmbientInput): AmbientMix {
   const { perSecond, techLevels, muted } = input;
   const { me, ee, pr, rs, xf } = perSecond;
   const era = currentEra(techLevels);
+  const weather = weatherMix(input.weather ?? null, era, muted);
   if (muted) {
     return {
       era,
@@ -292,6 +346,7 @@ export function ambientMix(input: AmbientInput): AmbientMix {
       droneGain: 0,
       servoGain: 0,
       servoHz: AUDIO.servo.minHz,
+      ...weather,
     };
   }
   const owned = (id: TechId): boolean => Number.isFinite(techLevels[id]) && techLevels[id] >= 1;
@@ -310,6 +365,7 @@ export function ambientMix(input: AmbientInput): AmbientMix {
     droneGain: droneGain(xf, owned(AUDIO.drone.techId)) * bedTrim('drone', era),
     servoGain: servoGain(servoLevel, servoMax) * bedTrim('servo', era),
     servoHz: servoHz(servoLevel, servoMax),
+    ...weather,
   };
 }
 

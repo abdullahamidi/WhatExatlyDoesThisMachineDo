@@ -132,11 +132,13 @@ describe('MUSIC scheduler constants', () => {
 });
 
 describe('AUDIO mix data (WP15)', () => {
-  const BEDS: BedId[] = ['hum', 'gear', 'mains', 'boiler', 'pad', 'servo', 'drone', 'wind'];
+  const BEDS: BedId[] = ['hum', 'gear', 'mains', 'boiler', 'pad', 'servo', 'drone', 'wind', 'rain'];
   // First era (1-based) in which each bed exists in the game.
   const FIRST_ERA: Record<BedId, number> = {
-    hum: 1, gear: 1, wind: 1, mains: 2, boiler: 3, pad: 4, servo: 4, drone: 5,
+    hum: 1, gear: 1, wind: 1, mains: 2, boiler: 3, pad: 4, servo: 4, drone: 5, rain: 3,
   };
+  // WP26: the boiler is re-trimmed in its own first era (era III) so the rain bed fits the 0.45 sum; every other bed starts untrimmed.
+  const FIRST_ERA_TRIM: Partial<Record<BedId, number>> = { boiler: 0.8 };
 
   it('has a trim row for every bed with five eras', () => {
     expect(Object.keys(AUDIO.bedTrim).sort()).toEqual([...BEDS].sort());
@@ -145,15 +147,17 @@ describe('AUDIO mix data (WP15)', () => {
 
   it.each(BEDS)('%s: trims are in (0, 1]', (bed) => {
     for (const v of AUDIO.bedTrim[bed]) {
-      expect(v).toBeGreaterThan(0);
+      // Rain is silent from era IV (trim 0); every other bed stays audible.
+      if (bed === 'rain') expect(v).toBeGreaterThanOrEqual(0);
+      else expect(v).toBeGreaterThan(0);
       expect(v).toBeLessThanOrEqual(1);
     }
   });
 
-  it.each(BEDS)('%s: first present era is untrimmed and later eras never grow', (bed) => {
+  it.each(BEDS)('%s: first present era is untrimmed (boiler: WP26 re-trim) and later eras never grow', (bed) => {
     const row = AUDIO.bedTrim[bed];
     const first = FIRST_ERA[bed] - 1;
-    expect(row[first]).toBe(1);
+    expect(row[first]).toBe(FIRST_ERA_TRIM[bed] ?? 1);
     for (let i = first + 1; i < row.length; i++) {
       expect(row[i] ?? NaN).toBeLessThanOrEqual(row[i - 1] ?? NaN);
     }

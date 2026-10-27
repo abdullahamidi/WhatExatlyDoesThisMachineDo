@@ -1,10 +1,10 @@
 // Living world era III-V state tables (WP23b): stage rules, props, environment tuning and loops for eras III to V.
 // Why: every threshold and frame of the era arc lives here, so the state maths (worldState) and the renderers read one copy.
 // Pure data: no Phaser. A StageRule is met when the tech level >= minLevel (default 1) and, when minTier is set, the part tier >= minTier.
-// Loops are one entry per step (LoopFrame, livingWorld.ts); dx is world px. Era V plays locomotion loops reversed; state never reverses.
+// One loop is left here: crowHigh (the cycle 2+ trace pose, a LoopFrame in livingWorld.ts). The other era loops were superseded by the WP24 behaviour runners and pruned in WP26.
 import type { AssetId } from '../assets/assetIds';
 import type { TechId } from './types';
-import type { LoopFrame, WorldSheetId } from './livingWorld';
+import type { LoopFrame } from './livingWorld';
 import { WORLD_SHADOWS } from './livingWorld';
 import { DEPTH } from './world';
 import { PALETTE } from './palette';
@@ -139,34 +139,8 @@ export const WORLD_ERA_ENV = {
 // Era V double exposure: one whole-self frame (violet, 15 % alpha) every 30-60 s on a hash schedule. Off under reduced motion.
 export const WORLD_DOUBLE_EXPOSURE = { minMs: 30000, maxMs: 60000, holdMs: 120, alpha: 0.15, seed: 4107, targets: ['inspector', 'dog', 'crow', 'girl'] } as const;
 
-export type WorldEraLoopId = 'inspectorVent' | 'dogShake' | 'dogStill' | 'dogRoam' | 'crowPerch' | 'crowStutterV' | 'crowHigh' | 'girlSway' | 'girlStill';
-export const WORLD_ERA_LOOP_SHEET: Record<WorldEraLoopId, WorldSheetId> = {
-  inspectorVent: 'inspector', dogShake: 'dog', dogStill: 'dog', dogRoam: 'dog', crowPerch: 'crow', crowStutterV: 'crow', crowHigh: 'crow',
-  girlSway: 'girl', girlStill: 'girl',
-};
-// Loops for eras III-V. dogRoam is forward time; era V plays it reversed.
+export type WorldEraLoopId = 'crowHigh';
+// Held by LivingWorld.ts while state.traces.crowHigh is set (D7).
 export const WORLD_ERA_LOOPS: Record<WorldEraLoopId, readonly LoopFrame[]> = {
-  inspectorVent: [{ frame: 'umbrellaOpen', dx: 0, flip: true }],
-  dogShake: [
-    { frame: 'sit0', dx: 0 }, { frame: 'sit0', dx: 0 }, { frame: 'sit0', dx: 0 }, { frame: 'sit0', dx: 0 },
-    { frame: 'shake0', dx: 0 }, { frame: 'shake1', dx: 0 }, { frame: 'shake0', dx: 0 }, { frame: 'shake1', dx: 0 },
-    { frame: 'sit0', dx: 0 }, { frame: 'sit0', dx: 0 }, { frame: 'sit0', dx: 0 }, { frame: 'sit0', dx: 0 },
-  ],
-  dogStill: [{ frame: 'sit0', dx: 0 }],
-  dogRoam: [
-    { frame: 'sit0', dx: 0 }, { frame: 'sit1', dx: 0 }, { frame: 'walk0', dx: 4 }, { frame: 'walk1', dx: 8 },
-    { frame: 'walk2', dx: 12 }, { frame: 'walk3', dx: 16 }, { frame: 'sit0', dx: 16 }, { frame: 'sit1', dx: 16 },
-    { frame: 'walk0', dx: 12 }, { frame: 'walk1', dx: 8 }, { frame: 'walk2', dx: 4 }, { frame: 'walk3', dx: 0 },
-  ],
-  crowPerch: [
-    { frame: 'perch0', dx: 0 }, { frame: 'perch0', dx: 0 }, { frame: 'perch0', dx: 0 }, { frame: 'perch0', dx: 0 },
-    { frame: 'perch1', dx: 0 }, { frame: 'perch1', dx: 0 }, { frame: 'perch1', dx: 0 }, { frame: 'perch1', dx: 0 },
-  ],
-  crowStutterV: [{ frame: 'perch0', dx: 0 }, { frame: 'perch0', dx: 0 }, { frame: 'perch0', dx: 4 }, { frame: 'perch0', dx: 0 }],
   crowHigh: [{ frame: 'fly2', dx: 0 }],
-  girlSway: [
-    { frame: 'stand0', dx: 0 }, { frame: 'stand0', dx: 0 }, { frame: 'stand0', dx: 0 }, { frame: 'stand0', dx: 0 },
-    { frame: 'stand1', dx: 0 }, { frame: 'stand1', dx: 0 }, { frame: 'stand1', dx: 0 }, { frame: 'stand1', dx: 0 },
-  ],
-  girlStill: [{ frame: 'stand0', dx: 0 }],
 };

@@ -2,6 +2,24 @@
 
 Notable changes per release, newest first. Work packages are named WPn; plans are in `docs/plan/`.
 
+## 0.10.1 — Follow-ups — 2026-10-27
+
+### Changed
+- **WP26** Weather sound: in the world, the wind bed follows the live wind, so gusts are audible. Still air keeps a quiet floor (eras IV and V, and the finale before the wind stops).
+- **WP26** Era III rain: a soft rain hiss follows the visible virga at about -30 dB. Its pitch falls and it fades as the virga slows and freezes. There is no rain in the demo (eras I and II), nor in eras IV and V.
+- **WP26** Era III mix: the boiler sound is 20 % quieter, so the rain fits without making the mix louder.
+- **WP26** Era V sky: the violet sky and horizon glow now rise slowly in the world view. A full fade takes 24 s, so a 0.25 step takes about 6 s. The sky does not snap, and fades out stay quick. The teaser and the showcase keep their timing.
+- **WP26** Living world: the girl (cycles 3 and up) stands beside the scrap pile, not on it. Cycles 1 and 2 are unchanged.
+- **WP26** Living world: unused denizen loop tables are removed (inspector walk, dog roam, crow stutter and others). No visual change.
+- **WP26** Crank Servo: the arm has a one-pixel light edge, so it reads against the X-brace on MK I to MK III. Same shape and size.
+- **WP26** TECH INDEX: seven tree slots moved in tabs I, IV and V, so no line passes behind another node. In tab V, two lines from Null Chamber now route around the outside of the graph.
+- No change to saves, economy, settings or text.
+
+### Verification
+- §R-lite (`docs/STEAM_RELEASE.md` section 15): typecheck clean; 5496 tests pass, 17 skip; builds and bundle budgets pass (app 493.9 / 500 KB, lazy world 205.3 / 210 KB).
+- GPU perf median of 3: frame p95 16.7 ms (budget 17). 30 min soak: heap growth 2.0 MB, display objects flat. World update 0.28 ms (budget 0.3).
+- New `scripts/smoke/weather-audio.mjs` (full and demo). Packaged demo and full exes pass `desktop.mjs`. Store set re-shot (`store-final3`) and approved by the Art Director.
+
 ## 0.10.0 — Living machine — 2026-10-27
 
 ### Added

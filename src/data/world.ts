@@ -18,25 +18,27 @@ export const DEPTH = { background: -100, ground: 0, machine: 100, dust: 200, flo
 export const PARALLAX_BOTTOM_MARGIN = 200;                      // world px the non-sky layer textures extend below the ground line (hidden behind the ground)
 export const PARALLAX_FADE_MS = 1500;                           // ms for a parallax layer to fade in or out when its visibility changes
 export const PYLONS_LIT_FADE_MS = 6000;                         // ms for the lit pylons layer and its cables to light (WP24 D9: the powerLines moment reads as seconds, not a blink)
+export const ERA5_SKY_FADE_IN_MS = 24000;                       // WP26 Q3: ms for a rising era V sky stage to fade in, per unit of fade (a 0.25 stage takes 6 s). AD tuning band 20000-40000 (the smallest stage step is 0.2, which must last >= 4 s)
 export interface ParallaxLayerDef { id: string; assetId: AssetId; scrollFactor: number;
   bottomY: number;      // world y where the texture BOTTOM appears when the camera is centred on CAMERA.focus
   depth: number; alpha: number;
   underfill: number | null;   // colour of a rectangle filled below the texture so panning shows no gap
   tint?: number;              // tint: haze colour multiplied into the layer (audit S3 #14)
   fadeMs?: number;      // ms of the fade in / out (default PARALLAX_FADE_MS; set on pylonsLit only, WP24 D9)
+  fadeInMs?: number;    // ms per unit of fade while the layer fades IN with the slow option on (WP26 Q3: skyViolet and horizonGlow only)
   visibleWhen?: { techId: TechId; minLevel: number };   // layer shown only when this tech level is reached (default: always)
   finale?: { track: FinaleTrackId; dir: 'in' | 'out' };   // WP13 finale: alpha multiplier from the track value (in = v, out = 1 - v); combines with visibleWhen / alphaStages
-  alphaStages?: readonly { techId: TechId; minLevel: number; alpha: number }[] }   // target alpha = stageAlpha() (max alpha over met stages, 0 if none); fades PARALLAX_FADE_MS; never combined with visibleWhen
+  alphaStages?: readonly { techId: TechId; minLevel: number; alpha: number }[] }   // target alpha = stageAlpha() (max alpha over met stages, 0 if none); fades PARALLAX_FADE_MS (WP26: fadeInMs when rising in WorldScene); never combined with visibleWhen
 export const PARALLAX_LAYERS: readonly ParallaxLayerDef[] = [
   { id: 'sky',       assetId: 'bg.sky',       scrollFactor: 0,    bottomY: VIEW.height,                       depth: DEPTH.background,      alpha: 1,    underfill: null },
   { id: 'mountains', assetId: 'bg.mountains', scrollFactor: 0.15, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 10, alpha: 0.45, underfill: 0x5f5244 /* WP16b F5: = bottom rows (197-255) of bg/mountains.png, darkest tone of its far-plain ramp (ART_BRIEF sand #5f5244; not a PALETTE key) */, finale: { track: 'mountains', dir: 'out' } },
   { id: 'skyline',   assetId: 'bg.skyline',   scrollFactor: 0.3,  bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 20, alpha: 0.4,  underfill: null /* WP16b F5: rows 220-319 of bg/skyline.png are transparent; a fill here brings the grey band back */, finale: { track: 'skyline', dir: 'out' } },
   { id: 'pylons',    assetId: 'bg.pylons',    scrollFactor: 0.55, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 30, alpha: 0.45, underfill: null, tint: 0xb8a98f },
   { id: 'pylonsLit', assetId: 'bg.pylonsLit', scrollFactor: 0.55, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 31, alpha: 0.7, underfill: null, fadeMs: PYLONS_LIT_FADE_MS, visibleWhen: { techId: 'powerLines', minLevel: 1 } },
-  { id: 'skyViolet', assetId: 'bg.skyViolet', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 1, alpha: 1, underfill: null,
+  { id: 'skyViolet', assetId: 'bg.skyViolet', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 1, alpha: 1, underfill: null, fadeInMs: ERA5_SKY_FADE_IN_MS,
     alphaStages: [{ techId: 'nullChamber', minLevel: 1, alpha: 0.25 }, { techId: 'lensArray', minLevel: 1, alpha: 0.5 }, { techId: 'horizonField', minLevel: 5, alpha: 0.75 }, { techId: 'skyAperture', minLevel: 1, alpha: 1 }],
     finale: { track: 'sky', dir: 'out' } },
-  { id: 'horizonGlow', assetId: 'bg.horizonGlow', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 3, alpha: 1, underfill: null,
+  { id: 'horizonGlow', assetId: 'bg.horizonGlow', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 3, alpha: 1, underfill: null, fadeInMs: ERA5_SKY_FADE_IN_MS,
     alphaStages: [{ techId: 'horizonField', minLevel: 1, alpha: 0.35 }, { techId: 'horizonField', minLevel: 10, alpha: 0.55 }, { techId: 'horizonField', minLevel: 20, alpha: 0.75 }],
     finale: { track: 'glow', dir: 'out' } },
   // WP13 restored world: twins of sky / mountains / skyline (same scrollFactor, bottomY and art size), faded in by the finale track.

@@ -103,6 +103,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
   let unsubscribers: Array<() => void> = [];
   let appliedLevels: LevelSnapshot | null = null; // last set pushed to the synth; the tick skips unchanged sets
   let lastMix: AmbientMix | null = null; // last ambient mix pushed by the tick (readout only)
+  let weatherApplied: { wind: number; lfo: boolean; rain: number; hz: number } | null = null; // quantized wind / rain last pushed (WP26); null = nothing pushed since the gate last closed
   let windStopped = false; // finale windStop beat fired: wind off for the rest of the sequence (cleared when the phase is 'none')
   const slots: [MusicSlot, MusicSlot] = [newMusicSlot(), newMusicSlot()];
   let activeSlot: 0 | 1 = 0; // slot of the current theme; the other one is the outgoing or idle slot
@@ -192,9 +193,39 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     appliedLevels = next;
     s.setMaster(next.master, AUDIO.rampSeconds);
     s.setWind(next.wind);
+    if (!next.wind) s.setRain(0, AUDIO.rain.hzMin); // the same gate silences the rain
+    weatherApplied = null;
+    if (next.wind) pushWeather(s, mixNow()); // no 200 ms of full-level wind after an unmute or the unlock
     s.setBusGain('sfx', next.sfxBus, AUDIO.rampSeconds);
     s.setBusGain('ambient', next.ambientBus, AUDIO.rampSeconds);
     s.setBusGain('music', next.musicBus, AUDIO.rampSeconds);
+  }
+
+  /** Ambient mix from the live session and the world weather readout (WP26); the tick and the level pushes both read it. */
+  function mixNow(): AmbientMix {
+    return ambientMix({ perSecond: session.rates.perSecond, techLevels: session.state.techLevels, muted: session.settings.muted, weather: feedback.worldWeather });
+  }
+
+  /**
+   * Wind and rain levels to the synth (WP26), quantized by AUDIO.weatherStep: a push happens only when a quantized level moved,
+   * so a steady readout writes nothing and a drifting one makes at most two synth calls (four AudioParam writes) per tick. Closed gate (mute, choice /
+   * postgame, windStop): applyLevels has already silenced both beds, so nothing is pushed and the next open pushes at once.
+   */
+  function pushWeather(s: Synth, mix: AmbientMix): void {
+    const gate = appliedLevels !== null && appliedLevels.wind;
+    if (!gate) {
+      weatherApplied = null;
+      return;
+    }
+    const q = AUDIO.weatherStep;
+    const wind = Math.round(mix.windGain / q.gain);
+    const rain = Math.round(mix.rainGain / q.gain);
+    const hz = rain === 0 ? 0 : Math.round(mix.rainHz / q.hz);
+    const prev = weatherApplied;
+    if (prev !== null && prev.wind === wind && prev.lfo === mix.windLfo && prev.rain === rain && prev.hz === hz) return;
+    if (prev === null || prev.wind !== wind || prev.lfo !== mix.windLfo) s.setWindLevel(mix.windGain, mix.windLfo);
+    if (prev === null || prev.rain !== rain || prev.hz !== hz) s.setRain(mix.rainGain, mix.rainHz);
+    weatherApplied = { wind, lfo: mix.windLfo, rain, hz };
   }
 
   /** Pushes a slot gain to the synth only when it changed. */
@@ -319,8 +350,9 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
       } catch (error) {
         warnOnce('music', error);
       }
-      const mix = ambientMix({ perSecond: session.rates.perSecond, techLevels: session.state.techLevels, muted: session.settings.muted });
-      lastMix = mix;
+      const mix = mixNow();
+      const gate = appliedLevels !== null && appliedLevels.wind;
+      lastMix = gate ? mix : { ...mix, windGain: 0, windLfo: false, rainGain: 0 }; // readout is post-gate: no wind or rain while the gate is closed
       s.setHum(mix.humHz, mix.humGain);
       s.scheduleGearTicks(mix.gearRate, mix.gearGain);
       s.setMains(mix.mainsGain);
@@ -329,6 +361,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
       s.setPad(mix.padGain);
       s.setDrone(mix.droneGain);
       s.setServo(mix.servoGain, mix.servoHz);
+      pushWeather(s, mix);
     } catch (error) {
       warnOnce('update', error);
     }
@@ -552,6 +585,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     synth = null;
     appliedLevels = null;
     lastMix = null;
+    weatherApplied = null;
     unlocked = false;
     slots[0] = newMusicSlot();
     slots[1] = newMusicSlot();

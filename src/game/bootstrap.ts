@@ -152,6 +152,7 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
       purchaseDenied: createSignal<PurchaseFailure>(), partLanded: createSignal<MachineComponentId>(), finaleBeat: createSignal<FinaleBeat>(),
       partEvolved: createSignal<PartEvolvedEvent>(), partTorqued: createSignal<PartTorquedEvent>(),
       worldSound: createSignal<WorldSound>(),
+      worldWeather: { live: false, wind: 0, virgaAlpha: 0, virgaSpeed: 0 },
     },
     modals,
     newCycle,

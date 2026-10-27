@@ -549,7 +549,7 @@ describe('era IV technology table', () => {
       },
       echoCrank: {
         id: 'echoCrank', kind: 'unlock', era: 4, costRes: 'rs', baseCost: 10000, growth: null, maxLevel: null,
-        tree: { col: 2, row: 0 }, branch: 'origin',
+        tree: { col: 4, row: 0 }, branch: 'origin',
         effects: [
           { type: 'clickEcho', seconds: 0.5, res: 'rs' },
           { type: 'clickMult', factor: 2 },
@@ -716,13 +716,13 @@ describe('era V technology table', () => {
       },
       graviticAnchor: {
         id: 'graviticAnchor', kind: 'repeatable', era: 5, costRes: 'me', baseCost: 1500000, growth: 1.5, maxLevel: 10,
-        tree: { col: 2, row: 2 }, branch: 'origin',
+        tree: { col: 3, row: 2 }, branch: 'origin',
         effects: [{ type: 'rateMult', factor: 1.1, res: 'all' }],
         requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
       },
       inversionCrank: {
         id: 'inversionCrank', kind: 'unlock', era: 5, costRes: 'xf', baseCost: 4000, growth: null, maxLevel: null,
-        tree: { col: 2, row: 0 }, branch: 'origin',
+        tree: { col: 4, row: 0 }, branch: 'origin',
         effects: [{ type: 'clickEcho', seconds: 0.75, res: 'xf' }],
         requires: [{ type: 'tech', id: 'containmentRing', minLevel: 3 }],
       },
@@ -765,13 +765,13 @@ describe('era V technology table', () => {
       },
       mainsBackfeed: {
         id: 'mainsBackfeed', kind: 'repeatable', era: 5, costRes: 'ee', baseCost: 20000000, growth: 1.4, maxLevel: null,
-        tree: { col: 3, row: 2 }, branch: 'automation',
+        tree: { col: 6, row: 0 }, branch: 'automation',
         effects: [{ type: 'autoPct', percent: 6, res: 'xf' }],
         requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
       },
       steamLance: {
         id: 'steamLance', kind: 'repeatable', era: 5, costRes: 'pr', baseCost: 5000000, growth: 1.4, maxLevel: null,
-        tree: { col: 4, row: 2 }, branch: 'automation',
+        tree: { col: 6, row: 2 }, branch: 'automation',
         effects: [{ type: 'autoPct', percent: 6, res: 'xf' }],
         requires: [{ type: 'tech', id: 'nullChamber', minLevel: 1 }],
       },
@@ -977,7 +977,7 @@ describe('era I rows match the WP25 literal', () => {
         { type: 'tech', id: 'wornMotor', minLevel: 1 },
       ],
       description: 'A heavy wheel that stores momentum. +10% automation production per level.',
-      tree: { col: 3, row: 0 },
+      tree: { col: 3, row: 1 },
     },
     wornMotor: {
       id: 'wornMotor',
@@ -993,7 +993,7 @@ describe('era I rows match the WP25 literal', () => {
       requires: [{ type: 'tech', id: 'handCrank', minLevel: 1 }],
       description: 'A salvaged motor that turns by itself. +17 ME/s.',
       flavor: 'Synchronization unsuccessful.',
-      tree: { col: 1, row: 2 },
+      tree: { col: 1, row: 1 },
     },
     motorTuning: {
       id: 'motorTuning',

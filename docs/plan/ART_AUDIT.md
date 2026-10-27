@@ -2165,3 +2165,241 @@ scene) is unaffected by the halo fix.
 
 ### Verdict
 **RELEASE-READY** (round 2, 9b7f3f1). F1-F3 fixed and verified in new captures; no new defect found.
+
+## WP26 — v0.10.1 follow-ups audit
+
+### AD1a — girl x and tree slots (2026-10-27)
+
+Art Director, data picks only (no code, no asset edits). Evidence `<O>` =
+`C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP26/ad1a/`
+(`out/` numbers, `mock/` mocks, `shots/` captures from :4174 at e860578, `tools/` scripts). Verdict: **tree slots PICKED** (7 slots, 2
+detours, every tab clear). **Girl x: NEEDS-DIRECTOR** (no x in 1556..1570 stays on stage).
+
+**Girl x (Q4): NEEDS-DIRECTOR at the pick; ruled GIRL_X 1552 (Q4a, see the hand-off block).**
+- GIRL_HALF = 14 world px. `world.girl` stand0 has an opaque box at art x 1..12 of 16 (origin 8): 7 art px left, 5 right, in every
+  era row. The girl never flips (`restFlip`). The 7 px left part is the lantern, 10-32 px above the feet; the boots reach 4 art px
+  (8 world px) left.
+- Rule (3) caps her. `usableX` keeps a left-wing x only up to machine left 1576 − `wingClearPx` 24 = **1552**. That holds in 16/18 e1,
+  29/29 s8 and 7/7 s9 states (`placeCast` at cycle 3, every S9 prefix plus S9 + crank servo; `out/probe-girl.txt`,
+  `out/probe-girl-edges.txt`). Every x from 1554 to 1570 returns `girl: null` in those states.
+- Rule (1) needs x ≥ 1538 + 8 + 14 = 1560. Rules (1) and (3) cannot both hold. Left of the scrap fails too: the s8 window is
+  1496..1552 and rule (2) needs x ≥ 1544.
+- AD proposal: **GIRL_X 1552** at e1, s8 and s9 ground (cycles 1-2 unchanged). It is on stage in all 54 probed states. Boots at 1544:
+  6 px clear of the scrap. The lantern ends at x 1538 (0 px gap in x) but sits 4 px above the 8 px scrap, so no pixel overlaps. 56 px
+  from the Inspector spot 1496; 14 px short of the machine edge. Other ways to keep a full 8 px: a girl-only wing clearance of 16 or
+  less (code in `worldPlacement.ts`, outside T7) gives 1560; or row `front` at 1538 (she stands in front of the scrap).
+- HUD: measured `#hud-panel` bottom in game px (UI 100 / 150): e1 196 / 298, s8 221 / 335, s9 with the AUTO-CRANK row 261 / 394, the
+  same at 720p and 1080p. Her head at 1552: e1 y 464, s8 592, s9 578. She clears the panel by at least 166 game px
+  (`shots/hud-*-150-*.png`, `out/probe-hud.json`).
+- Evidence: `mock/AD1a-girl-s8-before-after-MOCK-x4.png` (stand0 pasted on the s8 capture at 1538 and 1552),
+  `mock/girl-scrap-mock-1x.png`, `mock/girl-scrap-mock-x4.png` (1538, 1552, 1560 against the wing limit).
+
+**Tree slots (Q6): PICKED.**
+- Baseline: `edges.py` confirms the 7 N2 edges (`out/edges-baseline.txt`). The real-code probe (`buildTechTreeView`, 64 samples per
+  segment, under 4 px from a third node box, the T9 guard) finds 11 hits on exactly those 7 edges (`out/probe-tree-base.txt`).
+- Tab I: wornMotor (1,2) → (1,1), flywheel (3,0) → (3,1). Every tab I column is fixed by the requires chain (5 deep in 5 columns).
+  The edge clears only when both ends share a row and col 2 of that row is empty. This is the only 2-move layout among the 8 valid ones
+  (`out/search3-era1.txt`). wornMotor->flywheel becomes a straight run through the empty (2,1). Min col 0 and max col 4 stay (demo
+  centring).
+- Tab IV: echoCrank (2,0) → (4,0). harmonicCoil->echoCrank runs straight along row 0, and echoCrank->harmonicConvergence is an adjacent
+  S. The other 1-move fix (harmonicConvergence to (5,0)) would take the keystone off row 1 (`out/search3-era4.txt`).
+- Tab V: no layout without a detour exists. The search finds 0 layouts, even at 0 px clearance (`out/search-era5-thr.txt`).
+  nullChamber has 5 in-tab children, and a col-0 root in 3 rows reaches only 4 slots with a default curve. The 36 one-detour
+  layouts scramble the spine and add 5-6 crossings and 1-2 port ambiguities (`out/search3b-era5-det1-free.txt`). Row-gap detours
+  (the N2 route) always cross a diagonal edge inside a 14 px column gap, which reads as a junction (`mock/cand-c1-*`, `cand-c2-*`,
+  `cand-c4-*`). Pick: graviticAnchor (2,2) → (3,2), inversionCrank (2,0) → (4,0), mainsBackfeed (3,2) → (6,0), steamLance
+  (4,2) → (6,2). The row 1 spine, containmentRing and resonantSiphon stay.
+- DETOUR nullChamber->mainsBackfeed and nullChamber->steamLance use a new **outer-channel** path, not the N2 row-gap path. T9 adds it
+  in `edgePathAround` (`src/ui/techTreeView.ts`) for the DETOUR edges only. Let g = colGap / 2. yc = min node y − padding / 2 when the
+  target row is above the source; otherwise yc = max node bottom + padding / 2. d1 = sign(yc − y1), d2 = sign(yc − y2):
+  `M x1 y1 C x1+g y1, x1+g y1, x1+g y1+d1·g L x1+g yc−d1·g C x1+g yc, x1+g yc, x1+2g yc L x2−2g yc C x2−g yc, x2−g yc, x2−g yc−d2·g L x2−g y2+d2·g C x2−g y2, x2−g y2, x2 y2`.
+  Literals: nullChamber->mainsBackfeed =
+  `M 162 148 C 169 148, 169 148, 169 141 L 169 16 C 169 9, 169 9, 176 9 L 952 9 C 959 9, 959 9, 959 16 L 959 45 C 959 52, 959 52, 966 52`;
+  nullChamber->steamLance =
+  `M 162 148 C 169 148, 169 148, 169 155 L 169 280 C 169 287, 169 287, 176 287 L 952 287 C 959 287, 959 287, 959 280 L 959 251 C 959 244, 959 244, 966 244`.
+  The channels run in the outer padding, 9 px from the row boxes and from the canvas edge, where no other edge passes. Result: 0
+  crossings, 0 port ambiguity. The two vertical legs at x 169 share the nullChamber port with nullChamber->containmentRing and
+  ->resonantSiphon (one source), so they read as a bracket. Tab size is unchanged (1128 x 296).
+- Proof on the scratch copy `technologies.picked.ts` (`edges.py`, `depth.py`, `tools/report.py`) and the real-code probe with the
+  channel paths: every edge in tabs I-V clears every third node. Min L-inf per tab: I 7.5, II 4.6, III 4.6 (the two accepted same-row
+  detours, unchanged), IV 7.5, V 6.8 (channel legs beside containmentRing and resonantSiphon). 0 samples are within 4 px
+  (`out/probe-tree-picked.txt`). Of 54 edges, 38 are unchanged, 9 are better, and 7 are lower but still ≥ 7.5: handCrank->gearRatio
+  62 → 7.5, the others 158 → 62 (`out/edge-diff.txt`). Crossings 0 and port ambiguity 0 in every tab (`out/report-picked.txt`).
+- Constraints hold. Slots are unique per era. Max col and row per tab are unchanged: widths 812 / 970 / 1128 / 970 / 1128, height 296.
+  The requires graph and the list order are unchanged. Tab I min / max col stay 0 / 4. Tabs II and III are untouched, so store
+  shot 05 is unchanged.
+- T9 notes:
+  - `src/data/technologies.test.ts` has expected-def literals for the 7 moved techs.
+  - `DETOURED` in `src/ui/techTreeView.test.ts` gains the two channel edges. The injected era-II test sets its own tree slots, so the
+    pick does not affect it.
+  - Keep the guard at 4 px: the accepted same-row detours measure 4.6-4.7.
+- Evidence:
+  - `mock/AD1a-tab1-before-after.png`, `mock/AD1a-tab5-before-after.png`, `mock/AD1a-tab4-before-after.png`. Top: capture at
+    1920x1080 UI 100 (`shots/tree-tab*-1920x1080-100.png`). Middle: mock of today. Bottom: mock after. Red marks a point within 6 px
+    of a third node.
+  - Search logs `out/search*.txt`; tools `tools/treegeo.py`, `search3.py`, `report.py`, `treemock.py`, `apply.py`.
+
+```
+WP26-HANDOFF-BEGIN
+GIRL_X = 1552
+GIRL_HALF = 14
+SLOT flywheel 3 1
+SLOT wornMotor 1 1
+SLOT echoCrank 4 0
+SLOT graviticAnchor 3 2
+SLOT inversionCrank 4 0
+SLOT mainsBackfeed 6 0
+SLOT steamLance 6 2
+DETOUR nullChamber->mainsBackfeed
+DETOUR nullChamber->steamLance
+WP26-HANDOFF-END
+```
+GIRL_X = 1552: Director ruling Q4a (2026-10-27, recorded by the EM at the WP26 round 1 gate), the AD proposal above. Boots 6 px clear of the 1530 scrap, wing rule kept, cycles 1-2 unchanged. The AD2 audit checks it in the game; the plan's aim of 8 px clear is waived.
+
+### AD1b — servo arm N1 (2026-10-27)
+
+Art Director, recolour only (Director Q5). Evidence `<O>` =
+`C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP26/ad1b/`
+(`before/` and `after/` shot bursts with `shots.json`, `crops/` boards, `mock/` rule tries, `out/` gate report and contrast table,
+`orig/` the six PNGs as shipped at e860578, `tools/`). Verdict: **N1 FIXED** with the lit rim. No backing plate, no NEEDS-DIRECTOR.
+
+- Method: new `scripts/art/tiers/servo_rim.py` (idempotent, no arguments, writes in place).
+  - The rule runs per 48x48 frame: the static PNG, and each of the 80 frames of the rot sheet.
+  - An edge pixel (opaque, with a transparent 4-neighbour) whose outward normal faces the upper-left light (ART_BRIEF) becomes
+    iron lit `#7d8286`. Width: 1 art px. The shadow-side ink stays (selective outline).
+  - The normal is a Gaussian-weighted sum of the transparent offsets around the pixel (radius 3, sigma 1.25), so a RotSprite
+    staircase gets one normal per side. Try 1 used a per-step 4-neighbour test, and try 2 added a tie rule. Both gave a dotted,
+    zigzag rim on steep diagonals (`mock/try1-mk1-a.png`, `mock/try2-detail-x8.png`, frame 35). Try 3, the smoothed normal, ships
+    (`mock/try3-detail.png`, `mock/try3-sheet-a.png`, `-b.png`).
+  - In the terminator band (|cos| <= 0.2: the arm lies along the light, frames near 30 and 70) the up-facing side keeps the rim.
+  - The hub disc keeps a fixed upper-left highlight arc while it turns (the PART_TIERS rotating-part rule).
+- Files: MK I `era4/servo-arm.png` + `era4/rot/servo-arm-rot.png`; MK II `tiers/servo-arm-t2.png` + `tiers/rot/servo-arm-t2-rot.png`;
+  MK III `tiers/servo-arm-t3.png` + `tiers/rot/servo-arm-t3-rot.png`.
+  - 32 px change per static PNG and 2411 per rot sheet (27-32 in every one of the 80 frames), all to `#7d8286`. They were ink, or
+    `#5a5f63` where RotSprite had left a gap in the outline.
+  - Alpha is identical to e860578 in all six files. Canvas (48x48, 432x432) and the 80 frames are unchanged. Nothing was re-rotated.
+- Marks stay distinct. The rim mask depends on alpha only, and DERUST-FULL / POLISH map neither `#7d8286` nor ink. So MK II / MK III
+  are `palette_tiers.py` of the rimmed MK I: the script asserts it, and a rerun of `palette_tiers.py` into a scratch dir gives the
+  shipped t2 / t3 pixel for pixel. A second run of `servo_rim.py` changes 0 px and writes byte-identical files.
+- Gates:
+  - `python -I scripts/art/tiers/check_gates.py`: exit 0, 91 files, 0 failures (`out/gates.md`). servo-arm t2 changes 4 px vs MK I
+    (rot 212), t3 16 (rot 1424). Rust drop 100 %, rust kept 0.
+  - Palette: Rust Wasteland only (MK I 5 colours, MK II 4, MK III 3).
+  - `npx vitest run src/assets --maxWorkers=1`: 10 files, 210 tests pass.
+  - Decoded PNG total 54.46 MiB (sizes unchanged).
+  - PNG bytes: rot sheets 9671 / 4584 / 4373 → 4905 / 4896 / 4692 B; statics 304 / 273 / 259 → 331 / 319 / 290 B.
+- In-game proof, no build:
+  - The six PNGs were copied over the same-named files in `dist/assets/machine/` (no new file) and served by :4174.
+  - Fresh Playwright context, `?debug=1`, world quiet, output popups off, day held at 720.
+  - Framings s8 (generator entry), s9 and s13, at crankServo level 1 (s13: 3, still MK I), 4 and 7, at 1920x1080 and 1280x720.
+    Screen px per art px: s8 3 / 2, s9 2.25 / 1.5, s13 1.5 / 1.
+  - A 32-shot burst per state. Each shot is matched to its arm frame on screen: the alignment comes from the static servo base, then
+    the best of the 80 frames. 571 / 576 shots matched before, 575 / 576 after (score >= 0.6).
+- Contrast: WCAG relative-luminance contrast ratio, measured on screen at the arm silhouette. An arm edge pixel is compared with the
+  visible X-brace pixel just outside it (brace = the `support-frame.png` pixel at that spot, with the same colour on screen). Over all
+  matched frames; ranges are over the 18 states (`out/contrast-table.txt`, `out-measure-before.json`, `out-measure-after.json`).
+
+| pair | before | after |
+|---|---|---|
+| lit-side edge vs brace, median | 1.86 (ink vs `#3e4246`) | 2.61 (`#7d8286` vs `#3e4246`) |
+| lit-side edge vs brace, mean | 1.73-1.95 | 3.07-3.32 |
+| lit-side edge pairs >= 2:1 | 8-15 % | 85-90 % |
+| lit-side edge pairs <= 1.2:1 (merged) | 36-45 % | 10-15 % |
+| whole silhouette vs brace, pairs >= 2:1 | 9-16 % | 40-47 % |
+| whole silhouette vs brace, pairs <= 1.2:1 | 32-42 % | 20-28 % |
+| arm body vs brace, median | 1.57-1.66 | 1.57-1.66 (recolour only: the body is unchanged) |
+
+- Palette pairs:
+  - `#7d8286` vs brace body `#3e4246` 2.61, vs brace ink 4.84, vs the brace's own lit edge `#7d8286` 1.00 (the remaining merged
+    pairs).
+  - Before: ink vs `#3e4246` 1.86, ink vs ink 1.00. Body `#5a5f63` vs `#3e4246` 1.57.
+- Trade-off (accepted): where the lit side meets the bright bay (sand and sky seen through the frame), the edge goes from ink (about
+  6:1) to `#7d8286` (1.2-1.6:1). The body (2.0-2.7:1) and the shadow-side ink still carry that silhouette
+  (`crops/AD1b-up-frames-board.png`).
+- Read at 1:1: the arm now reads as a light-edged bar with a dark lower edge in every era, mark and size, including s13 at 720p
+  (1 screen px per art px). Before, only the base, lamp and rod read.
+- Evidence:
+  - Before / after with matched arm frames (same frame or ±1). Rows MK I / II / III; columns 1080 before, 1080 after, 720 before,
+    720 after. 1:1: `crops/AD1b-s8-1x.png`, `crops/AD1b-s9-1x.png`, `crops/AD1b-s13-1x.png`. Zoomed (nearest, tiles about 312 px):
+    `crops/AD1b-s8-zoom.png`, `crops/AD1b-s9-zoom.png`, `crops/AD1b-s13-zoom.png`. Picks: `crops/picks.json`.
+  - Arm up and sideways: `crops/AD1b-up-frames-board.png`. Full frames: `before/<state>-full.png`, `after/<state>-full.png`.
+  - Sprite level: `crops/AD1b-sprite-mk1-x7.png`, `-mk2-x7.png`, `-mk3-x7.png` (frames 0 / 20 / 30 / 50 / 60 / 70 on brace
+    `#3e4246`); `crops/AD1b-rot-mk1-after-sheet-a.png`, `-b.png` (all 80 MK I frames).
+- dist: `dist/assets/machine/` holds the rimmed PNGs until the EM gate rebuild, which makes dist authoritative. Nothing else in dist
+  was touched. AD2 re-checks the servo in eras II and IV on the rebuilt dist.
+
+### AD2 — WP26 audit, round 2 (2026-10-27)
+
+Art Director, in-game checks on the rebuilt build. Verdict: **RELEASE-READY**. All six AD2 checks pass. No fix, no asset change, no tuning
+(`ERA5_SKY_FADE_IN_MS` stays 24000). Four notes, none blocking.
+
+Build under audit: `dist` and `dist-demo` 08:56 (`index-CL98UPgq.js`, `index-26bM_dqJ.js`). Scratch rebuilds of the current tree give
+the same hashes, so dist is current. The six servo arm PNGs in `dist` and `dist-demo` are byte-equal to `public/`.
+- Previews: :4174 is the EM's `dist` preview, left running. :4177 served `dist-demo` for the demo checks only; it was started for them and
+  killed after (netstat empty).
+- One Playwright browser at a time. The sky screencast ran with `GPU_ARGS` (ANGLE D3D11, RTX 3060 Ti). rAF p50 16.7 ms, p95 <= 18.1 ms, so
+  the fades ran in real time with no headless clamp.
+
+Evidence root `<A>` =
+`C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP26/ad2/`.
+Contents:
+- `servo/`: 18 states, a 32-shot burst each.
+- `girl/`: cycle 3 framings, `girl.json`.
+- `sky/`: screencast clips with `clip.json`, `skycurves3.json`.
+- `finale/`, `showcase/`, `demo/`: fresh smoke runs.
+- `tree/`, `tree-demo/`: tab PNGs plus the DOM probe `tree-*.json`.
+- `store/`: `SIZES=1080,2160`.
+- `crops/`: boards.
+- `tools/`: `shots.mjs`, `measure.py`, `board2.py` (AD1b tools), `girl.mjs`, `girlcrop.py`, `sky.mjs`, `skycurve3.py`, `tree.mjs`,
+  `cmpdir.py`.
+
+| # | check | result | evidence |
+|---|---|---|---|
+| 1 | Servo arm vs X-brace: eras II (s8 / s9) and IV (s13), 1080p and 720p, MK I / II / III | **PASS**. 575 / 576 burst shots matched to their arm frame. Lit-side edge vs brace: median 2.61:1 in all 18 states (v0.10.0: 1.86); mean 3.06-3.33 (1.73-1.95); pairs >= 2:1 83-94 % (8-15 %); merged pairs <= 1.2:1 6-17 % (36-45 %). Whole silhouette >= 2:1: 40-48 % (9-16 %). The arm body is unchanged (median 1.57-1.66). At 1:1 the arm reads as a light-edged bar with a dark lower edge in every state, including s13 at 720p (1 screen px per art px). Same result as AD1b on the dist copy | `crops/AD2-servo-s8-1x.png`, `-s9-1x.png`, `-s13-1x.png`, `crops/AD2-servo-s8-1x-view2.png`, `crops/AD2-servo-s{8,9,13}-zoom.png` (columns: 1080 v0.10.0, 1080 rebuilt, 720 v0.10.0, 720 rebuilt; matched frames), `out-measure-ad2.json`, `crops/servo-picks.json` |
+| 2 | No figure on a scrap, cycle 3, e1 / s8 / s9 | **PASS**. Real cycle 3 run: S16, skip, BEGIN A NEW CYCLE x2, then S7 / S8 / S9 bought through the TECH INDEX. Girl at x 1552 (`ground`, `back`) in all three framings. Scraps: e1 1329 / 1421 / 1530, s8 1529, s9 1420 / 1529. Over 120 s of live world time per framing (1 s steps, settle off), no cast member came within 14 world px of a visible scrap: 0 / 360 samples. Ranges: Inspector 1448-1496, girl 1552 (stand0 / stand1 / lanternUp / tilt), Sensor 7 1384, dog and crow on the right wing. The boots clear the scrap by 6-7 world px (9-10 screen px at 1080p). The lantern hangs above the scrap end with no overlap. Settled frames at 1080p and 720p, UI 100 and 150: the girl is whole and clear of the HUD | `crops/AD2-girl-c3-before-after.png` (e1 v0.10.0 cycle 3 from WP23b AD4r5 vs WP26, same camera; s8 / s9 WP26), `crops/AD2-girl-cycle3-e1-s8-s9.png`, `girl/*-c3-*.png`, `girl/girl.json` |
+| 3 | Era V sky on a real-time screencast: no snap, no violet left in a new cycle | **PASS**. 60 fps CDP screencast; p = projection of the region colour on its own stage change (table below). Every rising stage ramps linearly over the designed time and never snaps: the largest single-frame step after a 5-frame median is 0.08-0.15 of the stage, which is 2-3 RGB levels (8-bit and JPEG quantisation). A snap would be >= 0.25. Glow stage 3 was bought inside the TECH INDEX, as in play: the tree covers the first 1.4 s, then the glow keeps rising from p 0.19 to 0.97 by 5.0 s, with no jump at the close. New cycle from the choice (confirm off): the white peaks at 0.80 s and clears by 2.34 s. After that the sky is the era I beige [141,128,111] in every frame to 9 s, and no frame of the white-out shows violet | `crops/AD2-sky-eraV-stages-strip.png`, `crops/AD2-sky-newcycle-strip.png`, `sky/*/clip.json`, `sky/skycurves3.json`, `sky/v4-after.png` |
+| 3b | Teaser and ShowcaseScene skies unchanged | **PASS**. `showcase.mjs` (fail [], errors []) vs the v0.10.0 §R run `<R2>/showcase`: 0.4-2.0 % of pixels, sky band <= 0.9 %, except `b_k41_5` (26 %). That frame varies by 28 % between pre-WP26 runs (WP24 val5 vs R2), so it is the survey-timing frame. Teaser frames `e_*` differ by 0.4-0.65 %. `demo.mjs` on :4177 (fail [], errors []) vs `<R2>/f4/demo`: teaser B1 / B2 differ by 15 % / 6.6 %, against 17 % / 12 % between the two v0.10.0 runs. The boards show the same sky | `crops/AD2-teaser-showcase-v0100-vs-wp26.png`, `showcase/`, `demo/` |
+| 4 | Finale A7 frames vs val6 (9b7f3f1) | **PASS**. Fresh `finale.mjs` (fail [], errors []): 26 of 29 frames differ by 0.01-2.1 % (animation phase), with the sky band <= 1 %. `k41_5` (23.5 %), `k45_2` (10 %) and `world-k38` (6.8 %) are the camera-survey and flock frames. They move by 12-17 %, 2-10 % and 1-7 % between pre-WP26 runs (val5, val6, R2). Same composition and the same restored sky | `crops/AD2-finale-val6-vs-wp26.png`, `finale/` |
+| 5 | TECH INDEX tabs I-V, 1080p; demo tabs I-II | **PASS**. DOM probe on the live tree (S15 save): each shown edge `path` sampled with `getPointAtLength` (>= 64 points per 100 px), L-inf distance to every shown node box except its own two ends. 54 edges, 0 samples under 4 px. Minimum per tab: I 7.6, II 4.6, III 4.6 (the two accepted same-row detours), IV 7.6, V 6.8 (the outer channels beside Containment Ring and Resonant Siphon). Demo build: fresh tab I 7.6, capped tabs I-II 7.6 / 4.6, tab III `FULL GAME` (disabled). Read at 1:1: tab I shows Worn Motor -> Flywheel as one straight run through the empty (2,1). Tab IV shows Harmonic Coil -> Echo Crank straight along row 0 and Echo Crank -> Convergence as a short S. Tab V: the two outer channels leave Null Chamber's port as a bracket with the Containment Ring / Resonant Siphon curves and turn into Mains Backfeed / Steam Lance. No crossing, and no line touches a box (N2) | `tree/full-tab{1..5}-1920x1080-100.png`, `tree/full-tab*-1920x1080-150.png`, `tree/full-tab*-1280x720-150.png`, `crops/AD2-tree-tab5-channels-x2.png`, `tree/tree-full.json`, `tree-demo/demo-fresh-tab1-1920x1080-100.png`, `tree-demo/demo-tab{1,2}-*.png`, `tree-demo/tree-demo.json` |
+| 6 | Store shots re-shot, `SIZES=1080,2160` | **PASS, approved**. `store-shots.mjs` into `<A>/store`: exit 0, 175 / 175 checks, fail [], errors [], missing []. Against the approved v0.10.0 set `<R2>/store-final2`, at both sizes: **05** (tab III) 0.00 %, pixel-identical (no tab III slot moved). **03** 1.7-2.2 %, animation only (no servo in the S9 list, cycle 1 cast). **06** 1.4-2.0 % and **07** 1.2-1.4 %: animation plus the servo arm rim. Both 06 and 07 carry the MK I servo (S13 buys crankServo x3), so rank 1 (07) changed too, not only 06. The rimmed arm reads at both sizes and nothing else moved: approved. `<A>/store/2160` is a valid upload set for STEAM_RELEASE §15 row 14 | `crops/AD2-store-06-07-servo-v0100-vs-wp26.png`, `store/1080/`, `store/2160/`, `store/store-shots.json`, `store/store-top5.json` |
+
+Era V sky stages (check 3; V1 = sky region 1920-px x 560-940, y 10-130; G1 = horizon glow at the left frame edge, behind the
+semi-transparent mountains):
+
+| stage (buy) | layer, alpha | design (24 s per unit) | t10 / t50 / t90 after the buy | p at 1 / 3 / 5 / 6 s | max step |
+|---|---|---|---|---|---|
+| nullChamber | violet 0 -> .25 | 6.0 s | 0.58 / 2.85 / 4.92 s | .17 / .47 / .92 / 1.0 | .083 |
+| lensArray | violet .25 -> .5 | 6.0 s | 0.05 / 2.87 / 5.60 s | .24 / .55 / .84 / .95 | .079 |
+| horizonField 1 | glow 0 -> .35 | 8.4 s | 0.96 / 4.16 / 8.03 s | .12 / .36 / .57 / .67 | .096 |
+| horizonField 5 | violet .5 -> .75 | 6.0 s | 0.26 / 2.98 / 5.52 s | .18 / .55 / .88 / 1.0 | .108 |
+| horizonField 10 | glow .35 -> .55 | 4.8 s | 0.67 / 2.46 / 4.16 s | .16 / .66 / 1.0 / 1.0 | .154 |
+| horizonField 20 (in the TECH INDEX) | glow .55 -> .75 | 4.8 s | tree open to 1.4 s, then .19 / .55 / .73 / .97 at 1.5 / 2.5 / 4.0 / 5.0 s | - | no jump at close |
+| skyAperture | violet .75 -> 1 | 6.0 s | 0.58 / 2.85 / 5.38 s | .17 / .50 / .82 / 1.0 | .084 |
+
+Tuning call (Q3): **keep `ERA5_SKY_FADE_IN_MS` 24000.**
+- A violet step takes 6 s. In play the buy happens inside the TECH INDEX, so after the player closes it, 3-5 s of the darkening is still
+  visible. It reads as the sky turning, not as a UI blink.
+- A longer fade (40 s = 10 s a step) would leave the sky at skyAperture well behind the lamp-out and the beam, which are the same
+  moment.
+- The smallest step (glow 0.2) takes 4.8 s, inside the 4 s floor.
+
+Notes (accepted, no fix):
+- **N1 (transient, pre-existing):** the s8 1080p UI 100 still was taken about 4 s after the generator buy while the camera was still
+  easing (cx 2199, settles at 2064). The cycle 3 girl at 1552 sat on the left frame edge (screen x -10..4) for that frame. Settled
+  frames show her whole at screen x 192 (1080p) and 128 (720p). The Inspector at 1472 shares the same pan. This is the WP23 era II
+  camera ease, not WP26.
+- **N2 (tab V reading):** the two outer channels run 13 px outside row 0 and row 2. With the shared left leg they frame the graph like a
+  border. They stay legible: the leg starts at Null Chamber's port, each end turns into its own node (Mains Backfeed, Steam Lance),
+  they cross nothing, and they touch no box. This is the AD1a pick; tab size unchanged.
+- **N3 (girl gap):** the Q4a waiver holds in game. 6-7 world px between the boots and the scrap end reads as clear ground at every size.
+  Before, the girl's left boot stood on the scrap (`crops/AD2-girl-c3-before-after.png`, top row).
+- **N4 (store set scope):** WP26.md AD2 lists 03, 05 and 06. 07 (rank 1) also changed, through the servo rim, and is approved with them.
+  The Director's §15 row 14 re-upload should take the whole 2160 store + alt set from one run (`<A>/store/2160`), not 06 alone.
+
+**Verdict: RELEASE-READY (WP26 round 2).** N1 servo rim, the cycle 3 girl stop, the slow era V sky, the tree slots and channels, and the
+store set all hold in the rebuilt build. No S1 / S2 open. Unchanged: finale, showcase, teaser, demo tree.
+
+**Director close (2026-10-27): ACCEPTED.** Q4a (girl x 1552, 6 px boots gap) confirmed. N4 done: the whole store set was re-shot on the
+v0.10.1 dist as `store-final3` (175/175 ok). Against this AD2 set, 05 is identical and the rest differ by animation phase only
+(0.97-2.13 % of pixels), same cast and order. STEAM_RELEASE §15 rows 11 and 14 PASS for v0.10.1. N1 (camera ease, pre-existing) and N2
+(tab V border reading) need no action.

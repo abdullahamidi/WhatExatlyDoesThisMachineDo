@@ -10,10 +10,9 @@ import { ASSET_MANIFEST } from '../assets/manifest';
 import { WORLD_FRAMES, WORLD_PLACEMENTS, WORLD_ROWS, WORLD_SHADOWS } from './livingWorld';
 import type { WorldSheetId } from './livingWorld';
 import {
-  WORLD_CHLADNI, WORLD_DOUBLE_EXPOSURE, WORLD_ERA_ENV, WORLD_ERA_LOOPS, WORLD_ERA_LOOP_SHEET, WORLD_ERA_RULES, WORLD_GIRL, WORLD_LAMP,
+  WORLD_CHLADNI, WORLD_DOUBLE_EXPOSURE, WORLD_ERA_ENV, WORLD_ERA_LOOPS, WORLD_ERA_RULES, WORLD_GIRL, WORLD_LAMP,
   WORLD_MOTES_BY_ERA, WORLD_PAGES, WORLD_PUDDLE, WORLD_SCRAPS, WORLD_SENSOR, WORLD_SPROUT, WORLD_TRACES, WORLD_VENTS, WORLD_VIRGA, WORLD_WINDOWS,
 } from './worldEras';
-import type { WorldEraLoopId } from './worldEras';
 import { WORLD_ENDING, WORLD_POSTGAME_LOOP } from './worldEnding';
 import type { PostgameSegment } from './worldEnding';
 import { PIXEL_SCALE } from './world';
@@ -196,32 +195,16 @@ describe('worldEras: tech rules', () => {
     expect(WORLD_SHADOWS.offRule.minLevel).toBe(5);
   });
 
-  it('keeps every era loop on its sheet (frames exist, the id sets match)', () => {
-    expect(Object.keys(WORLD_ERA_LOOP_SHEET).sort()).toEqual(Object.keys(WORLD_ERA_LOOPS).sort());
+  it('keeps crowHigh as the only era loop (the others were pruned in WP26)', () => {
+    expect(Object.keys(WORLD_ERA_LOOPS)).toEqual(['crowHigh']);
   });
 });
 
 describe('worldEras: loops', () => {
-  const IDS = Object.keys(WORLD_ERA_LOOPS) as WorldEraLoopId[];
-
-  it.each(IDS)('%s uses only frames that exist on its loop sheet', (id) => {
-    const sheet = WORLD_ERA_LOOP_SHEET[id];
-    const missing = WORLD_ERA_LOOPS[id].filter((step) => !onSheet(sheet, step.frame)).map((step) => `${sheet}:${step.frame}`);
+  it('plays crowHigh as one step on a frame that exists on the crow sheet', () => {
+    const missing = WORLD_ERA_LOOPS.crowHigh.filter((step) => !onSheet('crow', step.frame)).map((step) => `crow:${step.frame}`);
     expect(missing).toEqual([]);
-    expect(WORLD_ERA_LOOPS[id].length).toBeGreaterThan(0);
-  });
-
-  it('keeps the loop lengths from the brief', () => {
-    const lengths = Object.fromEntries(IDS.map((id) => [id, WORLD_ERA_LOOPS[id].length]));
-    expect(lengths).toEqual({
-      inspectorVent: 1, dogShake: 12, dogStill: 1, dogRoam: 12, crowPerch: 8, crowStutterV: 4, crowHigh: 1, girlSway: 8, girlStill: 1,
-    });
-  });
-
-  it('closes the roaming and swaying loops on dx 0 so the seam is clean', () => {
-    expect(WORLD_ERA_LOOPS.dogRoam[0]?.dx).toBe(0);
-    expect(WORLD_ERA_LOOPS.dogRoam.at(-1)?.dx).toBe(0);
-    expect(WORLD_ERA_LOOPS.dogRoam.every((step) => step.dx >= 0 && step.dx <= 16)).toBe(true);
+    expect(WORLD_ERA_LOOPS.crowHigh).toHaveLength(1);
   });
 });
 

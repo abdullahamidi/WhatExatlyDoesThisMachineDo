@@ -59,7 +59,9 @@ export interface Synth {
   playSting(): void; // AUDIO.sting 3 notes
   setHum(hz: number, gain: number): void; // one persistent oscillator, ramped; gain 0 = silent
   scheduleGearTicks(ticksPerSecond: number, gain?: number): void; // lookahead scheduling; 0 clears/resets the schedule; gain (0..) scales AUDIO.gearTick.gain, default 1
-  setWind(on: boolean): void; // looped noise -> lowpass -> gain, slow gust LFO on the gain
+  setWind(on: boolean): void; // looped noise -> lowpass -> gain, slow gust LFO on the gain; equals setWindLevel(on ? AUDIO.wind.gain : 0, on)
+  setWindLevel(gain: number, lfo: boolean): void; // wind bed gain (ramped) and gust LFO depth on / off (WP26); gain 0 = silent
+  setRain(gain: number, hz: number): void; // AUDIO.rain: looped noise -> bandpass(hz, AUDIO.rain.q) -> gain; nodes are built on the first gain > 0; gain 0 = silent
   setMains(gain: number): void; // AUDIO.mains 50 Hz + 100 Hz pair through a lowpass; gain 0 = silent
   scheduleArcs(perSecond: number): void; // AUDIO.arc crackle bursts; 0 clears/resets the schedule; capped at arc.maxRate
   playRelay(): void; // AUDIO.relay two square clicks (Era II purchase)
@@ -120,6 +122,12 @@ interface MainsNodes {
 }
 
 interface BoilerNodes {
+  source: AudioBufferSourceNode;
+  filter: BiquadFilterNode;
+  gain: GainNode;
+}
+
+interface RainNodes {
   source: AudioBufferSourceNode;
   filter: BiquadFilterNode;
   gain: GainNode;
@@ -424,6 +432,28 @@ function ensureBoiler(context: AudioContext, out: AudioNode, cache: BoilerNodes 
   filter.connect(gain);
   gain.connect(out);
   source.start();
+  return { source, filter, gain };
+}
+
+/**
+ * Rain bed (WP26): one persistent looped noise source through a bandpass at hz, then the level gain. The loop starts at a
+ * random offset so the rain does not mirror the wind, which uses the same noise buffer.
+ */
+function ensureRain(context: AudioContext, out: AudioNode, cache: RainNodes | null, noise: AudioBuffer): RainNodes {
+  if (cache) return cache;
+  const source = context.createBufferSource();
+  source.buffer = noise;
+  source.loop = true;
+  const filter = context.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = AUDIO.rain.hzMin;
+  filter.Q.value = AUDIO.rain.q;
+  const gain = context.createGain();
+  gain.gain.value = 0;
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(out);
+  source.start(0, Math.random() * noise.duration);
   return { source, filter, gain };
 }
 
@@ -1035,6 +1065,7 @@ export function createSynth(context: AudioContext): Synth {
   let wind: WindNodes | null = null;
   let mains: MainsNodes | null = null;
   let boiler: BoilerNodes | null = null;
+  let rain: RainNodes | null = null;
   let pad: PadNodes | null = null;
   let servo: ServoNodes | null = null;
   let drone: DroneNodes | null = null;
@@ -1122,6 +1153,17 @@ export function createSynth(context: AudioContext): Synth {
     } catch (err) {
       warnOnce(name, err);
     }
+  }
+
+  /**
+   * Wind bed on `out`: gain ramped to amp, and the gust LFO depth on (amp x gustDepth) or off. The LFO stops with the
+   * wind, or it would push the gain below zero while "off".
+   */
+  function applyWind(out: AudioNode, amp: number, lfo: boolean): void {
+    wind = ensureWind(context, out, wind, getNoise());
+    const now = context.currentTime;
+    wind.gain.gain.setTargetAtTime(amp, now, PARAM_TIME_CONSTANT_S);
+    wind.depth.gain.setTargetAtTime(lfo ? amp * AUDIO.wind.gustDepth : 0, now, PARAM_TIME_CONSTANT_S);
   }
 
   function getNoise(): AudioBuffer {
@@ -1347,13 +1389,25 @@ export function createSynth(context: AudioContext): Synth {
     },
 
     setWind(on: boolean): void {
-      run('setWind', 'ambient', (out) => {
-        const w = AUDIO.wind;
-        wind = ensureWind(context, out, wind, getNoise());
+      run('setWind', 'ambient', (out) => applyWind(out, on ? AUDIO.wind.gain : 0, on));
+    },
+
+    setWindLevel(gain: number, lfo: boolean): void {
+      run('setWindLevel', 'ambient', (out) => {
+        const amp = Number.isFinite(gain) && gain > 0 ? gain : 0;
+        applyWind(out, amp, lfo);
+      });
+    },
+
+    setRain(gain: number, hz: number): void {
+      run('setRain', 'ambient', (out) => {
+        const amp = Number.isFinite(gain) && gain > 0 ? gain : 0;
+        if (rain === null && amp === 0) return; // silent and never started: no nodes needed
+        rain = ensureRain(context, out, rain, getNoise());
         const now = context.currentTime;
-        wind.gain.gain.setTargetAtTime(on ? w.gain : 0, now, PARAM_TIME_CONSTANT_S);
-        // The LFO must stop too, or it would push the gain below zero while "off".
-        wind.depth.gain.setTargetAtTime(on ? w.gain * w.gustDepth : 0, now, PARAM_TIME_CONSTANT_S);
+        const hzNow = Number.isFinite(hz) && hz >= 20 ? hz : AUDIO.rain.hzMin;
+        rain.filter.frequency.setTargetAtTime(hzNow, now, AUDIO.rain.smoothS);
+        rain.gain.gain.setTargetAtTime(amp, now, AUDIO.rain.smoothS);
       });
     },
 
@@ -1684,6 +1738,10 @@ export function createSynth(context: AudioContext): Synth {
         boiler?.source.disconnect();
         boiler?.filter.disconnect();
         boiler?.gain.disconnect();
+        rain?.source.stop();
+        rain?.source.disconnect();
+        rain?.filter.disconnect();
+        rain?.gain.disconnect();
         for (const o of pad?.oscs ?? []) o.stop();
         pad?.lfo.stop();
         pad?.gain.disconnect();

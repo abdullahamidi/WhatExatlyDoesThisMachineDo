@@ -756,6 +756,7 @@ export class LivingWorldDirector implements WorldFinalePort {
   onSleep(): void {
     this.onScreenSeq += 1;
     this.asleep = true;
+    this.feedback.worldWeather.live = false;
     if (this.asleepSinceWall === null) this.asleepSinceWall = performance.now();
     this.silence = 'asleep';
     this.endAll(true, 'asleep');
@@ -765,6 +766,7 @@ export class LivingWorldDirector implements WorldFinalePort {
   onWake(): void {
     this.onScreenSeq += 1;
     this.asleep = false;
+    this.feedback.worldWeather.live = this.clocksOut !== null && this.applied !== null && this.applied.state.visible;
     if (this.asleepSinceWall !== null) {
       this.toastGate.elapse(performance.now() - this.asleepSinceWall);
       this.asleepSinceWall = null;
@@ -792,6 +794,7 @@ export class LivingWorldDirector implements WorldFinalePort {
     this.rows.back.destroy();
     this.rows.front.destroy();
     this.onScreenSeq += 1;
+    this.feedback.worldWeather.live = false;
     this.destroyed = true;
   }
 
@@ -1332,6 +1335,13 @@ export class LivingWorldDirector implements WorldFinalePort {
     const t1 = performance.now();
     this.clockTimings.record(t1 - t0);
     this.clocksOut = out;
+    // WP26 C1: the weather readout gameAudio reads (four writes, no allocation). wind is the raw clock wind: reduced motion does not zero it
+    // (ambient() does, for the picture). The virga values are what the atmos layer draws (tween x era). Light frames keep the last values.
+    const weather = this.feedback.worldWeather;
+    weather.live = this.applied !== null && this.applied.state.visible;
+    weather.wind = out.ambient.wind;
+    weather.virgaAlpha = out.tween.virga.alpha * out.ambient.virgaAlpha;
+    weather.virgaSpeed = out.tween.virga.speed * out.ambient.virgaSpeed;
     if (out.tintSnap) this.tintSnapPending = true;
     // A vent puff that rose glints the puddle once (WORLD_REACT ventPuff routes to props.puddleRing; the queued cue reaches the cast).
     if (out.ventPuffs > this.ventSeen) this.props.puddleRing();

@@ -37,6 +37,8 @@ function createFakeSynth() {
     setHum: vi.fn(),
     scheduleGearTicks: vi.fn(),
     setWind: vi.fn(),
+    setWindLevel: vi.fn(),
+    setRain: vi.fn(),
     setMains: vi.fn(),
     scheduleArcs: vi.fn(),
     playRelay: vi.fn(),
@@ -147,6 +149,7 @@ function createFeedback(): GameFeedback {
     partEvolved: createSignal<PartEvolvedEvent>(),
     partTorqued: createSignal<PartTorquedEvent>(),
     worldSound: createSignal<WorldSound>(),
+    worldWeather: { live: false, wind: 0, virgaAlpha: 0, virgaSpeed: 0 },
   };
 }
 
@@ -451,5 +454,150 @@ describe('gameAudio world sounds', () => {
     clearSynthCalls();
     feedback.worldSound.emit({ kind: 'ring' });
     expect(fake.playRing).not.toHaveBeenCalled();
+  });
+});
+
+describe('gameAudio weather (WP26)', () => {
+  it('no live readout: the v0.10.0 wind (full gain, gust LFO) and no rain', () => {
+    const { tick } = buildRig();
+    tick();
+    expect(lastNumber(fake.setWindLevel, 0)).toBeCloseTo(AUDIO.wind.gain, 12);
+    expect(lastArgs(fake.setWindLevel)?.[1]).toBe(true);
+    expect(fake.setRain.mock.calls.every((args) => args[0] === 0)).toBe(true);
+  });
+
+  it('live, still air: the wind keeps the floor and loses the LFO', () => {
+    const { feedback, tick } = buildRig();
+    Object.assign(feedback.worldWeather, { live: true, wind: 0, virgaAlpha: 0, virgaSpeed: 0 });
+    tick();
+    expect(lastNumber(fake.setWindLevel, 0)).toBeCloseTo(AUDIO.wind.gain * AUDIO.wind.floor, 12);
+    expect(lastArgs(fake.setWindLevel)?.[1]).toBe(false);
+  });
+
+  it('live, reference wind: the wind plays at full gain without the LFO', () => {
+    const { feedback, tick } = buildRig();
+    Object.assign(feedback.worldWeather, { live: true, wind: AUDIO.wind.refWind, virgaAlpha: 0, virgaSpeed: 0 });
+    tick();
+    expect(lastNumber(fake.setWindLevel, 0)).toBeCloseTo(AUDIO.wind.gain, 12);
+    expect(lastArgs(fake.setWindLevel)?.[1]).toBe(false);
+  });
+
+  it('the wind follows the readout by more than one step; a change under one step and an unchanged readout push nothing', () => {
+    const { feedback, tick } = buildRig();
+    Object.assign(feedback.worldWeather, { live: true, wind: 0, virgaAlpha: 0, virgaSpeed: 0 });
+    tick();
+    const before = fake.setWindLevel.mock.calls.length;
+    feedback.worldWeather.wind = AUDIO.wind.refWind;
+    tick();
+    expect(fake.setWindLevel.mock.calls.length).toBe(before + 1);
+    expect(lastNumber(fake.setWindLevel, 0)).toBeCloseTo(AUDIO.wind.gain, 12);
+    const windCalls = fake.setWindLevel.mock.calls.length;
+    const rainCalls = fake.setRain.mock.calls.length;
+    tick();
+    expect(fake.setWindLevel.mock.calls.length).toBe(windCalls);
+    expect(fake.setRain.mock.calls.length).toBe(rainCalls);
+    feedback.worldWeather.wind = 0.999; // 0.05 x 0.9993: still the same weatherStep.gain bucket
+    tick();
+    expect(fake.setWindLevel.mock.calls.length).toBe(windCalls);
+  });
+
+  it('era III: the rain follows the virga and its pitch rises with the speed; a sub-step change pushes nothing', () => {
+    const { feedback, tick } = buildRig({ boiler: 1 });
+    Object.assign(feedback.worldWeather, { live: true, wind: 1, virgaAlpha: 0.7, virgaSpeed: 1 });
+    tick();
+    expect(lastNumber(fake.setRain, 0)).toBeCloseTo(AUDIO.rain.gain * AUDIO.bedTrim.rain[2], 12);
+    expect(lastNumber(fake.setRain, 1)).toBeCloseTo(AUDIO.rain.hzMax, 9);
+    const rainCalls = fake.setRain.mock.calls.length;
+    feedback.worldWeather.virgaAlpha = 0.699; // 0.03 x 0.9986: same rain step, same pitch step
+    tick();
+    expect(fake.setRain.mock.calls.length).toBe(rainCalls);
+    feedback.worldWeather.virgaSpeed = 0;
+    tick();
+    expect(lastNumber(fake.setRain, 0)).toBe(0);
+  });
+
+  it('era IV: no rain even with full inputs (the bed is trimmed to 0)', () => {
+    const { feedback, audio, tick } = buildRig({ resonatorSpire: 1 });
+    Object.assign(feedback.worldWeather, { live: true, wind: 1, virgaAlpha: 0.7, virgaSpeed: 1 });
+    tick();
+    expect(lastNumber(fake.setRain, 0)).toBe(0);
+    expect(audio.stats().ambient?.era).toBe(4);
+    expect(audio.stats().ambient?.rainGain).toBe(0);
+  });
+
+  it('mute: wind and rain go silent at once and the readout reads 0; unmute pushes the live levels at once', () => {
+    const { session, feedback, audio, tick } = buildRig({ boiler: 1 });
+    Object.assign(feedback.worldWeather, { live: true, wind: 0, virgaAlpha: 0.7, virgaSpeed: 1 });
+    tick();
+    session.updateSettings({ muted: true });
+    expect(lastArgs(fake.setWind)).toEqual([false]);
+    expect(lastNumber(fake.setRain, 0)).toBe(0);
+    tick();
+    expect(audio.stats().ambient?.windGain).toBe(0);
+    expect(audio.stats().ambient?.rainGain).toBe(0);
+    clearSynthCalls();
+    session.updateSettings({ muted: false });
+    expect(lastArgs(fake.setWind)).toEqual([true]);
+    expect(lastNumber(fake.setWindLevel, 0)).toBeCloseTo(AUDIO.wind.gain * AUDIO.wind.floor, 12);
+    expect(lastArgs(fake.setWindLevel)?.[1]).toBe(false);
+    expect(lastNumber(fake.setRain, 0)).toBeCloseTo(AUDIO.rain.gain * AUDIO.bedTrim.rain[2], 12);
+  });
+
+  it('windStop: wind and rain go silent and later ticks push neither', () => {
+    const { session, feedback, audio, tick } = buildRig({ finalAlignment: 1 });
+    expect(session.purchase('primaryFunction').ok).toBe(true);
+    expect(session.state.ending.phase).toBe('sequence');
+    Object.assign(feedback.worldWeather, { live: true, wind: 1, virgaAlpha: 0.7, virgaSpeed: 1 });
+    tick();
+    clearSynthCalls();
+    feedback.finaleBeat.emit('windStop');
+    expect(lastArgs(fake.setWind)).toEqual([false]);
+    expect(lastNumber(fake.setRain, 0)).toBe(0);
+    clearSynthCalls();
+    tick();
+    tick();
+    expect(fake.setWindLevel).not.toHaveBeenCalled();
+    expect(fake.setRain).not.toHaveBeenCalled();
+    expect(audio.stats().ambient?.windGain).toBe(0);
+    expect(audio.stats().ambient?.rainGain).toBe(0);
+  });
+
+  it('choice and postgame: the gate is closed like windStop, so the wind and rain stay silent', () => {
+    const { session, feedback, audio, tick } = buildRig({ finalAlignment: 1 });
+    expect(session.purchase('primaryFunction').ok).toBe(true);
+    Object.assign(feedback.worldWeather, { live: true, wind: 1, virgaAlpha: 0.7, virgaSpeed: 1 });
+    expect(session.finishEndingSequence()).toBe(true);
+    clearSynthCalls();
+    tick();
+    expect(lastArgs(fake.setWind)).toEqual([false]);
+    expect(lastNumber(fake.setRain, 0)).toBe(0);
+    expect(audio.stats().ambient?.windGain).toBe(0);
+    clearSynthCalls();
+    expect(session.keepRunning()).toBe(true);
+    tick();
+    expect(fake.setWindLevel).not.toHaveBeenCalled();
+    expect(fake.setRain).not.toHaveBeenCalled();
+    expect(audio.stats().ambient?.windGain).toBe(0);
+  });
+
+  it('the readout carries the five weather fields', () => {
+    const { feedback, audio, tick } = buildRig({ boiler: 1 });
+    Object.assign(feedback.worldWeather, { live: true, wind: 1, virgaAlpha: 0.7, virgaSpeed: 1 });
+    tick();
+    expect(audio.stats().ambient).toMatchObject({ live: true, windLfo: false, rainHz: AUDIO.rain.hzMax });
+    expect(audio.stats().ambient?.windGain).toBeCloseTo(AUDIO.wind.gain, 12);
+    expect(audio.stats().ambient?.rainGain).toBeCloseTo(AUDIO.rain.gain * AUDIO.bedTrim.rain[2], 12);
+  });
+
+  it('dispose: no wind or rain call after it', () => {
+    const { audio, feedback, tick } = buildRig({ boiler: 1 });
+    Object.assign(feedback.worldWeather, { live: true, wind: 1, virgaAlpha: 0.7, virgaSpeed: 1 });
+    tick();
+    audio.dispose();
+    clearSynthCalls();
+    tick();
+    expect(fake.setWind).not.toHaveBeenCalled();
+    expect(fake.setWindLevel).not.toHaveBeenCalled();
+    expect(fake.setRain).not.toHaveBeenCalled();
   });
 });

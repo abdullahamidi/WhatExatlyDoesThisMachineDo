@@ -140,7 +140,7 @@ export class WorldScene extends Phaser.Scene {
   create(): void {
     // First statement: its session 'reset' subscription must run before any consumer's (see createDisplaySource).
     const display = createDisplaySource(this.ctx.session);
-    const background = new ParallaxBackground(this, this.ctx.session.state.techLevels);
+    const background = new ParallaxBackground(this, this.ctx.session.state.techLevels, { slowFadeIn: true });
     this.background = background;
     const pylonLines = PYLON_FEEDS.map(
       (feed) => new PylonLine(this, this.ctx.session.state.techLevels, feed, () => this.machineView?.isAssembling(feed.component) === true),
