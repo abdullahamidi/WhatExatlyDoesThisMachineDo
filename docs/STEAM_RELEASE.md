@@ -426,65 +426,71 @@ Evidence per program decision D8 (docs/plan/STEAM_DEMO_PROGRAM.md). Upload steps
 
 | # | D8 item | Evidence | Status |
 |---|---|---|---|
-| 1 | Pure full-run e2e | `src/simulation/fullRun.e2e.test.ts` (paths K and N, codec round trip, cycle 2): 9 pass (§R 2026-10-25) | PASS |
-| 2 | Save compat matrix (incl. pre-legacy save) | `src/persistence/compat.test.ts` + `src/persistence/fixtures/` (10 rows): 71 pass, 17 skip (conditional per-row skips, same count as baseline) (§R 2026-10-25) | PASS |
-| 3 | Balance sign-off | `src/simulation/signoff.sim.test.ts` (A 22:06 / 60:23 / 110:36 / 166:30 / 249:31; B 264:00; C 428:30; D 289:30 active): 15 pass, 0 fail (§R 2026-10-25) | PASS |
-| 4 | Demo cap timings | `src/simulation/demoCap.sim.test.ts` (A 60:23, B 72:52, N 98:29, C 148:28): 11 pass, 0 fail (§R 2026-10-25) | PASS |
-| 5 | Browser e2e, full | `scripts/smoke/e2e-full.mjs` on dist, port 4173: `fail []`, `errors []`, 53 results, 1m51s (§R 2026-10-25) | PASS |
-| 6 | Browser e2e, demo | `scripts/smoke/demo.mjs` (incl. demo-cases C-F, keys A-G) on `dist-demo`, port 4178: `fail []`, `errors []`, 54 results. `world.mjs` demo: `fail []`, 68 checks, G_cost 0.2317 ok (demo case G sampled with the world asleep; not a cost reading; G_cost PENDING quiet-PC). `tiers.mjs` demo: `fail []`, 27 checks, FG_skipped_demo recorded (§R 2026-10-25) | PASS |
-| 7 | Accessibility | `scripts/smoke/a11y.mjs` (`fail []`, `deferred []`, `errors []`); `scripts/smoke/ux.mjs` (`?debug=1`, case M ok; `fail []`, `errors []`) (§R 2026-10-25) | PASS |
-| 8 | Resolutions 1280x720, 1280x800, 1920x1080, 2560x1440, 3440x1440 | `scripts/smoke/resolutions.mjs`: `fail []`, `errors []`, 119 checks over 5 viewports x UI 100/150, plus title rows (§R 2026-10-25) | PASS |
-| 9 | Soak 30–60 min | v0.9.0 (ad129ce / 3219580): `SOAK_MIN=60 SOAK_GPU=1 scripts/smoke/soak.mjs` on main ad129ce: 60 min, 121 samples, heap 91.5 → 92.7 MB (slope 0.01 MB/min), display objects 74 flat, DOM growth 0; see below | PENDING (quiet-PC re-run for v0.10.0; v0.9.0 PASS) |
-| 10 | Quiet-machine GPU perf (frame p95 ≤ 17 ms) | v0.9.0 (ad129ce / 3219580): `PERF_GPU=1 scripts/smoke/perf.mjs`, median of 3 (`scripts/perf/perf-median.mjs`): frame p95 16.8 ms, post-purchase p95 16.7 ms (RTX 3060 Ti, D3D11); see below | PENDING (quiet-PC re-run for v0.10.0; v0.9.0 PASS) |
-| 11 | Final Art Director audit (incl. 1080p, Deck 1280x800) | `docs/plan/ART_AUDIT.md` "WP16b-3 — final release audit" (1920x1080, 2560x1440, 3440x1440, 1280x800 UI 100/150, 1280x720 UI 100/150; full + demo). Row 11 sign-off in `docs/plan/ART_AUDIT.md` "## R — store set": in-game PASS from WP22 round 5, WP23a AD2f and WP23b AD4 round 5. AD §R 2026-10-25 (store set, row 14): verdict FIXES REQUIRED, one smoke-script fix (F1), no asset, data or game change. Release sign-off NOT given until F1 is fixed and the store set is re-shot. | PENDING (AD FIXES REQUIRED, F1) |
-| 12 | ASSET_GUIDE refresh + guard | `src/assets/assetGuide.test.ts` (7 pass), `docs/ASSET_GUIDE.md` (ASSET_GUIDE_OUT block, 39049 bytes, verbatim) (§R 2026-10-25) | PASS |
-| 13 | Docs | `README.md` (0.10.0), `CHANGELOG.md` (0.10.0 entry), this file section 10/15, `docs/GAME_SPEC.md` section 18.3, `scripts/smoke/README.md`. Versions 0.10.0 in `package.json` and `desktop/package.json`; shell title `v0.10.0 · SAVE v2`. DOC-S15 fixed in this pass: stale rows 9/10 and Packaged builds (§R 2026-10-25) | PASS |
-| 14 | Store screenshots (3840x2160, HUD-free) | `scripts/smoke/store-shots.mjs` + `store-top5.json` (plate cap `RES?OR?`, `no_spoiler` checks). §R 2026-10-25 run, SIZES 1080 and 2160, 38 PNG: exit 0, `fail []`, `errors []`, 115/115 checks ok; 28 `_no_spoiler` and 8 `_plate_cap` checks true; `store_top5_complete` true, missing []; no RESTORE text in any store or alt frame. Order: 1 `07-era5-ruined-clean`, 2 `06-era4-spire-hud`, 3 `03-era2-generator-hud`, 4 `05-tree-era3-hud`, 5 `09-postgame-portrait-clean`; alt `04-era3-boiler-hud`. AD F1 (S2): living-world cast framed wrong in 03, 04, 06, 07: cast left on the previous framing's spots (buys made with the TECH INDEX closed). Not store-ready until re-shot. | FIXES REQUIRED (AD F1); PENDING re-shoot |
-| 15 | Bundle budget, full + demo | `node scripts/perf/bundle-budget.mjs` and `… dist-demo`. Full: app 483.2/500, lazy world 116.6/120, css 41.0/45, phaser 1481.8/1500, public assets 1776.4/8000. Demo: app 483.8, lazy world 116.6, css 43.8/45, phaser 1481.8, assets 1776.4. Both PASS (§R 2026-10-25) | PASS |
+| 1 | Pure full-run e2e | `src/simulation/fullRun.e2e.test.ts` (paths K and N, codec round trip, cycle 2): 9 pass (§R 2026-10-27) | PASS |
+| 2 | Save compat matrix (incl. pre-legacy save) | `src/persistence/compat.test.ts` + `src/persistence/fixtures/` (10 rows): 71 pass, 17 skip (conditional per-row skips, same count as baseline) (§R 2026-10-27) | PASS |
+| 3 | Balance sign-off | `src/simulation/signoff.sim.test.ts` (WP25 passive-first: A 22:07 / 61:03 / 110:41 / 167:16 / 250:11; B 267:00; C 307:30, also gated ≤ 360 min; D 240:30 active, wall 1200:30; max purchase gap A/B/C/D 393/240/240/300 s): 16 pass, 0 fail (§R 2026-10-27) | PASS |
+| 4 | Demo cap timings | `src/simulation/demoCap.sim.test.ts` (A 61:03, B 71:56, N 72:28, C 86:07, P1d 73:42): 13 pass, 0 fail (§R 2026-10-27) | PASS |
+| 5 | Browser e2e, full | `scripts/smoke/e2e-full.mjs` on dist, port 4173: `fail []`, `errors []`, 53 results, 1m19s; re-run after F4: `fail []`, `errors []`, 53 results, 1m18s (§R 2026-10-27) | PASS |
+| 6 | Browser e2e, demo | `scripts/smoke/demo.mjs` (incl. demo-cases C-F, keys A-G) on `dist-demo`, port 4178: `fail []`, `errors []`, 54 results. `world.mjs` demo: `fail []`, `errors []`, 122 checks (83 `skipped` by design), `N_demo_hold` ok; its G_cost 0.2865 was sampled with the world asleep, not a cost reading (full-build G_cost in Gate runs). `tiers.mjs` demo: `fail []`, 27 checks, FG_skipped_demo recorded. `economy.mjs` demo: `fail []`, 17 checks, `G_output_cost` 0.0077 ms. Re-run after F4: `demo.mjs` `fail []`, `errors []`, 54 results (§R 2026-10-27) | PASS |
+| 7 | Accessibility | `scripts/smoke/a11y.mjs` (`?debug=1`): `fail []`, `deferred []`, `errors []`, 107 results (25 `inactive` = disabled tabs, 1 `indeterminate` = title version). `scripts/smoke/ux.mjs`: `fail []`, `errors []`, 65 results, case M ok (§R 2026-10-27) | PASS |
+| 8 | Resolutions 1280x720, 1280x800, 1920x1080, 2560x1440, 3440x1440 | `scripts/smoke/resolutions.mjs`: `fail []`, `errors []`, 118 checks over 5 viewports x UI 100/150, bubble checks and title rows (§R 2026-10-27) | PASS |
+| 9 | Soak 30–60 min | `SOAK_MIN=60 SOAK_GPU=1 scripts/smoke/soak.mjs` on dist (code d0625bf), quiet PC: 60 min, 121 samples, `fail []`, `errors []`; heap 99.0 → 100.9 MB (slope 0.02 MB/min), display objects 80 flat, DOM growth 0; see below (§R 2026-10-27) | PASS |
+| 10 | Quiet-machine GPU perf (frame p95 ≤ 17 ms) | `PERF_GPU=1 scripts/smoke/perf.mjs` on dist (code d0625bf), median of 3 full runs (`scripts/perf/perf-median.mjs`): frame p95 16.8 ms, post-purchase p95 16.8 ms (RTX 3060 Ti, D3D11), `fail []`; see below (§R 2026-10-27) | PASS |
+| 11 | Final Art Director audit (incl. 1080p, Deck 1280x800) | `docs/plan/ART_AUDIT.md` "WP16b-3 — final release audit" (1920x1080, 2560x1440, 3440x1440, 1280x800 UI 100/150, 1280x720 UI 100/150; full + demo). In game PASS: WP22 round 5, WP23a AD2f, WP23b AD4 round 5, WP24 AD2 round 2, WP25 AD1 round 2. Store set: `docs/plan/ART_AUDIT.md` "## R — store set", "### §R re-check 2026-10-27": F1 (cast framing) fixed and holding; F4 (tab III edge `boiler->bellowsDrive` through Induction Heater) fixed by the slot move `bellowsDrive` (2,2) → (3,2) in `src/data/technologies.ts`; the Director re-check of `store-final2` met every AD condition (see row 14). AD N2 (7 more in-game tree edges through a third node, none in the store set) moves to WP26 (§R 2026-10-27) | PASS |
+| 12 | ASSET_GUIDE refresh + guard | `src/assets/assetGuide.test.ts` (7 pass), `docs/ASSET_GUIDE.md` (ASSET_GUIDE_OUT block, 39069 bytes, matches the generated block, 0 diff after CRLF normalising) (§R 2026-10-27) | PASS |
+| 13 | Docs | `README.md` (0.10.0, WP24 living world + WP25 passive-first), `CHANGELOG.md` (0.10.0 entry dated 2026-10-27, WP22-WP25), this file section 10/15, `docs/GAME_SPEC.md` sections 18.3 and 18.5, `scripts/smoke/README.md` (WP24 + WP25 sections). Versions 0.10.0 in `package.json` and `desktop/package.json`; shell title `v0.10.0 · SAVE v2` (§R 2026-10-27) | PASS |
+| 14 | Store screenshots (3840x2160, HUD-free) | `scripts/smoke/store-shots.mjs` + `store-top5.json` (plate cap `RES?OR?`, `no_spoiler` and `no_output_tick` checks). Final run `store-final2` after F4 (dist d0625bf + F4), SIZES 1080 and 2160, 38 PNG: exit 0, `fail []`, `errors []`, 175/175 checks ok; 28 `_no_spoiler`, 8 `_plate_cap` and 38 `_no_output_tick` true; `store_top5_complete` true, missing []. 05 shows one clean Boiler → Bellows Drive curve under Superheater and over Induction Heater. Every other frame differs from the AD-approved `store-final` run only by animation phase (gears, wheels, smoke, core swirl, gain floats; 0.1–2.9 % of pixels), the cast unchanged. Order: 1 `07-era5-ruined-clean`, 2 `06-era4-spire-hud`, 3 `03-era2-generator-hud`, 4 `05-tree-era3-hud`, 5 `09-postgame-portrait-clean`; alt `04-era3-boiler-hud`. Upload the 2160 store + alt files of `store-final2` (§R 2026-10-27) | PASS |
+| 15 | Bundle budget, full + demo | `node scripts/perf/bundle-budget.mjs` and `… dist-demo`, before and after F4 (same numbers). Full: app 490.5/500, lazy world 204.9/210 (limit raised 120 → 210 by WP24, Director-approved), css 41.0/45, phaser 1481.8/1500, public assets 1781.5/8000. Demo: app 491.1/500, lazy world 204.9/210, css 43.8/45, phaser 1481.8/1500, assets 1781.5/8000. Both PASS (§R 2026-10-27) | PASS |
 
-### Gate runs (v0.10.0, §R 2026-10-25)
-- `npm run typecheck`: exit 0 (also after glue).
-- `npx vitest run --maxWorkers=2` after glue: 148 files pass; 4736 pass, 17 skip, 4753 total. Skips are the conditional per-row skips in `compat.test.ts`.
-- `npm run build`: exit 0 (231 modules). `npm run build:demo`: exit 0 (234 modules).
-- Full smokes on port 4173, one at a time: `tiers` `fail []` (33 checks); `showcase` `errors []`; `finale` `errors []`, no fast-forward failures; `prestige` `errors []`, no `ok=false`; `stages` `errors []`, HUD titles, rows and frontier match the README; `shell` `fail []` (38 checks), `A_title_version` and `E_footer_text` = `v0.10.0 · SAVE v2`.
-- `world.mjs` full: `fail` [`G_cost`] only, `errors []`, 68 checks. G_cost meanMs 0.5422 vs budget 0.3 on a loaded PC: PENDING (quiet-PC re-measure). Demo `world.mjs`: G_cost 0.2317 ok (demo case G sampled with the world asleep; not a cost reading; G_cost PENDING quiet-PC).
-- Not run now (timing-sensitive, Director call): row 9 soak, row 10 GPU perf, `world.mjs` G_cost re-measure.
+### Gate runs (v0.10.0, §R 2026-10-27)
+- Code d0625bf (WP24 + WP25 merged); 2e79294 after it is docs only.
+- `npm run typecheck`: exit 0.
+- `npx vitest run --maxWorkers=4`: 159 files pass; 5432 pass, 17 skip, 5449 total, 37.8 s. Skips are the conditional per-row skips in `compat.test.ts`.
+- `npm run build`: exit 0 (240 modules). `npm run build:demo`: exit 0 (243 modules). `bundle-budget.mjs` on dist and dist-demo: PASS.
+- Full smokes on port 4173, one at a time: `tiers` `fail []` (33 checks); `showcase` `errors []`; `finale` `errors []`, no fast-forward failures; `prestige` `errors []`, no `ok=false`; `stages` `errors []`, HUD titles, rows and frontier match the README (AUTO-CRANK `null` at s11, `AUTO-CRANK 3/s` at s13, right edge max 319 ≤ 340); `shell` `fail []` (38 checks), `A_title_version` and `E_footer_text` = `v0.10.0 · SAVE v2`.
+- `world.mjs` full on a quiet PC: `fail []`, `errors []`, 122 checks; G_cost meanMs 0.2748 ≤ 0.3 (cast 0.055, props 0.061, atmos 0.009, clocks 0.033, runners 0.038). Margin is thin: a second browser on the same PC pushes it over (see PROJECT_STATUS known issues). Closes the 2026-10-25 G_cost PENDING.
+- `economy.mjs` full: `fail []`, `errors []`, 17 checks, G_output_cost meanMs 0.0120 ≤ 0.05.
+- F4 (store-set AD re-check): `bellowsDrive.tree` (2,2) → (3,2) in `src/data/technologies.ts` + its test literal, data only. After it: `npm run typecheck` exit 0; `npx vitest run --maxWorkers=4` 159 files, 5432 pass, 17 skip; `npm run build` (240 modules) and `npm run build:demo` (243 modules) exit 0; bundle budgets unchanged; `store-shots` (`store-final2`), `e2e-full`, `resolutions` (119 results) and `demo.mjs` re-run with `fail []`, `errors []`. Rows 9 and 10 ran on the pre-F4 dist; F4 moves one tech tree node and adds no runtime work.
+- Achievements: no Steam achievements ship (section 12). In-game `automation` reads "Install the crank servo." with no era, so moving the servo to era II (WP25) needs no text change.
 
-### Row 10 evidence, quiet-machine GPU perf (v0.9.0, 2026-10-24)
-- Run: main 3219580, quiet machine, `PERF_GPU=1`, median of 3 per half, 6 runs (`scripts/perf/perf-median.mjs`).
+### Row 10 evidence, quiet-machine GPU perf (v0.10.0, §R 2026-10-27)
+- Run: dist built from d0625bf (WP24 + WP25), preview 4173, quiet PC, `PERF_GPU=1`, 3 full runs (223 s each, each `fail []`, `errors []`), merged by `scripts/perf/perf-median.mjs`.
 - renderer ANGLE NVIDIA GeForce RTX 3060 Ti D3D11, gpu true, fail []
 - frameP95Ms 16.8 (budget 17)
-- postFrameP95Ms 16.7 (budget 17)
-- machineMeanMs 0.91 (budget 4)
-- machineMaxMs 1.6 (budget 40)
-- uiMeanMs 0.04
-- uiMaxMs 0.2
-- finaleMeanMs 0.05
-- displayObjects 76 (budget 500)
-- techTreeOpenMs 1.7
-- heapMb 97.4 (budget 150)
-- heapGrowthMb 0
-- bootMs 777.6 (budget 3000)
-- liveVoices 7
-- musicVoices 5
-- peakDbfs -17.18
-- cycleDisplayPct 4.29
-- Every stage frame p50/p95 16.7 / 16.7–16.8 ms (vsync 60 Hz).
-### Row 9 evidence, 60 min soak (v0.9.0, 2026-10-24)
-- Run: main ad129ce (final build), quiet machine, `SOAK_MIN=60 SOAK_GPU=1`, 121 samples every 30 s, `fail []`, `errors []`.
-- heapMb baseline 91.5 (t=60 s), last 92.74, max 92.75 (cap 150); growth 1.24 (limit 16); slope 0.01 MB/min (limit 1.0)
-- displayObjects 74 → 74 (cap 500, growth limit 81.4)
-- domNodes 670 → 670 (growth limit 200)
-- toasts max 1 (cap 4)
-- liveVoices max 7 (cap 48), growth -1 (limit 8)
-- machineMeanMs 0.84–1.0 for all 60 min
-- purchases 75 ok of 120 tried (legacy feed cycle; not a gated limit)
-- An earlier 60 min run on 3219580 also passed. It ran while other heavy work was running on the same machine, and its machineMeanMs went from 0.92 to about 1.6. This quiet run stays flat, so that rise came from the machine being busy, not from the game.
+- postFrameP95Ms 16.8 (budget 17)
+- machineMeanMs 0.92 (budget 4)
+- machineMaxMs 1.5 (budget 40); postMachineMaxMs 1.6 (budget 40)
+- uiMeanMs 0.04 (budget 2)
+- uiMaxMs 0.2 (budget 8)
+- finaleMeanMs 0.08 (budget 2)
+- displayObjects 82 (budget 500)
+- techTreeOpenMs 1.7 (budget 8)
+- heapMb 103 (budget 150); heapGrowthMb 0 (budget 8)
+- bootMs 822.8 (budget 3000)
+- liveVoices 8 (budget 48); musicVoices 5 (budget 8)
+- peakDbfs -17.92 (budget -1)
+- cycleDisplayPct 3.95 (budget 10)
+- Per stage, frame p50 / p95 (ms) and machine mean: s0 16.7 / 16.7, 0.10; s7 16.7 / 16.7, 0.25; s9 16.7 / 16.8, 0.32; s11 16.7 / 16.7, 0.51; s13 16.7 / 16.8, 0.67; s15 16.7 / 16.8, 0.92; s16 16.7 / 16.7, 0.92. Frames are vsync 60 Hz.
+- v0.9.0 history (3219580, 2026-10-24, median of 3 per half): frame p95 16.8, post 16.7, machine mean 0.91, heap 97.4 MB, boot 777.6 ms, displayObjects 76.
 
-### Packaged builds (v0.10.0, §R 2026-10-25)
-- HEAD 723d01b + §R glue (version 0.10.0). `npm run build:steam-demo` and `npm run build:steam` exit 0. `out/steam/demo/win-x64/` and `out/steam/full/win-x64/`: 74 files, 371.4 MB each.
-- Packaged demo exe (`DESKTOP_EDITION=demo scripts/smoke/desktop.mjs`): `fail []`, `errors []`. Title `v0.10.0 · DEMO · SAVE v2`. Demo tabs ok. Relaunch keeps progress (gain 5, `.bak` true).
-- Packaged full exe (`scripts/smoke/desktop.mjs`): `fail []`, `errors []`. Title `v0.10.0 · SAVE v2`. Relaunch keeps progress (gain 5, `.bak` true).
+### Row 9 evidence, 60 min soak (v0.10.0, §R 2026-10-27)
+- Run: the same dist (d0625bf), preview 4173, quiet PC, straight after the row 10 runs, `SOAK_MIN=60 SOAK_GPU=1`. 121 samples every 30 s, `fail []`, `errors []`.
+- heapMb: baseline 99.03 (t=60 s), last 100.89, range 99.0–100.9 (cap 150); growth 1.86 (limit 16); slope 0.02 MB/min (limit 1.0).
+- displayObjects 80 → 80 (cap 500, growth limit 88).
+- domNodes 687 → 687, max 690 (growth limit 200).
+- toasts max 1 (cap 4).
+- liveVoices 5 → 5, max 8 (cap 48); growth 0 (limit 8).
+- machineMeanMs 0.84–1.12 for all 60 min.
+- Purchases 73 ok of 120 tried (legacy feed cycle; not a gated limit).
+- v0.9.0 history (ad129ce, 2026-10-24): 60 min, heap 91.5 → 92.7 MB, slope 0.01 MB/min, display objects 74 flat, DOM growth 0.
+
+### Packaged builds (v0.10.0, §R 2026-10-27)
+- Final: code d0625bf + F4 (version 0.10.0), rebuilt after F4. `npm run build:steam-demo` and `npm run build:steam` exit 0. `out/steam/demo/win-x64/` and `out/steam/full/win-x64/`: 372 MB each.
+- Packaged demo exe (`DESKTOP_EDITION=demo scripts/smoke/desktop.mjs`): `fail []`, `errors []`, 11 checks. Title `v0.10.0 · DEMO · SAVE v2`. Demo tabs: ERA I open, SIGNAL ? and FULL GAME disabled. Relaunch keeps progress (20 clicks, `.bak` true). SETTINGS fullscreen on/off ok, content 1280x720 stable.
+- Packaged full exe (`scripts/smoke/desktop.mjs`): `fail []`, `errors []`, 10 checks. Title `v0.10.0 · SAVE v2`. Relaunch keeps progress.
+- Both exes: debug hook undefined, `isPackaged` true, crank 0 → 20, quit writes the save (`totalClicks` 20), 0 page errors, no `logs/renderer.log` (no CSP lines).
+- The pre-F4 builds of the same day (d0625bf, 371.5 MB each) passed the same smokes.
+- §R 2026-10-25 run (HEAD 723d01b + §R glue): same results, 371.4 MB each.
 - v0.9.0 history (main ad129ce, 2026-10-24): `npm run build:steam-demo` and `npm run build:steam` pass (`out/steam/demo/win-x64/`, `out/steam/full/win-x64/`, 371 MB each).
 - v0.9.0 history: `scripts/smoke/desktop.mjs` on both exes: `fail []`, `errors []`. Title `v0.9.0 · DEMO · SAVE v2` / `v0.9.0 · SAVE v2`, debug hook undefined, crank, quit writes the save, relaunch keeps progress (.bak present), SETTINGS fullscreen on/off, no CSP lines, 0 page errors. Demo tabs: ERA I open, SIGNAL ? and FULL GAME locked.
 - `f11Routed false`: CDP key events skip the main-process input hook (known since WP19). Real F11 and Alt+Enter were checked with OS key events (SendKeys) in WP19; the hook in `desktop/main.cjs` is unchanged since.

@@ -762,7 +762,7 @@ export const TECHNOLOGIES: Record<TechId, TechDefinition> = {
     effects: [{ type: 'autoPct', percent: 8, res: 'pr' }],
     requires: [{ type: 'tech', id: 'boiler', minLevel: 1 }],
     description: 'The old drive train works a bellows into the firebox. +8% PR production per level.',
-    tree: { col: 2, row: 2 },
+    tree: { col: 3, row: 2 },
   },
   gridExciter: {
     id: 'gridExciter',

@@ -442,7 +442,7 @@ describe('era III technology table', () => {
       },
       bellowsDrive: {
         id: 'bellowsDrive', kind: 'repeatable', era: 3, costRes: 'me', baseCost: 300000, growth: 2.5, maxLevel: null,
-        tree: { col: 2, row: 2 }, branch: 'automation',
+        tree: { col: 3, row: 2 }, branch: 'automation',
         effects: [{ type: 'autoPct', percent: 8, res: 'pr' }],
         requires: [{ type: 'tech', id: 'boiler', minLevel: 1 }],
       },

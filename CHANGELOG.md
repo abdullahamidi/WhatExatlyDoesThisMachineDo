@@ -27,10 +27,11 @@ Notable changes per release, newest first. Work packages are named WPn; plans ar
 - **WP22** HUD inset follows UI SCALE (100, 125 and 150 %).
 - **WP23a** Saves: an optional `world` block (which living-world lines were seen). No save version change; older saves load as before.
 - **WP25** Balance: click echoes are shorter (Dynamo and Steam Hammer 0.25 s, Echo Crank 0.5 s, Inversion 0.75 s). Passive output is raised per energy. The Echo bonus is 15 % per Echo (was 30 %), and total pace is still faster than before. Generator cost 25 500. Data only: no save change.
+- **§R** TECH INDEX era III: Bellows Drive moves one column right, so its line from the Boiler no longer runs behind Induction Heater.
 
 ### Verification
 - Bundle budgets (`scripts/smoke/perf-budget.json`, checked by `scripts/perf/bundle-budget.mjs`): app JS raw <= 500 KB (was 460 KB), lazy living-world chunk <= 210 KB (was 120 KB; WP24 behaviour, day clock and transitions; loads with the World scene, off the boot path), CSS <= 45 KB (was 44 KB).
-- Timing rows (GPU perf median of 3, 60 min soak, world update cost) are re-measured on a quiet PC. Their status is in `docs/STEAM_RELEASE.md` section 15.
+- Timing rows, re-measured on a quiet PC (`docs/STEAM_RELEASE.md` section 15, all 15 rows PASS): GPU perf median of 3, frame p95 16.8 ms (budget 17); 60 min soak, heap 99.0 to 100.9 MB, display objects flat; world update 0.27 ms (budget 0.3).
 - Known note: denizens are small at the default camera (the Inspector is about 30 px tall at 1080p, smaller at zoom 0.5 in eras III to V). They are readable but easy to miss.
 
 ## 0.9.0 — Steam demo candidate — 2026-10-23

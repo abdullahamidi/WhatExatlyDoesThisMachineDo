@@ -1773,6 +1773,91 @@ Re-check after F2 + F3 (Director / EM, no AD round if all hold): fresh preview, 
 **Row 11 release art sign-off (v0.10.0):** in-game PASS (unchanged). Store set: not final. F1 PASS; PENDING F2 + F3; PASS when the
 `store-final3` run meets the re-check above (as in `proto/set5/`).
 
+### §R re-check 2026-10-27
+
+Art Director, v0.10.0 store set after WP24 (living world v2) + WP25 (passive-first HUD), STEAM_RELEASE §15 rows 11 + 14. Verdict:
+**FIXES REQUIRED** (F4, one data number + its test literal, then a store-shots re-run; no asset, script or game-logic change). The
+round-1 F1 (cast on stale spots) holds. The WP24 world and the WP25 HUD read clean in every store and alt frame. New find: the rank 4
+frame (05, TECH INDEX tab III) shows a false dependency.
+
+Set under audit: `<R2>/store-final/`, `<R2>` =
+`C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/R2/`
+(code d0625bf, `SIZES=1080,2160`). `<R2>/store-final.json`: exit 0, `fail []`, `errors []`, 175 / 175 checks ok; 38 PNGs; 28
+`*_no_spoiler` true (frame <= 2, plaque `RES?OR?` 03-07 / 09, `UNKNOWN` / `R?S????` 01 / 02, hits []), 8 `*_plate_cap` true, 38
+`*_no_output_tick` true (visible 0, shown = base), 20 `*_hud_values_visible` (hidden 0), `09_keep_window` 14.5 / 15.4 s,
+`store_top5_complete` true, missing []. Stills only: no preview, no browser (Director perf / soak runs). AD evidence
+`<R2>/ad-recheck/` (`crops/`, `mock/`, `tools/`). Old / new boards use the R round 2 proof `<R>/ad-store/proto/set5/` (pre-WP24 /
+WP25): set5 top, store-final bottom.
+
+| rank | frame | 2160 + 1080 | result |
+|---|---|---|---|
+| 1 | `07-era5-ruined-clean` | Girl front row, violet rim. Inspector and dog now face the camera (era V stare = WP24 settle rest frame): more uncanny than set5. Crow flares its wings on the dead lamp (hover cell, violet rim, feet on the finial): reads as a flare, not a glitch. Black puddle + sprout, plate `RES?OR?`, no text | PASS |
+| 2 | `06-era4-spire-hud` | Girl on the ground left of the boiler; Inspector, Sensor 7, dog, crow on the lit lamp. Warmer sky (WP24 day tint). HUD `CLICK +218 RS · 0.2S` / `+11 ME` / `AUTO-CRANK 3/S · +655 RS/S`, one line each, inside the panel. 3-click gain block legible right of the spire at both sizes | PASS |
+| 3 | `03-era2-generator-hud` | Clock, booth + hanging receiver, lit lamp + glow + moths, crow hovering (era II canon, as set5), dog. Ruin windows lit, the girl's window dimmed (WP24 canon). MILESTONE toast opaque at both sizes. HUD `CLICK +78 EE · 0.25S` / `+5.6 ME` (no servo in the S9 list, so no AUTO-CRANK row) | PASS |
+| 4 | `05-tree-era3-hud` | `boiler->bellowsDrive` dives behind Induction Heater: it enters the top border and leaves as a stub at the right into Bellows Drive. Reads Boiler -> Induction Heater -> Bellows Drive; Bellows Drive needs Boiler only. Same in set5: pre-existing since WP17 put Bellows Drive at (2,2). Missed by WP16b-3, R and R2; WP25 F2 covers same-row edges only | **FAIL (F4)** |
+| 5 | `09-postgame-portrait-clean` | Cast as set5 (held loop, D17): dog asleep by the lantern, Inspector, Sensor 7, crow + moths on the warm lamp | PASS |
+| alt | `04-era3-boiler-hud` | Cast on its spots: Sensor 7 + Inspector left, sprout, lamp, booth, crow, dog right. The Inspector holds the umbrella folded (settle rest frame), so the "umbrella under the dry virga" beat is gone (N1). HUD `CLICK +90 PR · 0.25S` / `+5.6 ME` | PASS (N1) |
+
+- WP24 in stills: no half-faded or mid-transition denizen in any store or alt frame at either size. `worldSettle(true)` parks every
+  runner on its rest frame at its home spot and snaps targets on the TECH INDEX blink. Cast alpha is full; no runner walks or is cut by
+  a frame edge (outermost: Sensor 7 at x ≈ 50, dog / booth / lamp inside x 1920 - 70). 1080 cast = 2160 cast
+  (`crops/board-cast-1080-x2.png`).
+- WP25: HUD lines read cleanly at 1:1 2160 (`crops/hud-panels-03-04-06-07-2160.png`). No output popup in any frame. The floating
+  numbers in the hud frames are the 3-click gain block (values = 3 x CLICK).
+- Spoilers: name plates `RES?OR?` in 03, 04, 06, 07, 09 (`crops/plates-2160-x3.png`); HUD plaque `RES?OR?`; era V HUD `NEXT: PRIMARY
+  FUNCTION`; no RESTORE / RESTORATION text in a store or alt frame.
+
+**Round-1 F1 (cast on stale spots): FIXED, holds.** 03: right-wing cast at the lit lamp. 04: Sensor 7 + Inspector left; lamp, booth,
+crow and dog right. 06: girl on the ground. 07: girl front row. Evidence: `crops/{03,04,06,07,09}-wing{L,R}-old-new-2160.png`,
+`crops/*-wings-1080-x2.png`.
+
+F4 (S2, store-facing, rank 4): tab III edge `boiler->bellowsDrive` passes through Induction Heater.
+- Geometry (`TECH_TREE_LAYOUT` px): `edgePath` = `M 162 148 C 248 148, 248 244, 334 244` goes 25.5 px deep into Induction Heater
+  (176-320 x 210-278).
+- Fix (data, owner: worker via EM): `src/data/technologies.ts` `bellowsDrive.tree` `{ col: 2, row: 2 }` -> `{ col: 3, row: 2 }`; the same
+  literal in the expected era III def in `src/data/technologies.test.ts` (line 445). (3,2) is Grid Exciter's slot in tab IV, so the edge
+  takes the shape of the accepted `resonatorSpire->gridExciter`.
+- New path `M 162 148 C 327 148, 327 244, 492 244` clears Induction Heater and Superheater by 11.5 each (34 px at 2160) and crosses no
+  edge. No edge enters (3,2). No other edge in eras I-V changes (`tools/edges.py`, `tools/depth.py`). Tab width (max col 6), the
+  per-era unique-slot test and keyboard order (list order) are unchanged.
+- Proof (MOCK painted on the 2160 frame, not a capture): `crops/F4-tree3-shipped-vs-mock-2160.png`,
+  `mock/05-tree-era3-hud-MOCK-bellows32-2160.png`. One curve runs Boiler -> Bellows Drive under Superheater and over Induction
+  Heater; Bellows Drive sits under Condenser. The 1 px nub on Induction Heater's right border and the faint box around the moved node
+  are mock seams.
+
+Re-check after F4 (Director / EM; no AD round if all of it holds):
+- Fresh `vite preview` of the rebuilt `dist`, then `store-shots.mjs` `SIZES=1080,2160` into `<R2>/store-final2`.
+- Run: fail [], errors [], 175 checks; 28 / 8 / 38 true; missing [].
+- 05 at both sizes: Bellows Drive under Condenser; one curve from Boiler that passes under Superheater and over Induction Heater; no
+  stub between Induction Heater and the empty (2,2).
+- Every other frame: animation-phase diffs only.
+- Upload the 2160 store + alt files of that run. Any miss: back to the AD.
+
+Notes (no block):
+- N1: 04 alt loses the open umbrella (settle rest frame). Accept: it is the alt only and still reads as era III (virga, steam, cast).
+- N2 (in game, not in the store set; S3 follow-up for the Director): 7 more edges pass through a third node.
+  - Tab I `wornMotor->flywheel`, through the Reinforced Crank and Motor Tuning corners, 21 px deep. Demo-visible:
+    `<R2>/resolutions/res-1920x1080-100-tree.png`, `crops/tree-e1-wornMotor-flywheel-1080x2.png`.
+  - Tab IV `echoCrank->harmonicConvergence`, through Crystal Lattice.
+  - Tab V `nullChamber->graviticAnchor`, `nullChamber->mainsBackfeed`, `nullChamber->steamLance`, `graviticAnchor->skyAperture`,
+    `inversionCrank->finalAlignment`.
+  - A cross-row detour in `edgePathAround` (route through the gap next to the target row) clears all 7 (`tools/edges.py`). In tab V,
+    though, 4 detours would share the row 1-2 gap and merge into an ambiguous bus. Tab V needs its own layout pass.
+- N3: The hud frames show click gains, not the machine popups (off by design for the set). The passive pitch is carried by the HUD
+  (`AUTO-CRANK`, the `/S` rates, the worth in seconds). Accept.
+- N4: In 06 hud the `+33 ME` gain line sits on a lit ruin window plate (orange on orange). The ink stroke keeps it legible at both
+  sizes. Accept.
+
+Store order: **keep** (1 `07-era5-ruined-clean`, 2 `06-era4-spire-hud`, 3 `03-era2-generator-hud`, 4 `05-tree-era3-hud`, 5
+`09-postgame-portrait-clean`; alt `04-era3-boiler-hud`). The era V stare makes rank 1 stronger. 06 now carries the passive message in
+the HUD (AUTO-CRANK + four `/S` rates). After F4, 05 shows a clean dependency tree.
+
+**Row 11 release art sign-off (v0.10.0):** in game PASS (WP22 R5, WP23a AD2f, WP23b AD4r5, WP24 AD2 round 2, WP25 AD1 round 2).
+Store set: round-1 F1 PASS, R2 F2 / F3 PASS (09 dog asleep, 02 ME number shown); PENDING F4. **Row 14 (store screenshots):** PENDING
+F4. Both rows PASS when the `store-final2` run meets the re-check above.
+
+**Director F4 re-check (2026-10-27): HOLDS.** `bellowsDrive.tree` (2,2) -> (3,2) applied to `src/data/technologies.ts` and the test literal. Rebuilt dist, fresh preview, `store-shots.mjs` `SIZES=1080,2160` into `<R2>/store-final2`: exit 0, 175/175 checks, `fail []`, `errors []`; 28 / 8 / 38 true; missing []. 05 (1080 and 2160): Bellows Drive under Condenser, one curve from Boiler under Superheater and over Induction Heater, (2,2) empty, no stub. Other frames vs `store-final`: animation phase only (gears, wheels, smoke, core swirl, gain floats; 0.1-2.9 % of pixels, cast unchanged; `<R2>/f4-diff-07-era5-ruined-clean.png`, `<R2>/f4-diff-03-era2-generator-hud.png`). **Row 11 and row 14: PASS.** N2 goes to WP26 (docs/plan/WP26.md T9).
+
 ## WP25 — passive-first audit
 
 Art Director AD1, round 1, 2026-10-26. Verdict: **FIXES REQUIRED** (1 S1, 1 S2, 3 notes; both fixes are code, owner worker via EM;
