@@ -6,7 +6,7 @@ describe('APP_VERSION', () => {
     expect(APP_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  it('is 0.10.0', () => {
-    expect(APP_VERSION).toBe('0.10.0');
+  it('is 0.10.1', () => {
+    expect(APP_VERSION).toBe('0.10.1');
   });
 });

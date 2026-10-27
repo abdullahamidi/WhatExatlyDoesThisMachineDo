@@ -2,6 +2,8 @@
 
 ## Current milestone
 **Steam demo program (2026-10-23)** — see docs/plan/STEAM_DEMO_PROGRAM.md (decisions D1–D8, two tracks).
+**v0.10.1 release-ready (2026-10-27)**: WP26 follow-ups merged (weather audio, slow era V sky, girl off the scrap, servo arm rim,
+tech tree edges clear every node); docs/STEAM_RELEASE.md section 15 §R-lite PASS (GPU perf p95 16.7 ms, packaged exes).
 **v0.10.0 release-ready (2026-10-27)**: WP22–WP25 merged (part tiers, living world v1 + v2, passive-first economy); docs/STEAM_RELEASE.md
 section 15 rows 1–15 PASS (§R 2026-10-27: GPU perf median of 3, 60 min soak, store set AD-approved after F4, packaged exes).
 **v0.9.0 demo release-ready (2026-10-24)**: every roadmap WP done; docs/STEAM_RELEASE.md section 15 rows 1–15 PASS.
@@ -39,7 +41,7 @@ Left for the user: Steam app/depot ids, capsule art, trailer, SteamPipe upload (
 | WP23b | Living world eras III–V, finale, postgame, cycle 2+; then §R release refresh | ✅ done (merged f8a5d94; AD4 round 5 RELEASE-READY); §R checkpoint 6245240, re-run after WP24/WP25 |
 | WP25 | Passive-first economy: machine carries progression, click = optional bonus (user playtest 2026-10-25) | ✅ done (merged ca297ce; Opus review APPROVE, EM PASS, AD1 round 2 RELEASE-READY) |
 | WP24 | Living world v2: varied continuous behaviour, recorded-Tuesday day clock, gradual transitions (user playtest 2026-10-25) | ✅ done (merged 6f56c4f; X0 with WP25 on the branch; Opus review + F1–F3, EM smoke matrix PASS, AD2 round 2 RELEASE-READY) |
-| WP26 | Post-v0.10.0 follow-ups → v0.10.1: wind/rain audio from the world weather, slow era V sky fade-in, loop prune, girl off the scrap, servo arm rim, tech tree edges clear every node (AD §R N2) | planned (docs/plan/WP26.md) |
+| WP26 | Post-v0.10.0 follow-ups → v0.10.1: wind/rain audio from the world weather, slow era V sky fade-in, loop prune, girl off the scrap, servo arm rim, tech tree edges clear every node (AD §R N2) | ✅ done (v0.10.1; Opus review round 2 APPROVE, EM round 2 PASS, AD2 round 2 RELEASE-READY; §R-lite PASS) |
 | WP25b | Surge: click = very serious income (playtest reading R2), capped burst on top of WP25 | follow-up, only if the user asks |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
@@ -157,11 +159,24 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   - The AD store re-check found F4: the tab III edge `boiler->bellowsDrive` ran through Induction Heater. It is fixed by the
     `bellowsDrive` slot move (2,2) → (3,2), then re-shot as `store-final2` (175/175), with rows 11 and 14 PASS.
   - Docs: CHANGELOG/README 0.10.0 for WP24 + WP25, plus the STORY_BIBLE / DENIZEN_ART / GAME_SPEC §18.5 canon (2e79294).
+- **WP26** post-v0.10.0 follow-ups → v0.10.1 (2026-10-27; wp-exec2, 22 agents, 2 fix rounds):
+  - Weather audio: `GameFeedback.worldWeather` readout from the LivingWorldDirector; wind bed follows the live wind (floor 0.3,
+    no LFO while live); era III rain hiss follows the visible virga at −30 dB, pitch and gain fall with the era trim; boiler era III
+    trim 0.8. New smoke `scripts/smoke/weather-audio.mjs` (full 34 checks, demo 21: no rain in the demo).
+  - Era V sky: `fadeInMs` 24000 on skyViolet and horizonGlow, rising only, WorldScene only (teaser and ShowcaseScene keep 1.5 s).
+  - Loop prune: `WORLD_LOOPS` keeps only receiver, `WORLD_ERA_LOOPS` only crowHigh; `WORLD_ERA_LOOP_SHEET` removed (0 KB: the
+    pruned tables were already tree-shaken).
+  - Girl (cycle 3+) ground x 1538 → 1552 in e1/s8/s9 (Q4a: largest x the wing rule allows; boots 6 px clear of the 1530 scrap).
+  - Servo arm (MK I–III, static + 80 rot frames): lit rim #7d8286 by `scripts/art/tiers/servo_rim.py`, alpha unchanged;
+    lit-edge contrast vs the X-brace median 1.86 → 2.61:1.
+  - TECH INDEX: 7 slot moves (tabs I, IV, V) + 2 era V outer-channel detours from Null Chamber; pure geometric guard test (≥ 64
+    samples per edge, 4 px clearance from every third node, eras I–V); AD DOM probe 0 hits over 54 edges.
+  - Budget: app 493.9 / 494.5 KB (demo) vs the 500 KB hard cap; WP26 soft cap re-baselined to 494.0 / 494.6 (Director confirmed).
 - **Art**: every sprite and background layer is PixelLab Pro in one locked palette from one style
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 5432 pass, 17 skipped (159 files; WP22–WP25 merged) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 5496 pass, 17 skipped (159 files; WP22–WP26 merged) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
@@ -186,13 +201,15 @@ Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era 
   CPU (claude.exe BelowNormal, 6 of 12 cores, user active); WP23a read 0.12–0.16 ms quiet. Profile: per-frame director cost
   WP23b 0.45 vs WP23a 0.29 ms (new atmos layer, one more walker, cast logic), no single hot spot. Quiet PC 2026-10-26 (v0.10.0, case G
   with the era card closed): 0.179 / 0.186 / 0.173 ms, PASS (limit 0.3).
-- Lazy world chunk 204.9 KB after WP24 + WP25 (limit 120 → 140 → 210, WP24 Revision 5; 5.1 KB headroom). It loads with the World scene, off
+- Lazy world chunk 205.3 KB after WP26 (limit 120 → 140 → 210, WP24 Revision 5; 4.7 KB headroom). App chunk 493.9 KB full / 494.5
+  KB demo against the 500 KB cap (about 6 KB headroom). It loads with the World scene, off
   the boot path.
 - WP24 `G_cost` reads 0.27–0.297 ms on a quiet PC (limit 0.3; thin margin). The first full-matrix pass with a second browser live
   failed N_umbrella / N_flicker_reduced / demo G_cost on CPU contention; quiet reruns pass. Run timing smokes alone. §R 2026-10-27
-  quiet: full 0.2748 ms (cast 0.055, props 0.061, atmos 0.009, clocks 0.033, runners 0.038).
-- AD §R N2: 7 tech tree edges still pass through a third node (tab I `wornMotor->flywheel` is demo-visible; tab IV 1; tab V 5).
-  None is in the store set. Fix in WP26 T9.
+  quiet: full 0.2748 ms (cast 0.055, props 0.061, atmos 0.009, clocks 0.033, runners 0.038). WP26 quiet: 0.2818 ms, alone ×3
+  0.2751 / 0.2892 / 0.2815 (the weather readout writes after the clock timing; no new cost).
+- AD §R N2 (7 tech tree edges through a third node): closed in WP26 T9. Tab V's two outer-channel detours frame the graph like a
+  border; the AD accepts them as legible (WP26 AD2 N2).
 
 ## Important technical decisions
 - Art Director agent (`.claude/agents/art-director.md`, Opus) owns visual/mechanical correctness;
@@ -223,13 +240,9 @@ packaged exes pass, store-shots F1-F3) is superseded by the user's 2026-10-25 pl
 (2) passive income too weak, clicking mandatory; clicking should become an extra action (or very serious income).
 Both are answered: WP25 merged ca297ce, WP24 merged 6f56c4f (X0 done on the branch). The §R re-run is done: v0.10.0 is release-ready
 (STEAM_RELEASE §15 rows 1–15 PASS, 2026-10-27).
-Next: WP26 → v0.10.1 (docs/plan/WP26.md; Director decisions Q1–Q6 recorded), run with wp-exec2 in a worktree branched from the
-v0.10.0 close commit:
-- W1: weather readout, weather audio maths, era V slow sky fade, loop prune, plus AD1 (servo rim, girl x, tree slots);
-- W2: synth, girl stop, tree slots + geometric guard;
-- W3: weather-audio smoke;
-- then review, EM validation, AD2, docs, bump and §R-lite.
-WP25b Surge only if the user picks that reading of the playtest.
+WP26 (v0.10.1) is merged and release-ready (§R-lite 2026-10-27). Every ROADMAP_FULL row is done.
+Open, user-owned decisions: WP25b Surge (playtest reading R2: click = very serious income) only if the user picks it; denizen size
+postponed by the user. For the store upload, use the 2160 set of the v0.10.1 run `store-final3` (STEAM_RELEASE §15 row 14).
 wp-exec2 (workflows/scripts) orders waves by depends_on, lets AD verify run (the EM marks the AD gate N/A) and only skips a task whose
 dependency landed no files. WP24 needed Director rounds after the 6 automated fix rounds (F1–F3, AD2 fixes).
 Still user-owned for the Steam upload: real app/depot ids, capsule art, trailer, SteamPipe upload (STEAM_RELEASE sections 4, 10, 12).
