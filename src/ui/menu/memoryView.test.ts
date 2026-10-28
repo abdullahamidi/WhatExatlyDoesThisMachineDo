@@ -46,15 +46,15 @@ describe('buildMemoryView: empty state', () => {
 });
 
 describe('buildMemoryView: header', () => {
-  it('3 Echoes, nothing owned: ECHOES 3 (+45% ALL/S), UNSPENT 3, CYCLE 0042', () => {
+  it('3 Echoes, nothing owned: ECHOES 3 (+42% ALL/S), UNSPENT 3, CYCLE 0042', () => {
     const view = buildMemoryView(prestige(3), NEXT, false);
-    expect(view.echoesText).toBe('ECHOES 3 (+45% ALL/S)');
+    expect(view.echoesText).toBe('ECHOES 3 (+42% ALL/S)');
     expect(view.unspentText).toBe('UNSPENT 3');
     expect(view.cycleText).toBe('CYCLE 0042');
   });
 
-  it('bonus counts earned Echoes and is capped at 30 counted Echoes', () => {
-    expect(buildMemoryView(prestige(40), NEXT, false).echoesText).toBe('ECHOES 40 (+450% ALL/S)');
+  it('bonus counts earned Echoes and is capped at 12 counted Echoes', () => {
+    expect(buildMemoryView(prestige(40), NEXT, false).echoesText).toBe('ECHOES 40 (+168% ALL/S)');
     expect(buildMemoryView(prestige(0, [], 1), NEXT, true).echoesText).toBe('ECHOES 0 (+0% ALL/S)');
   });
 
@@ -64,7 +64,7 @@ describe('buildMemoryView: header', () => {
 
   it('spending does not lower the bonus; unspent drops', () => {
     const view = buildMemoryView(prestige(3, ['residualCharge']), NEXT, false);
-    expect(view.echoesText).toBe('ECHOES 3 (+45% ALL/S)');
+    expect(view.echoesText).toBe('ECHOES 3 (+42% ALL/S)');
     expect(view.unspentText).toBe('UNSPENT 1');
   });
 });
@@ -116,7 +116,7 @@ describe('buildMemoryView: cards', () => {
   it('all five owned: every card OWNED, no button, unspent 0', () => {
     const view = buildMemoryView(prestige(11, [...PERK_IDS]), NEXT, false);
     expect(view.unspentText).toBe('UNSPENT 0');
-    expect(view.echoesText).toBe('ECHOES 11 (+165% ALL/S)');
+    expect(view.echoesText).toBe('ECHOES 11 (+154% ALL/S)');
     for (const card of view.cards) {
       expect(card.statusText).toBe('OWNED');
       expect(card.buttonText).toBeNull();

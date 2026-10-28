@@ -2,6 +2,9 @@
 
 ## Current milestone
 **Steam demo program (2026-10-23)** — see docs/plan/STEAM_DEMO_PROGRAM.md (decisions D1–D8, two tracks).
+**v0.11.0 release-ready (2026-10-28)**: WP27 (user playtest 2026-10-27) merged: click curve (cranking leads the first minutes, the machine
+takes over by era III), ME click parity, Machine Faults (clickable events, F key), wind-up click branch, era I-II crow perched, Sensor 7
+in era II; docs/STEAM_RELEASE.md section 15 §R-lite, all 15 rows PASS (GPU perf p95 16.8 ms, 30 min soak, packaged exes, store-final4).
 **v0.10.1 release-ready (2026-10-27)**: WP26 follow-ups merged (weather audio, slow era V sky, girl off the scrap, servo arm rim,
 tech tree edges clear every node); docs/STEAM_RELEASE.md section 15 §R-lite PASS (GPU perf p95 16.7 ms, packaged exes).
 **v0.10.0 release-ready (2026-10-27)**: WP22–WP25 merged (part tiers, living world v1 + v2, passive-first economy); docs/STEAM_RELEASE.md
@@ -42,7 +45,8 @@ Left for the user: Steam app/depot ids, capsule art, trailer, SteamPipe upload (
 | WP25 | Passive-first economy: machine carries progression, click = optional bonus (user playtest 2026-10-25) | ✅ done (merged ca297ce; Opus review APPROVE, EM PASS, AD1 round 2 RELEASE-READY) |
 | WP24 | Living world v2: varied continuous behaviour, recorded-Tuesday day clock, gradual transitions (user playtest 2026-10-25) | ✅ done (merged 6f56c4f; X0 with WP25 on the branch; Opus review + F1–F3, EM smoke matrix PASS, AD2 round 2 RELEASE-READY) |
 | WP26 | Post-v0.10.0 follow-ups → v0.10.1: wind/rain audio from the world weather, slow era V sky fade-in, loop prune, girl off the scrap, servo arm rim, tech tree edges clear every node (AD §R N2) | ✅ done (v0.10.1; Opus review round 2 APPROVE, EM round 2 PASS, AD2 round 2 RELEASE-READY; §R-lite PASS) |
-| WP25b | Surge: click = very serious income (playtest reading R2), capped burst on top of WP25 | follow-up, only if the user asks |
+| WP25b | Surge: click = very serious income (playtest reading R2), capped burst on top of WP25 | superseded by WP27 (the user's 2026-10-27 answer) |
+| WP27 | Playtest 2026-10-27: click curve (hand → hand + machine → machine), ME click parity, Machine Faults + wind-up click branch (5 new nodes), prestige re-tune, crow perched in eras I-II, Sensor 7 in era II | ✅ done (v0.11.0; Opus review round 3 APPROVE, EM round 3 PASS, AD round 3 RELEASE-READY; §R-lite all 15 rows PASS) |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -172,19 +176,40 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   - TECH INDEX: 7 slot moves (tabs I, IV, V) + 2 era V outer-channel detours from Null Chamber; pure geometric guard test (≥ 64
     samples per edge, 4 px clearance from every third node, eras I–V); AD DOM probe 0 hits over 54 edges.
   - Budget: app 493.9 / 494.5 KB (demo) vs the 500 KB hard cap; WP26 soft cap re-baselined to 494.0 / 494.6 (Director confirmed).
+- **WP27** playtest 2026-10-27 follow-ups → v0.11.0 (2026-10-28; design workflow: AD diag + economy audit (h27 harness, exact runGreedy parity) →
+  plan → critic → Revision 1; wp-exec3: 48 agents, 3 fix rounds):
+  - Click curve F2hi (`docs/plan/WP27.md`): Worn Motor +2 ME/s (was 17), Motor Tuning 0.9, Piston Array 3000 / +60, Improved Pistons 3000 /
+    +10, Generator Blueprint 400K, converters re-tuned per era. A: ME click share ≥ 75 % to 2:00, crossover 6:50, era II click share 32 %,
+    eras III-V plain 21 / 20 / 19 % and active (clicks + faults + wind-up) 38 / 40 / 44 %; gates 22:14 / 60:50 / 110:29 / 167:36 / 250:09
+    (within 0.2 % of v0.10.1); W5 (cranks 5 min, then 0.5 cps, no faults) / A = 1.448; demo A 60:50.
+  - One crank echo (`crankEcho`) pays seconds of output in every energy incl. ME, folded into the servo like before: ME parity
+    (perClick.me / perSecond.me ≥ every other energy) holds at every sample (0 failures).
+  - Machine Faults: pure seeded clock (`src/simulation/faults.ts`, data `src/data/faults.ts` + marker data `src/data/faultMarker.ts`), Fault
+    Lamp unlock (era I, demo), payout 15 / 18 / 22 s of all output, 90-180 s (×0.9 after Leak Whistle), 8 s window (+4), Overdrive ×2 6 s
+    (Overrun Clutch). Eligible only when visible and interactive; never offline; first spawn ≥ 180 s per session. FaultMarker in its own lazy
+    chunk (11.0 KB), F key, live-region text, reduced-motion steady plate, per-era synth cues. No save field.
+  - Wind-up: transient store (cap up to 2 s, refill up to 0.2 s/s) released by the next manual click (RELEASE line); HUD WIND-UP row.
+  - Prestige: Residual Charge 10 %, Echo 14 % per Echo, counted cap 12 (bounds unchanged: cycle 2 0.550-0.609, cycle 3 0.353).
+  - Crow: CROW_I / CROW_II perched repertoire (perch, look, peck, ruffle, shift; era II stutter / skip), tipTry glitch ≤ 1.8 s and never in
+    crank playback; 3 new folded-wing columns (perchTurn, perchHead, perchTalk; crow.png 360x108); lift 56; drip from era III; cycle 2+
+    crowHigh only inside the era I-II tipTry.
+  - Sensor 7: s8 1470 / Inspector 1536 / clock 2680; new s8w framing key (capacitorBank or sparkGap before transformer: Sensor 7 1500,
+    Inspector 1552, full cast); s10 / s11 spots; unit test "every framing with the Inspector places Sensor 7".
+  - Budget: app 507.5 / 508.1 KB (demo) vs the 510 KB cap (raised from 500, Director Q5; plan soft 506 exceeded by 1.5 KB, accepted).
 - **Art**: every sprite and background layer is PixelLab Pro in one locked palette from one style
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 5496 pass, 17 skipped (159 files; WP22–WP26 merged) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 5746 pass, 17 skipped (165 files; WP22–WP27 merged) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
-- Balance (greedy 4 clicks/s): Worn Motor 0:13, Reinforced Crank 3:16, Piston Array 12:02,
-  Generator Blueprint 22:06.
+- Balance (greedy 4 clicks/s, WP27): Worn Motor 0:18, Reinforced Crank 3:55, Piston Array 6:24, Fault Lamp 7:01,
+  Generator Blueprint 22:14.
 
 ## Balance (greedy harness, fast profile)
-Era I: blueprint 22:06 · Era II: substation 60:23/72:52/148:28 · Era III (A/B/C): vessel 110:36/124:01/255:01 · Era IV (A/B/C): convergence 166:30/181:33/339:41 · Era V (A/B/C): primaryFunction 249:31/264:00/428:30 (WP17).
+WP27 (F2hi): A blueprint 22:14 · substation 60:50 · vessel 110:29 · convergence 167:36 · primaryFunction 250:09; B 276:30; C 350:00; W5/A 1.448; demo A/B/N/C/P1d 60:50/74:07/77:45/98:09/81:52.
+Before WP27 (WP17 numbers): Era I: blueprint 22:06 · Era II: substation 60:23/72:52/148:28 · Era III (A/B/C): vessel 110:36/124:01/255:01 · Era IV (A/B/C): convergence 166:30/181:33/339:41 · Era V (A/B/C): primaryFunction 249:31/264:00/428:30 (WP17).
 Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era V spend share 99/100/90/81 %.
 
 ## Known issues
@@ -201,8 +226,8 @@ Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era 
   CPU (claude.exe BelowNormal, 6 of 12 cores, user active); WP23a read 0.12–0.16 ms quiet. Profile: per-frame director cost
   WP23b 0.45 vs WP23a 0.29 ms (new atmos layer, one more walker, cast logic), no single hot spot. Quiet PC 2026-10-26 (v0.10.0, case G
   with the era card closed): 0.179 / 0.186 / 0.173 ms, PASS (limit 0.3).
-- Lazy world chunk 205.3 KB after WP26 (limit 120 → 140 → 210, WP24 Revision 5; 4.7 KB headroom). App chunk 493.9 KB full / 494.5
-  KB demo against the 500 KB cap (about 6 KB headroom). It loads with the World scene, off
+- Lazy world chunk 206.2 KB after WP27 (limit 120 → 140 → 210, WP24 Revision 5; 3.8 KB headroom). App chunk 507.5 KB full / 508.1
+  KB demo against the 510 KB cap (raised from 500 in WP27; about 2 KB headroom). FaultMarker lazy chunk 11.0 / 12 KB. It loads with the World scene, off
   the boot path.
 - WP24 `G_cost` reads 0.27–0.297 ms on a quiet PC (limit 0.3; thin margin). The first full-matrix pass with a second browser live
   failed N_umbrella / N_flicker_reduced / demo G_cost on CPU contention; quiet reruns pass. Run timing smokes alone. §R 2026-10-27
@@ -240,9 +265,12 @@ packaged exes pass, store-shots F1-F3) is superseded by the user's 2026-10-25 pl
 (2) passive income too weak, clicking mandatory; clicking should become an extra action (or very serious income).
 Both are answered: WP25 merged ca297ce, WP24 merged 6f56c4f (X0 done on the branch). The §R re-run is done: v0.10.0 is release-ready
 (STEAM_RELEASE §15 rows 1–15 PASS, 2026-10-27).
-WP26 (v0.10.1) is merged and release-ready (§R-lite 2026-10-27). Every ROADMAP_FULL row is done.
-Open, user-owned decisions: WP25b Surge (playtest reading R2: click = very serious income) only if the user picks it; denizen size
-postponed by the user. For the store upload, use the 2160 set of the v0.10.1 run `store-final3` (STEAM_RELEASE §15 row 14).
+WP26 (v0.10.1) is merged and release-ready (§R-lite 2026-10-27).
+User playtest 2026-10-27 (v0.10.1): era I crow frozen with spread wings; first passive (+17) killed the click (wanted: click → click + passive
+→ passive with the click optional but kept warm by tree upgrades and clickable events); ME clicks too weak vs EE; Sensor 7 missing in era II.
+All four answered by WP27 (v0.11.0, merged, §R-lite all 15 rows 2026-10-28). WP25b Surge is superseded by WP27. Every ROADMAP_FULL row is done.
+Open, user-owned: denizen size (postponed by the user); the next playtest of the v0.11.0 curve. For the store upload, use the 2160 set of
+the v0.11.0 run `store-final4` (STEAM_RELEASE §15 row 14).
 wp-exec2 (workflows/scripts) orders waves by depends_on, lets AD verify run (the EM marks the AD gate N/A) and only skips a task whose
 dependency landed no files. WP24 needed Director rounds after the 6 automated fix rounds (F1–F3, AD2 fixes).
 Still user-owned for the Steam upload: real app/depot ids, capsule art, trailer, SteamPipe upload (STEAM_RELEASE sections 4, 10, 12).

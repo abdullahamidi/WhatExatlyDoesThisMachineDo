@@ -110,6 +110,57 @@ describe('resolveHotkey tech tree (t)', () => {
   });
 });
 
+describe('resolveHotkey fault (f)', () => {
+  it.each(['f', 'F'])('clears a fault on %j in a plain state', (key) => {
+    expect(resolveHotkey(ev({ key }), FIRST, NOW)).toBe('fault');
+    expect(resolveHotkey(ev({ key, targetKind: 'other' }), FIRST, NOW)).toBe('fault');
+  });
+
+  it('works on an interactive target such as a focused button, like t', () => {
+    expect(resolveHotkey(ev({ key: 'f', targetKind: 'interactive' }), FIRST, NOW)).toBe('fault');
+    expect(resolveHotkey(ev({ key: 'F', targetKind: 'interactive' }), FIRST, NOW)).toBe('fault');
+  });
+
+  it.each([
+    ['ctrl', { ctrl: true }],
+    ['meta', { meta: true }],
+    ['alt', { alt: true }],
+  ])('ignores f with %s held', (_name, mods) => {
+    expect(resolveHotkey(ev({ key: 'f', ...mods }), FIRST, NOW)).toBeNull();
+    expect(resolveHotkey(ev({ key: 'F', ...mods }), FIRST, NOW)).toBeNull();
+  });
+
+  it('ignores held-key repeat', () => {
+    expect(resolveHotkey(ev({ key: 'f', repeat: true }), FIRST, NOW)).toBeNull();
+    expect(resolveHotkey(ev({ key: 'F', repeat: true }), FIRST, NOW)).toBeNull();
+  });
+
+  it('is blocked while a modal is open', () => {
+    expect(resolveHotkey(ev({ key: 'f', modalOpen: true }), FIRST, NOW)).toBeNull();
+    expect(resolveHotkey(ev({ key: 'F', modalOpen: true, targetKind: 'interactive' }), FIRST, NOW)).toBeNull();
+  });
+
+  it('is ignored on an editable target (typing f in a text box)', () => {
+    expect(resolveHotkey(ev({ key: 'f', targetKind: 'editable' }), FIRST, NOW)).toBeNull();
+    expect(resolveHotkey(ev({ key: 'F', targetKind: 'editable' }), FIRST, NOW)).toBeNull();
+  });
+
+  it('does not match F11 or F5 (the lower-cased key is f11 / f5, not f)', () => {
+    expect(resolveHotkey(ev({ key: 'F11' }), FIRST, NOW)).toBeNull();
+    expect(resolveHotkey(ev({ key: 'F5' }), FIRST, NOW)).toBeNull();
+  });
+
+  it('does not depend on the crank timing', () => {
+    expect(resolveHotkey(ev({ key: 'f' }), 4999, NOW)).toBe('fault');
+  });
+
+  it('leaves Space (crank), t (tech tree) and Escape (menu) as before', () => {
+    expect(resolveHotkey(ev({ key: ' ' }), FIRST, NOW)).toBe('crank');
+    expect(resolveHotkey(ev({ key: 't' }), FIRST, NOW)).toBe('techTree');
+    expect(resolveHotkey(ev({ key: 'Escape' }), FIRST, NOW)).toBe('menu');
+  });
+});
+
 describe('resolveHotkey menu (Escape)', () => {
   it('opens the menu on Escape when no modal is open', () => {
     expect(resolveHotkey(ev({ key: 'Escape' }), FIRST, NOW)).toBe('menu');

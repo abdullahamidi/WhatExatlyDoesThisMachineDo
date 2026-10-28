@@ -109,7 +109,7 @@ describe('getTechStatus', () => {
   });
 
   it('milestone is never available even when its conditions are met', () => {
-    const s = withMe(withLevels({ pistonArray: 1, flywheel: 1 }), 0, 240000);
+    const s = withMe(withLevels({ pistonArray: 1, flywheel: 1 }), 0, 400000);
     expect(getTechStatus(s, 'generatorBlueprint')).toBe('locked');
   });
 });
@@ -138,7 +138,7 @@ describe('getTechView', () => {
 
   it('owned wornMotor', () => {
     const v = getTechView(withLevels({ wornMotor: 1 }), 'wornMotor');
-    expect(v.currentEffectText).toBe('+17 ME/s');
+    expect(v.currentEffectText).toBe('+2 ME/s');
     expect(v.nextCost).toBeNull();
     expect(v.nextEffectText).toBeNull();
     expect(v.status).toBe('purchased');
@@ -147,14 +147,14 @@ describe('getTechView', () => {
   it('unowned reinforcedCrank', () => {
     const v = getTechView(createInitialState(0), 'reinforcedCrank');
     expect(v.currentEffectText).toBe('None');
-    expect(v.nextEffectText).toBe('×1.5 manual production');
-    expect(v.nextCost).toBe(2500);
+    expect(v.nextEffectText).toBe('Clicks echo 0.15s of all output, +0.35s wind-up, +0.035s/s refill');
+    expect(v.nextCost).toBe(1200);
   });
 
   it('flywheel at level 2 shows cumulative effects', () => {
     const v = getTechView(withLevels({ gearRatio: 3, reinforcedCrank: 1, wornMotor: 1, flywheel: 2 }), 'flywheel');
-    expect(v.currentEffectText).toBe('+20% automation');
-    expect(v.nextEffectText).toBe('+30% automation');
+    expect(v.currentEffectText).toBe('+20% automation, +0.03s wind-up, +0.003s/s refill');
+    expect(v.nextEffectText).toBe('+30% automation, +0.045s wind-up, +0.0045s/s refill');
   });
 
   it('handCrank view', () => {
@@ -181,7 +181,7 @@ describe('getTechView', () => {
 
   it('generatorBlueprint requirement labels and met flags', () => {
     const v = getTechView(createInitialState(0), 'generatorBlueprint');
-    expect(v.requirements.map((r) => r.label)).toEqual(['Piston Array', 'Flywheel Lv 1', '240K lifetime ME']);
+    expect(v.requirements.map((r) => r.label)).toEqual(['Piston Array', 'Flywheel Lv 1', '400K lifetime ME']);
     expect(v.requirements.every((r) => r.met === false)).toBe(true);
   });
 
@@ -267,6 +267,20 @@ describe('describeEffect', () => {
     expect(describeEffect({ type: 'autoClick', perSecond: 1 }, 3)).toBe('+3 auto-cranks/s — each yields a full click of every energy');
     expect(describeEffect({ type: 'autoClick', perSecond: 0.5 }, 1)).toBe('+0.5 auto-cranks/s — each yields a full click of every energy');
   });
+
+  it('describes the WP27 crank echo and wind-up (four decimals kept)', () => {
+    expect(describeEffect({ type: 'crankEcho', seconds: 0.15 }, 1)).toBe('Clicks echo 0.15s of all output');
+    expect(describeEffect({ type: 'windup', seconds: 0.35, refill: 0.035 }, 1)).toBe('+0.35s wind-up, +0.035s/s refill');
+    expect(describeEffect({ type: 'windup', seconds: 0.015, refill: 0.0015 }, 10)).toBe('+0.15s wind-up, +0.015s/s refill');
+  });
+
+  it('describes the WP27 faults and overdrive', () => {
+    expect(describeEffect({ type: 'faultUnlock', seconds: 15 }, 1)).toBe('Faults appear; clearing one pays 15s of all output');
+    expect(describeEffect({ type: 'faultSeconds', seconds: 3 }, 1)).toBe('Cleared faults pay +3s');
+    expect(describeEffect({ type: 'faultRate', factor: 0.9 }, 1)).toBe('Fault interval ×0.9');
+    expect(describeEffect({ type: 'faultWindow', seconds: 4 }, 1)).toBe('Faults last +4s');
+    expect(describeEffect({ type: 'overdrive', seconds: 6, factor: 2 }, 1)).toBe('Cleared faults: ×2 output for 6s');
+  });
 });
 
 describe('purchase failures', () => {
@@ -337,9 +351,9 @@ describe('purchase success', () => {
     if (result.ok) expect(result.state.res.me).toBe(0);
   });
 
-  it('buys reinforcedCrank for 2500 ME once gearRatio is 3', () => {
-    const first = purchase(withMe(withLevels({ gearRatio: 3 }), 2500, 2500), 'reinforcedCrank');
-    expect(first).toMatchObject({ ok: true, cost: 2500, newLevel: 1 });
+  it('buys reinforcedCrank for 1200 ME once gearRatio is 3', () => {
+    const first = purchase(withMe(withLevels({ gearRatio: 3 }), 1200, 1200), 'reinforcedCrank');
+    expect(first).toMatchObject({ ok: true, cost: 1200, newLevel: 1 });
     if (!first.ok) return;
     expect(first.state.res.me).toBe(0);
     expect(first.state.techLevels.reinforcedCrank).toBe(1);
@@ -388,14 +402,14 @@ describe('purchase success', () => {
 
 describe('evaluateMilestones', () => {
   it('does nothing below the lifetime threshold', () => {
-    const s = withMe(withLevels({ pistonArray: 1, flywheel: 1 }), 0, 239999);
+    const s = withMe(withLevels({ pistonArray: 1, flywheel: 1 }), 0, 399999);
     const result = evaluateMilestones(s);
     expect(result.unlocked).toEqual([]);
     expect(result.state).toBe(s);
   });
 
   it('unlocks generatorBlueprint at the threshold, idempotently', () => {
-    const s = withMe(withLevels({ pistonArray: 1, flywheel: 1 }), 5, 240000);
+    const s = withMe(withLevels({ pistonArray: 1, flywheel: 1 }), 5, 400000);
     const first = evaluateMilestones(s);
     expect(first.unlocked).toEqual(['generatorBlueprint']);
     expect(first.state.techLevels.generatorBlueprint).toBe(1);
@@ -408,12 +422,12 @@ describe('evaluateMilestones', () => {
   });
 
   it('needs flywheel', () => {
-    const s = withMe(withLevels({ pistonArray: 1 }), 0, 240000);
+    const s = withMe(withLevels({ pistonArray: 1 }), 0, 400000);
     expect(evaluateMilestones(s).unlocked).toEqual([]);
   });
 
   it('needs pistonArray', () => {
-    const s = withMe(withLevels({ flywheel: 1 }), 0, 240000);
+    const s = withMe(withLevels({ flywheel: 1 }), 0, 400000);
     expect(evaluateMilestones(s).unlocked).toEqual([]);
   });
 
@@ -454,11 +468,11 @@ describe('scripted two-branch run', () => {
       spent += buy(id);
     }
     spent += buy('pistonArray');
-    expect(spent).toBe(19145);
+    expect(spent).toBe(8845);
 
     const result = evaluateMilestones(s);
     expect(result.unlocked).toEqual(['generatorBlueprint']);
-    expect(result.state.res.me).toBe(1e6 - 19145);
+    expect(result.state.res.me).toBe(1e6 - 8845);
     expect(result.state.lifetime.me).toBe(1e6);
   });
 });

@@ -1,7 +1,7 @@
 // Tests for the behaviour scheduler (WP24 T3a): the hash and seed helpers, the draw index start (k0), the stare map, looks (key, first,
 // last, static), visible change gaps, caps, hold clips, the 'when' conditions and the eligible lists, the pick rule over the real
-// repertoire (no A to A except a merge, no walk after a walk, cooldowns, travel filters, hold and static run caps, the crow's frozen
-// cap), the fallback chain with small pools, the spot travel (walk time, previous spot damp), startSeg, the follow and recency odds,
+// repertoire (no A to A except a merge, no walk after a walk, cooldowns, travel filters, hold and static run caps, the crow's glitch
+// share and run, WP27 D5), the fallback chain with small pools, the spot travel (walk time, previous spot damp), startSeg, the follow and recency odds,
 // and determinism. Pure maths, fixed seeds. Structure and canon only: the numbers come from the data and are never pinned here. The timed runner (T3b): dt invariance, A to A, the per-step walk and facing rules, pause, rehome, pins, parking, clip frame timing, emits, the seam and reduced motion. T3c: cues and reactions (bands, chance, pair cooldown, walks, wakes), crank mode, the era change, the unison conductor, and the era IV runner path (join, accents, rises, perBeat, downbeats, the stare, walks, leaving).
 import { describe, it, expect } from 'vitest';
 import {
@@ -328,21 +328,35 @@ describe('pickNext over the real repertoire', () => {
     }
   });
 
-  it('keeps the crow I frozen hold and its static run within 55 s', () => {
-    const pool = eligible('crow', 1, ctxOf({ era: 1 }));
-    const env = envOf('crow', 1, { fps: 4 });
-    let frozen = 0;
-    for (const seed of [1, 2, 3, 4]) {
-      const picks = playPicks(pool, env, seed, { minutes: 60 });
-      expectRules(picks, env);
-      for (const p of picks) {
-        if (p.seg.id !== 'frozen') continue;
-        frozen++;
-        expect(p.seg.holdMs).toBeLessThanOrEqual(55000);
-        expect(p.seg.endMs - p.seg.runStartMs).toBeLessThanOrEqual(55000);
+  it('keeps the crow perched in eras I and II: the spread-wing glitch is at most 5 % of the time and never a run over 2 s (WP27 D5)', () => {
+    // A segment shows the spread wing when its look draws frozen or frozenTip (the tip try only, by the data guard).
+    const spreadWing = (key: string): boolean => key.split('/').some((f) => f === 'frozen' || f === 'frozenTip');
+    for (const era of [1, 2] as const) {
+      const pool = eligible('crow', era, ctxOf({ era }));
+      const env = envOf('crow', era, { fps: 4 });
+      let spreadMs = 0;
+      let totalMs = 0;
+      let spreadPicks = 0;
+      for (const seed of [1, 2, 3, 4]) {
+        const picks = playPicks(pool, env, seed, { minutes: 60 });
+        expectRules(picks, env);
+        let run = 0;
+        let prevSpread = false;
+        for (const { seg } of picks) {
+          const spread = spreadWing(seg.look.key);
+          if (spread) {
+            spreadPicks += 1;
+            spreadMs += seg.endMs - seg.startMs;
+            run = prevSpread ? run + (seg.endMs - seg.startMs) : seg.endMs - seg.startMs;
+            expect(run, `era ${era} seed ${seed} spread-wing run`).toBeLessThanOrEqual(2000);
+          }
+          prevSpread = spread;
+        }
+        totalMs += picks[picks.length - 1]?.seg.endMs ?? 0;
       }
+      expect(spreadPicks, `era ${era} glitch picks`).toBeGreaterThan(0);
+      expect(spreadMs / totalMs, `era ${era} spread-wing share`).toBeLessThanOrEqual(0.05);
     }
-    expect(frozen).toBeGreaterThan(0);
   });
 
   it('merges a repeatable activity into the same segment (same start, longer hold)', () => {
@@ -1364,6 +1378,103 @@ describe('crank mode (T3c)', () => {
     r.step(100, ctxFor('inspector', 1, 'fps4', HOME_L, { spots: [] }));
     expect(r.snapshot().sinceMs - before).toBe(100);
     expect(r.snapshot().activity).toBe('write');
+  });
+});
+
+// ---- WP27 F5.1b: the crow's glitch (tipTry) never shows in crank playback and never as a fresh runner's first pick. ----
+describe('the crow glitch in crank playback and as a first pick (WP27 F5.1b)', () => {
+  // The frames the crow perches on in eras I-II (WP27 D5): all the crank may show without the glitch.
+  const PERCHED: readonly string[] = ['perch0', 'perch1', 'perchTurn', 'peck0', 'peck1', 'ruffle'];
+  // One crank burst of clicks: each click posts the crankClick cue (a fresh index per burst).
+  const burstCues = (index: number): BehaviourCtx['cues'] => [{ id: 'crankClick', index }];
+
+  it('the pool holds the glitch in timed playback and never in crank playback', () => {
+    expect(eligible('crow', 1, ctxFor('crow', 1, 'fps4', HOME_R)).some((a) => a.id === 'tipTry')).toBe(true);
+    expect(eligible('crow', 1, ctxFor('crow', 1, 'crank', HOME_R)).some((a) => a.id === 'tipTry')).toBe(false);
+    expect(eligible('crow', 2, ctxFor('crow', 2, 'crank', HOME_R)).some((a) => a.id === 'tipTry')).toBe(false);
+  });
+
+  it('a crow in crank playback: 200 bursts of 1-12 clicks per seed (seeds 1-4), each followed by 5-30 s of steps, never shows the glitch', () => {
+    for (const seed of [1, 2, 3, 4]) {
+      const ctx = ctxFor('crow', 1, 'crank', HOME_R);
+      const log: BehaviourLogEntry[] = [];
+      const r = createBehaviourRunner('crow', seed, STUB_CONDUCTOR, (e) => log.push(e));
+      r.reset(seed, 0, HOME_R);
+      const frames = new Set<string>();
+      const activities = new Set<string>();
+      r.step(0, ctx);
+      for (let burst = 0; burst < 200; burst++) {
+        const clicks = 1 + Math.floor(hash01(seed + 5, 2 * burst) * 12);
+        const f = r.step(0, { ...ctx, crankSteps: clicks, cues: burstCues(burst + 1) });
+        frames.add(f.frame);
+        activities.add(f.activity);
+        // 5-30 s of 100 ms steps with no click: the crank does not move, so the frame must hold on the perched set.
+        const waitSteps = 50 + Math.floor(hash01(seed + 9, burst) * 251);
+        for (let s = 0; s < waitSteps; s++) {
+          const w = r.step(100, { ...ctx, crankSteps: 0 });
+          frames.add(w.frame);
+          activities.add(w.activity);
+        }
+      }
+      expect([...frames].filter((fr) => !PERCHED.includes(fr)), `seed ${seed} frames`).toEqual([]);
+      expect(activities.has('tipTry'), `seed ${seed} glitch on screen`).toBe(false);
+      expect(log.some((e) => e.activity === 'tipTry'), `seed ${seed} glitch in log`).toBe(false);
+      expect(log.length, `seed ${seed} closed segments`).toBeGreaterThan(20);
+    }
+  });
+
+  it('the crank pool follows the mode: a runner that played timed first drops the glitch once it cranks (seeds 1-4)', () => {
+    for (const seed of [1, 2, 3, 4]) {
+      const timed = ctxFor('crow', 1, 'fps4', HOME_R);
+      const crank = ctxFor('crow', 1, 'crank', HOME_R);
+      const log: BehaviourLogEntry[] = [];
+      const r = createBehaviourRunner('crow', seed, STUB_CONDUCTOR, (e) => log.push(e));
+      r.reset(seed, 0, HOME_R);
+      for (let i = 0; i < 1200; i++) r.step(100, timed);
+      // Switch to crank when the timed clock is not on the glitch (the cache, not an in-progress glitch, is what this checks).
+      for (let i = 0; i < 1200 && r.snapshot().activity === 'tipTry'; i++) r.step(100, timed);
+      log.length = 0;
+      const frames = new Set<string>();
+      const activities = new Set<string>();
+      r.step(0, crank);
+      for (let burst = 0; burst < 100; burst++) {
+        const clicks = 1 + Math.floor(hash01(seed + 5, 2 * burst) * 12);
+        const f = r.step(0, { ...crank, crankSteps: clicks, cues: burstCues(burst + 1) });
+        frames.add(f.frame);
+        activities.add(f.activity);
+      }
+      expect([...frames].filter((fr) => !PERCHED.includes(fr)), `seed ${seed} frames`).toEqual([]);
+      expect(activities.has('tipTry'), `seed ${seed} glitch on screen`).toBe(false);
+      expect(log.some((e) => e.activity === 'tipTry'), `seed ${seed} glitch in log`).toBe(false);
+    }
+  });
+
+  it('a fresh runner never starts with the glitch, in crank or fps2 playback, in eras I and II (seeds 1-200)', () => {
+    for (const mode of ['crank', 'fps2'] as const) {
+      for (const era of [1, 2] as const) {
+        const ctx = ctxFor('crow', era, mode, HOME_R);
+        const pool = eligible('crow', era, ctx);
+        for (let seed = 1; seed <= 200; seed++) {
+          // The first pick of a fresh memory (no current segment) and the first frame of a fresh runner (no time passes: the first segment).
+          const first = pickNext(newMemory(seed, 0, 0), null, pool, envOf('crow', era), 0);
+          expect(first.id, `${mode} era ${era} seed ${seed} first pick`).not.toBe('tipTry');
+          const r = createBehaviourRunner('crow', seed, STUB_CONDUCTOR);
+          r.reset(seed, 0, HOME_R);
+          const f = r.step(0, ctx);
+          expect(f.activity, `${mode} era ${era} seed ${seed} first frame`).not.toBe('tipTry');
+        }
+      }
+    }
+  });
+
+  it('in fps2 a crankClick cue can still start the glitch as a reaction (the pick rule does not reach reactions)', () => {
+    let found = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      // The cue index whose chance gate passes for this seed, so the reaction is due; the crow's current segment is interruptible.
+      const log = playCued('crow', seed, ctxFor('crow', 1, 'fps2', HOME_R), STEP, 2 * MIN, [{ step: 30, id: 'crankClick', index: passingIndex(seed) }]);
+      if (log.some((e) => e.reaction && e.activity === 'tipTry')) found += 1;
+    }
+    expect(found).toBeGreaterThan(0);
   });
 });
 

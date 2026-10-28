@@ -3,6 +3,7 @@
 // Limits for the raw rows come from scripts/smoke/perf-budget.json ("bundle" block, decimal KB / MB).
 // App js gzip is report-only since WP15R (program D7: raw sizes only): printed with status 'report', never a breach.
 // The lazy living-world chunk (LivingWorldDirector-*.js) is gated by bundle.lazyWorldKb (WP23a: the app chunk stays under appRawKb because the director loads lazily).
+// The lazy fault marker chunk (FaultMarker-*.js) is gated by bundle.lazyFaultKb when that key exists (WP27; sum 0 when the chunk is absent).
 // Prints a table; exit 1 on any breach.
 import { readdirSync, readFileSync, statSync, existsSync } from 'fs';
 import { gzipSync } from 'zlib';
@@ -39,6 +40,7 @@ const appJs = files.filter((f) => /^index-.*\.js$/.test(f));
 const phaserJs = files.filter((f) => /^phaser-.*\.js$/.test(f));
 const css = files.filter((f) => f.endsWith('.css'));
 const lazyWorld = files.filter((f) => /^LivingWorldDirector-.*.js$/.test(f));
+const lazyFault = files.filter((f) => /^FaultMarker-.*\.js$/.test(f));
 
 if (appJs.length === 0) {
   console.error('bundle-budget: no index-*.js app chunk in ' + assetsDir);
@@ -59,6 +61,7 @@ row('app js raw (index-*.js)', sum(appJs, rawOf) / KB, budget.appRawKb, 'KB');
 row('app js gzip (index-*.js)', sum(appJs, gzOf) / KB, undefined, 'KB', true);
 row('phaser js raw (phaser-*.js)', sum(phaserJs, rawOf) / KB, budget.phaserKb, 'KB');
 if (budget.lazyWorldKb !== undefined) row('lazy world js raw (Director-*.js)', sum(lazyWorld, rawOf) / KB, budget.lazyWorldKb, 'KB');
+if (budget.lazyFaultKb !== undefined) row('lazy fault marker js raw (FaultMarker-*.js)', sum(lazyFault, rawOf) / KB, budget.lazyFaultKb, 'KB');
 row('css raw (*.css)', sum(css, rawOf) / KB, budget.cssKb, 'KB');
 const publicDir = join(root, 'public', 'assets');
 const publicKb = existsSync(publicDir) ? dirBytes(publicDir) / KB : 0;
@@ -66,10 +69,10 @@ row('public/assets total', publicKb, budget.publicAssetsKb, 'KB');
 
 const fmt = (n) => n.toFixed(1).padStart(10);
 console.log(`bundle budget (${distDir}; decimal KB)`);
-console.log('metric'.padEnd(34) + 'value'.padStart(10) + '  limit'.padEnd(12) + 'status');
+console.log('metric'.padEnd(44) + 'value'.padStart(10) + '  limit'.padEnd(12) + 'status');
 for (const r of rows) {
   const status = r.reportOnly ? 'report' : r.ok ? 'ok' : 'BREACH';
-  console.log(r.name.padEnd(34) + fmt(r.value) + '  ' + String(r.limit).padEnd(10) + status);
+  console.log(r.name.padEnd(44) + fmt(r.value) + '  ' + String(r.limit).padEnd(10) + status);
 }
 const breaches = rows.filter((r) => !r.ok);
 console.log(breaches.length === 0 ? 'bundle budget: PASS' : `bundle budget: FAIL (${breaches.length} breach)`);

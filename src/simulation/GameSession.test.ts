@@ -77,20 +77,22 @@ describe('GameSession', () => {
     it('advances automation by the elapsed time and moves lastSimTime', () => {
       const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
       session.applyOffline(0);
+      // WP27 re-pin (F2hi): Worn Motor is 2 ME/s, was 17 ME/s in v0.10.1: 5 s = 10 ME.
       session.update(5000);
-      expect(session.state.res.me).toBeCloseTo(85, 9);
+      expect(session.state.res.me).toBeCloseTo(10, 9);
       expect(session.state.lastSimTime).toBe(5000);
       session.update(5000);
-      expect(session.state.res.me).toBeCloseTo(85, 9);
+      expect(session.state.res.me).toBeCloseTo(10, 9);
     });
 
     it('routes a first update through offline progress, capped at the offline limit', () => {
       const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => 0 });
       const log = record(session);
       session.update(36_000_000);
-      expect(session.state.res.me).toBeCloseTo(489600, 9);
+      // WP27 re-pin (F2hi): 28800 s capped x 2 ME/s = 57600 (was 489600 at 17 ME/s).
+      expect(session.state.res.me).toBeCloseTo(57600, 9);
       expect(session.state.lastSimTime).toBe(36_000_000);
-      expect(log).toEqual(['offline:489600']);
+      expect(log).toEqual(['offline:57600']);
     });
 
     it('advances normally for a gap equal to the offline threshold, without an offline event', () => {
@@ -98,7 +100,8 @@ describe('GameSession', () => {
       session.applyOffline(0);
       const log = record(session);
       session.update(OFFLINE_REPORT_THRESHOLD_SECONDS * 1000);
-      expect(session.state.res.me).toBeCloseTo(OFFLINE_REPORT_THRESHOLD_SECONDS * 17, 9);
+      // WP27 re-pin (F2hi): Worn Motor 2 ME/s (was 17).
+      expect(session.state.res.me).toBeCloseTo(OFFLINE_REPORT_THRESHOLD_SECONDS * 2, 9);
       expect(session.state.lastSimTime).toBe(OFFLINE_REPORT_THRESHOLD_SECONDS * 1000);
       expect(log).toEqual([]);
     });
@@ -118,7 +121,8 @@ describe('GameSession', () => {
       session.applyOffline(0);
       const log = record(session);
       session.update(500);
-      expect(session.state.res.me).toBeCloseTo(8.5, 9);
+      // WP27 re-pin (F2hi): 0.5 s x 2 ME/s = 1 (was 8.5 at 17 ME/s).
+      expect(session.state.res.me).toBeCloseTo(1, 9);
       expect(log).toEqual([]);
     });
 
@@ -129,8 +133,9 @@ describe('GameSession', () => {
       session.update(2000);
       const log = record(session);
       session.update(2000 + 300_000);
-      expect(log).toEqual(['offline:5100']);
-      expect(session.state.res.me).toBeCloseTo(5134, 9);
+      // WP27 re-pin (F2hi): 300 s x 2 ME/s = 600, plus the 4 ME of the two normal steps (was 5100 and 5134 at 17 ME/s).
+      expect(log).toEqual(['offline:600']);
+      expect(session.state.res.me).toBeCloseTo(604, 9);
     });
 
     it('does not double-count: applyOffline(t) then update(t) adds nothing', () => {
@@ -165,11 +170,12 @@ describe('GameSession', () => {
       let t = 3000;
       const session = new GameSession({ state: withLevels({ wornMotor: 1 }, { lastSimTime: 0 }), now: () => t });
       session.update();
-      expect(session.state.res.me).toBeCloseTo(51, 9);
+      // WP27 re-pin (F2hi): Worn Motor 2 ME/s (was 17): 3 s = 6, then 4 s = 8 (was 51 and 68).
+      expect(session.state.res.me).toBeCloseTo(6, 9);
       expect(session.state.lastSimTime).toBe(3000);
       t = 4000;
       session.update();
-      expect(session.state.res.me).toBeCloseTo(68, 9);
+      expect(session.state.res.me).toBeCloseTo(8, 9);
     });
   });
 
@@ -295,14 +301,15 @@ describe('GameSession', () => {
       expect(report).toEqual({
         elapsedSeconds: 3600,
         cappedSeconds: 3600,
-        gained: { ...emptyResourceMap(), me: 120600 },
+        // WP27 re-pin (F2hi): Worn Motor 2 + 5 x Motor Tuning 0.9 = 6.5 ME/s x 3600 s = 23400 (was 120600 at 33.5 ME/s).
+        gained: { ...emptyResourceMap(), me: 23400 },
       });
-      expect(session.state.res.me).toBeCloseTo(120600, 9);
+      expect(session.state.res.me).toBeCloseTo(23400, 9);
       expect(session.state.lastSimTime).toBe(3_600_000);
 
       session.update(3_600_000);
-      expect(session.state.res.me).toBeCloseTo(120600, 9);
-      expect(log).toEqual(['offline:120600']);
+      expect(session.state.res.me).toBeCloseTo(23400, 9);
+      expect(log).toEqual(['offline:23400']);
     });
 
     it('reports only ME for a motor save and credits res and lifetime', () => {
@@ -311,13 +318,14 @@ describe('GameSession', () => {
         now: () => 0,
       });
       const report = session.applyOffline(10_000);
-      expect(report.gained.me).toBeCloseTo(170, 9);
+      // WP27 re-pin (F2hi): 10 s x 2 ME/s = 20 (was 170 at 17 ME/s).
+      expect(report.gained.me).toBeCloseTo(20, 9);
       expect(report.gained.ee).toBe(0);
       expect(report.gained.pr).toBe(0);
       expect(report.gained.rs).toBe(0);
       expect(report.gained.xf).toBe(0);
-      expect(session.state.res.me).toBeCloseTo(170, 9);
-      expect(session.state.lifetime.me).toBeCloseTo(170, 9);
+      expect(session.state.res.me).toBeCloseTo(20, 9);
+      expect(session.state.lifetime.me).toBeCloseTo(20, 9);
       expect(session.state.res.ee).toBe(0);
     });
 
@@ -328,8 +336,9 @@ describe('GameSession', () => {
       });
       const report = session.applyOffline(10 * 3_600_000);
       expect(report.cappedSeconds).toBe(28800);
-      expect(report.gained.me).toBeCloseTo(964800, 9);
-      expect(session.state.res.me).toBeCloseTo(964800, 9);
+      // WP27 re-pin (F2hi): 28800 s x 6.5 ME/s = 187200 (was 964800 at 33.5 ME/s).
+      expect(report.gained.me).toBeCloseTo(187200, 9);
+      expect(session.state.res.me).toBeCloseTo(187200, 9);
     });
 
     it('still emits offline when nothing is gained', () => {
@@ -398,7 +407,8 @@ describe('GameSession', () => {
         state: withMe(
           withLevels({ gearRatio: 3, reinforcedCrank: 1, wornMotor: 1, motorTuning: 5, pistonArray: 1 }, { lastSimTime: 0 }),
           5000,
-          240000,
+          // WP27 re-pin (F2hi): Generator Blueprint's lifetime ME requirement is 400000 (was 240000).
+          400000,
         ),
         now: () => 0,
       });

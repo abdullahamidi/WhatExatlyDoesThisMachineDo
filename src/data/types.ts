@@ -7,7 +7,8 @@ export const TECH_IDS = ['handCrank','gearRatio','reinforcedCrank','flywheel','w
   'boiler','firebox','inductionHeater','steamHammer','superheater','condenser','turbine','reliefValves','pressureVesselBlueprint',
   'resonatorSpire','harmonicCoil','pressureResonator','crankServo','echoCrank','phaseLock','standingWave','crystalLattice','harmonicConvergence',
   'nullChamber','containmentRing','resonantSiphon','graviticAnchor','inversionCrank','lensArray','horizonField','skyAperture','finalAlignment','primaryFunction',
-  'bellowsDrive','gridExciter','mainsBackfeed','steamLance'] as const;
+  'bellowsDrive','gridExciter','mainsBackfeed','steamLance',
+  'faultLamp','dischargeLever','leakWhistle','dampingFork','overrunClutch'] as const;
 export type TechId = typeof TECH_IDS[number];
 export const RESOURCE_IDS = ['me', 'ee', 'pr', 'rs', 'xf'] as const;
 export type ResourceId = typeof RESOURCE_IDS[number];
@@ -29,6 +30,13 @@ export type Effect =                                      // repeatable effects 
   | { type: 'clickEcho'; seconds: number; res: ResourceId } // per click = seconds*lvl * perSecond[res]
   | { type: 'offlineHours'; hours: number } // adds hours * level to the offline cap
   | { type: 'autoClick'; perSecond: number } // perSecond * level automatic crank clicks per second
+  | { type: 'crankEcho'; seconds: number }                 // every click (manual and servo) also yields seconds x perSecondPre of EVERY energy, ME included
+  | { type: 'windup'; seconds: number; refill: number }    // wind-up capacity (s of output) and refill (s per s)
+  | { type: 'faultUnlock'; seconds: number }               // faults on; base payout seconds
+  | { type: 'faultSeconds'; seconds: number }              // + payout seconds
+  | { type: 'faultRate'; factor: number }                  // spawn interval x factor^level
+  | { type: 'faultWindow'; seconds: number }               // + seconds a fault stays
+  | { type: 'overdrive'; seconds: number; factor: number } // on a clear: perSecond x factor for `seconds` (refresh, never stack)
   | { type: 'ending' } // marker: starts the finale (WP12); no rate, click or offline effect
   | { type: 'none' };
 export type Requirement =

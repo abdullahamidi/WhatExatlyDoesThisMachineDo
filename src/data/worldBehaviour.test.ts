@@ -159,6 +159,52 @@ describe('girl and crow stay still on screen', () => {
   });
 });
 
+// The crow perched with folded wings in eras I-II (WP27 D5): the base activities draw only the perched frames; the spread-wing freeze is
+// the one tip try glitch (at most 1.8 s, weight at most 0.5), the only activity marked glitch.
+describe('the crow is perched in eras I-II (WP27 D5)', () => {
+  const PERCH_FRAMES = ['perch0', 'perch1', 'perchTurn', 'peck0', 'peck1', 'ruffle'];
+  const SPREAD_FRAMES = ['frozen', 'frozenTip', 'head', 'talk', 'fly0', 'fly1', 'fly2'];
+  const EARLY_CROW = ROWS.filter((r) => r.actor === 'crow' && (r.era === 1 || r.era === 2));
+
+  it('every era I-II crow activity but tipTry draws only the perched frames, never a spread-wing or head or talk frame', () => {
+    for (const { era, act } of EARLY_CROW) {
+      if (act.id === 'tipTry') continue;
+      for (const f of shownFrames(act.clip)) {
+        expect(PERCH_FRAMES, `era ${era} crow ${act.id} ${f}`).toContain(f);
+        expect(SPREAD_FRAMES, `era ${era} crow ${act.id} ${f}`).not.toContain(f);
+      }
+    }
+  });
+
+  it('tipTry is the brief glitch: hold at most 2 s, weight at most 0.5, in eras I and II', () => {
+    const tips = EARLY_CROW.filter((r) => r.act.id === 'tipTry');
+    expect(tips.map((r) => r.era)).toEqual([1, 2]);
+    for (const { era, act } of tips) {
+      expect(act.holdMs[1], `era ${era} tipTry hold`).toBeLessThanOrEqual(2000);
+      expect(act.weight, `era ${era} tipTry weight`).toBeLessThanOrEqual(0.5);
+    }
+  });
+
+  it('perchHead and perchTalk are crow sheet frames, and neither is a spread-wing frame', () => {
+    expect(WORLD_FRAMES.crow).toEqual(expect.arrayContaining(['perchHead', 'perchTalk']));
+    expect(SPREAD_FRAMES).not.toContain('perchHead');
+    expect(SPREAD_FRAMES).not.toContain('perchTalk');
+  });
+
+  it('the era IV pre-stare unison crow shows only folded-wing frames (AD2 round 2 F9)', () => {
+    for (const [id, clip] of Object.entries(WORLD_UNISON.map.pre.crow)) {
+      if (clip === undefined) continue;
+      for (const f of shownFrames(clip)) expect(SPREAD_FRAMES, `pre crow ${id} ${f}`).not.toContain(f);
+    }
+    expect(WORLD_UNISON.map.post.crow.stare?.frames).toEqual(['head']);
+  });
+
+  it('only the tipTry activity carries glitch, in eras I and II (the crank and first-pick rules read it)', () => {
+    const glitch = ROWS.filter((r) => r.act.glitch === true).map((r) => `${r.actor} ${r.era} ${r.act.id}`);
+    expect(glitch).toEqual(['crow 1 tipTry', 'crow 2 tipTry']);
+  });
+});
+
 describe('stare-safe rules (D2, Q7)', () => {
   it('the first stare-safe entry is the actor front: front, head, head, stand0', () => {
     expect(WORLD_STARE_SAFE.inspector[0]).toBe('front');
@@ -290,8 +336,12 @@ describe('behaviour constants', () => {
 });
 
 // Spots (WP24 T1, decision 3): each Inspector and dog spot FEET x (the base placement x plus dx) must lie in the actor band of the
-// framing; neighbouring spots are at least minTravelPx apart; the Inspector has at least two spots and the dog three.
+// framing; neighbouring spots are at least minTravelPx apart; the Inspector has at least two spots and the dog three, except that the
+// Inspector keeps one spot beside Sensor 7 in the sensor-side framings (WP27 F6.2: s8, s8w, s10).
 describe('spots against the actor bands (actorBand)', () => {
+  // The framings where Sensor 7 stands beside the Inspector (WP27 F6.2): the Inspector keeps his one spot there.
+  const SENSOR_SIDE_FRAMINGS: readonly FramingKey[] = ['s8', 's8w', 's10'];
+
   const SPOT_STAGES: readonly { name: string; buys: readonly string[] }[] = [
     { name: 'S7', buys: S7 }, { name: 'S8', buys: S8 }, { name: 'S9', buys: S9 }, { name: 'S10', buys: S10 }, { name: 'S11', buys: S11 },
     { name: 'S15', buys: S15 },
@@ -307,7 +357,8 @@ describe('spots against the actor bands (actorBand)', () => {
       const band = actorBand(framing, pose, levels, actor);
       console.log(`${s.name} ${framing} ${actor} spots ${JSON.stringify(spots.map((p) => [p.id, p.dx]))} band ${JSON.stringify(band)}`);
       expect(base, `${framing} ${actor} placement`).toBeDefined();
-      expect(spots.length, `${framing} ${actor} spot count`).toBeGreaterThanOrEqual(actor === 'inspector' ? 2 : 3);
+      const minSpots = actor === 'dog' ? 3 : SENSOR_SIDE_FRAMINGS.includes(framing) ? 1 : 2;
+      expect(spots.length, `${framing} ${actor} spot count`).toBeGreaterThanOrEqual(minSpots);
       expect(new Set(spots.map((p) => p.id)).size, `${framing} ${actor} unique spot ids`).toBe(spots.length);
       for (let i = 1; i < spots.length; i++) {
         const prev = spots[i - 1];

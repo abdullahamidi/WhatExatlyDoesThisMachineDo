@@ -103,9 +103,13 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
   clickSub.style.display = 'none';
   const autoEl = createElement('div', { id: 'hud-auto', className: 'hud-auto' });
   autoEl.style.display = 'none';
+  // WIND-UP row (WP27 C8) under the click lines, in the AUTO-CRANK look; hidden while there is no wind-up to show.
+  const windupEl = createElement('div', { id: 'hud-windup', className: 'hud-auto hud-windup' });
+  windupEl.style.display = 'none';
   panel.appendChild(clickRow);
   panel.appendChild(clickSub);
   panel.appendChild(autoEl);
+  panel.appendChild(windupEl);
 
   // Machine plaque: the current primary function line (see plaqueText in hudView.ts).
   const plaque = createElement('div', { id: 'hud-plaque', className: 'hud-plaque', text: INITIAL_PLAQUE });
@@ -167,6 +171,12 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
     autoEl.textContent = text ?? '';
     autoEl.style.display = text === null ? 'none' : '';
   });
+  // WP27 C8: the WIND-UP row is cached on its text (the view object is new on every build), and its tooltip apart.
+  const setWindup = cachedWrite<string | null>(null, (text) => {
+    windupEl.textContent = text ?? '';
+    windupEl.style.display = text === null ? 'none' : '';
+  });
+  const setWindupTitle = cachedWrite<string>('', (t) => { windupEl.title = t; });
   const setPlaque = cachedWrite<string>(INITIAL_PLAQUE, (text) => { plaque.textContent = text; });
   const setCycle = cachedWrite<string>('', (text) => {
     cycleEl.textContent = text;
@@ -182,6 +192,8 @@ export function createHud(root: HTMLElement, commands: GameContext['commands']):
       setClickTitle(view.click.title);
       setSecondary(view.click.secondary);
       setAuto(view.autoCrank);
+      setWindup(view.windup?.text ?? null);
+      setWindupTitle(view.windup?.title ?? '');
       setPlaque(view.plaque);
       setCycle(view.cycle ?? '');
       setViewMachine(view.viewMachine);

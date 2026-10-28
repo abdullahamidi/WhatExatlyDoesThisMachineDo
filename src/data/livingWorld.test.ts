@@ -288,11 +288,12 @@ describe('cadence config (bible §7.1)', () => {
   });
 });
 
-describe('placements (DENIZEN_ART §3, rows e1 / s8 / s9)', () => {
-  const FRAMINGS: readonly ('e1' | 's8' | 's9')[] = ['e1', 's8', 's9'];
+describe('placements (DENIZEN_ART §3, rows e1 / s8 / s8w / s9)', () => {
+  const FRAMINGS: readonly ('e1' | 's8' | 's8w' | 's9')[] = ['e1', 's8', 's8w', 's9'];
   // Expected tables written from DENIZEN_ART §3 (feet x in world px). Stake = dog x - 16; hole = dog x + 30 (front row, §1.4).
-  // Sensor 7 and the clock are off-stage at s8. The girl is a window or pylon-foot plane and has no ground placement.
-  const EXPECTED: Record<'e1' | 's8' | 's9', Partial<Record<GroundId, WorldPlacement>>> = {
+  // WP27 F6.1: Sensor 7 and the clock stand at s8; the s8w row (capacitorBank or sparkGap before the transformer) has Sensor 7 and
+  // no clock (documented exemption). The girl is a window or pylon-foot plane and has no ground placement.
+  const EXPECTED: Record<'e1' | 's8' | 's8w' | 's9', Partial<Record<GroundId, WorldPlacement>>> = {
     e1: {
       sensor7: { x: 1384, row: 'back' },
       inspector: { x: 1472, row: 'back', route: [1448, 1496] },
@@ -306,13 +307,26 @@ describe('placements (DENIZEN_ART §3, rows e1 / s8 / s9)', () => {
       scraps: { x: 1330, row: 'back', xs: [1330, 1420, 1530] },
     },
     s8: {
-      inspector: { x: 1472, row: 'back' },
+      sensor7: { x: 1470, row: 'back' },
+      inspector: { x: 1536, row: 'back' },
       dog: { x: 2604, row: 'front' },
+      clock: { x: 2680, row: 'back' },
       payphone: { x: 2604, row: 'back' },
       lamp: { x: 2656, row: 'back' },
       crow: { x: 2656, row: 'back' },
       stakeChain: { x: 2588, row: 'front' },
       hole: { x: 2634, row: 'front' },
+      scraps: { x: 1330, row: 'back', xs: [1330, 1420, 1530] },
+    },
+    s8w: {
+      sensor7: { x: 1500, row: 'back' },
+      inspector: { x: 1552, row: 'back' },
+      dog: { x: 2694, row: 'front' },
+      payphone: { x: 2678, row: 'back' },
+      lamp: { x: 2720, row: 'back' },
+      crow: { x: 2720, row: 'back' },
+      stakeChain: { x: 2676, row: 'front' },
+      hole: { x: 2716, row: 'front' },
       scraps: { x: 1330, row: 'back', xs: [1330, 1420, 1530] },
     },
     s9: {
@@ -333,18 +347,19 @@ describe('placements (DENIZEN_ART §3, rows e1 / s8 / s9)', () => {
     expect(WORLD_PLACEMENTS[key]).toEqual(EXPECTED[key]);
   });
 
-  it('has a row for all nine framing keys (WP23b late framings included)', () => {
-    const ALL: FramingKey[] = ['e1', 's8', 's9', 's10', 's11', 's15', 'portrait', 'baseL', 'baseR'];
+  it('has a row for all ten framing keys (WP23b late framings and the WP27 s8w pose included)', () => {
+    const ALL: FramingKey[] = ['e1', 's8', 's8w', 's9', 's10', 's11', 's15', 'portrait', 'baseL', 'baseR'];
     expect(Object.keys(WORLD_PLACEMENTS).sort()).toEqual([...ALL].sort());
   });
 
-  it('fills the late rows (WP23b R6): the lantern sits at x 965 wherever it stands, the girl only in her framings', () => {
+  it('fills the late rows (WP23b R6, WP27 F6.5): the lantern sits at x 965 wherever it stands, the girl only in her framings', () => {
     expect(WORLD_PLACEMENTS.s10).toEqual({
-      inspector: { x: 1252, row: 'back' }, dog: { x: 2858, row: 'front' }, payphone: { x: 2858, row: 'back' },
+      sensor7: { x: 1234, row: 'back' }, inspector: { x: 1276, row: 'back' }, dog: { x: 2858, row: 'front' }, payphone: { x: 2858, row: 'back' },
       stakeChain: { x: 2842, row: 'front' }, hole: { x: 2888, row: 'front' },
     });
     expect(WORLD_PLACEMENTS.s11.scraps).toEqual({ x: 690, row: 'back', xs: [690, 830, 960] });
-    expect(WORLD_PLACEMENTS.s11.inspector).toEqual({ x: 784, row: 'back', route: [760, 808] });
+    expect(WORLD_PLACEMENTS.s11.sensor7).toEqual({ x: 750, row: 'back' });
+    expect(WORLD_PLACEMENTS.s11.inspector).toEqual({ x: 816, row: 'back', route: [792, 840] });
     expect(WORLD_PLACEMENTS.portrait.inspector).toEqual({ x: 784, row: 'back' });
     for (const key of ['s15', 'portrait', 'baseL'] as const) expect(WORLD_PLACEMENTS[key].lantern, key).toEqual({ x: 965, row: 'front', dy: 40, inner: true });
     expect(WORLD_PLACEMENTS.baseL).not.toHaveProperty('dog');
@@ -355,7 +370,7 @@ describe('placements (DENIZEN_ART §3, rows e1 / s8 / s9)', () => {
   });
 
   // Every framing with a row, so the route, integer and stake checks cover the late rows too.
-  const ROWED: FramingKey[] = ['e1', 's8', 's9', 's10', 's11', 's15', 'portrait', 'baseL', 'baseR'];
+  const ROWED: FramingKey[] = ['e1', 's8', 's8w', 's9', 's10', 's11', 's15', 'portrait', 'baseL', 'baseR'];
   const placed = ROWED.flatMap((f) =>
     Object.entries(WORLD_PLACEMENTS[f]).flatMap(([ground, p]) => (p ? [{ where: `${f}.${ground}`, p }] : [])),
   );
@@ -376,15 +391,38 @@ describe('placements (DENIZEN_ART §3, rows e1 / s8 / s9)', () => {
     expect(bad).toEqual([]);
   });
 
-  it('places the stake 16 px behind the dog and the hole 30 px ahead of it, in every framing with a dog', () => {
+  it('places the stake 16 px behind the dog and the hole 30 px ahead of it, in every framing with a dog (s8w: 18 and 22, the right wing)', () => {
+    // WP27 F6.1: at s8w the right wing ends at 2720 (cx 2104), so the stake sits 18 px behind the dog and the hole 22 px ahead.
+    const OFFSETS: Partial<Record<FramingKey, { stake: number; hole: number }>> = { s8w: { stake: -18, hole: 22 } };
     const withDog = ROWED.filter((f) => WORLD_PLACEMENTS[f].dog !== undefined);
-    expect(withDog).toEqual(['e1', 's8', 's9', 's10', 's11', 's15', 'portrait', 'baseR']);
+    expect(withDog).toEqual(['e1', 's8', 's8w', 's9', 's10', 's11', 's15', 'portrait', 'baseR']);
     for (const f of withDog) {
       const dogX = WORLD_PLACEMENTS[f].dog?.x;
+      const off = OFFSETS[f] ?? { stake: -16, hole: 30 };
       expect(dogX, `dog x in ${f}`).toBeDefined();
-      if (WORLD_PLACEMENTS[f].stakeChain !== undefined) expect(WORLD_PLACEMENTS[f].stakeChain?.x).toBe((dogX ?? 0) - 16);
-      if (WORLD_PLACEMENTS[f].hole !== undefined) expect(WORLD_PLACEMENTS[f].hole?.x).toBe((dogX ?? 0) + 30);
+      if (WORLD_PLACEMENTS[f].stakeChain !== undefined) expect(WORLD_PLACEMENTS[f].stakeChain?.x).toBe((dogX ?? 0) + off.stake);
+      if (WORLD_PLACEMENTS[f].hole !== undefined) expect(WORLD_PLACEMENTS[f].hole?.x).toBe((dogX ?? 0) + off.hole);
     }
+  });
+
+  it('the s8w tripod (16 px either side of 1500) clears the Inspector body (14 px left of 1552)', () => {
+    // WP27 F6.1 / ART_AUDIT WP27 (a): Sensor 7 left of the far-plane mini, the Inspector right of it. The mini itself is tested in
+    // worldPlacement.test.ts (the girl mini at s8w).
+    const sensor = WORLD_PLACEMENTS.s8w.sensor7?.x ?? NaN;
+    const inspector = WORLD_PLACEMENTS.s8w.inspector?.x ?? NaN;
+    expect(sensor).toBe(1500);
+    expect(inspector).toBe(1552);
+    expect(sensor + 16).toBeLessThan(inspector - 14);
+  });
+
+  it('the s8 cycle 3+ girl (1504) stands in the mini slot: clear of the tripod (1470 + 16) and of the Inspector body (1536 - 14)', () => {
+    // ART_AUDIT WP27 (b): the girl's body reaches 14 px left and 10 px right of her x; the tripod is 16 px either side of its foot.
+    const girl = WORLD_GIRL_PLACEMENTS.s8?.ground?.x ?? NaN;
+    const sensor = WORLD_PLACEMENTS.s8.sensor7?.x ?? NaN;
+    const inspector = WORLD_PLACEMENTS.s8.inspector?.x ?? NaN;
+    expect(girl).toBe(1504);
+    expect(girl - 14).toBeGreaterThan(sensor + 16);
+    expect(girl + 10).toBeLessThan(inspector - 14);
   });
 });
 
@@ -621,11 +659,12 @@ describe('WP23a layout, environment and audio pins (W1-C)', () => {
     expect(WORLD_LAYOUT.wingClearPx).toBe(24);
   });
 
-  it('pins the nine framing reference poses (WP23b R6) with unique keys', () => {
+  it('pins the ten framing reference poses (WP23b R6, WP27 F6.1 s8w) with unique keys', () => {
     expect(WORLD_LAYOUT.framingPoses).toEqual([
-      { key: 'e1', zoom: 1, centerX: 1920 }, { key: 's8', zoom: 1, centerX: 2064 }, { key: 's9', zoom: 0.75, centerX: 2192 },
-      { key: 's10', zoom: 0.75, centerX: 2055 }, { key: 's11', zoom: 0.5, centerX: 1922 }, { key: 's15', zoom: 0.5, centerX: 1920 },
-      { key: 'portrait', zoom: 0.5, centerX: 1920 }, { key: 'baseL', zoom: 1, centerX: 1320 }, { key: 'baseR', zoom: 1, centerX: 2520 },
+      { key: 'e1', zoom: 1, centerX: 1920 }, { key: 's8', zoom: 1, centerX: 2064 }, { key: 's8w', zoom: 1, centerX: 2112 },
+      { key: 's9', zoom: 0.75, centerX: 2192 }, { key: 's10', zoom: 0.75, centerX: 2055 }, { key: 's11', zoom: 0.5, centerX: 1922 },
+      { key: 's15', zoom: 0.5, centerX: 1920 }, { key: 'portrait', zoom: 0.5, centerX: 1920 }, { key: 'baseL', zoom: 1, centerX: 1320 },
+      { key: 'baseR', zoom: 1, centerX: 2520 },
     ]);
     const keys: FramingKey[] = WORLD_LAYOUT.framingPoses.map((p) => p.key);
     expect(new Set(keys).size).toBe(keys.length);
@@ -640,16 +679,17 @@ describe('WP23a layout, environment and audio pins (W1-C)', () => {
     expect(WORLD_ENV.receiverOnHookArt).toEqual({ x: 13, y: -34 });
     expect(WORLD_MARKS.fogColor).toBe(0xddc9a3);
     expect(WORLD_GIRL_PLACEMENTS.e1?.ground).toEqual({ x: 1552, row: 'back' });
-    expect(WORLD_GIRL_PLACEMENTS.s8?.ground).toEqual({ x: 1552, row: 'back' });
+    expect(WORLD_GIRL_PLACEMENTS.s8?.ground).toEqual({ x: 1504, row: 'back' });
     expect(WORLD_GIRL_PLACEMENTS.s9?.ground).toEqual({ x: 1552, row: 'back' });
+    expect(WORLD_GIRL_PLACEMENTS.s8w).toBeUndefined();
   });
 
-  it('cycle 3 girl clears the 1530 scrap by 6 px and the Inspector spots by 48 px', () => {
+  it('cycle 3 girl clears the 1530 scrap by 6 px and the Inspector spots by 48 px (e1 and s9; s8 has its own test)', () => {
     // Her boots reach 8 world px left of her x (the art origin is x 8 of 16). The scrap is 16 px wide, centred on its x.
     const GIRL_BOOT_REACH = 8;
     const SCRAP_HALF_WIDTH = 8;
     const INSPECTOR_SPOTS = [1448, 1472, 1496];
-    for (const key of ['e1', 's8', 's9'] as const) {
+    for (const key of ['e1', 's9'] as const) {
       const girlX = WORLD_GIRL_PLACEMENTS[key]?.ground?.x;
       expect(girlX, key).toBeDefined();
       if (girlX === undefined) continue;

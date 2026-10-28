@@ -40,6 +40,17 @@ const stages = {
   s15_era5_full: S15,
   s16_postgame: S16,
 };
+// WP27 F6.4: the hook buys do not commit cast placements (the placement gate wants the TECH INDEX open), so a shot would show the stale
+// e1 cast. Open the index, wait, close it, clear the era card (the commit() sequence of the WP27 Art Director diagnosis).
+async function commitPlacements(p) {
+  await p.keyboard.press('t');
+  await p.waitForTimeout(1200);
+  await p.keyboard.press('Escape');
+  await p.waitForTimeout(2500);
+  await p.evaluate(() => { const c = document.getElementById('era-card'); if (c && !c.hidden) c.click(); });
+  await p.mouse.move(5, 5);
+  await p.waitForTimeout(400);
+}
 const only = process.env.ONLY ? process.env.ONLY.split(',') : Object.keys(stages);
 const b = await chromium.launch();
 const errors = [];
@@ -92,6 +103,8 @@ for (const name of only) {
   }
   // settle wait: env WAIT_MS overrides; s16_postgame waits 2.5 s; Era IV+ stages (s14 and later, numeric compare) get 12 s
   await p.waitForTimeout(+(process.env.WAIT_MS ?? (name === 's16_postgame' ? 2500 : (+name.slice(1).split('_')[0] >= 14 ? 12000 : 2500))));
+  // WP27 F6.4: commit the cast placements of the buys before any shot (after the postgame skip above, so no finale is running)
+  if (buys.length) await commitPlacements(p);
   // era V stages: click the crank 3x so the 3 s inversion ghost shows in the shot and the frames;
   // CLICK_SHOT=1 does the same on every stage (A17: the crank gain block is in the shot)
   if (name === 's15_era5_full' || name === 's16_postgame' || process.env.CLICK_SHOT === '1') {

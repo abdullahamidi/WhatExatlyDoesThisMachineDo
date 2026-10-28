@@ -208,7 +208,8 @@ const checkQuiet = async page => {
   report.check('E_quiet', s0 !== null && samples.every(s => s.shown === s0 && s.visible === 0), { s0, samples });
 };
 
-// Measures the CLICK value and the AUTO-CRANK line: rendered line count (rect tops within 2 px) and a box inside the HUD panel.
+// Measures the CLICK value, the AUTO-CRANK line and the WIND-UP row (WP27 C8): rendered line count (rect tops within 2 px) and a box inside the HUD panel.
+// contained: the whole box inside the panel (top and bottom too); panelInView: the panel inside the viewport (1 px slack).
 const hudFitNow = () => {
   const panel = document.getElementById('hud-panel');
   if (!panel) return null;
@@ -225,11 +226,18 @@ const hudFitNow = () => {
       if (!tops.some(t => Math.abs(t - top) <= 2)) tops.push(top);
     }
     const box = el.getBoundingClientRect();
-    return { lines: tops.length, inside: box.width > 0 && box.left >= p.left - 1 && box.right <= p.right + 1 };
+    return {
+      lines: tops.length,
+      inside: box.width > 0 && box.left >= p.left - 1 && box.right <= p.right + 1,
+      contained: box.width > 0 && box.height > 0 && box.left >= p.left - 1 && box.right <= p.right + 1
+        && box.top >= p.top - 1 && box.bottom <= p.bottom + 1,
+    };
   };
-  return { click: measure('hud-per-click'), auto: measure('hud-auto') };
+  const panelInView = p.left >= -1 && p.top >= -1 && p.right <= window.innerWidth + 1 && p.bottom <= window.innerHeight + 1;
+  return { click: measure('hud-per-click'), auto: measure('hud-auto'), windup: measure('hud-windup'), panelInView };
 };
-// F: the CLICK and AUTO-CRANK rows stay one line each inside the HUD panel at UI 100 / 125 / 150; the UI scale goes back to 100.
+// F: the CLICK and AUTO-CRANK rows stay one line each inside the HUD panel, the WIND-UP row (WP27) one line wholly inside it, and the
+// panel inside the viewport, at UI 100 / 125 / 150; the UI scale goes back to 100.
 const checkFit = async page => {
   const perScale = [];
   try {
@@ -237,8 +245,10 @@ const checkFit = async page => {
       await setSettings(page, { uiScale: ui });
       await page.waitForTimeout(400);
       const m = await page.evaluate(hudFitNow);
+      // WIND-UP (WP27 C8): shown once Reinforced Crank is owned (S7); one line, wholly inside the panel, and the panel in the viewport.
+      const windupOk = m !== null && m.windup !== null && m.windup.lines === 1 && m.windup.contained && m.panelInView === true;
       const pass = m !== null && m.click !== null && m.auto !== null
-        && m.click.lines === 1 && m.auto.lines === 1 && m.click.inside && m.auto.inside;
+        && m.click.lines === 1 && m.auto.lines === 1 && m.click.inside && m.auto.inside && windupOk;
       report.check(FIT_NAME[ui], pass, m);
       perScale.push(pass);
       await shot(page, `economy-F-${ui}.png`);

@@ -345,8 +345,14 @@ describe.each(ROWS)('$file', (row) => {
       const original = JSON.parse(row.raw) as { savedAt: number };
       const out = JSON.parse(serialize(r.state, r.settings, original.savedAt, { ...meta, world: r.world })) as {
         settings: Record<string, unknown>;
+        state: { techLevels: Record<string, unknown> };
         world?: WorldSaveState;
       };
+      // WP27: techs added after a fixture was written load at level 0 and are written back as 0; the fixture has no key for them.
+      const rawLevels = (JSON.parse(row.raw) as { state: { techLevels: Record<string, unknown> } }).state.techLevels;
+      for (const id of TECH_IDS) {
+        if (!(id in rawLevels) && out.state.techLevels[id] === 0) delete out.state.techLevels[id];
+      }
       // WP23a: old fixtures have no settings.worldVoices; its default 'on' is not written back for them.
       if (out.settings['worldVoices'] === 'on') delete out.settings['worldVoices'];
       // WP23a: old fixtures have no world block; the default block is not written back for them.

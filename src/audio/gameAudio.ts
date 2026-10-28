@@ -9,7 +9,8 @@ import { MUSIC } from '../data/music';
 import type { AudioStats, MusicThemeId } from '../data/music';
 import type { SettingsState } from '../data/types';
 import type { GameFeedback, WorldSound } from '../game/context';
-import type { GameSession } from '../simulation';
+import type { GameSession, SessionEvents } from '../simulation';
+import { currentEra } from '../simulation/progression/era';
 import { ambientMix, busGain, levelsChanged, masterTarget, purchaseCue, windAllowed } from './audioMath';
 import type { AmbientMix, LevelSnapshot } from './audioMath';
 import { barSeconds, crossfadeGains, duckLevel, eventsInWindow, musicAllowed, musicTheme } from './musicMath';
@@ -24,6 +25,10 @@ export interface GameAudioStats extends AudioStats {
   readonly ambient: AmbientMix | null;
   /** Blip sequences started since unlock (world voices, WP23a). Refused ones are not counted. 0 before unlock. */
   readonly worldBlips: number;
+  /** Fault spawn cues started since unlock (WP27). Muted or refused spawns are not counted. 0 before unlock. */
+  readonly faultSpawnCues: number;
+  /** Fault clear cues started since unlock (WP27). Expire plays no cue and is not counted. 0 before unlock. */
+  readonly faultClearCues: number;
 }
 
 export interface GameAudio {
@@ -113,6 +118,8 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
   let beats: BeatClock = { swellS: null, chordS: null, milestoneS: null };
   let blipEndsS: number[] = []; // wall-clock end of each world blip sequence still sounding (pruned on every blip)
   let worldBlips = 0; // blip sequences started since unlock (readout)
+  let faultSpawnCues = 0; // fault spawn cues started since unlock (readout, WP27)
+  let faultClearCues = 0; // fault clear cues started since unlock (readout, WP27)
   const warned = new Set<string>();
   const doc: Document | undefined = target.document;
 
@@ -138,11 +145,11 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
   }
 
   /** One-shot voice: plays only when unlocked and not muted. Errors are logged, never thrown. */
-  function oneShot(where: string, play: (s: Synth) => void): () => void {
-    return () => {
+  function oneShot<P = unknown>(where: string, play: (s: Synth, payload: P) => void): (payload: P) => void {
+    return (payload: P) => {
       try {
         const s = synth;
-        if (s && !session.settings.muted) play(s);
+        if (s && !session.settings.muted) play(s, payload);
       } catch (error) {
         warnOnce(where, error);
       }
@@ -474,6 +481,19 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
       session.on('cycle', oneShot('cycle', (s) => s.playStamp())),
       session.on('cycle', clearBeats),
       session.on('reset', clearBeats),
+      // Machine Faults (WP27): a spawn cue in the era of the session, a clear cue with a rising tick under Overdrive; expire is silent.
+      session.on(
+        'fault',
+        oneShot('fault', (s, e: SessionEvents['fault']) => {
+          if (e.kind === 'spawn') {
+            s.playFaultSpawn(currentEra(session.state.techLevels));
+            faultSpawnCues += 1;
+          } else if (e.kind === 'clear') {
+            s.playFaultClear(e.overdriveSeconds > 0);
+            faultClearCues += 1;
+          }
+        }),
+      ),
       feedback.partLanded.on(oneShot('partLanded', (s) => s.playClunk())),
       feedback.partEvolved.on(oneShot('partEvolved', (s) => s.playRefit())),
       feedback.partTorqued.on((event) => {
@@ -595,6 +615,8 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     duckNow = 1;
     blipEndsS = [];
     worldBlips = 0;
+    faultSpawnCues = 0;
+    faultClearCues = 0;
     clearBeats();
     if (s) {
       try {
@@ -608,7 +630,7 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
 
   /** Idle readout: nothing has been created yet (or the controller is disposed). */
   function idleStats(): GameAudioStats {
-    return { unlocked: false, running: false, theme: null, slotGains: [0, 0], duck: 0, liveVoices: 0, musicVoices: 0, dropped: 0, peakDb: null, levels: null, ambient: null, worldBlips: 0 };
+    return { unlocked: false, running: false, theme: null, slotGains: [0, 0], duck: 0, liveVoices: 0, musicVoices: 0, dropped: 0, peakDb: null, levels: null, ambient: null, worldBlips: 0, faultSpawnCues: 0, faultClearCues: 0 };
   }
 
   /** Live readout for the debug hook. Never throws; reads the synth counters, the controller state, the last levels and mix. */
@@ -630,6 +652,8 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
         levels: appliedLevels,
         ambient: lastMix,
         worldBlips,
+        faultSpawnCues,
+        faultClearCues,
       };
     } catch (error) {
       warnOnce('stats', error);

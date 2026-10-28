@@ -20,7 +20,7 @@ const withEffects = (overrides: Partial<Record<TechId, Effect[]>>): Record<TechI
   return out;
 };
 
-// Automation rate: wornMotor 1 + motorTuning 5 = 33.5 ME/s.
+// Automation rate: wornMotor 1 (2 ME/s) + motorTuning 5 (0.9 x 5) = 6.5 ME/s (WP27 data; was 33.5).
 const auto6 = (extra: Partial<GameState> = {}) => withLevels({ wornMotor: 1, motorTuning: 5 }, extra);
 
 // Injected table with an ee economy: me 4/s, ee 1/s (0.5 * sqrt(4)), ee echo 2 per click.
@@ -50,8 +50,15 @@ describe('applyClick', () => {
   });
 
   it('uses manual multipliers', () => {
-    const { gained } = applyClick(withLevels({ gearRatio: 3, reinforcedCrank: 1 }));
+    // Injected clickMult 1.5 on Reinforced Crank (the real tech has a crank echo now, not a multiplier).
+    const techs = withEffects({ reinforcedCrank: [{ type: 'clickMult', factor: 1.5 }] });
+    const { gained } = applyClick(withLevels({ gearRatio: 3, reinforcedCrank: 1 }), techs);
     expect(gained).toBeCloseTo(3.75, 9);
+  });
+
+  it('Reinforced Crank adds no ME to a click while there is no ME/s to echo (Gear Ratio 3: 2.5)', () => {
+    const { gained } = applyClick(withLevels({ gearRatio: 3, reinforcedCrank: 1 }));
+    expect(gained).toBeCloseTo(2.5, 9);
   });
 
   it('credits every resource that has a per-click echo', () => {
@@ -70,8 +77,8 @@ describe('applyClick', () => {
 describe('advance', () => {
   it('adds perSecond * seconds to me and lifetime.me', () => {
     const next = advance(auto6(), 10);
-    expect(next.res.me).toBeCloseTo(335, 9);
-    expect(next.lifetime.me).toBeCloseTo(335, 9);
+    expect(next.res.me).toBeCloseTo(65, 9);
+    expect(next.lifetime.me).toBeCloseTo(65, 9);
   });
 
   it('grows every resource and its lifetime by perSecond * seconds', () => {
@@ -114,11 +121,11 @@ describe('advance', () => {
 });
 
 describe('computeOffline', () => {
-  it('1 hour at 33.5/s', () => {
+  it('1 hour at 6.5/s', () => {
     const r = computeOffline(auto6({ lastSimTime: 0 }), 3_600_000);
     expect(r.elapsedSeconds).toBe(3600);
     expect(r.cappedSeconds).toBe(3600);
-    expect(r.gained.me).toBeCloseTo(120600, 9);
+    expect(r.gained.me).toBeCloseTo(23400, 9);
     expect(r.gained.ee).toBe(0);
   });
 
@@ -126,7 +133,7 @@ describe('computeOffline', () => {
     const r = computeOffline(auto6({ lastSimTime: 0 }), 36_000_000);
     expect(r.elapsedSeconds).toBeCloseTo(36000, 9);
     expect(r.cappedSeconds).toBe(28800);
-    expect(r.gained.me).toBeCloseTo(964800, 9);
+    expect(r.gained.me).toBeCloseTo(187200, 9);
   });
 
   it('clock going backwards yields all zeros', () => {
@@ -147,7 +154,7 @@ describe('computeOffline', () => {
   it('honours a custom cap', () => {
     const r = computeOffline(auto6({ lastSimTime: 0 }), 3_600_000, 60);
     expect(r.cappedSeconds).toBe(60);
-    expect(r.gained.me).toBeCloseTo(2010, 9);
+    expect(r.gained.me).toBeCloseTo(390, 9);
   });
 
   it('gives every resource perSecond * capped', () => {
@@ -198,8 +205,8 @@ describe('applyOffline', () => {
     const { state, report } = applyOffline(s, 36_000_000, techs);
     expect(report.elapsedSeconds).toBe(36000);
     expect(report.cappedSeconds).toBe(36000);
-    expect(report.gained.me).toBeCloseTo(1206000, 9);
-    expect(state.res.me).toBeCloseTo(1206000, 9);
+    expect(report.gained.me).toBeCloseTo(234000, 9);
+    expect(state.res.me).toBeCloseTo(234000, 9);
   });
 
   it('a 14 h gap with the buffer is capped at 12 h', () => {
@@ -208,7 +215,7 @@ describe('applyOffline', () => {
     const { report } = applyOffline(s, 50_400_000, techs);
     expect(report.elapsedSeconds).toBe(50400);
     expect(report.cappedSeconds).toBe(43200);
-    expect(report.gained.me).toBeCloseTo(1447200, 9);
+    expect(report.gained.me).toBeCloseTo(280800, 9);
   });
 
   it('without the buffer a 10 h gap is still capped at 8 h (regression)', () => {
@@ -219,9 +226,9 @@ describe('applyOffline', () => {
 
   it('credits offline gain and advances lastSimTime', () => {
     const { state, report } = applyOffline(auto6({ lastSimTime: 0 }), 3_600_000);
-    expect(report.gained.me).toBeCloseTo(120600, 9);
-    expect(state.res.me).toBeCloseTo(120600, 9);
-    expect(state.lifetime.me).toBeCloseTo(120600, 9);
+    expect(report.gained.me).toBeCloseTo(23400, 9);
+    expect(state.res.me).toBeCloseTo(23400, 9);
+    expect(state.lifetime.me).toBeCloseTo(23400, 9);
     expect(state.lastSimTime).toBe(3_600_000);
   });
 
@@ -238,8 +245,8 @@ describe('applyOffline', () => {
     const first = applyOffline(auto6({ lastSimTime: 0 }), 3_600_000);
     const second = applyOffline(first.state, 3_600_000);
     expect(second.report.gained.me).toBe(0);
-    expect(second.state.res.me).toBeCloseTo(120600, 9);
-    expect(second.state.lifetime.me).toBeCloseTo(120600, 9);
+    expect(second.state.res.me).toBeCloseTo(23400, 9);
+    expect(second.state.lifetime.me).toBeCloseTo(23400, 9);
   });
 
   it('a time before lastSimTime leaves res unchanged but still sets lastSimTime', () => {

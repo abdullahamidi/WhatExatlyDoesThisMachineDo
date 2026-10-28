@@ -10,6 +10,7 @@ export interface HotkeyDeps {
   modals: ModalStack;
   crank(): void;
   toggleTechTree(): void;
+  clearFault(): void;
   openMenu(): void;
   now?(): number;
 }
@@ -82,6 +83,8 @@ export function bindHotkeys(target: Window, deps: HotkeyDeps): () => void {
       deps.crank();
     } else if (action === 'techTree') {
       deps.toggleTechTree();
+    } else if (action === 'fault') {
+      deps.clearFault();
     } else {
       deps.openMenu();
     }

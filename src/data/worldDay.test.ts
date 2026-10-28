@@ -144,9 +144,10 @@ describe('worldDay: ambient', () => {
     }
   });
 
-  it('the ruffle drip falls a positive distance in a palette colour with red >= blue', () => {
+  it('the ruffle drip falls a positive distance in a palette colour with red >= blue, from era III', () => {
     const { drip } = WORLD_AMBIENT;
     expect(drip.fallPx).toBeGreaterThan(0);
+    expect(drip.fromEra).toBe(3);
     const rgb = PALETTE[drip.paletteKey];
     expect(redOf(rgb)).toBeGreaterThanOrEqual(blueOf(rgb));
   });

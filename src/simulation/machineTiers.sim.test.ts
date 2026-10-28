@@ -10,7 +10,7 @@ import type { GreedyOptions, GreedyResult } from './sim/greedy';
 // WP22 A2 tier reach guard. Deterministic greedy players must reach the top tier of every part track (PART_TIERS)
 // before primaryFunction: profiles A, B, C (full game). The demo edition (era cap read from EDITIONS.demo) must reach
 // MK III on every era I-II track and MK V on motorTuning. gearRatio reaches MK II within 6 minutes (A, B, C).
-// Profiles are copied from signoff.sim.test.ts. A failing claim is a balance finding: do not edit thresholds here.
+// Profiles are copied from signoff.sim.test.ts, faults included (WP27). A failing claim is a balance finding: do not edit thresholds here.
 // One markdown table is printed via console.info. The wall-time check is the only clock use.
 // Re-run: npx vitest run src/simulation/machineTiers.sim.test.ts
 
@@ -19,10 +19,11 @@ const FILE_BUDGET_MS = 30000;
 const SETUP_TIMEOUT_MS = 60000;
 
 // A = 4 clicks/s, buys every second. B = 4 clicks/s, buys every 30 s. C = 1 click/s, buys every 30 s, no offline.
-type Profile = Pick<GreedyOptions, 'seconds' | 'clicksPerSecond' | 'stepSeconds' | 'buyIntervalSeconds'>;
-const PROFILE_A: Profile = { seconds: 17400, clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 1 };
-const PROFILE_B: Profile = { seconds: 18000, clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 30 };
-const PROFILE_C: Profile = { seconds: 28800, clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30 };
+// `faults` = the Machine Faults catch model of each player (WP27), as signoff.sim.test.ts: the tier numbers were measured with it.
+type Profile = Pick<GreedyOptions, 'seconds' | 'clicksPerSecond' | 'stepSeconds' | 'buyIntervalSeconds' | 'faults'>;
+const PROFILE_A: Profile = { seconds: 17400, clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 1, faults: { catchProb: 1, reactionSeconds: 2 } };
+const PROFILE_B: Profile = { seconds: 18000, clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 1, reactionSeconds: 3 } };
+const PROFILE_C: Profile = { seconds: 28800, clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 0.5, reactionSeconds: 4 } };
 
 const DEMO_A_SECONDS = 5500;
 const DEMO_B_SECONDS = 6200;

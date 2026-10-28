@@ -16,8 +16,9 @@ import type { GreedyResult } from './sim/greedy';
 const MAIN_SECONDS = 17400;
 const CLICKS_PER_SECOND = 4;
 
-// Profile A (same as balance.sim.test.ts): 4 clicks/s, 1 s step, 1 s buy interval.
-const PROFILE_A = { seconds: MAIN_SECONDS, clicksPerSecond: CLICKS_PER_SECOND, stepSeconds: 1, buyIntervalSeconds: 1 };
+// Profile A (same as balance.sim.test.ts): 4 clicks/s, 1 s step, 1 s buy interval. Faults: the catch model of
+// signoff.sim.test.ts profile A (WP27), so the run clears its faults as the tier and balance numbers were measured.
+const PROFILE_A = { seconds: MAIN_SECONDS, clicksPerSecond: CLICKS_PER_SECOND, stepSeconds: 1, buyIntervalSeconds: 1, faults: { catchProb: 1, reactionSeconds: 2 } };
 
 // Cycle, Echo and offline rows: not reachable in one online run (no cycle, no Echoes, no offline time).
 const NOT_IN_ONLINE_RUN: ReadonlySet<AchievementId> = new Set<AchievementId>([

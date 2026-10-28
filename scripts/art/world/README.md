@@ -116,7 +116,7 @@ minimum on-screen sizes, and `src/assets/worldSheets.test.ts` once the manifest 
 | hole | `world/hole.png` 64x6 | 95.6 | 0 / 0, 2 info | CLEAN | 1 per cell; stages only grow (`grow` check in check_sheet) |
 | scraps | `world/scraps.png` 24x4 | 99.1 | 0 / 0, 3 info | CLEAN | 1 per cell; ink edge (paper = far-plain value) |
 | mote | `world/mote.png` 4x2 | 100.0 (AD3a) | 0 / 0, 2 info | CLEAN | ash `s` over `b`; moth `C` over `w` (a 1 px `C` glint scored 88: singletons) |
-| crow | `world/crow.png` 288x108 | 99.8 (WP24 AD1b-2; AD3b 99.8, WP23a 100.0) | 0 / 0, 4 info | CLEAN | 1 per cell (check_sheet), 0 holes; lint counts 67 on the sheet: the ruffle crown (cell row 0) touches the toes of the cell above (5 cells); body 24x14 (14 = the zoom .5 floor); AD3b cells 14-17 tall, frozenTip 16, ruffle 18 |
+| crow | `world/crow.png` 360x108 | 99.8 (WP24 AD1b-2; AD3b 99.8, WP23a 100.0) | 0 / 0, 4 info | CLEAN | 1 per cell (check_sheet), 0 holes; lint counts 67 on the sheet: the ruffle crown (cell row 0) touches the toes of the cell above (5 cells); body 24x14 (14 = the zoom .5 floor); AD3b cells 14-17 tall, frozenTip 16, ruffle 18; WP27 ADa added cols 12-14 (15 per row), score and lint re-measured at the next gate run |
 | girl | `world/girl.png` 192x168 | 97.8 (WP24 AD1b-2; AD3b 98.1, WP23a 98.7) | 0 / 0, 3 info | CLEAN | 72 = 1 per cell, 0 holes; body 12x24 = the tone-check maximum (every cell inside it; lanternUp 11x24) |
 | girlMini | `world/girl-mini.png` 24x12 | 100.0 (WP24 AD1b-2) | 0 / 0, 3 info | CLEAN | 1 per cell; body 5x10 (palm: + the raised hand, 6x11) |
 | girlWindow | `world/girl-window.png` 16x6 | 96.0 (AD3b; WP23a 100.0) | 0 / 0, 3 info (banding = the flat lit rows) | CLEAN | rust only (`c d e f`, sheets.py `only`; the restored frame adds `A B C`, `only_frames`), no outline |
@@ -152,7 +152,7 @@ Era-row sheets (6 rows I, II, III, IV, V, whole): inspector, dog, crow, girl, pa
 |---|---|---|---|---|---|
 | inspector | world.inspector | world/inspector.png 440x240 | 20x40 | idleA, idleB, walk0, walk1, walk2, walk3, write0, write1, glance, front, talk, shield, pat0, pat1, wave, watch, umbrellaOpen, frontUmbrella, talkUmbrella, lookUp, crouch, umbrellaHalf | AD-a 11 + AD3a 8 + WP24 AD1b-1 3 (all 22 drawn) |
 | dog | world.dog | world/dog.png 644x120 | 28x20 | sit0, sit1, sniff0, sniff1, walk0, walk1, walk2, walk3, dig0, dig1, shake0, shake1, head, talk, flat, lie, sleep, chase0, chase1, wag, scratch0, scratch1, lookUp | AD-b 13 + AD3a 7 + WP24 AD1b-1 3 (all 23 drawn) |
-| crow | world.crow | world/crow.png 288x108 | 24x18 | frozen, perch0, perch1, head, talk, peck0, peck1, fly0, fly1, fly2, frozenTip, ruffle | AD-c 3 + AD3b 7 + WP24 AD1b-2 2 (all 12 drawn) |
+| crow | world.crow | world/crow.png 360x108 | 24x18 | frozen, perch0, perch1, head, talk, peck0, peck1, fly0, fly1, fly2, frozenTip, ruffle, perchTurn, perchHead, perchTalk | AD-c 3 + AD3b 7 + WP24 AD1b-2 2 + WP27 ADa 3 (all 15 drawn) |
 | girl | world.girl | world/girl.png 192x168 | 16x28 | stand0, stand1, palm, talk, shield, run0, run1, run2, run3, lanternDrop, lanternUp, tilt | AD-c 2 + AD3b 8 + WP24 AD1b-2 2 (all 12 drawn) |
 | payphone | world.payphone | world/payphone.png 168x312 | 28x52 | dark, lit, ring0, ring1, fog, restored | AD-c 4 + AD3b 2 (all 6 drawn) |
 | receiver | world.receiver | world/receiver.png 48x72 | 8x12 | hang, swing0, swing1, swing2, level, onHook | AD-c 5 + AD3b 1 (all 6 drawn) |

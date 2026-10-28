@@ -6,8 +6,8 @@ import { formatNumber } from '../utils/format';
 
 export interface CycleConfirmModel {
   title: string;               // BEGIN CYCLE 0043?
-  gainLine: string;            // +3 ECHOES -> ECHOES 3 (+45% ALL/S)
-  bonusLine: string;           // NEXT CYCLE: +45% ALL/S
+  gainLine: string;            // +3 ECHOES -> ECHOES 3 (+42% ALL/S)
+  bonusLine: string;           // NEXT CYCLE: +42% ALL/S
   thresholdHint: string | null; // +1 ECHO AT 2B RF; null when no threshold is left
   kept: string[];              // KEPT list lines
   reset: string[];             // RESET list lines

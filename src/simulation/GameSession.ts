@@ -1,4 +1,5 @@
 import { MAX_UPDATE_SECONDS, OFFLINE_REPORT_THRESHOLD_SECONDS } from '../data/balance';
+import { FAULTS } from '../data/faults';
 import { DEFAULT_SETTINGS_VALUES } from '../data/settings';
 import { TECHNOLOGIES } from '../data/technologies';
 import { TECH_IDS } from '../data/types';
@@ -23,6 +24,11 @@ import { ACHIEVEMENT_LIST } from '../data/achievements';
 import { evaluateAchievements } from './achievements';
 import { computeRates } from './production/rates';
 import { advance, applyClick, applyOffline as applyOfflineState } from './production/tick';
+import { refillWindup, releaseWindup, windupParams } from './production/windup';
+import type { WindupParams } from './production/windup';
+import { clearFault as clearFaultClock, consumeOverdrive, createFaultClock, faultParams, stepFaultClock } from './faults';
+import type { FaultAlive, FaultClock, FaultParams } from './faults';
+import { addMaps } from './resources';
 import { evaluateMilestones } from './progression/milestones';
 import { clampStateToEra } from './progression/edition';
 import type { EraCap } from './progression/edition';
@@ -70,6 +76,8 @@ export interface GameSessionOptions {
   now?: () => number;
   /** WP21: era cap of the demo edition. Absent/null = full game. */
   maxEra?: EraCap;
+  /** WP27: seed of the Machine Faults clock. Defaults to the clock in ms as an unsigned 32-bit int; tests inject one. */
+  faultSeed?: number;
 }
 
 /**
@@ -77,6 +85,11 @@ export interface GameSessionOptions {
  * snapshot, its cached production rates, the settings, the lifetime stats and the achievements,
  * and emits a typed event for every change it makes. Contains no timers: the host decides when
  * to call update().
+ *
+ * Transient machine state (WP27, not saved; SAVE_VERSION stays 2): the wind-up store (seconds of
+ * output that the next manual click releases; it refills in update() and across an offline span
+ * on load) and the Machine Faults clock (one per run; it moves only through stepFaults, never
+ * offline, and a fresh session waits 180 eligible seconds before its first fault).
  *
  * Host lifecycle (required order):
  *  1. Load the save (SaveManager.load) to obtain state, settings, stats and achievements.
@@ -115,6 +128,11 @@ export class GameSession {
   private cachedTechs: Record<TechId, TechDefinition>;
   private currentRevision = 0;
   private offlineApplied = false;
+  // WP27 transient machine state (never saved). Params follow the tech levels; see setState.
+  private windupStored = 0;
+  private windupParams: WindupParams;
+  private faultParams: FaultParams;
+  private faultClock: FaultClock;
   private readonly clock: () => number;
   private readonly capEra: EraCap;
   private readonly emitter = new TypedEmitter();
@@ -127,6 +145,9 @@ export class GameSession {
     this.currentPrestige = normalizePrestige(options.prestige ?? DEFAULT_PRESTIGE);
     this.cachedTechs = cycleTechs(TECHNOLOGIES, this.currentPrestige);
     this.cachedRates = computeRates(this.current, this.cachedTechs);
+    this.windupParams = windupParams(this.current.techLevels, this.cachedTechs);
+    this.faultParams = faultParams(this.current.techLevels, this.cachedTechs);
+    this.faultClock = createFaultClock(options.faultSeed ?? (Math.floor(this.clock()) >>> 0));
     this.currentStats = {
       ...bumpMaxRates(options.stats ?? deriveStats(this.current, this.clock()), this.cachedRates.perSecond),
       cycles: this.currentPrestige.cycle,
@@ -193,15 +214,66 @@ export class GameSession {
     return this.currentRevision;
   }
 
+  /** Wind-up (WP27): stored seconds of output, capacity and refill (seconds per second). Transient, not saved. */
+  get windup(): Readonly<{ stored: number; cap: number; refill: number }> {
+    return { stored: this.windupStored, cap: this.windupParams.cap, refill: this.windupParams.refill };
+  }
+
   /**
-   * Manual click. Emits 'click' (ME gained plus every resource gained), then runs the milestone
-   * check and the achievement check. Returns the ME gained.
+   * Machine Faults (WP27): the clock's public numbers. Transient, not saved. overdriveFactor and payoutSeconds
+   * come from the owned fault techs. alive is the clock's own object, not a copy: the clock replaces it on every
+   * change and never mutates it, so the snapshot stays stable. Per-frame readers use faultAlive (no snapshot).
+   */
+  get faults(): Readonly<{
+    unlocked: boolean; alive: FaultAlive | null; nextIn: number | null; overdriveLeft: number;
+    overdriveFactor: number; payoutSeconds: number; spawned: number; caught: number; missed: number;
+  }> {
+    const c = this.faultClock;
+    return {
+      unlocked: this.faultParams.unlocked,
+      alive: c.alive,
+      nextIn: c.nextIn,
+      overdriveLeft: c.overdriveLeft,
+      overdriveFactor: this.faultParams.overdriveFactor,
+      payoutSeconds: this.faultParams.payoutSeconds,
+      spawned: c.spawned,
+      caught: c.caught,
+      missed: c.missed,
+    };
+  }
+
+  /**
+   * Machine Faults (WP27): the live fault, or null. The same object comes back on every read until the next
+   * stepFaults, clearFault or reset (the clock replaces it, never mutates it), so a per-frame reader allocates nothing.
+   */
+  get faultAlive(): Readonly<FaultAlive> | null {
+    return this.faultClock.alive;
+  }
+
+  /**
+   * Manual click. A plain click first (applyClick). When wind-up is stored, the same click then releases it as a
+   * second state step (releaseWindup); the two gains are summed only for the event and the return value. Emits ONE
+   * 'click' (gained = ME of both steps, gainedAll = every resource of both, released = wind-up seconds, absent when
+   * nothing was stored). Then the milestone check and the achievement check. Returns the ME gained.
    */
   click(): number {
-    const { state, gained, gainedAll } = applyClick(this.current, this.cachedTechs);
-    this.setState(state);
+    const plain = applyClick(this.current, this.cachedTechs);
+    this.setState(plain.state);
+    let gainedAll = plain.gainedAll;
+    let released = 0;
+    if (this.windupStored > 0) {
+      // Only a manual click gets here: servo auto-cranks fold into the rates (C5) and never release the store.
+      const release = releaseWindup(this.current, this.windupStored, this.windupParams, this.cachedRates.perSecond);
+      released = release.released;
+      if (released > 0) {
+        this.setState(release.state);
+        gainedAll = addMaps(plain.gainedAll, release.gained);
+      }
+      this.windupStored = 0;
+    }
+    const gained = gainedAll.me;
     this.patchStats({ clicks: this.currentStats.clicks + 1 });
-    this.emitter.emit('click', { gained, gainedAll });
+    this.emitter.emit('click', released > 0 ? { gained, gainedAll, released } : { gained, gainedAll });
     this.checkMilestones();
     this.checkAchievements();
     return gained;
@@ -257,7 +329,15 @@ export class GameSession {
 
     const dt = elapsed > 0 ? Math.min(elapsed, MAX_UPDATE_SECONDS) : 0;
     if (dt > 0 || t !== this.current.lastSimTime) {
-      const advanced = advance(this.current, dt, this.cachedTechs);
+      let extraSeconds = 0;
+      if (dt > 0) {
+        // Overdrive (WP27) adds its extra output seconds to this step; the wind-up refills by the step.
+        const od = consumeOverdrive(this.faultClock, this.faultParams, dt);
+        this.faultClock = od.clock;
+        extraSeconds = od.extraSeconds;
+        this.windupStored = refillWindup(this.windupStored, this.windupParams, dt);
+      }
+      const advanced = advance(this.current, dt + extraSeconds, this.cachedTechs);
       this.setState({ ...advanced, lastSimTime: t });
       if (dt > 0) this.patchStats({ activeSeconds: this.currentStats.activeSeconds + dt });
     }
@@ -276,6 +356,8 @@ export class GameSession {
     const at = Number.isFinite(t) ? t : this.current.lastSimTime;
     const { state, report } = applyOfflineState(this.current, at, this.cachedTechs);
     this.offlineApplied = true;
+    // The wind-up refills over the offline span; the fault clock never moves offline (WP27).
+    this.windupStored = refillWindup(this.windupStored, this.windupParams, report.cappedSeconds);
     this.setState(state);
     this.patchStats({
       offlineSeconds: this.currentStats.offlineSeconds + report.cappedSeconds,
@@ -306,6 +388,7 @@ export class GameSession {
     const t = nowMs ?? this.clock();
     this.applyPrestige(DEFAULT_PRESTIGE);
     this.offlineApplied = true; // a fresh state has no offline progress to award
+    this.resetMachineState();
     this.setState(createInitialState(t), true);
     this.currentWorld = normalizeWorld(undefined);
     this.currentWorldRevision += 1;
@@ -336,6 +419,7 @@ export class GameSession {
 
     this.applyPrestige(next);
     this.offlineApplied = true; // the fresh run has no offline progress to award
+    this.resetMachineState();
     this.setState(clampStateToEra(newCycleState(t, next), this.capEra).state, true);
     // Living world (WP23a): a new cycle keeps only seenEver; seen, eraMoments and youEras restart.
     this.currentWorld = { ...normalizeWorld(undefined), seenEver: [...this.currentWorld.seenEver] };
@@ -414,6 +498,62 @@ export class GameSession {
     this.currentWorldRevision += 1;
   }
 
+  /**
+   * Machine Faults clock (WP27), called by the host once per frame. `eligible` is the host's "visible and
+   * interactive" test: when false nothing changes. dt is clamped to FAULTS.maxStepS first, so one long frame can
+   * neither age a fault out nor skip the countdown. Emits 'fault' (spawn or expire) and bumps the revision only
+   * when something happened.
+   */
+  stepFaults(dtSeconds: number, eligible: boolean): void {
+    const dt = Number.isFinite(dtSeconds) ? Math.min(dtSeconds, FAULTS.maxStepS) : dtSeconds;
+    const aliveBefore = this.faultClock.alive;
+    const r = stepFaultClock(this.faultClock, this.faultParams, dt, eligible);
+    this.faultClock = r.clock;
+    if (r.event === null) return;
+    // A spawn reports the new fault; an expire reports the fault that was alive before this step.
+    const fault = r.event === 'spawn' ? r.clock.alive : aliveBefore;
+    if (fault === null) return;
+    this.currentRevision += 1;
+    this.emitter.emit('fault', { kind: r.event, serial: fault.serial, payout: null, overdriveSeconds: 0 });
+  }
+
+  /**
+   * Clears the live fault (WP27): pays payoutSeconds of every energy with a rate, starts Overdrive when the owned
+   * techs grant it, and emits 'fault' (clear). The payout goes through setState (res and lifetime), then the
+   * milestone and achievement checks run. Returns the payout, or null with no events when no fault is alive.
+   */
+  clearFault(): ResourceMap | null {
+    const alive = this.faultClock.alive;
+    const r = clearFaultClock(this.faultClock, this.faultParams, this.cachedRates.perSecond);
+    if (alive === null || r === null) return null;
+    this.faultClock = r.clock;
+    this.setState({
+      ...this.current,
+      res: addMaps(this.current.res, r.payout),
+      lifetime: addMaps(this.current.lifetime, r.payout),
+    });
+    this.emitter.emit('fault', {
+      kind: 'clear',
+      serial: alive.serial,
+      payout: r.payout,
+      overdriveSeconds: this.faultParams.overdriveSeconds,
+    });
+    this.checkMilestones();
+    this.checkAchievements();
+    return r.payout;
+  }
+
+  /**
+   * Debug hook only (C11, the window.__wedtmd smoke hook; the game never calls it): makes the next eligible
+   * stepFaults spawn a fault, even before the 180 s first-fault wait. False and no change when the Fault Lamp is
+   * not owned or a fault is already alive.
+   */
+  debugForceFault(): boolean {
+    if (!this.faultParams.unlocked || this.faultClock.alive !== null) return false;
+    this.faultClock = { ...this.faultClock, nextIn: 0 };
+    return true;
+  }
+
   /** Subscribes to a session event. Returns an unsubscribe function. */
   on<K extends keyof SessionEvents>(type: K, fn: Listener<K>): () => void {
     return this.emitter.on(type, fn);
@@ -422,16 +562,26 @@ export class GameSession {
   /**
    * Replaces the state snapshot and bumps the revision. Rates are recomputed when the techLevels
    * object changed or `ratesChanged` is set (the tech table changed). Lifetime stats gain the positive
-   * lifetime growth of this step; max rates are raised whenever the rates are recomputed.
+   * lifetime growth of this step; max rates are raised whenever the rates are recomputed. The wind-up and
+   * fault params follow the same condition; a shrinking wind-up cap clamps the stored seconds.
    */
   private setState(next: GameState, ratesChanged = false): void {
     this.currentStats = addLifetimeDelta(this.currentStats, this.current.lifetime, next.lifetime);
     if (ratesChanged || next.techLevels !== this.current.techLevels) {
       this.cachedRates = computeRates(next, this.cachedTechs);
       this.currentStats = bumpMaxRates(this.currentStats, this.cachedRates.perSecond);
+      this.windupParams = windupParams(next.techLevels, this.cachedTechs);
+      this.faultParams = faultParams(next.techLevels, this.cachedTechs);
+      this.windupStored = Math.min(this.windupStored, this.windupParams.cap);
     }
     this.current = next;
     this.currentRevision += 1;
+  }
+
+  /** WP27: a fresh run starts with an empty wind-up and a fresh fault clock, seeded from the old clock's rng. */
+  private resetMachineState(): void {
+    this.windupStored = 0;
+    this.faultClock = createFaultClock(this.faultClock.rng);
   }
 
   /** Replaces the prestige and rebuilds the cached tech table. Callers recompute rates via setState(_, true). */

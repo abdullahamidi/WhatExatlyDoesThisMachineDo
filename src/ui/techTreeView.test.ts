@@ -69,7 +69,7 @@ describe('techTreeView', () => {
     const view = buildTechTreeView(views, emptyResourceMap(), null, 1);
 
     it('builds one node per tech at its tree position', () => {
-      expect(view.nodes).toHaveLength(9);
+      expect(view.nodes).toHaveLength(10);
       for (const node of view.nodes) {
         const def = TECHNOLOGIES[node.id];
         expect({ x: node.x, y: node.y }).toEqual(techNodePosition(def.tree));
@@ -79,15 +79,15 @@ describe('techTreeView', () => {
     });
 
     it('computes the canvas size from the tree extents', () => {
-      expect(view.width).toBe(812);
+      expect(view.width).toBe(970);
       expect(view.height).toBe(296);
       expect(view.width).toBe(
-        TECH_TREE_LAYOUT.padding * 2 + 5 * TECH_TREE_LAYOUT.nodeWidth + 4 * TECH_TREE_LAYOUT.colGap,
+        TECH_TREE_LAYOUT.padding * 2 + 6 * TECH_TREE_LAYOUT.nodeWidth + 5 * TECH_TREE_LAYOUT.colGap,
       );
     });
 
-    it('has 10 edges and only the crank edges are met', () => {
-      expect(view.edges).toHaveLength(10);
+    it('has 11 edges and only the crank edges are met', () => {
+      expect(view.edges).toHaveLength(11);
       const met = view.edges.filter((e) => e.met).map((e) => e.key).sort();
       expect(met).toEqual(['handCrank->gearRatio', 'handCrank->wornMotor']);
     });
@@ -478,6 +478,8 @@ describe('techTreeView', () => {
   describe('no edge passes through a third node (WP26 Q6)', () => {
     const CLEAR_PX = 4;            // layout px: the closest an edge may come to a node box that is not one of its two ends
     const SAMPLES_PER_SEGMENT = 64; // points per L or C segment, the same sampling as the detour test in edgePathAround
+    const SHARED_PX = 0.5;          // layout px: a point of one edge lies on another edge's line within this distance
+    const MAX_SHARED_RUN_PX = 8;    // layout px: the longest stretch two edges with no port in common may run along each other
     type Pt = { x: number; y: number };
 
     /** Tree view of one era built from the real techs, as the overlay builds it. */
@@ -622,12 +624,58 @@ describe('techTreeView', () => {
       }
       expect(crossings).toEqual([]);
     });
+
+    /** Distance from a point to the segment ab. */
+    function distToSegment(p: Pt, a: Pt, b: Pt): number {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len2 = dx * dx + dy * dy;
+      const u = len2 === 0 ? 0 : Math.min(1, Math.max(0, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+      return Math.hypot(a.x + dx * u - p.x, a.y + dy * u - p.y);
+    }
+
+    /**
+     * Longest stretch (layout px) of `a` that runs along `b`: consecutive sample points of `a` that both lie
+     * within SHARED_PX of b's line, summed over the stretch. A run of two edges sharing one track shows here.
+     */
+    function longestSharedRun(a: Pt[], b: Pt[]): number {
+      const segments = segmentsOf(b);
+      const on = a.map((p) => segments.some(([s, t]) => distToSegment(p, s, t) < SHARED_PX));
+      let best = 0;
+      let run = 0;
+      for (let i = 1; i < a.length; i++) {
+        const p = a[i - 1];
+        const q = a[i];
+        if (!p || !q || !on[i - 1] || !on[i]) {
+          run = 0;
+          continue;
+        }
+        run += Math.hypot(q.x - p.x, q.y - p.y);
+        best = Math.max(best, run);
+      }
+      return best;
+    }
+
+    it.each([1, 2, 3, 4, 5])('era %i: no two edges share a run', (era) => {
+      const view = realEraView(era);
+      const sampled = view.edges.map((edge) => ({ edge, pts: samplePath(edge.d) }));
+      const shared: string[] = [];
+      for (const first of sampled) {
+        for (const second of sampled) {
+          // Edges out of the same source or into the same target share a port, so they run together there by design.
+          if (first === second || first.edge.from === second.edge.from || first.edge.to === second.edge.to) continue;
+          const run = longestSharedRun(first.pts, second.pts);
+          if (run >= MAX_SHARED_RUN_PX) shared.push(`${first.edge.key} = ${second.edge.key} (${run.toFixed(1)} px)`);
+        }
+      }
+      expect(shared).toEqual([]);
+    });
   });
 
   describe('tab width and height stay (WP26)', () => {
-    // Max tree col and row per era, and the tab width they give, before the WP26 slot moves.
+    // Max tree col and row per era, and the tab width they give. WP27 Fault Lamp (5,2) widens tab I to 970 px; the other eras keep their WP26 size.
     it.each([
-      [1, 4, 2, 812],
+      [1, 5, 2, 970],
       [2, 5, 2, 970],
       [3, 6, 2, 1128],
       [4, 5, 2, 970],
@@ -868,7 +916,7 @@ describe('techTreeView', () => {
 
     describe('per-era canvas with real techs', () => {
       it.each([
-        [1, 812],
+        [1, 970],
         [2, 970],
         [3, 1128],
         [4, 970],

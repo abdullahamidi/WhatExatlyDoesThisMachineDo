@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AUDIO } from '../data/audio';
-import type { BedId } from '../data/audio';
+import type { BedId, FaultFlavour } from '../data/audio';
 import { ERA_KEYSTONES } from '../data/eras';
 import type { EraNumber } from '../data/eras';
 import { MUSIC } from '../data/music';
@@ -810,6 +810,10 @@ describe('mix invariants (WP15 C2)', () => {
     AUDIO.stamp.thumpGain,
     AUDIO.beadTick.gain,
     AUDIO.arc.gain,
+    AUDIO.faultSpawn.gain,
+    AUDIO.faultClear.ratchet.gain,
+    AUDIO.faultClear.bright.gain,
+    AUDIO.faultClear.overdrive.gain,
   ];
 
   it('bed sum x trim <= 0.45 in every era', () => {
@@ -875,11 +879,44 @@ describe('purchaseCue (WP15R D1: cue by the era of the paying resource)', () => 
   });
 });
 
+describe('fault cues (WP27): bounds of AUDIO.faultSpawn and AUDIO.faultClear', () => {
+  it('the spawn cue ends inside 400 ms and its gain is at most 0.25', () => {
+    const noises = [AUDIO.faultSpawn.crackle, AUDIO.faultSpawn.hiss, AUDIO.faultSpawn.static];
+    const total = Math.max(AUDIO.faultSpawn.ms, ...noises.map((n) => (n.count - 1) * n.gapMs + n.pulseMs));
+    expect(total).toBeLessThanOrEqual(400);
+    expect(AUDIO.faultSpawn.gain).toBeGreaterThan(0);
+    expect(AUDIO.faultSpawn.gain).toBeLessThanOrEqual(0.25);
+  });
+
+  it('every spawn flavour peaks at 0.25 or less: noise at gain, ping at gain x (1 + partialGain) for its two sines', () => {
+    const { faultSpawn: f } = AUDIO;
+    const flavours: FaultFlavour[] = ['crackle', 'hiss', 'ping', 'static'];
+    for (const flavour of flavours) {
+      const peak = flavour === 'ping' ? f.gain * (1 + f.ping.partialGain) : f.gain;
+      expect(peak, flavour).toBeGreaterThan(0);
+      expect(peak, flavour).toBeLessThanOrEqual(0.25);
+    }
+  });
+
+  it('the clear cue, Overdrive tick included, ends inside 300 ms and its gains are at most 0.35', () => {
+    const r = AUDIO.faultClear.ratchet;
+    const { bright, overdrive } = AUDIO.faultClear;
+    const total = Math.max((r.count - 1) * r.gapMs + r.pulseMs, bright.atMs + bright.ms, overdrive.atMs + overdrive.ms);
+    expect(total).toBeLessThanOrEqual(300);
+    for (const g of [r.gain, bright.gain, overdrive.gain]) expect(g).toBeLessThanOrEqual(0.35);
+  });
+
+  it('the era flavours are crackle (I-II), hiss (III), ping (IV) and static (V)', () => {
+    expect([...AUDIO.faultSpawn.flavourByEra]).toEqual(['crackle', 'crackle', 'hiss', 'ping', 'static']);
+  });
+});
+
 describe('ambient bed refit (WP15R D2: maxPerSecond >= 3x post-finale rate)', () => {
-  // pf: post-finale rate of the driving resource; unlock: rate at the first unlock; old: the pre-refit curve (min, max, maxPerSecond).
+  // pf: post-finale rate of the driving resource; unlock: rate at the first unlock; old: the curve the refit replaces (min, max, maxPerSecond).
+  // hum and gear: old is the curve before the WP27 P9 refit (40000, the WP15R value), not the pre-WP15R 5000 (the 0.85 guard is per refit).
   const REFIT = [
-    { bed: 'hum', cfg: AUDIO.hum, pf: 1.2e4, unlock: 1, old: { min: 0.04, max: 0.16, maxPerSecond: 5000 }, now: () => humGain(1) },
-    { bed: 'gear', cfg: AUDIO.hum, pf: 1.2e4, unlock: 1, old: { min: 1.5, max: 14, maxPerSecond: 5000 }, now: () => gearTickRate(1) },
+    { bed: 'hum', cfg: AUDIO.hum, pf: 2.8e5, unlock: 1, old: { min: 0.04, max: 0.16, maxPerSecond: 40000 }, now: () => humGain(1) },
+    { bed: 'gear', cfg: AUDIO.hum, pf: 2.8e5, unlock: 1, old: { min: 1.5, max: 14, maxPerSecond: 40000 }, now: () => gearTickRate(1) },
     { bed: 'mains', cfg: AUDIO.mains, pf: 9.6e5, unlock: 4.17, old: { min: 0.02, max: 0.09, maxPerSecond: 5000 }, now: () => mainsGain(4.17) },
     { bed: 'arc', cfg: AUDIO.arc, pf: 9.6e5, unlock: 4.17, old: { min: 0.5, max: 3, maxPerSecond: 5000 }, now: () => arcRate(4.17, true) },
     { bed: 'boiler', cfg: AUDIO.boiler, pf: 1.1e6, unlock: 9.85, old: { min: 0.03, max: 0.14, maxPerSecond: 100000 }, now: () => boilerGain(9.85, true) },
@@ -901,7 +938,7 @@ describe('ambient bed refit (WP15R D2: maxPerSecond >= 3x post-finale rate)', ()
   });
 
   it('writes the refit leaves and the new tech gates', () => {
-    expect(AUDIO.hum.maxPerSecond).toBe(40000);
+    expect(AUDIO.hum.maxPerSecond).toBe(1000000);
     expect(AUDIO.mains.minGain).toBe(0.025);
     expect(AUDIO.mains.maxPerSecond).toBe(3000000);
     expect(AUDIO.arc.minRate).toBe(0.7);

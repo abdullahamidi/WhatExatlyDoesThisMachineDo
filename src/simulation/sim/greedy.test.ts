@@ -1,9 +1,10 @@
 import { beforeAll, describe, it, expect } from 'vitest';
+import { FAULTS } from '../../data/faults';
 import { RESOURCE_IDS, TECH_IDS } from '../../data/types';
-import type { GameState, ResourceId, TechDefinition, TechId, TechView } from '../../data/types';
+import type { GameState, ResourceId, ResourceMap, TechDefinition, TechId, TechView } from '../../data/types';
 import { TECHNOLOGIES } from '../../data/technologies';
-import { runGreedy, maxPurchaseGap, purchaseLedger, deadMinutes, spendShare, manualShare } from './greedy';
-import type { GreedyOptions, GreedyResult, IncomeSplit, LedgerEntry } from './greedy';
+import { runGreedy, maxPurchaseGap, purchaseLedger, deadMinutes, spendShare, manualShare, activeShare } from './greedy';
+import type { GreedyOptions, GreedyResult, GreedySample, IncomeSplit, LedgerEntry } from './greedy';
 import { applyClick, advance, offlineCapSeconds } from '../production/tick';
 import { computeRates } from '../production/rates';
 import { getAllTechViews } from '../progression/status';
@@ -12,6 +13,8 @@ import { evaluateMilestones } from '../progression/milestones';
 import { createInitialState } from '../state';
 import { costAt } from '../economy/cost';
 import { emptyResourceMap } from '../resources';
+import { createFaultClock, faultParams, nextUnit } from '../faults';
+import { windupParams } from '../production/windup';
 import type { EraNumber } from '../../data/eras';
 
 const CLICKS_PER_SECOND = 4;
@@ -102,6 +105,27 @@ const cheapBlueprint: Record<TechId, TechDefinition> = {
   },
 };
 
+// The table without wind-up and crank-echo effects: the pre-WP27 economy (bit-identity checks, and the reference loop
+// below, which has no wind-up release).
+function withoutWindupOrEcho(): Record<TechId, TechDefinition> {
+  const table = {} as Record<TechId, TechDefinition>;
+  for (const id of TECH_IDS) {
+    const def = TECHNOLOGIES[id];
+    table[id] = { ...def, effects: def.effects.filter((e) => e.type !== 'windup' && e.type !== 'crankEcho') };
+  }
+  return table;
+}
+const plainTable = withoutWindupOrEcho();
+
+// Fault Lamp with the Overrun Clutch Overdrive effect added: the Overdrive path of the fault accounting.
+const overdriveTable: Record<TechId, TechDefinition> = {
+  ...TECHNOLOGIES,
+  faultLamp: {
+    ...TECHNOLOGIES.faultLamp,
+    effects: [...TECHNOLOGIES.faultLamp.effects, ...TECHNOLOGIES.overrunClutch.effects.filter((e) => e.type === 'overdrive')],
+  },
+};
+
 describe('runGreedy', () => {
   let defaultRun: GreedyResult;
   let cheapRun: GreedyResult;
@@ -143,7 +167,8 @@ describe('runGreedy', () => {
   });
 
   it('the optimised harness matches the per-resource reference run (same picks, same order)', () => {
-    const opts = options(1500);
+    // WHY: the reference loop has no wind-up release, so both sides run on the table without wind-up effects.
+    const opts = { ...options(1500), techs: plainTable };
     const fast = runGreedy(opts);
     const reference = referenceRun(opts);
     expect(fast.firstAt).toEqual(reference.firstAt);
@@ -160,16 +185,18 @@ describe('runGreedy', () => {
     expect(stopped.purchases).toEqual(full.purchases.filter((p) => p.t <= 4));
   });
 
+  // WP27: re-pinned from the repo run (no faults, wind-up release on). Old pins: motorTuning 23, reinforcedCrank 205,
+  // flywheel 297, pistonArray 730, improvedPistons 761, generatorBlueprint 1327.
   it('era I exact first-purchase times hold on the optimised harness', () => {
     const run = runGreedy(options(1500));
     expect(run.firstAt.gearRatio).toBe(4);
     expect(run.firstAt.wornMotor).toBe(18);
-    expect(run.firstAt.motorTuning).toBe(23);
-    expect(run.firstAt.reinforcedCrank).toBe(205);
-    expect(run.firstAt.flywheel).toBe(297);
-    expect(run.firstAt.pistonArray).toBe(730);
-    expect(run.firstAt.improvedPistons).toBe(761);
-    expect(run.firstAt.generatorBlueprint).toBe(1327);
+    expect(run.firstAt.motorTuning).toBe(28);
+    expect(run.firstAt.reinforcedCrank).toBe(235);
+    expect(run.firstAt.flywheel).toBe(502);
+    expect(run.firstAt.pistonArray).toBe(384);
+    expect(run.firstAt.improvedPistons).toBe(403);
+    expect(run.firstAt.generatorBlueprint).toBe(1392);
   });
 });
 
@@ -443,21 +470,39 @@ describe('runGreedy schedule (profile D offline blocks)', () => {
 });
 
 // WP25 (T2): click-rate overrides and the manual / passive income split. Profile A = 4 cps, buy every 1 s.
-describe('runGreedy clickRate and income tracking (WP25)', () => {
-  const ERAS: readonly EraNumber[] = [1, 2, 3, 4, 5];
+const ALL_ERAS: readonly EraNumber[] = [1, 2, 3, 4, 5];
+const INCOME_KEYS: readonly (keyof IncomeSplit)[] = ['manual', 'passive', 'release', 'fault'];
 
-  // Every resource: sum over eras of (manual + passive) equals the final lifetime (rel 1e-9; abs 1e-9 at 0).
-  function expectConserved(run: GreedyResult): void {
-    const income = run.income;
-    if (income === undefined) throw new Error('expected income');
-    for (const res of RESOURCE_IDS) {
-      const sum = ERAS.reduce((acc, era) => acc + income[era].manual[res] + income[era].passive[res], 0);
-      const expected = run.final.lifetime[res];
-      if (expected === 0) expect(Math.abs(sum)).toBeLessThanOrEqual(1e-9);
-      else expect(Math.abs(sum - expected) / Math.abs(expected)).toBeLessThanOrEqual(1e-9);
-    }
+function incomeOf(run: GreedyResult): Record<EraNumber, IncomeSplit> {
+  if (run.income === undefined) throw new Error('expected income');
+  return run.income;
+}
+
+/** One income key summed over all eras, per energy. */
+function sumIncome(income: Record<EraNumber, IncomeSplit>, key: keyof IncomeSplit): ResourceMap {
+  const out = emptyResourceMap();
+  for (const era of ALL_ERAS) {
+    for (const res of RESOURCE_IDS) out[res] += income[era][key][res];
   }
+  return out;
+}
 
+// Every resource: manual + passive + fault summed over the eras equals the final lifetime (rel 1e-9; abs 1e-9 at 0).
+// The wind-up release is inside manual, so it is not counted twice.
+function expectConserved(run: GreedyResult): void {
+  const income = incomeOf(run);
+  const manual = sumIncome(income, 'manual');
+  const passive = sumIncome(income, 'passive');
+  const fault = sumIncome(income, 'fault');
+  for (const res of RESOURCE_IDS) {
+    const sum = manual[res] + passive[res] + fault[res];
+    const expected = run.final.lifetime[res];
+    if (expected === 0) expect(Math.abs(sum)).toBeLessThanOrEqual(1e-9);
+    else expect(Math.abs(sum - expected) / Math.abs(expected)).toBeLessThanOrEqual(1e-9);
+  }
+}
+
+describe('runGreedy clickRate and income tracking (WP25)', () => {
   it('a constant clickRate of 4 equals clicksPerSecond 4 (600 s)', () => {
     const plain = runGreedy(options(600));
     const constant = runGreedy({ ...options(600), clickRate: () => 4 });
@@ -585,6 +630,8 @@ describe('runGreedy clickRate and income tracking (WP25)', () => {
     const split = (manual: number, passive: number): IncomeSplit => ({
       manual: { ...emptyResourceMap(), me: manual },
       passive: { ...emptyResourceMap(), me: passive },
+      release: emptyResourceMap(),
+      fault: emptyResourceMap(),
     });
     const income: Record<EraNumber, IncomeSplit> = {
       1: split(25, 75),
@@ -597,5 +644,198 @@ describe('runGreedy clickRate and income tracking (WP25)', () => {
     expect(manualShare(income, 2, 'me')).toBe(0);
     expect(manualShare(income, 1, 'ee')).toBe(0);
     expect(manualShare(income, 3, 'me')).toBe(0);
+  });
+});
+
+// WP27 (C7): Machine Faults, the wind-up release, samples and the release / fault income split. The catch
+// fixtures use catch 1 and reaction 2 s (profile A); the fixture start owns Worn Motor and the Fault Lamp.
+describe('runGreedy Machine Faults, wind-up and samples (WP27)', () => {
+  const CATCH = { catchProb: 1, reactionSeconds: 2 };
+  const startState = createInitialState(0);
+  const faulty: GameState = { ...startState, techLevels: { ...startState.techLevels, wornMotor: 1, faultLamp: 1 } };
+
+  it('without faults and without wind-up or crank-echo techs, the run is bit-identical to the pre-WP27 loop (600 s)', () => {
+    const plain = runGreedy({ ...options(600), techs: plainTable });
+    const reference = referenceRun({ ...options(600), techs: plainTable });
+    expect(plain.firstAt).toEqual(reference.firstAt);
+    expect(plain.purchases).toEqual(reference.purchases);
+    expect(plain.final).toEqual(reference.final);
+    expect(plain.maxValue).toEqual(reference.maxValue);
+    expect('faults' in plain).toBe(false);
+    expect('samples' in plain).toBe(false);
+  });
+
+  it('catch 1, reaction 2: each clear is 2 s after its spawn and pays payoutSeconds x perSecond of every energy', () => {
+    const run = runGreedy({ ...QUIET, seconds: 600, initial: faulty, trackIncome: true, sampleEverySeconds: 1, faults: CATCH });
+    const payout = faultParams(faulty.techLevels).payoutSeconds;
+    const faults = run.faults;
+    if (faults === undefined) throw new Error('expected fault counts');
+    let previous: ResourceMap = emptyResourceMap();
+    const clearSteps: number[] = [];
+    for (const s of run.samples ?? []) {
+      if (s.income === undefined) throw new Error('expected income in samples');
+      const now = sumIncome(s.income, 'fault');
+      // WHY: a clear shows as a step whose fault income grows; no buy happens between a clear and its sample.
+      const gained = RESOURCE_IDS.some((res) => now[res] > previous[res]);
+      if (gained) clearSteps.push(s.t);
+      for (const res of RESOURCE_IDS) {
+        expect(now[res] - previous[res]).toBeCloseTo(gained ? payout * s.perSecond[res] : 0, 6);
+      }
+      previous = now;
+    }
+    expect(faults.spawned).toBe(faults.caught);
+    expect(clearSteps.length).toBe(faults.caught);
+    expect(faults.missed).toBe(0);
+    const first = faults.firstSpawnAt;
+    if (first === null) throw new Error('expected a spawn');
+    expect(clearSteps[0]).toBe(first + CATCH.reactionSeconds);
+    for (let i = 1; i < clearSteps.length; i++) {
+      // WHY: the next spawn comes one interval after the clear; its catch comes reactionSeconds after that spawn.
+      const interval = (clearSteps[i] ?? 0) - (clearSteps[i - 1] ?? 0) - CATCH.reactionSeconds;
+      expect(interval).toBeGreaterThanOrEqual(FAULTS.intervalS[0]);
+      expect(interval).toBeLessThanOrEqual(FAULTS.intervalS[1]);
+    }
+  });
+
+  it('the first fault never comes before FAULTS.firstAfterS (180 s)', () => {
+    const run = runGreedy({ ...QUIET, seconds: 600, initial: faulty, faults: CATCH });
+    expect(run.faults?.firstSpawnAt).toBeGreaterThanOrEqual(FAULTS.firstAfterS);
+  });
+
+  it('catch 0 never pays: no fault income, nothing caught, every spawn missed but at most one still on screen', () => {
+    const run = runGreedy({ ...QUIET, seconds: 600, initial: faulty, trackIncome: true, faults: { catchProb: 0, reactionSeconds: 2 } });
+    const faults = run.faults;
+    if (faults === undefined) throw new Error('expected fault counts');
+    expect(faults.spawned).toBeGreaterThan(0);
+    expect(faults.caught).toBe(0);
+    expect([faults.spawned, faults.spawned - 1]).toContain(faults.missed);
+    const fault = sumIncome(incomeOf(run), 'fault');
+    for (const res of RESOURCE_IDS) expect(fault[res]).toBe(0);
+  });
+
+  it('a reaction equal to the window is never a catch: at equal times the clock expires the fault first', () => {
+    const run = runGreedy({
+      ...QUIET,
+      seconds: 600,
+      initial: faulty,
+      trackIncome: true,
+      faults: { catchProb: 1, reactionSeconds: FAULTS.windowS },
+    });
+    expect(run.faults?.spawned).toBeGreaterThan(0);
+    expect(run.faults?.caught).toBe(0);
+    expect(sumIncome(incomeOf(run), 'fault').me).toBe(0);
+  });
+
+  it('a buy at step t unlocks the fault clock at step t + 1: the first spawn is drawn from the step after the Fault Lamp', () => {
+    const run = runGreedy({ ...options(700), faults: CATCH });
+    const bought = run.firstAt.faultLamp;
+    if (!Number.isFinite(bought)) throw new Error('expected the Fault Lamp within 700 s');
+    // WHY: the clock arms at bought + 1 and draws its first interval from the spawn seed; the spawn comes at
+    // arm + ceil(interval), and never before firstAfterS (the clock counts eligible seconds from t = 0).
+    const first = nextUnit(createFaultClock(FAULTS.seed).rng).u;
+    const interval = FAULTS.intervalS[0] + (FAULTS.intervalS[1] - FAULTS.intervalS[0]) * first;
+    expect(run.faults?.firstSpawnAt).toBe(Math.max(bought + 1 + Math.ceil(interval), FAULTS.firstAfterS));
+  });
+
+  it('era I with Machine Faults (profile A, 2000 s) equals the audit harness: Fault Lamp 421 s, first spawn 549 s', () => {
+    const run = runGreedy({ ...options(2000), faults: CATCH });
+    expect(run.firstAt.faultLamp).toBe(421);
+    expect(run.firstAt.gearRatio).toBe(4);
+    expect(run.firstAt.wornMotor).toBe(18);
+    expect(run.firstAt.motorTuning).toBe(28);
+    expect(run.firstAt.reinforcedCrank).toBe(235);
+    expect(run.firstAt.flywheel).toBe(502);
+    expect(run.firstAt.pistonArray).toBe(384);
+    expect(run.firstAt.improvedPistons).toBe(403);
+    expect(run.firstAt.generatorBlueprint).toBe(1334);
+    expect(run.faults).toEqual({ spawned: 12, caught: 12, missed: 0, firstSpawnAt: 549 });
+  });
+
+  it('manual + passive + fault equals the lifetime gained per energy (faults and wind-up on, 2000 s)', () => {
+    const run = runGreedy({ ...options(2000), trackIncome: true, faults: CATCH });
+    expectConserved(run);
+    const income = incomeOf(run);
+    expect(sumIncome(income, 'release').me).toBeGreaterThan(0);
+    expect(sumIncome(income, 'fault').me).toBeGreaterThan(0);
+  });
+
+  it('Overdrive bonus is fault income and the accounting still closes (600 s, Fault Lamp with the Overrun Clutch effect)', () => {
+    const run = runGreedy({ ...QUIET, seconds: 600, initial: faulty, techs: overdriveTable, trackIncome: true, faults: CATCH });
+    expectConserved(run);
+    const faults = run.faults;
+    if (faults === undefined) throw new Error('expected fault counts');
+    const params = faultParams(faulty.techLevels, overdriveTable);
+    const perSecond = computeRates(faulty, overdriveTable).perSecond.me;
+    // WHY: each clear pays its payout, and its Overdrive (seconds x (factor - 1) extra output) is fault income too.
+    // Every clear's Overdrive ends inside the run, so the whole bonus is counted.
+    const bonusSeconds = params.overdriveSeconds * (params.overdriveFactor - 1);
+    expect(faults.caught).toBeGreaterThan(0);
+    expect(sumIncome(incomeOf(run), 'fault').me).toBeCloseTo(faults.caught * (params.payoutSeconds + bonusSeconds) * perSecond, 6);
+  });
+
+  it('a manual turn releases the stored output once per step, after the plain clicks', () => {
+    const winder: GameState = { ...startState, techLevels: { ...startState.techLevels, wornMotor: 1, reinforcedCrank: 1 } };
+    const seconds = 20;
+    const run = runGreedy({ ...QUIET, clicksPerSecond: 1, seconds, initial: winder, trackIncome: true });
+    // WHY: step 1 starts with an empty store; from step 2 on, each click releases one refill (refill x perSecond) and the
+    // refill of that step fills the store again.
+    const refill = windupParams(winder.techLevels).refill;
+    const perSecond = computeRates(winder).perSecond.me;
+    expect(run.final.totalClicks).toBe(seconds);
+    expect(sumIncome(incomeOf(run), 'release').me).toBeCloseTo((seconds - 1) * refill * perSecond, 9);
+  });
+
+  it('samples every 10 s: t = 10, 20, ..., rates and wind-up cap; cumulative income never decreases', () => {
+    const run = runGreedy({ ...options(600), trackIncome: true, sampleEverySeconds: 10, faults: CATCH });
+    const samples = run.samples ?? [];
+    expect(samples.map((s) => s.t)).toEqual(Array.from({ length: 60 }, (_, i) => (i + 1) * 10));
+    expect(samples[59]?.windupCap).toBeGreaterThan(0);
+    let decreases = 0;
+    for (let i = 1; i < samples.length; i++) {
+      const before = samples[i - 1]?.income;
+      const after = samples[i]?.income;
+      if (before === undefined || after === undefined) throw new Error('expected income in samples');
+      for (const era of ALL_ERAS) {
+        for (const key of INCOME_KEYS) {
+          for (const res of RESOURCE_IDS) {
+            if (after[era][key][res] < before[era][key][res]) decreases += 1;
+          }
+        }
+      }
+    }
+    expect(decreases).toBe(0);
+  });
+
+  it('samples carry no income key without trackIncome; a sample interval that is not finite and > 0 throws RangeError', () => {
+    const samples: GreedySample[] = runGreedy({ ...options(20), sampleEverySeconds: 10 }).samples ?? [];
+    expect(samples.map((s) => s.t)).toEqual([10, 20]);
+    expect('income' in (samples[0] ?? {})).toBe(false);
+    for (const bad of [0, -1, Number.NaN]) {
+      expect(() => runGreedy({ ...options(20), sampleEverySeconds: bad })).toThrow(RangeError);
+    }
+  });
+
+  it('activeShare adds fault to manual; manualShare puts fault in the total; release is already inside manual', () => {
+    const split = (manual: number, passive: number, fault: number, release = 0): IncomeSplit => ({
+      manual: { ...emptyResourceMap(), me: manual },
+      passive: { ...emptyResourceMap(), me: passive },
+      release: { ...emptyResourceMap(), me: release },
+      fault: { ...emptyResourceMap(), me: fault },
+    });
+    const income: Record<EraNumber, IncomeSplit> = {
+      1: split(25, 50, 25, 10),
+      2: split(0, 0, 0),
+      3: split(10, 0, 0),
+      4: split(0, 0, 0),
+      5: split(0, 0, Number.POSITIVE_INFINITY),
+    };
+    expect(manualShare(income, 1, 'me')).toBe(0.25);
+    expect(activeShare(income, 1, 'me')).toBe(0.5);
+    expect(manualShare(income, 3, 'me')).toBe(1);
+    expect(activeShare(income, 3, 'me')).toBe(1);
+    expect(activeShare(income, 2, 'me')).toBe(0);
+    expect(activeShare(income, 5, 'me')).toBe(0);
+    expect(manualShare(income, 5, 'me')).toBe(0);
+    expect(activeShare(income, 1, 'ee')).toBe(0);
   });
 });

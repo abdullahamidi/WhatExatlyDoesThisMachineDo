@@ -332,6 +332,7 @@ npm script `perf:bundle` runs the second command (`npm run build && npm run perf
 | app js raw | `index-*.js` | <= 500 KB (`appRawKb`) |
 | phaser js raw | `phaser-*.js` | <= 1500 KB (`phaserKb`) |
 | lazy world js raw | `LivingWorldDirector-*.js` | <= 120 KB (`lazyWorldKb`, WP23b; was 80 at WP23a) |
+| lazy fault marker js raw | `FaultMarker-*.js` | <= 12 KB (`lazyFaultKb`, WP27; the row is printed only when the key is set) |
 | css raw | `*.css` | <= 45 KB (`cssKb`) |
 | public assets | `public/assets` total | <= 8000 KB (`publicAssetsKb`) |
 
@@ -942,3 +943,58 @@ Settle note: `worldSettle(true)` forces the gusts off (constant wind). Each stag
 | `TEASER_back` | report only (boolean, never in fail): `ambient.live` is true again within 4 s after `showcaseStop()` |
 | `DEMO_rain_always_zero` | demo only: the max rain gain over the S7 and S9 windows is within TOL of 0 |
 | `FAILED:<case>:<message>` | a thrown error in that case (in `fail`) |
+
+## Faults and wind-up (WP27)
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/faults.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/faults
+```
+
+`faults.mjs` (WP27 C13) runs the fault cases `A` to `O` in ONE browser, a fresh context per case, 1920x1080 unless a case says otherwise. Prints ONE JSON object `{ results, fail, errors }`; `errors` holds the page errors and the console errors. Expected run: `fail: []` and `errors: []` on `http://localhost:4174/?debug=1` (full) and on `http://localhost:4177/?debug=1` (demo, where case `O` is the demo case).
+
+| case | setup | checks (names in `results` / `fail`) | shots |
+|---|---|---|---|
+| `A` locked | fresh run (waits until `faultStats()` is non-null, the lazy marker), then 10 s | `A_locked` (`faultStats().unlocked` false, `spawned` 0, no marker) | none |
+| `B` unlock | S7 list and `faultLamp` | `B_toast` (install toast with the Fault Lamp line), `B_tree` (faultLamp node on tab I at slot (5,2)) | none |
+| `C` spawn | `forceFault()` | `C_marker` (within 1.5 s: `marker.visible`, the centre inside the viewport and within 120 screen px of the anchor part), `C_announce` (the world-voice live region contains `Fault:`) | `faults-C-e1.png` |
+| `D` clear by pointer | click `client` (the marker centre) | `D_caught` (caught +1; ME and every other energy with perSecond > 0 gained at least 0.95 x payoutSeconds x perSecond), `D_popup` (the first line of the newest gain block is `CLEARED +<payout seconds>s`, e.g. `CLEARED +15s` in era I, within 1 s), `D_cue` (audio fault-clear count +1) | none |
+| `E` clear by key | `forceFault()`, press `f` | `E_key` (caught +1) | none |
+| `F` miss | `forceFault()`, wait the window + 1.5 s | `F_missed` (missed +1, resources unchanged apart from passive income, marker hidden), `F_input` (`marker.interactive` false) | none |
+| `G` no stacking | `forceFault()` twice while alive | `G_single` (spawned +1 only) | none |
+| `H` gates | photo mode on, then `forceFault()`; TECH INDEX open, then `forceFault()` | `H_photo`, `H_tree` (no marker, `alive` stays null for 3 s; a spawn within 1.5 s after closing) | none |
+| `I` reduced motion | reduced motion on, `forceFault()` | `I_steady` (`marker.tagFrame` and `fxFrame` constant over 6 samples in 2 s, each at least 0) | none |
+| `J` eras | S9, S11, S13 and S15 lists, `forceFault()` each | `J_anchor_<era>` (marker on an anchor of that era, on screen; era V's list is `graviticAnchorR` and `generator`, see `FAULT_MARKER.anchors` in `src/data/faultMarker.ts`) | `faults-J-<key>.png` (`e2` to `e5`) |
+| `J_e5in` | own run: S14 list (S13 + `nullChamber`, era V without the Gravitic Anchor) and the fault techs, `forceFault()` | `J_e5in` (within 1.5 s: marker visible, `anchor` `generator` (era V's second anchor; the crank fallback is no longer used in era V), `eligible` true) | `faults-J-e5in.png` |
+| `K` Overdrive | S15 list and `overrunClutch`, `forceFault()`, clear | `K_overdrive` (`overdriveLeft` 5-6 s right after; the HUD WIND-UP row contains `OVERDRIVE`) | none |
+| `L` wind-up | after Reinforced Crank: wait 12 s, one click | `L_release` (`gainLines()[0]` matches `/^RELEASE \+\d/` right after the click; the store is 0 at the `'click'` event and the event's `released` (seconds paid) matches the stored seconds read before the click) | none |
+| `M` quiet | `setFaults(false)`, then `forceFault()` | `M_quiet` (no marker for 3 s) | none |
+| `N` cost | 30 s with a fault alive (S9) | `N_cost` (`marker.meanMs` at most 0.05) | none |
+| `O` demo | dist-demo (`:4177`): S7 + `faultLamp`, S9 + `dischargeLever` | `O_demo` (B, C, D and E pass; the `dischargeLever` node on tab II at (5,0); the tab III node shows FULL GAME) | none |
+
+`I_steady`, `L_release` and `D_popup` are real checks now (no skip and no hook gap): `I` reads the marker frames, `L` reads the RELEASE line from `gainLines()` and the store at the `'click'` event (a one-shot `session.on` probe: the store is 0 there and `released` matches the stored seconds), `D` reads the clear popup header from `gainLines()`. The skips left are the demo era cap (eras III-V) and case `O` on the full build. `J_e5in` is the one new case (WP27 F-SMOKE).
+
+Debug API (WP27 C11, `src/game/debugHook.ts`):
+- `faultStats()`: `{ unlocked, alive, nextIn, spawned, caught, missed, overdriveLeft, eligible, marker, client, anchorClient }`, or `null` without a World scene or marker (the marker is a lazy chunk: it may be absent for the first moments after load). `marker` is the FaultMarker `stats()` (`visible`, `interactive`, `eligible`, `anchor`, `anchorWorld`, `code`, `x`, `y`, `age`, `window`, `shown`, `cleared`, `missed`, `meanMs`, `tagFrame`, `fxFrame`). `anchorWorld` is the anchor part's top-centre point in world px (`null` without an anchor); `tagFrame` and `fxFrame` are the last frames set on the tag and FX sprites (`-1` before the first set; `I_steady` compares them). `client` is the marker centre in client px (`null` while hidden); `anchorClient` is the anchor point (the part's top centre) in client px (`null` without an anchor). The smokes click `client`.
+- `gainLines()`: the text of each line (`string[]`) of the newest floating gain block: the crank block (its first line is `RELEASE +0.3s`-style after a wind-up release) or the clear popup (its first line is `CLEARED +<payout seconds>s`); `null` without a World scene.
+- `forceFault()`: calls `session.debugForceFault()`; the next eligible clock step spawns a fault. `false` when refused.
+- `setFaults(on)`: the marker gate. Off hides a live marker and freezes the clock. No-op without a marker.
+- `windupStats()`: `{ stored, cap, refill }`: the stored wind-up seconds, the cap (seconds) and the refill (seconds per second).
+
+HUD fit (`economy.mjs`, `F_hud_fit`): the table row `F` of the WP25 section also checks the WIND-UP row (WP27 C8, `#hud-windup`; visible once Reinforced Crank is owned, which the S7 list gives) at UI 100, 125 and 150. The row is one line, its whole box lies inside `#hud-panel` (`windup.contained`), and the panel lies inside the viewport (`panelInView`). The per-scale records `F_hud_fit_100`, `F_hud_fit_125` and `F_hud_fit_150` carry `windup` and `panelInView`; `F_hud_fit` is still the AND of the three scales. The CLICK and AUTO-CRANK checks are unchanged.
+
+### Crow talk (`world.mjs`, `crowTalk_e1` and `crowTalk_s8`)
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright ONLY=crowTalk_e1,crowTalk_s8 node scripts/smoke/world.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/world
+```
+
+Each case is a fresh run at UI 150 (the framing `caseD` checks): the hook buys (`buyList`), the F6.4 commit step (press `t`, 1.2 s, Escape), then the placements at the framing (`e1` or `s8`). `worldSay` forces the crow's line: `CRW-01` (era I, log reply) for `crowTalk_e1`, `CRW-04` (crossedLines step 2) for `crowTalk_s8`. Within 1.5 s the crow entry of `livingWorld()` has `speaking` true; then six samples 600 ms apart (3 s) show its `variant` in `perchHead` / `perchTalk` only (never `head`, `talk`, `frozen` or `frozenTip`). Both cases also run in the full run and on the demo edition (eras I and II are open there).
+
+| check | what it means |
+|---|---|
+| `crowTalk_e1` | the buys and the e1 placements pass, `worldSay('CRW-01')` is true, the crow speaks and the six samples are folded-wing poses. Shot `world-crowTalk-e1.png`. Value: `buyFail`, `problems`, `said`, `speaking`, `poses` |
+| `crowTalk_s8` | the same at framing s8 with `CRW-04`. Shot `world-crowTalk-s8.png` (also taken on a skip). When `worldSay` refuses `CRW-04` (the chain gate) the check records `value.skipped` with the reason and does not fail; AD2 checks a crossed-lines chain by eye on the shot. A failed buy or placement still fails |
+
+### Store shots: `_no_fault` (`store-shots.mjs`)
+
+`quietWorld` also turns the fault marker gate off (`setFaults(false)`), and every shot adds `<size>_<id>_<variant>_no_fault`. It passes when `faultStats()` is null (no World scene, or a build without the hook) or `faultStats().marker.visible` is false. The check sits next to `_no_output_tick`.

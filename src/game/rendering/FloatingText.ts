@@ -20,6 +20,8 @@ export class FloatingText {
   private next = 0;
   /** The block last taken by a fresh showBlock: the target of merged updates. */
   private newest: GainBlockView | null = null;
+  /** The lines of the latest showBlock call, merged or not, tracked or not (the debug hook reads their text). */
+  private lastLines: readonly GainLine[] | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -29,11 +31,15 @@ export class FloatingText {
    * Shows the stacked gain block. `lines` are listed top-first; at most FLOATING_TEXT.maxLines are shown.
    * merged = false: the block starts at worldPos. merged = true: the newest block is re-texted and keeps its position
    * (with no block yet it is treated as fresh). Each (re)show restarts the rise and fade from the block's current y.
+   * track = false (WP27 fault popups): the block is shown as usual but is never the merge target, so a later crank
+   * click cannot re-text it.
    */
-  showBlock(worldPos: Vec2, lines: readonly GainLine[], fontPx: number, merged: boolean): void {
+  showBlock(worldPos: Vec2, lines: readonly GainLine[], fontPx: number, merged: boolean, track = true): void {
+    this.lastLines = lines;
     const reused = merged ? this.newest : null;
     const block = reused ?? this.acquire();
-    this.newest = block;
+    if (track) this.newest = block;
+    else if (this.newest === block) this.newest = null;
     const container = block.container;
     if (reused === null) container.setPosition(worldPos.x, worldPos.y);
 
@@ -68,6 +74,11 @@ export class FloatingText {
       ease: 'Quad.easeIn',
       onComplete: () => container.setVisible(false),
     });
+  }
+
+  /** The lines given to the latest showBlock, or null before the first one (smoke probe; the lines are not copied). */
+  lastBlockLines(): readonly GainLine[] | null {
+    return this.lastLines;
   }
 
   /** Kills tweens and destroys every pooled block and text. */

@@ -13,6 +13,7 @@ import { Terrain } from '../rendering/Terrain';
 import { DustField } from '../rendering/DustField';
 import { FloatingText } from '../rendering/FloatingText';
 import { OutputTicker } from '../rendering/OutputTicker';
+import type { FaultMarker } from '../rendering/FaultMarker';
 import { CameraController } from '../rendering/CameraController';
 import { Eclipse } from '../rendering/Eclipse';
 import { ApertureBeam } from '../rendering/ApertureBeam';
@@ -124,6 +125,10 @@ export class WorldScene extends Phaser.Scene {
   private photo: PhotoModeController | null = null;
   /** WP23a living world director; null before `create`, until its lazy chunk resolves, after its teardown, or when #ui-root is missing. */
   private worldDirector: LivingWorldDirector | null = null;
+  /** WP27 fault marker; null before `create`, until its lazy chunk resolves, after its teardown. */
+  private faultMarker: FaultMarker | null = null;
+  /** The gain-text pool of this scene (the crank and the fault popups share it); null before `create` and after its teardown. */
+  private floatingText: FloatingText | null = null;
   /** performance.now() of the last HUD rebuild (poll or event); the poll waits HUD_REFRESH_MS after it. */
   private hudRenderedAtMs = Number.NEGATIVE_INFINITY;
   private readonly frameTimings = new FrameTimings();
@@ -161,15 +166,34 @@ export class WorldScene extends Phaser.Scene {
     const steamFx = new SteamFx(this, display, () => this.machineView);
     this.steamFx = steamFx;
     const floatingText = new FloatingText(this);
+    this.floatingText = floatingText;
     const crank = new HandCrank(this, this.ctx, machine, floatingText);
     const outputTicker = new OutputTicker(this, { session: this.ctx.session, machine: () => this.machineView, photoActive: () => this.photo?.isActive() === true, finaleOrPostgame: () => this.ctx.session.state.ending.phase !== 'none', reducedMotion: () => this.ctx.session.settings.reducedMotion });
+    // WP27 machine faults: the marker over a faulted part, a lazy chunk (the app chunk is budgeted). bootstrap warms it; it is built
+    // here once it resolves, long before the first fault (era I waits at least 180 eligible seconds). Its overlay checks mirror the living
+    // world's ports (the same overlays hide it). Set by the disposable below: a chunk that resolves after teardown builds nothing.
+    const worldRoot = document.getElementById('ui-root');
+    let faultTornDown = false;
+    import('../rendering/FaultMarker')
+      .then(({ FaultMarker: Marker }) => {
+        if (faultTornDown) return;
+        this.faultMarker = new Marker(this, {
+          session: this.ctx.session,
+          machine: () => this.machineView,
+          floatingText,
+          ui: this.ui,
+          photo: () => this.photo,
+          cycle: () => this.cycleTransition,
+          clearCommand: this.ctx.commands.clearFault,
+        });
+      })
+      .catch((err: unknown) => console.error('[faults] marker failed to load', err));
     const camera = new CameraController(this, this.ctx.session);
     const unsubscribeRefocus = this.ctx.commands.refocus.on(() => camera.refocus());
     // WP23a living world: after SteamFx, before the finale. Its ports read scene and UI state lazily, so the photo mode and the
     // cycle transition (created below) may still be null here. Needs #ui-root for the bubble DOM; without it there is no director.
     // The director is a lazy chunk (the app chunk is budgeted): it is built a moment after create, and update() and the links
     // stay no-ops until then. bootstrap warms the chunk during the asset load, so the import is normally already resolved.
-    const worldRoot = document.getElementById('ui-root');
     const worldDisposables: Array<() => void> = [];
     if (worldRoot !== null) {
       const ports: WorldDirectorPorts = {
@@ -313,8 +337,17 @@ export class WorldScene extends Phaser.Scene {
       unsubscribeRefocus,
       () => camera.destroy(),
       () => crank.destroy(),
-      () => floatingText.destroy(),
+      () => {
+        this.floatingText = null;
+        floatingText.destroy();
+      },
       () => outputTicker.destroy(),
+      () => {
+        faultTornDown = true;
+        const marker = this.faultMarker;
+        this.faultMarker = null;
+        marker?.destroy();
+      },
       // WP23a: the living world goes before SteamFx and the dust (and so before the display source, which is disposed last).
       ...worldDisposables,
       () => {
@@ -393,6 +426,16 @@ export class WorldScene extends Phaser.Scene {
   /** The machine view, or null before `create` and after its teardown. */
   getMachine(): MachineView | null {
     return this.machineView;
+  }
+
+  /** The WP27 fault marker, or null before `create`, until its lazy chunk resolves, after its teardown. */
+  getFaultMarker(): FaultMarker | null {
+    return this.faultMarker;
+  }
+
+  /** The gain-text pool, or null before `create` and after its teardown. */
+  getFloatingText(): FloatingText | null {
+    return this.floatingText;
   }
 
   /** The finale director, or null before `create` and after its teardown. */
@@ -480,6 +523,7 @@ export class WorldScene extends Phaser.Scene {
     if (this.ctx.session.revision !== this.lastRevision && hudStart - this.hudRenderedAtMs >= HUD_REFRESH_MS) this.renderHud();
     this.ui.techTree.update();
     OutputTicker.of(this)?.update(delta);
+    this.faultMarker?.update(delta);
     this.frameTimings.record((sessionEnd - sessionStart) + (performance.now() - hudStart));
     // Photo mode ends itself when another modal sits on top or the finale runs again.
     this.photo?.update();
@@ -516,7 +560,9 @@ export class WorldScene extends Phaser.Scene {
     const session = this.ctx.session;
     this.lastRevision = session.revision;
     this.hudRenderedAtMs = performance.now();
-    const view = buildHudView(session.state, session.rates, session.prestige, session.techs);
+    // WP27 C8: the wind-up and Overdrive readout of the CLICK row (stored output, cap, Overdrive time left and factor).
+    const crank = { stored: session.windup.stored, cap: session.windup.cap, overdriveLeft: session.faults.overdriveLeft, overdriveFactor: session.faults.overdriveFactor };
+    const view = buildHudView(session.state, session.rates, session.prestige, session.techs, crank);
     // WP16b-3: a store-shot plate cap caps the plaque line too (cappedPlaqueLevels, src/game/math/plateCap.ts).
     this.ui.hud.render(this.plateCap === null ? view : { ...view, plaque: plaqueText(cappedPlaqueLevels(session.state.techLevels, this.plateCap)) });
   }

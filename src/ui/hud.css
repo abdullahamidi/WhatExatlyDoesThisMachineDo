@@ -87,6 +87,14 @@
   color: var(--amber);
 }
 
+/* WIND-UP row: one line, long text clipped. */
+.hud-windup {
+  font-size: max(12px, .72em);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .hud-plaque {
   margin-top: 8px;
   padding-top: 6px;

@@ -3,7 +3,7 @@ import { CRANK_FEEDBACK, CRANK_PULSE, DEPTH, FLOATING_TEXT, PIXEL_SCALE } from '
 import { emptyResourceMap } from '../../simulation';
 import { motionPolicy } from '../../simulation/settings';
 import type { ResourceMap } from '../../data/types';
-import { clickGainLines } from '../../ui/hudView';
+import { clickGainLines, releaseLine } from '../../ui/hudView';
 import { gainFontPx, mergeGains } from '../math/gainBlock';
 import type { GainBlock } from '../math/gainBlock';
 import type { GameContext } from '../context';
@@ -31,8 +31,12 @@ export class HandCrank {
   private readonly sparks: CrankSparks;
   /** Resources gained by the latest click, from the session 'click' event. */
   private lastGain: ResourceMap = emptyResourceMap();
+  /** Wind-up seconds the latest click released (WP27 C8); 0 when it released nothing. */
+  private lastReleased = 0;
   /** The gain block of the latest click: rapid clicks merge into it (WP17 T8). */
   private block: GainBlock | null = null;
+  /** Wind-up seconds released by the clicks of the open block: one RELEASE line sums them (WP27 C8). */
+  private blockReleased = 0;
   private pulseRing: Phaser.GameObjects.Arc | null = null;
   private pulseTween: Phaser.Tweens.Tween | null = null;
   private pulseOutline: Phaser.GameObjects.Arc | null = null;
@@ -49,6 +53,7 @@ export class HandCrank {
 
     this.unsubscribeClick = ctx.session.on('click', (e) => {
       this.lastGain = e.gainedAll;
+      this.lastReleased = e.released ?? 0;
     });
 
     const pos = machine.getComponentWorldPosition('handCrank');
@@ -106,6 +111,11 @@ export class HandCrank {
     this.ctx.session.click(); // the only state mutation
     const { block, merged } = mergeGains(this.block, this.lastGain, this.scene.time.now, FLOATING_TEXT.coalesceMs, FLOATING_TEXT.blockMaxMs);
     this.block = block;
+    // WP27 C8: a merged click adds its release to the block; a fresh block starts from this click's release alone.
+    this.blockReleased = merged ? this.blockReleased + this.lastReleased : this.lastReleased;
+    // The RELEASE line (when any) sits on top of the gain block, then one line per energy (ME included).
+    const release = releaseLine(this.blockReleased);
+    const lines = release === null ? clickGainLines(block.gains) : [release, ...clickGainLines(block.gains)];
     const fontPx = gainFontPx(this.scene.cameras.main.zoom, FLOATING_TEXT.fontSizePx, FLOATING_TEXT.minScreenPx);
     const crankPos = this.machine.getComponentWorldPosition('handCrank');
     // A fresh block gets a small random x jitter; a merged block stays on its spot.
@@ -114,7 +124,7 @@ export class HandCrank {
     const offset = this.machine.getComponentState(FLOATING_TEXT.spireComponent).visible ? FLOATING_TEXT.spawnOffsetSpire : FLOATING_TEXT.spawnOffset;
     this.floatingText.showBlock(
       { x: crankPos.x + offset.x + jitterX, y: crankPos.y + offset.y },
-      clickGainLines(block.gains),
+      lines,
       fontPx,
       merged,
     );

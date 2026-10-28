@@ -32,7 +32,7 @@ export interface MemoryView {
   empty: boolean; // no Echo yet and the run is not revealed: only `message` shows
   message: string; // PRESTIGE_TEXT.empty when empty, '' otherwise
   echo: MemorySprite; // currency icon (echo.png)
-  echoesText: string; // ECHOES 3 (+45% ALL/S)
+  echoesText: string; // ECHOES 3 (+42% ALL/S)
   unspentText: string; // UNSPENT 1
   cycleText: string; // CYCLE 0042
   nextCycleText: string | null; // NEXT CYCLE: CYCLE 0043 · +3 ECHOES, only once revealed

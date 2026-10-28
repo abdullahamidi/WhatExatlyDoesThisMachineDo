@@ -91,9 +91,9 @@ export const DUST_WIND = { gravityXPerUnit: 12, epsilon: 0.5, driftEpsilon: 0.01
 export const CRANK_FEEDBACK = { degreesPerClick: 90, tweenMs: 160, shakePx: 1 /* art px */, shakeMs: 60,
   floatRisePx: 40, floatMs: 1100, hitRadius: 36 /* art px, crank click area */ } as const;
 export const FLOATING_TEXT = { fontSizePx: 24, minScreenPx: 16, strokePx: 4, jitterX: 6, spawnOffset: { x: 116, y: -128 },
-  spawnOffsetSpire: { x: 316, y: -138 }, spireComponent: 'spireTower', maxLines: 5,
+  spawnOffsetSpire: { x: 316, y: -138 }, spireComponent: 'spireTower', maxLines: 6,
   lineGapPx: 2, coalesceMs: 300, blockMaxMs: 900, blockPoolSize: 6, charWidthEm: 0.62, color: '#ffd27a',
-  colors: { me: '#ffd27a', ee: PALETTE_CSS.cyanLight, pr: PALETTE_CSS.steam, rs: PALETTE_CSS.verdigrisLight, xf: PALETTE_CSS.violetPale } } as const;   // world px (WP17 crank gain block: minScreenPx is the font floor in screen px; spawnOffset is the block bottom-centre from the crank)
+  colors: { me: '#ffd27a', ee: PALETTE_CSS.cyanLight, pr: PALETTE_CSS.steam, rs: PALETTE_CSS.verdigrisLight, xf: PALETTE_CSS.violetPale } } as const;   // world px (WP17 crank gain block: minScreenPx is the font floor in screen px; spawnOffset is the block bottom-centre from the crank; maxLines 6 = RELEASE line + five energies, WP27)
 /** Poll path of the HUD rebuild (WorldScene): at most one rebuild per HUD_REFRESH_MS. Session events rebuild at once. */
 export const HUD_REFRESH_MS = 100;
 export const CRANK_PULSE = { color: 0xffd27a, outlineColor: PALETTE.ink, radiusArtPx: 24, strokeArtPx: 2, outlineArtPx: 1, alphaPeak: 0.9, periodMs: 1200 } as const;   // first-click ring on the crank (art px): amber ring with a 1 art px ink outline (WP20 D8)

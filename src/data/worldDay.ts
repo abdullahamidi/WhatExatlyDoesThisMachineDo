@@ -80,8 +80,8 @@ export const WORLD_AMBIENT = {
   sway: { sproutPx: 2, scrapLiftPx: 2, scrapDxPx: 2, scrapLiftPhaseRad: 1 },
   receiver: { periodMs: [1500, 3000], maxSteps: 3 },
   virga: { scrollPxPerS: 20, skewPerWind: 0.1 },
-  // The drip starts at the crow's edge (AD1b-2), not inside the breast.
-  drip: { offsetArt: { x: 7, y: -3 }, sizeArtPx: 1, fallPx: 24, fallMs: 900, paletteKey: 'steam' satisfies PaletteKey },
+  // The drip starts at the crow's edge (AD1b-2), not inside the breast. fromEra 3 (AD2 F5): the ruffle drip is steam, so it starts with era III.
+  drip: { offsetArt: { x: 7, y: -3 }, sizeArtPx: 1, fallPx: 24, fallMs: 900, fromEra: 3, paletteKey: 'steam' satisfies PaletteKey },
   // Stream salts. The micro streams are micro + the kind index (0..7): the block must meet none of the other salts (a data test pins it).
   seeds: { micro: 4501, gust: 4403, vent: 4407, motes: 4409 },
 } as const;

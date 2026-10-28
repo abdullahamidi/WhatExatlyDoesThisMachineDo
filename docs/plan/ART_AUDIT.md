@@ -2403,3 +2403,627 @@ store set all hold in the rebuilt build. No S1 / S2 open. Unchanged: finale, sho
 v0.10.1 dist as `store-final3` (175/175 ok). Against this AD2 set, 05 is identical and the rest differ by animation phase only
 (0.97-2.13 % of pixels), same cast and order. STEAM_RELEASE §15 rows 11 and 14 PASS for v0.10.1. N1 (camera ease, pre-existing) and N2
 (tab V border reading) need no action.
+
+## WP27 — crow, Sensor 7 and the fault marker (2026-10-27)
+
+### ADa — crow frames and s8w geometry (wave 1)
+
+`<O>` = `C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP27`.
+Evidence under `<O>/ada/`. Diagnosis: `<O>/diag/diag.md`. Hand-pixelled in the crow master; PixelLab used for the gates only (no
+generations spent). No build, no preview: the in-game check of the new cells is AD2's (wave 9).
+
+**Crow (D5, F5.2).** Defect: in eras I-II the crow is a frozen spread-wing picture, and its bubble frames (`head`, `talk`) carry the
+spread-wing body. Fix: three folded-wing columns appended to `world.crow` (old indices keep; 288 x 108 -> 360 x 108, 15 frames x 6
+era rows), drawn in the master `scripts/art/world/masters/crow/crow.txt` and baked by `build_sheet.py` / `erarecolor.py`.
+
+| column | frame | drawing | px changed vs perch0 (rows I, II / III, IV / V / whole) | rows 6-17 vs perch0 |
+|---|---|---|---|---|
+| 12 | `perchTurn` | perch0 with the head turned back over the shoulder: perch0's head outline, perch0's beak mirrored about the head axis (x 14.5) so it points left over the back; eye (13, 3) rows III+; gloss (whole) on the crown (16, 2) (17, 3), clear of the eye | 18 / 21 / 27 / 24 | identical; rows III-V lack perch0's beak drip (21, 6) (it hangs from the side beak) |
+| 13 | `perchHead` | perch0 body + the camera-facing head of `head` on perch0's round head outline: iron 2 brows (14, 2) (16, 2), eyes (14, 3) (16, 3) rows III+, a 1 px beak stroke x 15 rows 4-5; rows I-II keep the smudge face (brows bake to #4e2a1a, no eye) | 13 / 15 / 18 / 15 | identical except the same beak drip (III-V) |
+| 14 | `perchTalk` | perchHead with the lower mandible 1 px longer (15, 6); rows III+ the open-beak mouth pixel #6e3a22 at (15, 5) (the `talk` convention) | 14 / 16 / 19 / 16 | + the mandible pixel (15, 6) |
+
+Layers follow perch0: eyes III IV V whole; damp III IV V = the tail tip only (a drip under the turned beak at (8, 6) closed a
+1 px hole (9, 6) against the back: the first workbench lint found 3 holes, the drip was dropped); gloss whole = crown + perch0's
+wing edge. Registered: `sheets.py` `FRAMES.crow` (+3), `WORLD_FRAMES.crow` (+3, indices 12-14), manifest `world.crow` 360 x 108,
+count 90, "15 frames per era row", `docs/ASSET_GUIDE.md` block regenerated, DENIZEN_ART §2.3 table and era rows I-II.
+
+| gate | result |
+|---|---|
+| `build_sheet.py crow` / `check_sheet.py crow` | exit 0 / CLEAN (manifest 360 x 108, 90); the 12 old columns are pixel-identical to the v0.10.1 PNG; the shipped PNG is the master rebuild |
+| workbench `score` | sheet 99.9 (was 99.8); columns perchTurn 100.0, perchHead 100.0, perchTalk 100.0 |
+| workbench `lint` | sheet 0 / 0, 4 info, 0 holes, 85 components = 90 cells - 5 ruffle crown touches; new columns 0 / 0, 3 info, 0 holes, 18 components |
+| decoded PNG total | 276 PNGs, 54.49 MiB (limit 56) |
+
+Read at 1:1 and x3 (`<O>/ada/strip-row-<I|II|III|IV|V|whole>-x3.png`: 1:1 left, x3 right; perch0, perch1, perchTurn, perchHead,
+perchTalk, the old head / talk for contrast) and in game size (`<O>/ada/comp-s8w-lamp-row-<I|II|III|whole>-<1x|x3>.png`: lamp at
+the s8w x 2720 on the cast-free 1080p s8cap shot, crow feet on the finial at lift 56, row I at alpha .75):
+- same bird in every row: the body, wing, tail, legs and toes are perch0's pixels; only the head changes;
+- the head turn reads at 1:1: the beak jumps from the right to over the back, the head stays put;
+- perchHead reads as a perched crow facing the player (no side beak; eyes from row III); no spread wing in any of the three;
+- perchTalk vs perchHead in rows I-II is one ink px on #2e1a12 (the `talk` convention: the beak lengthens, the mouth pixel is a
+  row III+ layer); the bubble carries the talk read there. AD2 judges it in motion.
+
+**Sensor 7 geometry (D6, F6.1).** Real code: `<O>/ada/calc/geom.ts` bundles `worldPlacement` (`framingPose`, `framingKeyOfPose`,
+`viewRectOf`, `usableX`, `placeCast`, `actorBand`) and `machineBounds` with esbuild and overrides the placements under test at
+run time (base = 25b7c8b data; wp27 = the F6.1 bindings + the values below): `base.json`, `wp27.json`. Drawn-pixel clearances:
+`overlap.py`, `pairs.py`, `pairs2.py`, `girlscan.py`, `s11.py` (`pairs.txt`, `pairs2.txt`, `girlscan.txt`, `s10s11.txt`):
+per pixel row of the shipped sprites, world px, negative = overlap; Inspector flipped (rest flip, left wing), era row II for s8 /
+s8w and III / IV for s10 / s11; finale-only frames (pat0, pat1, wave, shield) out; umbrella frames only from era III; the era II mini
+frame is `cold` (`palm` is the era III vents reaction). Plan convention alongside: tripod +-16, Inspector body -14..+12, mini cell
++-8 game px.
+
+| pose | key | cx / zoom | view | machine | left wing | right wing | girl mini game x (world-eq) |
+|---|---|---|---|---|---|---|---|
+| generator (+ retrofit, copper, dynamo) | s8 | 2064 / 1 | 1424-2704 | 1576-2552 | 1448-1552 | 2576-2680 | 84.8 (1508.8) |
+| capacitorBank, no transformer | s8w | 2112 / 1 | 1472-2752 | 1576-2648 | 1496-1552 | 2672-2728 | 58.4 (1530.4) |
+| sparkGap alone, no transformer | s8w | 2104 / 1 | 1464-2744 | 1576-2632 | 1488-1552 | 2656-2720 | 62.8 (1526.8) |
+| transformer, no powerLines / full | s9 | 2176 / 2192, .75 | 1339-3045 (2192) | 1576-2776 / 2808 | 1347-1552 / 1363-1552 | 2800-3005 / 2832-3021 | 170.8 (2192) |
+| boiler (era III entry) | s10 | 2055 / .75 | 1202-2908 | 1302-2808 | 1226-1278 | 2832-2884 | - |
+| era III-IV full | s11 | 1922 / .5 | 642-3202 | 1036-2808 | 666-1012 | 2832-3178 | - |
+| steamHammer / superheater before condenser | s11 | 2006 / .5 | 726-3286 | 1204-2808 | 750-1180 | 2832-3262 | - |
+
+(a) s8w: **Sensor 7 1500, Inspector 1552** (the draft).
+- Wing: both x pass both poses. 1552 is the wing's right limit (machine left 1576 - 24); the mini sits at 1519-1539, so nothing
+  can stand right of it: the pair keeps the s8 order (tripod left of the mini, Inspector right of it, facing it).
+- Mini, plan convention: cx 2112 cell 1522.4-1538.4 vs Inspector body 1538 = **0.4 px overlap**, tripod right 1516 = 6.4 px clear;
+  cx 2104 3.2 / 2.8 px clear. Drawn px: cx 2112 mini 1.6 px clear of every era II Inspector frame (crouch included), 10.4 px from
+  the tripod; cx 2104 5.2 / 6.8. Pre-agreed fallback (a): overlap 0.4 px (hand-off 1, rounded up), the mini on the far plane.
+- Tripod to Inspector 16 px (crouch, worst); scrap 1530 lies between them on the ground.
+- Cycle 3+ ground girl: **none** (fallback (b)). Left wing: the best x (1522 with the tripod at 1496) leaves 0 px to both the
+  tripod and the Inspector (-2 px with the tripod at 1500); she needs 24 px plus 2 x 2. Right wing (2672-2720 in both poses):
+  the booth at 2678 draws 2652-2706; the x that clear it by 2 px (2716-2720) stand 14-18 px into the lamp post at 2720. The
+  s8w pose lasts 28-137 s.
+- Draft rest, placed at both poses: booth 2678, lamp and crow 2720, dog 2694, stake 2676, hole 2716 (front), scraps keep 1530.
+- Mock with these x: `<O>/diag/mock-d6-s8w-left-x2.png`, `-right-x2.png`, `-full.png`.
+
+(b) s8 bindings pass: Sensor 7 1470, Inspector 1536, clock 2680 are placed (clock = the right wing limit). Mini game 84.8: tripod
+right game 62, Inspector left game 98, cell 76.8-92.8 inside (14.8 / 5.2 px; drawn 18.8 / 7.2). Tripod to Inspector 30 px.
+- Finding, cycle 3+ ground girl at 1508: 12 px from the tripod and 4 px from the Inspector's rest frames, but F6.2 runs the crouch
+  in place at the single s8 spot and the crouch boots reach x - 20: her boots overlap his by 2 px. Fix spec (EM call, no key in the
+  block): `WORLD_GIRL_PLACEMENTS.s8.ground` x **1504** (tripod 8, Inspector rest 8, crouch 2 px clear; still in the wing).
+
+(c) Eras III-IV (outside the demo).
+- s10: **Sensor 7 1234, Inspector 1276 accepted, with one companion change**: `WORLD_SPOTS.s10` = `{ inspector: [{ id: 'sensor',
+  dx: 0 }], dog: DOG_SPOTS }` (the s8 / s8w F6.2 form). With `INS_SPOTS` the sensor spot is 1252 (inside the 1226-1278 band) and
+  reading / crouch (both travel to the sensor spot) put the Inspector 14 px (write1) / 18 px (crouch) into the tripod. At 1276:
+  6 px clear (crouch, worst), tripod 1218-1250 (16 px inside the view). Without that spot change, s10 Sensor 7 must be exempt.
+- s11: the plan's Inspector 800 / route [784, 824] is rejected: `INS_SPOTS` put the sensor spot at 776 (10 px into the tripod at
+  750) and the route end 784 is 2 px into it (crouch). **ADa: Sensor 7 750, Inspector 816, route 792-840** (= the spots 792 / 816 /
+  840): 6 / 30 / 54 px clear of the tripod (rows III and IV, crouch worst); every x passes both s11 poses (666-1012 and
+  750-1180); the cycle 3+ ground girl at 880 stays 14 px clear of the 840 spot; the near mini (world-eq about 945 / 971) is far away.
+
+(d) Era I-II audit (`wp27.json` `sweep`, 214 cases: every cumulative prefix of the S15 list, each single era II tech on S8, each
+single era III tech on S10; 60 cases in eras I-II). Placed at e1 = Sensor 7, Inspector, dog, booth, lamp, crow, clock, stake, hole,
+scraps, the cycle 3+ ground girl.
+
+| pose family | cases (prefixes + singles) | off-stage, 25b7c8b data | off-stage, WP27 values |
+|---|---|---|---|
+| e1 (s0-s7) | 15 + 0 | none | none |
+| s8 cx 2064 (generator, retrofit, copper, dynamo; singles also substationBlueprint, crankServo, dischargeLever) | 27 + 7 | Sensor 7, clock | none |
+| s8w cx 2112 (capacitorBank before transformer) | 2 + 1 | Inspector, Sensor 7, dog, booth, lamp, crow, clock, stake, hole | clock (exempt), cycle 3+ girl (exempt, fallback b) |
+| s8w cx 2104 (sparkGap alone) | 0 + 1 | Inspector, Sensor 7, dog, booth, clock, stake, hole | clock (exempt), cycle 3+ girl (exempt, fallback b) |
+| s9 cx 2176 (transformer before powerLines) | 3 + 1 | none | none |
+| s9 cx 2192 (era II full) | 2 + 1 | none | none |
+
+Inspector placed without Sensor 7, all eras: 69 cases in the 25b7c8b data (s8 34, s10 32, s11 variant 3), 0 with the WP27 values.
+Exemptions: `s8w clock` (the right wing 2672-2720 holds booth 2678, lamp and crow 2720) and `s8w girl` (no 24 px slot, above).
+Info only (era III, not in this audit's scope): s10 still places no crow, lamp, clock, hole, scraps or ground girl (narrow wings).
+
+Hand-off (T5 placements, T8a / T8b crow frames):
+
+```
+WP27-HANDOFF-BEGIN
+S8W_SENSOR7 = 1500
+S8W_INSPECTOR = 1552
+S8W_GIRL_GROUND = none
+S8W_MINI_OVERLAP_PX = 1
+S10_SENSOR7 = 1234   S10_INSPECTOR = 1276
+S11_SENSOR7 = 750   S11_INSPECTOR = 816   S11_ROUTE = 792,840
+CROW_FRAMES = perchTurn:12 perchHead:13 perchTalk:14
+WP27-HANDOFF-END
+```
+
+Outside the block (EM): s10 needs the single Inspector spot above; s8 cycle 3+ girl 1504 recommended over the 1508 binding.
+`scripts/art/world/README.md` (not ADa's file) still lists crow 288 x 108 / 12 frames in its gate and frame tables.
+
+### ADb — fault sheet and anchors (wave 2)
+
+Evidence under `<O>/adb/` (`<O>` as in ADa). Backdrops: stills of the v0.10.1 `dist/` (preview :4174, killed after use) at
+1920x1080 and 1280x720 for e1 (S7), s8, s8w (S8 + capacitorBank: cx 2112; S8 + sparkGap: cx 2104), s9, s10, s11 at cx 2006 (S11
+prefix to steamHammer) and cx 1922, s12 (era IV entry), s13, s14 (era V entry) and s15: `<O>/adb/bg/<shot>-<1080|720>.png` +
+`meta.json` (camera, HUD rect). Geometry: `<O>/adb/calc/anchors.ts` (real `framingPose` / `viewRectOf` / `componentBounds` /
+`OUTPUT_TICK` / `FLOATING_TEXT` via esbuild) over 229 tech-level cases: every cumulative prefix of S15 plus every same-era tech
+alone on S8 / S10 / S12 / S14 (prerequisites ignored, so a superset of reachable states). Ranking: `<O>/adb/calc/rank.cjs`.
+
+**Sheet (C12).** `public/assets/fx/fault.png`, 288 x 24, 12 frames of 24 x 24, origin bottom-centre. Hand-pixelled (master
+`<O>/adb/art/fault_sheet.py`, ASCII per frame; the PNG in the repo is the shipped source). No PixelLab generation spent.
+
+| frame | content | colours |
+|---|---|---|
+| 0 tag lit | rounded 16 x 16 plate (ink ring, corner pixels cut), lit from the upper left (#ffd27a top / left edge, #f0a848 face, #d9822b bottom / right edge), four #ad6236 rivet dimples, a bold ink `!` (4 px wide head over 3 rows, 2 px stem, 2 x 2 dot), a 2-row pointer under the plate aiming at the part; pointer tip on row 20, rows 21-23 empty | ink + accent ramp |
+| 1 tag dim | frame 0 with every amber one ramp step down (C->B, B->A, A->#ad6236, rivets #8c4a2a); identical alpha and ink | ink + accent + rust |
+| 2-3 spark (I-II) | a four-point star and two streaks (bright head, amber tail) thrown off the flanks, 2-3 single glints; the frames swap sides | #ffd27a #f0a848 #d9822b |
+| 4-5 steam hiss (III) | 4: jets from under the plate and low flank puffs; 5: the puffs have risen to the upper flanks and top corners | steam-puff ramp #e8e0cc #ddc9a3 #b8a98f |
+| 6-7 ring wobble (IV) | dish-wave arcs on both flanks plus a cap arc; 7 one step wider with a dark inner echo | #cfe8d6 #7fae96 #3f5e52 |
+| 8-9 null static (V) | interference specks and 2-px torn dashes, pale and dark mixed so they read on sky and on the chamber; the two frames share no pixel | #e0c8ff #9a6ad0 #54367a #24162f |
+| 10 clear puff | eight short rays and a ring of dust where the plate was (shown alone, 250 ms) | #ffd27a #f0a848 #ddc9a3 |
+| 11 spare | empty (alpha 0 everywhere): never shown | — |
+
+Rules kept: the tag silhouette is one shape in every era (frames 0 / 1 share alpha); FX pixels never touch the tag mask grown by
+1 px (checked by the master), so the FX and tag sprites may draw in either order; each era extension colour appears only in its
+own era's FX frames (steam III, verdigris IV, violet V; Rust Wasteland elsewhere); colour is never the only signal (plate shape,
+glyph, pointer, label).
+
+| gate | result |
+|---|---|
+| size / mode / alpha | 288 x 24, RGBA 8-bit, alpha {0, 255} |
+| palette | 16 colours: 8 Rust Wasteland + steam (frames 4-5) + verdigris x3 (6-7) + violet x4 (8-9), all in `src/data/palette.ts` |
+| `python -I scripts/art/tiers/check_gates.py` | exit 0 (91 files, 0 failures) |
+| workbench `score` (tag frame 0) | 100.0, 5 colours |
+| workbench `lint` (sheet) | 0 errors; 1 warning `orphan_pixel` (71) + info `orphan_cluster` (113): the FX particles are 1-2 px glints / specks by design |
+| decoded PNG total | 277 PNGs, 54.51 MiB (limit 56) |
+| registration | `ASSET_IDS` + `fx.fault` (id 145, 146 total), manifest row, `manifest.test.ts` pins 145 -> 146 and the WP23a slice `slice(120)` -> `slice(120, 145)` (it pinned the tail), `assetGuide.test.ts` placement note, `docs/ASSET_GUIDE.md` block regenerated (only the new row differs) |
+
+**Placement rule (spec for T9b; the plan says "anchor world position", undefined).** Anchor point = the top-centre of the part's
+art box: `machineLocalToWorld({ x: (b.left + b.right) / 2, y: b.top })` with `b = componentBounds(MACHINE_COMPONENTS[id])`. Not
+`getComponentWorldPosition(id)`: that is the pivot, which is the bottom for bottom-origin parts (pistonArray, sparkGap, boiler,
+calliope, the gravitic anchors) and would put the marker inside the part. The marker container (origin bottom-centre) sits at
+anchor point + `OFFSET_ART_PX` x `PIXEL_SCALE` = 28 world px above the part top, scaled with the world like the machine (1 art px
+= 2 world px; no extra low-zoom scale, see S2). Inside the frame: plate rows 3-18, pointer tip row 20, rows 21-23 empty. Label
+`FAULT [F]`: top-centre about 3 art px above the frame bottom (just under the pointer tip); the 16 x 2 bar under the label; both
+end above the part top. Draw order FX, tag, label, bar. `onScreen(id)` for `pickAnchor`: the part is visible and the frame box
+(24 x 24 art px at the anchor point + offset) lies inside the camera view inset by 80 world px.
+
+**Anchors.** Pass = visible part's marker box (frame + label gap) at least 80 world px inside the view in every swept case of the
+era, clear of the HUD panel (measured rect + 20 game px for the WP27 WIND-UP row), the crank gain block (5 lines, 14 chars,
+jitter) and the WP25 output popup (`OUTPUT_TICK` anchor + offset, 10 chars, rise). Insets are world px, worst case.
+
+| era | plan | ADb | inset (visible / cases) | why changed |
+|---|---|---|---|---|
+| I | wornMotor, pistonArray | **pistonArray, flywheel** | 108 (3/3), 236 (3/3) | wornMotor: the ME output popup (`OUTPUT_TICK` wornMotor + (0, -32)) rises through the marker in 3/3 cases (`<O>/adb/cand/cand-e1-1080-p0.png`) |
+| II | generator, sparkGap | **sparkGap, flywheel** | 120 (7/43), 292 (43/43) | generator: the EE popup (generator + (0, -90)) sits on the tag in 43/43 (`<O>/adb/cand/cand-s8-1080-generator-p0-1x.png`); no other era II part is visible at era II entry, so the flywheel carries early era II |
+| III | boiler, steamHammer | boiler, steamHammer (confirmed) | 214 (46/46), 502 (14/46) | — (the PR popup, 10 chars, starts 67 world px right of the boiler frame at s11; AD2 checks the real label width) |
+| IV | spireTower, koenigFork | **spireExciter, calliope** | 604 (53/53), 608 (16/53) | spireTower: the anchor point is the crown, so once crystalLattice is owned the tag covers the crystal (`<O>/adb/cand/cand-s13-1080-p0.png`); koenigFork passes but crowds the exciter; calliope stands in open sky above the whistles. spireExciter is 19 world px clear of the crank gain block at 14 chars (39 at 12) |
+| V | nullChamber, ring2Front | **graviticAnchorR, graviticAnchorL** | 216 (36/73), 216 (36/73) | nullChamber -24 and ring2Front -8: off-screen at the era V entry framing (s11 pose, the chamber top 26 game px under the screen top; `<O>/adb/cand/cand-s14-1080-top-1x.png`); nullGallery would sit inside the chamber over the core and siphons (`<O>/adb/cand/cand-s15-1080-p0.png`) |
+| fallback | handCrank | handCrank (confirmed) | 284 / 304 / 324 / 480 / 332 (all cases) | — (on the frame top girder, above the crank hit circle) |
+
+Era V has no clean anchor until graviticAnchor is owned: before it the fallback (the crank) takes every era V fault, by the
+plan's own fallback rule. HUD margins (game px): graviticAnchorL is the closest, 38 under the era V HUD with the WIND-UP row
+allowance (it shares the HUD's x span); every other anchor is right of the HUD. No anchor touches a gain block or popup.
+
+**Read checks** (`<O>/adb/final/`; review shots show both anchors of an era at once, the game shows one marker; the label and
+bar are mocks for spacing, T9b owns them):
+- full frames `final-<shot>-<1080|720>-p<0|1>.png` (p0 = tag 0 + fx[era][0], the reduced-motion pair; p1 = tag 1 + fx[era][1]);
+- crops `final-<shot>-<h>-<id>-pulse-<1x|x3>.png`: lit | dim side by side, 1:1 and x3 nearest.
+- e1 / s8 (zoom 1): tag 72 client px at 1080p, 48 at 720p, reads on sky and on iron; sparks visible.
+- s9 / s10 (zoom .75): 54 / 36 px; non-integer nearest scale as every sprite at this zoom.
+- s11-s15 (zoom .5): 36 px at 1080p, 24 px (1 art px = 1 px) at 720p. The plate and `!` read at 1:1; the FX are faint at 720p
+  (`<O>/adb/final/scale-compare-720-<1x|x3>.png`).
+- Pulse: lit -> dim is one ramp step of value on an unchanged shape; at 340 ms it reads as a slow pulse (2.9 changes per s,
+  1.5 Hz cycle), not a strobe. Spark / static frames move a few 1-px particles: within the 3 Hz rule.
+- The FX never cover the part (they live on the flanks and above the plate) and never cover the tag.
+
+**Specs for the EM (not ADb files):**
+- **S1 (T9b debug hook, T14a smoke C).** C13 `C_marker` "within 120 screen px of the anchor part" fails when `anchorClient` is the
+  part centre: marker centre to part centre at 1080p is pistonArray 165, flywheel 222, sparkGap 150 (zoom 1), boiler 167 (s10),
+  graviticAnchor 135, handCrank 150 client px. Make `faultStats().anchorClient` the anchor point (part top-centre); the marker
+  centre is then 52 world px away (78 client px at zoom 1, 39 at zoom .5) for every anchor.
+- **S2 (not adopted; AD2 to judge in game).** A 2x marker scale at zoom <= .5 would make the era III-V tag 48 px at 720p, but
+  then spireExciter overlaps the crank gain block (53/53 era IV cases), the era III fallback crank does in 16/46, and
+  graviticAnchorL touches the HUD allowance (`<O>/adb/calc/anchors-14-lowz2.json`). Keep the world scale.
+- **R1 (AD2 watch).** A crow bubble on the lamp can come near the sparkGap marker at s8 cx 2104 and the graviticAnchorR marker at
+  s15 (both in the right wing); bubbles are transient, no data change proposed.
+
+Hand-off (T9b applies it to `src/data/faults.ts` and its test):
+
+```
+WP27-FAULT-HANDOFF-BEGIN
+ANCHORS_1 = pistonArray flywheel
+ANCHORS_2 = sparkGap flywheel
+ANCHORS_3 = boiler steamHammer
+ANCHORS_4 = spireExciter calliope
+ANCHORS_5 = graviticAnchorR graviticAnchorL
+FALLBACK_ANCHOR = handCrank
+ART_TAG = 0 1       ART_FX_1 = 2 3  ART_FX_2 = 2 3  ART_FX_3 = 4 5  ART_FX_4 = 6 7  ART_FX_5 = 8 9     ART_CLEAR = 10     FRAME_MS = 340
+OFFSET_ART_PX = 0 -14
+WP27-FAULT-HANDOFF-END
+```
+
+Outside the block (T9b): the anchor point is the part's art-box top-centre (placement rule above), not its pivot.
+
+### AD2 — WP27 in-game audit (wave 9)
+
+Art Director, in game. **Verdict: NOT RELEASE-READY** (round 1). The crow, Sensor 7, the tree, the HUD row, era I motion and the store set
+pass. The fault marker fails A17 as built: it is drawn on the part's pivot (inside the part), not above it (F1), and era V faults stop
+until Gravitic Anchor is owned (F2). The ruffle drip still falls in eras I-II (F5). Fix list F1-F7 below; F1, F2 and F5 are code.
+
+Build under audit. **The gate builds did not exist**: `dist/` and `dist-demo/` were the v0.10.1 baseline of 11:39 (pre-WP27, no fault code;
+WP27 sources 18:34-20:46; no `<O>/val/`). No build was allowed, so the working tree was served by the Vite dev server: `npx vite --port 4174
+--strictPort` (full) and `npx vite --mode demo --port 4177 --strictPort` (demo); both killed after (netstat empty). The tree did not change
+during the audit (last edit 20:45). Typecheck clean at the start. Rendering code is the same as a build; the only DEV branch in `src/` is the
+debug hook gate. **Round 2 must re-run on the real gate builds** (tools below, a few minutes each).
+- One Playwright browser at a time, 1920x1080 unless stated.
+- Fix trials were emulated at run time in the dev page only (no file edit): `FaultMarker.prototype` methods and `FAULTS` /
+  `WORLD_GIRL_PLACEMENTS` values patched through the dev server's own module instances.
+
+Evidence root `<A>` = `<O>/ad2/` (`<O>` as in ADa). Boards in `<A>/crops/`; runs: `crow/`, `crow2/`, `sensor/`, `crouch/`, `crouch1504/`,
+`tree/`, `tree-demo/`, `resolutions/`, `fault/` + `fault45/` (as built), `faultP/`, `faultP22/`, `faultP12/`, `faultP10/` (emulated F1 with
+offsets -14 / -22 / -12 / -10), `anchors/`, `pulse/`, `hud/`, `early/`, `demo/`, `store/`. Tools in `<A>/tools/` (`crow.mjs`, `crow2.mjs`,
+`sensor.mjs`, `crouch.mjs`, `tree.mjs`, `fault.mjs` (env `PATCH`, `OFFSET_Y`, `ANCHORS5`), `anchors.mjs`, `pulse.mjs`, `hud.mjs`,
+`early.mjs`, `demofault.mjs`, `board.py`, `faultboard.py`).
+
+**1. A11 crow** — PASS except the drip (F5).
+
+| case | result | evidence |
+|---|---|---|
+| s0, 60 s, a click every 1.5 s (crank playback) | 40 pose runs: perch0 / perch1 bob, perchTurn, peck0 / peck1; spread frames 0 | `crow/crow.json` `s0click`, `crops/AD2-crow-s0click-strip-x2.png` |
+| s0, 3 clicks then 60 s idle | perch0 150 / 150 samples, never spread (crank playback holds the folded pose) | `crow.json` `s0idle`, `crow/s0idle-t*.png` |
+| e1 (S7, timed), 60 s | perch, shift, look, ruffle, peck; one tipTry 515 ms (frozenTip, 2 art px pop) | `crops/AD2-crow-e1s7-strip-x2.png` |
+| s8, 60 s | perch, stutter, skip, look, peck, ruffle; one tipTry 548 ms | `crops/AD2-crow-s8-strip-x2.png` |
+| feet on the finial | perched y 1568 = lamp 1680 - 56 art x 2; glitch 1564 (the 2 px pop only inside tipTry) | `crops/AD2-crow-e1-poses-x4.png` |
+| bubbles | s0 CRW-01 (after 8 clicks; refused on a cold s0), e1 CRW-01, s8 CRW-04 (accepted directly): perchHead / perchTalk only | `crops/AD2-crow-c2-and-talk-x3.png`, `crow/talk*-crow-*.png` |
+| cycle 2 (save cycle set to 2) | forced tipTry: fly2 at lift 66 (y 1548) for 0.7-1.7 s in e1, up to 1.2 s at s8, then perched; 60 s natural: nothing held; eras III-V: tipTry refused, no fly2 in 30 s each | `crow2/crow2.json`, `crops/AD2-crow-c2-and-talk-x3.png` |
+| ruffle drip from era III only | **FAIL**: the drop falls in eras I and II (8 of 9 forced ruffles); era III correct. `CastExtras.drawDrip` has no era gate (file unchanged vs 25b7c8b) | `crow.json` `dripE1/E2/E3`, F5 |
+
+Seen beyond the list: in eras III-IV the crow talks on the spread-wing `talk` frame and snaps back to the folded perch
+(`crops/AD2-crow-talk-e3-e4-x4.png`). That is the playtest picture again, in short bursts. F6 raises `crowPerchPoseToEra` to 4.
+The era V stare (`head`) is canon (untouched).
+
+**2. A12 Sensor 7** — PASS (F7 is polish).
+
+| framing (commit step after hook buys) | placed (world x) | result | evidence |
+|---|---|---|---|
+| e1 (S7) | S7 1384, Inspector 1472, all e1 objects | ok | `sensor/e1s7-c1-*.png` |
+| s8 cx 2064 | S7 1470, mini, Inspector 1536 facing it; clock 2680 shows | ok | `crops/AD2-sensor7-s8-s8w-c1-x3.png`, `crops/AD2-right-wing-s8-s8w-x2.png` |
+| s8w cx 2112 (capacitorBank) / cx 2104 (sparkGap) | S7 1500, Inspector 1552, booth 2678, lamp + crow 2720, dog 2694, stake 2676, hole 2716, scrap 1530; clock and girl exempt | full cast; mini clear of the Inspector by 1 art px at cx 2112 | `crops/AD2-s8w-mini-x6.png` |
+| s9 (S9) | e1 positions, all objects | ok | `sensor/s9-c1-*.png` |
+| s10 / s11 (cx 2006 and 1922) | S7 1234 / Insp 1276; S7 750 / Insp 816 | ok, tripod inside the view | `crops/AD2-sensor7-s9-s10-s11-x3.png` |
+| cycle 3 e1 / s8 / s8w / s9 | girl 1552 / 1508 / none / 1552 | s8: her boots touch the crouching Inspector's at 1508; 1504 clears by 2 art px (ADa's number) -> F7 | `crops/AD2-girl-c3-s8-s8w-x3.png`, `crops/AD2-s8-c3-crouch-1508-vs-1504-x4.png` |
+
+The era I-II audit found no other missing object (`sensor/sensor-c1.json`, `sensor-c3.json`).
+
+**3. A13 tree** — PASS.
+- DOM probe, S15 + the five nodes, 1080p UI 100 (`tree/tree-full.json`).
+- Per tab: nodes / edges / minimum edge-to-foreign-node distance. I 10 / 11 / 7.6 px; II 11 / 12 / 4.6; III 11 / 12 / 4.6; IV 10 / 10 / 7.6;
+  V 13 / 14 / 6.8. No sample under 4 px.
+- The new edges are short straight runs: Improved Pistons -> Fault Lamp (5,2); Spark Gap -> Discharge Lever (5,0) through the empty (4,0);
+  Bellows Drive -> Leak Whistle (4,2) (accepted, no fallback); Echo Crank -> Damping Fork (5,0); Inversion Crank -> Overrun Clutch (5,0).
+- Every old edge path is byte-equal to WP26 AD2.
+- Edge-to-edge probe: only shared ports. Spark Gap's fork to Substation Blueprint and Discharge Lever shares about 8 px, then splits (a
+  clean fork). The tab V outer channel leg is the WP26 N2 one.
+- Demo :4177: tab I Fault Lamp, tab II Discharge Lever, tabs III-V `FULL GAME` (disabled).
+- `resolutions.mjs`: 119 results, fail [], errors []. Tree PNGs approved; at 1280x720 / 800 UI 150, row 2 sits below the fold as in v0.10.x
+  (the graph scrolls).
+- Boards: `crops/AD2-tree-tabs-1345-1080.png`, `tree/full-tab2-1920x1080-100.png`, `crops/AD2-tree-demo-tabs-1080.png`,
+  `crops/AD2-res-tree-1280x800-150-old-new.png`.
+
+**4. A17 fault marker** — **FAIL as built**. It PASSES with F1-F4 (emulated).
+
+| item | as built | with F1 + F2 + F3 + F4 (emulated, offset -10) | evidence |
+|---|---|---|---|
+| placement | **on the part's pivot**: plate on the piston cylinders, the flywheel hub, the boiler plinth, the gravitic pillar base. The 2-line label lies on iron, or on the ground beside the dog. `FaultMarker.anchorPoint` uses `getComponentWorldPosition`, which ADb ruled out ("the pivot ... would put the marker inside the part") | plate in open air above each part, pointer down at it; the label overlaps only the part's top edge (stroked, readable) | `crops/AD2-fault-marker-1080-100-1x.png` vs `crops/AD2-faultP10-marker-1080-100-1x.png` |
+| era V entry (S14, no gravitic anchor) | **no fault at all**: `eraAnchorOnScreen` ignores the fallback, so the clock freezes; `forceFault` true, `alive` stays null | spawns on the crank (fallback) | `fault45/e5in-1080-100-full.png`, `faultP10/e5in-*` |
+| HUD, UI 150 (1080p, 720p, Deck) | clear (markers sit low) | graviticAnchorL's top sits under the UI-150 HUD (F3: R only); era III plate tops 6-11 px under the HUD bottom at -10 (1-4 px at -14, F4) | `crops/AD2-faultP-e5-L-ui150.png`, `anchors/anchors-14.json` |
+| crank gain block, output popups | no overlap in any era | no overlap; the crank fallback marker sits on the frame top, its block rises to the right | `crops/AD2-fault-<era>-context.png`, `crops/AD2-faultP10-<era>-context.png` |
+| denizen bubbles | e5 crow bubble clear of the marker | e5 crow bubble covers the R label while it shows; the plate stays visible (transient, ADb R1) | `crops/AD2-faultP-e5-context.png` |
+| legibility | frame 72 / 54 / 36 px at zoom 1 / .75 / .5 (plate 48 / 36 / 24) at 1080p; 24 px (plate 16) at 720p and Deck at zoom .5; the plate and `!` read at 1:1; the label (font floor 12 screen px) carries the small cases | same | `crops/AD2-faultP10-marker-720-deck-x2.png` |
+| pulse | tag / FX swap every 293-405 ms (2 frames, about a 1.5 Hz cycle); reads as a slow pulse | same | `pulse/pulse.json` (renderer frame log) |
+| reduced motion | one frame set, no swap in 4 s; instant hide on expiry | same | `pulse.json` |
+| expiry | fade, visible about 0.2 s after `alive` ends | same | `pulse.json` |
+| clear popup | `CLEARED +15s / +1.26K` (I), `+18s` + 3 energy lines (III), `+22s` + 5 lines (V); readable; its own block (untracked), never merged with the crank block | same, on open sky | `crops/AD2-fault-clear-popup-x2.png` |
+| Overdrive | HUD row `WIND-UP 1.9/1.9s · OVERDRIVE ×2 6s` after a clear (era V) | same | `hud/hud.json` |
+| demo :4177 | era I pistonArray; era II flywheel once the teaser and the end card are past (the teaser gate holds faults, by design); F clears | same | `demo/demofault.json` |
+
+**5. HUD row** — PASS. WIND-UP is one line inside the panel at UI 100 / 125 / 150 on 1920x1080, 1280x720 and 1280x800, in era I and in
+era V with Overdrive (18 / 18, `hud/hud.json`, `crops/AD2-hud-windup-row.png`). The RELEASE line comes first in the crank block: e1
+`RELEASE +0.3s`; e5 `RELEASE +0.1s` + 5 energies = 6 lines, readable (`crops/AD2-e1-release-line-x2.png`,
+`crops/AD2-faultP10-e5in-context.png`).
+
+**6. Era I motion at +2 ME/s** — PASS.
+- Worn Motor after 45 hand clicks.
+- Over 30 s idle: `+6 ME` popups every 3 s (10 popups); the drive train turns slowly; the cast and the crow keep acting.
+- The crank turns only on clicks (by design).
+- Motor Tuning makes it +2.9 / s. Nothing reads dead.
+- Evidence: `early/early.json`, `crops/AD2-early-wornMotor-idle.png`.
+
+**7. Store shots** — PASS, approved.
+- `store-shots.mjs` `SIZES=1080,2160` into `<A>/store`: 213 checks, fail [], errors []; `_no_fault` 38 / 38.
+- Against the v0.10.1 set `WP26/close/store-final3`:
+  - hud shots 02, 03, 04, 06, 07, 09: 2.4-8.3 % of pixels. The HUD zone moves 6-12 %: the WIND-UP row and the new economy numbers (02 era I
+    `CLICK +15 ME · 0.18S`, 84 / s).
+  - 05 (tab III): 2.5 %. Leak Whistle at (4,2) has the focus; the detail pane reads its plain line.
+  - Clean shots: 0.1-3.5 %. Animation, and the crow perched instead of spread.
+- Evidence: `crops/AD2-store-hud-old-new.png`, `crops/AD2-store-05-tree-era3-hud-half.png`,
+  `crops/AD2-store-02-era1-full-clean-half.png`.
+
+Notes (no fix):
+- N1: in era V, Overdrive's HUD suffix widens the panel by about 20 CSS px for its 6 s. The values shift sideways, then back. C8 text kept;
+  a shorter suffix is a later polish.
+- N2: the s8 scrap 1530 lies at the Inspector's boot tip. He reads and crouches over it, so it reads as the thing he inspects. Accepted.
+- N3 (pre-existing, v0.10.1 identical): Spark Gap bought before the Capacitor Bank hangs in the air. Mechanical backlog: it needs its bank
+  or a stand (`crops/AD2-sparkgap-alone-v0101-vs-wp27.png`).
+- N4 (pre-existing): tab III Turbine -> Relief Valves crosses the Condenser -> Vessel Blueprint channel at (801, 100). The paths are
+  unchanged since WP26 (accepted detour). Backlog.
+- N5: era IV crank block. Its RS line can land on the RS output popup and ghost the text (`crops/AD2-e4-crankblock-vs-rs-popup-x2.png`).
+  This is the WP25 popup lane, not the marker. The EM checks it against v0.10.1.
+- N6: `faults.mjs` `L_release` and `D_popup` are blind by design (no hook reads Phaser text). Checked by eye above.
+
+Fix list (DATA / PLACEMENT for T15; **F1, F2, F5 are code**, outside the T15 template: EM call, the spec is exact):
+
+| F | sev | file | key | old -> new |
+|---|---|---|---|---|
+| F1 | S1 | `src/game/rendering/FaultMarker.ts` | `anchorPoint()` | `machine.getComponentWorldPosition(id)` -> the ADb rule, art-box top-centre: `const b = componentBounds(MACHINE_COMPONENTS[id]); return machineLocalToWorld({ x: (b.left + b.right) / 2, y: b.top });` (imports from `../math/machineLayout`, `../../data/machineComponents`; keep the per-id cache) |
+| F1b | S1 | `src/game/debugHook.ts` | `faultStats().anchorClient` | `machine.getComponentWorldPosition(marker.anchor)` -> the same top-centre point (ADb S1), so `faults.mjs` `C_marker` (120 px) keeps passing for tall parts |
+| F2 | S2 | `src/game/rendering/FaultMarker.ts` | `eraAnchorOnScreen()` | era list only -> era list, or `this.isOnScreen(FAULTS.fallbackAnchor)` (the plan's "else fallbackAnchor; none on screen = not eligible") |
+| F3 | S2 | `src/data/faults.ts` (+ `src/data/faults.test.ts:29`) | `FAULTS.anchors[5]` | `['graviticAnchorR', 'graviticAnchorL']` -> `['graviticAnchorR', 'graviticAnchorR']` (with F1, L sits under the UI-150 HUD) |
+| F4 | S3 | `src/data/faults.ts` | `FAULTS.layout.offsetArtPx.y` | `-14` -> `-10` (era III plate clear of the UI-150 HUD by 6-11 px) |
+| F5 | S2 | `src/data/worldDay.ts` + `src/game/rendering/CastExtras.ts` | `WORLD_AMBIENT.drip` + `drawDrip()` | add `fromEra: 3`; `drawDrip` hides and resets the drop while `(this.state?.era ?? 1) < DRIP.fromEra` (plan F5.3) |
+| F6 | S3 | `src/data/worldEras.ts` | `WORLD_ERA_ENV.crowPerchPoseToEra` | `2` -> `4` (eras III-IV bubbles on perchHead / perchTalk; plan F5.3 allows it) |
+| F7 | S3 | `src/data/livingWorld.ts` (+ pins `livingWorld.test.ts:418-423, 682`; `worldPlacement.test.ts:325-328, 453-455, 461-462`; doc row `docs/plan/DENIZEN_ART.md:348`) | `WORLD_GIRL_PLACEMENTS.s8.ground.x` (and its comment) | `1508` -> `1504` (tripod 4 px, Inspector rest 8 px, crouch 2 art px clear) |
+
+```
+WP27-AD2-FIX-BEGIN
+F1  CODE  src/game/rendering/FaultMarker.ts anchorPoint = componentBounds top-centre (ADb rule)
+F1b CODE  src/game/debugHook.ts faultStats.anchorClient = same point
+F2  CODE  src/game/rendering/FaultMarker.ts eraAnchorOnScreen || isOnScreen(FAULTS.fallbackAnchor)
+F3  DATA  src/data/faults.ts FAULTS.anchors[5] = graviticAnchorR graviticAnchorR
+F4  DATA  src/data/faults.ts FAULTS.layout.offsetArtPx.y = -10
+F5  CODE  src/data/worldDay.ts WORLD_AMBIENT.drip.fromEra = 3 ; src/game/rendering/CastExtras.ts drawDrip era gate
+F6  DATA  src/data/worldEras.ts WORLD_ERA_ENV.crowPerchPoseToEra = 4
+F7  DATA  src/data/livingWorld.ts WORLD_GIRL_PLACEMENTS.s8.ground.x = 1504
+WP27-AD2-FIX-END
+```
+
+Round 2 (after the fixes and the gate builds):
+- `fault.mjs` without `PATCH`, every era, 4 views.
+- `anchors.mjs`: HUD gaps at UI 150.
+- `crow.mjs` `ONLY=drip,talk` + one era III talk.
+- `crouch.mjs` with no `GIRL_X`.
+- `store-shots.mjs`: 07 and 09 can change only if F6 or F7 moves a pose.
+
+### AD2 — WP27 in-game audit, round 2 (2026-10-28)
+
+Art Director, in game, on the real gate builds. **Verdict: FIXES REQUIRED** (two small data fixes, F8 and F9). Round-1 fixes F1-F7 all
+hold in the build. The crow, Sensor 7, the tree, the HUD row, the RELEASE line, the gates and the store set pass. Two defects are left:
+- F8: at the era V entry the fault marker falls back to the crank. Its hit zone overlaps the crank hit circle and its label covers the crank.
+- F9: in era IV the crow holds the spread-wing `head` frame for up to 12 s during the pre-stare unison `look`.
+
+Build under audit: `dist` 02:40 (`index-CdInn1wD.js` 507 521 B, `FaultMarker-BoaemCl6.js` 11 010 B) and `dist-demo` 02:40
+(`index-DRMHPH8d.js`). No file under `src/` or `public/` is newer than either build, so no rebuild was needed.
+- Previews: :4174 `vite preview` (dist) and :4177 `vite preview --outDir dist-demo`, each started for its runs and killed after. netstat
+  was empty at the end.
+- :4174 briefly served the dev server, only for the F8 / F9 runtime emulation (no file edit). It was killed after.
+- One Playwright browser at a time.
+
+Evidence root `<A2>` = `<O>/ad2/r2/` (`<O>` as in ADa).
+- Runs: `crow/`, `crow2/`, `c2tip/`, `c2tip-warm/`, `sensor/`, `crouch/`, `fault/`, `pulse2/`, `gates/`, `gates2/`, `hud/`, `tree/`,
+  `store/`, `demo/`, `tree-demo/`, `emu/`, `emu-e4/`.
+- Boards: `crops/`.
+- Tools: `tools/`. These are the round-1 tools plus `gates.mjs`, `gates2.mjs`, `c2tip.mjs`, `pulse2.mjs`, `emu.mjs` and
+  `run-full.sh`. `fault.mjs` now also logs the plate top against the HUD and the marker hit zone against the crank hit circle.
+- Geometry: `calc/anchors-10.json`, the ADb calculator rebuilt on the current tree with offset -10.
+
+**Round-1 fixes in the build**
+
+| F | check | result |
+|---|---|---|
+| F1 / F1b | plate above the part top, pointer down, `anchorClient` = top centre | PASS, every era (marker centre 22-33 client px above the part top) |
+| F2 | era V entry spawns on the fallback | PASS (it spawns), but see F8 |
+| F3 | era V `graviticAnchorR` twice | PASS (never L under the UI-150 HUD) |
+| F4 | offset -10 | PASS: the plate stays below the HUD in every view; worst gap 5 px (era III, Deck UI 150), then 10 (1080 UI 150) |
+| F5 | no ruffle drip in eras I-II | PASS: drip samples 0 / 0 in eras I and II, 4-5 per ruffle in era III |
+| F6 | crow bubble poses folded to era IV | PASS: e3 CRW-05 and e4 CRW-07 show `perchTalk*` / `perchHead*`; e5 CRW-08 keeps the canon `talk` / `head` stare |
+| F7 | cycle 3 s8 girl at 1504 | PASS: crouch, reading and write cycles; her boots are clear of his (`crops/AD2r2-crouch-c3-s8-1504-x3.png`) |
+
+**1. A11 crow** — PASS in eras I-II. Era IV: see F9.
+
+| case (1920x1080) | result | evidence |
+|---|---|---|
+| s0, 90 s, a crank click every 1.5 s (59 clicks, crank playback) | perch 101 / look 37 / shift 24 / peck 17 / ruffle 14 samples; frames perch0, perch1, perchTurn, peck0, peck1, ruffle; **spread frames 0**; feet y 1568 = lamp 1680 - 56 x 2 | `crops/AD2r2-crow-s0click-strip-x3.png`, `crow/crow.json` |
+| s0, 3 clicks then 90 s idle | perch0 260 / 260 samples, never spread (crank playback holds the folded pose) | `crops/AD2r2-crow-s0idle-strip-x2.png` |
+| e1 (S7, timed), 90 s | perch, shift, look, peck, ruffle, plus one glance (`perchHead`); one tipTry of about 1.0 s (frozenTip / frozen, the 2 px pop to y 1564 only inside it) | `crops/AD2r2-crow-e1s7-strip-x2.png` |
+| s8, 90 s | perch, stutter, skip, look, peck, ruffle; one tipTry of about 0.8 s | `crops/AD2r2-crow-s8-strip-x2.png` |
+| bubbles | s0 after 8 clicks, e1, s8 and the s8 PAY-01 chain all show `perchHead` / `perchTalk` only | `crops/AD2r2-crow-talk-eras-x3.png`, `crops/AD2r2-crow2-c2.png` |
+| cycle 2 (F5.4) | 60 s natural: no fly2. Forced tipTry: fly2 at lift 66 (y 1548), then perched; per-frame render 0.72-1.53 s with the world log 0.88-1.66 s (`c2tip-warm/`). The eras III-V forced tipTry is refused, with no fly2 in 30 s each | `crow2/crow2.json`, `c2tip-warm/c2tip.json` |
+| sheet style | columns 12-14 (perchTurn, perchHead, perchTalk) share perch0's body, outline and ramps in all six rows | `crops/crow-sheet-x4.png` |
+
+**2. A12 Sensor 7** — PASS. Commit step after the hook buys, cycles 1 and 3.
+
+| framing | placed (world x) | result |
+|---|---|---|
+| e1 (S7) | S7 1384, Inspector 1472, booth 2420, lamp + crow 2476, clock 2516, dog 2364 | full cast |
+| s8 cx 2064 | S7 1470, the mini between, Inspector 1536 facing it; clock 2680 | full cast + clock (`crops/AD2r2-s8-left-x4.png`, `crops/AD2r2-right-wing-e1-s8-s8w-s9.png`) |
+| s8w cx 2112 (capacitorBank) / cx 2104 (sparkGap) | S7 1500, Inspector 1552, booth 2678, lamp + crow 2720, dog 2694 | full cast; the mini sits behind the Inspector's hand, unoccluded (the pre-agreed 1 px fallback); clock and cycle 3 girl exempt |
+| s9 | S7 1384, Inspector 1472 (cx 2192, .75) | full cast |
+| s10 / s11 (cx 2006 and 1922) | S7 1234 / Inspector 1276; S7 750 / Inspector 816 | pair together, tripod in view (`crops/AD2r2-sensor7-s10-s11-x2.png`) |
+| cycle 3 | girl e1 1552, s8 1504, s9 1552 | clear of the tripod and the Inspector (`crops/AD2r2-sensor7-left-c1-c3-x2.png`) |
+
+No other era I-II object is missing (`sensor/sensor-c1.json`, `sensor-c3.json`).
+
+**3. A17 fault marker** — PASS except F8 (era V entry).
+- Shape: amber plate, `!` glyph, era FX, the `FAULT [F]` label with the code above it, and the timer bar. All nine era states read at
+  1080p and 720p, UI 100 and 150, and on Deck UI 150. Plate size by zoom: 1 = 48 px, .75 = 36, .5 = 24 (16 at 720p).
+- Evidence: `crops/AD2r2-fault-markers-1080-x1.png`, `crops/AD2r2-fault-markers-720-x2.png`, `crops/AD2-fault-<era>-context.png`.
+- Anchors seen: e1 pistonArray / flywheel; e2 flywheel / sparkGap; e3 boiler / steamHammer; e4 spireExciter / calliope;
+  e5 graviticAnchorR; e5in handCrank (fallback).
+- HUD: the plate is never under the panel. Closest: era III steamHammer, 5 px at Deck UI 150 and 10 px at 1080 UI 150.
+- Crank hit area: the marker zone (at least 56 px) clears the crank circle (72 world px) by 52-706 px in eras I-IV and V full.
+  **e5in: it overlaps by 13 px at 1080p and 18 px at 720p / Deck, and the label lies on the crank hub (F8).**
+- Flicker, read per animation frame from `faultStats().marker`: tag / FX swap 2.91-2.92 Hz in eras I and IV, with frame-quantised
+  intervals of 300-384 ms (`pulse2/pulse2.json`). Reduced motion: 0 swaps in 5 s, steady `0/2` (I) and `0/6` (IV).
+- Clear popup: `CLEARED +15s` / `+18s` / `+22s` plus one payout line per energy, in its own block. Overdrive: the HUD shows
+  `OVERDRIVE ×2 6s` in era V.
+- Gates, with a fault forced each time:
+  - no marker and no clock behind the system menu, photo mode, TECH INDEX, the finale `sequence` and the `choice`;
+  - the era card (eras II and IV): 19 / 19 samples with the card up and no fault; it spawns after the card closes (`gates2/`);
+  - demo: the teaser and the END OF DEMO card hold it too.
+  - Evidence: `crops/AD2r2-gates-half.png`, `crops/AD2r2-demo-gates-half.png`.
+- Demo :4177: e1 pistonArray, e2 flywheel, F clears.
+
+**4. HUD and tree** — PASS.
+- WIND-UP is one line inside the panel at 1920x1080, 1280x720 and 1280x800, UI 100 / 125 / 150. This holds in era I and in era V with
+  `· OVERDRIVE ×2 6s` (`hud/hud.json`, `crops/AD2r2-hud-windup-rows.png`).
+- RELEASE is the first line of the crank block: e1 `RELEASE +0.4s` / `+45`; e5 `RELEASE +1.9s` plus 5 energies. It reads at every
+  view (`crops/AD2r2-release-lines.png`).
+- Tree probe, full: tabs I-V have 10 / 11 / 11 / 10 / 13 nodes and 11 / 12 / 12 / 10 / 14 edges. No edge touches a box; minimum
+  distances are 7.6 / 4.6 / 4.6 / 7.6 / 6.8 px, the same as round 1.
+- Shared runs are only port forks (II sparkGap 4 px, V nullChamber 18 px), plus N4 (tab III, 3 px, pre-existing).
+- Demo tabs I-II are the same; tab III shows FULL GAME.
+
+**5. Store shots** — PASS. `store-shots.mjs` `SIZES=1080`: 107 / 107 checks, fail [], errors []. `_no_fault` 19 / 19 and
+`_no_output_tick` 19 / 19. Against the EM gate set `val-em2/store-1080`: 05 and 10 are identical, and the rest differ by 0.02-3.3 %
+(animation phase).
+
+**F8 (S2, data): era V entry marker on the crank**
+- Before Gravitic Anchor, no era V anchor is on screen, so every era V fault takes the `handCrank` fallback.
+- The plate sits on the frame girder. Its 56 px hit zone reaches 13-18 px into the crank hit circle, and the `FAULT [F]` label covers the
+  crank hub. A crank click on the hub's top clears the fault instead of turning the crank. This breaks the acceptance item "never over
+  the crank hit area".
+- Fix: era V's second anchor becomes `generator`. ADb calculator over 73 era V cases: visible 73 / 73, minimum inset 320 world px, gain
+  block 0, output popup 0.
+- Emulated in game: the plate stands in open sky above the coils, 267-401 px from the crank, with the label above the coil caps. Once
+  Gravitic Anchor is owned, faults alternate R and generator. `flywheel` was rejected: the crank gain block crosses it in 73 / 73.
+- Evidence: `crops/AD2r2-F8-e5in-before-after.png`, `crops/AD2r2-F8-generator-e5-x2.png`, `emu/emu.json`.
+
+**F9 (S3, data): era IV crow spread wings in the unison look**
+- `WORLD_UNISON.map.pre.crow` maps `look` to `head` and the `mouth` accent to `talk`. Both are spread-wing frames.
+- In 60 s of era IV the crow held `head` for one 12.0 s run, plus 0.8 s of `talk` accents. With the era IV hover this is the playtest
+  picture again, and STORY_BIBLE §5.5 asks only that "the crow turns its head".
+- Fix: `perchHead` / `perchTalk`, the same frames round-1 F6 gave the era III-IV bubbles. The post-observer stare (`head`) stays canon.
+- Emulated: 11.9 s `perchHead` + 0.8 s `perchTalk`, folded wings.
+- Evidence: `crops/AD2r2-F9-e4-unison-before-after-x4.png`, `emu-e4/emu.json`, `c2tip/c2tip.json`.
+
+Notes (no fix):
+- N7 (debug only): the first forced cycle 2 tipTry within about 2 s of a reload rendered fly2 for 2.7 s. The world log says 1.68 s, so
+  the world clock ran slow just after load. After a 20 s warm-up, all 6 forced runs show 0.72-1.53 s. The 60 s natural cycle 2 run had
+  no fly2.
+- N8: the label lies on the part's top edge: e1 the piston caps, e4 the exciter, e3 the hammer frame. The 3 px ink stroke keeps it
+  legible at every view. Accepted as in round 1.
+- N9 (canon): the era IV crow hovers about 2 art px over the finial ("The crow hovers in place", STORY_BIBLE §4.1 era IV). Unchanged by F9.
+- N3 / N4 from round 1 are still open as backlog: the Spark Gap floats without its bank at s8w cx 2104, and tab III has the
+  turbine -> reliefValves meet.
+
+```
+WP27-AD2R2-FIX-BEGIN
+F8  DATA  src/data/faultMarker.ts FAULT_MARKER.anchors[5] = graviticAnchorR generator (+ faults.test.ts pins, faults.mjs ANCHORS + J_e5in, smoke README)
+F9  DATA  src/data/worldBehaviour.ts WORLD_UNISON.map.pre.crow look = perchHead ; mouth accent = perchTalk (+ worldBehaviour.test.ts guard)
+WP27-AD2R2-FIX-END
+```
+
+Round 3, after F8 and F9 and a rebuild, a short check: `fault.mjs` `ONLY=e5in,e5` (generator, crank gap > 0, HUD) and `c2tip.mjs` era IV
+(no `head` before the observer). Then RELEASE-READY.
+
+### AD2 — WP27 in-game audit, round 3 (2026-10-28)
+
+Art Director, in game, on the gate builds with F8 and F9. **Verdict: RELEASE-READY.** F8 and F9 hold. The full A11 / A12 / A13 / A17 sweep
+was re-run on both builds and passes. No new fix.
+
+Build under audit:
+- `dist` 05:00: `index-B3MMpdpy.js` 507 521 B, `FaultMarker-CuqEso-v.js` 11 004 B, `LivingWorldDirector-hsKMZFG4.js` 206 248 B.
+- `dist-demo` 05:00: `index-BvdlqJ06.js` 508 123 B.
+- No file under `src/` or `public/` is newer than either build, so no rebuild was needed.
+- The bundles carry both fixes: `graviticAnchorR","generator"` in both FaultMarker chunks, and `look:Q("perchHead")` in the lazy chunk.
+
+Run notes:
+- Previews: :4174 `vite preview` (dist) for the full runs, then :4177 `vite preview --outDir dist-demo` for the demo runs. Each was killed
+  after its runs; netstat for 4174 / 4177 was empty at the end.
+- One Playwright browser at a time, 1920x1080 unless stated.
+
+Evidence root `<A3>` = `<O>/ad3/` (`<O>` as in ADa).
+- Runs: `fault/`, `c2tip/`, `crow/`, `crowtalk/`, `crow2/`, `sensor/`, `crouch/`, `pulse2/`, `gates/`, `gates2/`, `hud/`, `tree/`,
+  `early/`, `store/`, `e4crow/`.
+- Demo runs: `demo/`, `tree-demo/`, `demo-sensor/`, `demo-crow/`.
+- Boards: `crops/AD3-*`.
+- Tools: `tools/`. These are the round-2 tools plus two additions:
+  - `gates.mjs` gains a `postgame` gate: KEEP IT RUNNING, then forceFault.
+  - `e4crow.mjs`: era IV unison crow clips.
+- `run.sh` / `run2.sh` run the steps in sequence.
+
+**Round-2 fixes in the build**
+
+| F | check | result | evidence |
+|---|---|---|---|
+| F8 | era V entry (S14, no Gravitic Anchor): the marker on `generator`, not the crank | PASS. Every view picks the generator: plate over the coil caps, open sky. Crank gap: 315 px at 1080 UI 100 / 150, 200 px at 720 UI 100 and Deck UI 150 (round 2: -13 / -18). Plate top clear of the HUD. In era V full, faults alternate generator / graviticAnchorR (crank gap 200-706). | `crops/AD3-F8-e5in-before-after-x2.png`, `crops/AD3-F8-e5in-views-half.png`, `fault/fault.json` |
+| F9 | era IV unison crow folded before the observer | PASS. 60 s of era IV (cycle 1): perch0 45.8 s, perchHead 11.95 s (`look`), perchTalk 0.7 s (`mouth`), perchTurn 1.0 s. `head` / `talk` 0 ms. The F9 clips show perchHead and perchTalk with folded wings on the era IV row (canon hover 2 art px, N9). | `crops/AD3-F9-e4-unison-before-after-x4.png`, `c2tip/c2tip.json`, `e4crow/e4crow.json` |
+
+**1. A11 crow** — PASS (full and demo).
+
+| case | result | evidence |
+|---|---|---|
+| s0, 90 s, a crank click every 1.5 s (59 clicks, crank playback) | Activities: perch 97, look 35, shift 24, peck 16, ruffle 14 samples. Frames: perch0, perch1, perchTurn, peck0, peck1, ruffle. Spread frames 0. Feet y 1568 = lamp 1680 - 56 x 2. Demo: the same (spread 0). | `crops/AD3-crow-s0click-strip-x3.png`, `crow/crow.json`, `demo-crow/crow.json` |
+| s0, 3 clicks then 90 s idle | perch0 258 / 258 samples, never spread. Crank playback holds the folded pose by design (F5.1b). | `crow/s0idle-t*.png` |
+| e1 (S7, timed), 90 s | perch, shift, look, peck, ruffle, one glance (perchHead). One tipTry, 1.31 s in the log: frozenTip / frozen, the 2 px pop to y 1564 only inside it. Demo: tipTry 1.06 s. | `crops/AD3-crow-e1s7-s8-strip-x3.png` |
+| s8, 90 s | perch, stutter, skip, look, peck, ruffle. One tipTry, 0.82 s. Demo: about 0.8 s. | `crops/AD3-crow-s8-strip-x3.png` |
+| bubbles | e1 CRW-01, s8 CRW-04, the s8 PAY-01 -> CRW-04 chain, e3 CRW-05, e4 CRW-07: perchHead / perchTalk only. s0 after a few clicks (`crow2`): perchHead. e5 CRW-08: the canon talk / head stare. A cold s0 refuses CRW-01 (as in rounds 1-2). | `crops/AD3-crow-talk-eras-x3.png`, `crowtalk/crow.json` |
+| cycle 2 (F5.4) | 60 s natural e1: no fly2. Forced tipTry after a 20 s warm-up, sampled per animation frame: fly2 at lift 66 (y 1548) for 0.72-1.48 s in e1 and 1.02-1.47 s at s8, then perched. Eras III-V refuse the forced tipTry: no fly2 in 30 s each. The first forced try right after a reload rendered 2.6 s (debug only, N7 as in round 2). | `c2tip/c2tip.json`, `crow2.out.json` |
+| ruffle drip | eras I-II 0 / 0, era III 4 samples per ruffle | `crowtalk/crow.json` |
+| sheet style | Columns 12-14 (perchTurn, perchHead, perchTalk) share perch0's body, outline and ramps in all six rows. The rows I-II smudge face and the rows III+ eye and rim layers are kept. | `crops/AD3-crow-cols-x6.png`, `crops/AD3-crow-sheet-x4.png` |
+
+**2. A12 Sensor 7** — PASS (full and demo, cycles 1 and 3).
+
+| framing | placed (world x) | result |
+|---|---|---|
+| e1 (S7) | S7 1384, Inspector 1472, booth 2420, lamp + crow 2476, clock 2516, dog 2364 | full cast |
+| s8 cx 2064 | S7 1470, the mini, Inspector 1536 facing it; clock 2680 | full cast and clock |
+| s8w cx 2112 (capacitorBank) / cx 2104 (sparkGap) | S7 1500, Inspector 1552, booth 2678, lamp + crow 2720, dog 2694 | Full cast. The mini sits behind the Inspector's hand, unoccluded (the 1 px fallback). Clock and cycle 3 girl exempt as documented. |
+| s9 | S7 1384, Inspector 1472 | full cast |
+| s10 / s11 | S7 1234 / Inspector 1276; S7 750 / Inspector 816 | the pair together |
+| cycle 3 | girl e1 1552, s8 1504, s9 1552 | Clear of the tripod and the Inspector. At s8 his crouch, reading and write poses keep a visible gap to her boots (about 1 art px, at 1504). |
+
+No other era I-II object is missing (`sensor/sensor-c1.json`, `sensor-c3.json`, `demo-sensor/`).
+Boards: `crops/AD3-sensor7-left-c1-x2.png`, `crops/AD3-s8-s8w-mini-x4.png`, `crops/AD3-right-wing-e1-s8-s8w-s9-x2.png`,
+`crops/AD3-crouch-c3-s8-x3.png`.
+
+**3. A17 fault marker** — PASS.
+- Every era state reads at 1080p and 720p, UI 100 and 150, and on Deck UI 150: amber plate, `!` glyph, era FX, the code over the
+  `FAULT [F]` label, and the timer bar (`crops/AD3-fault-markers-1080-100-x1.png`, `crops/AD3-fault-markers-720-100-x2.png`).
+- Anchors seen: e1 pistonArray / flywheel; e2 flywheel / sparkGap; e3 boiler / steamHammer; e4 spireExciter / calliope;
+  e5in generator; e5 generator / graviticAnchorR.
+- HUD: the plate is never under the panel. Closest: era III steamHammer, 5 px at Deck UI 150 and 10 px at 1080 UI 150.
+- Crank: the hit zone clears the crank circle in every era and view. Minimum 52 px (era IV spireExciter at 720 / Deck), era V entry
+  200 px. No marker over the crank gain block or the output popups (`fault/*-crank-with-marker*.png`).
+- Flicker, read per animation frame: 2.94 Hz (I) and 2.97 Hz (IV), intervals 300-400 ms. Reduced motion: 0 swaps, steady `0/2` / `0/6`
+  frames (`pulse2/pulse2.json`, `crops/AD3-fault-pulse-reduced-x3.png`).
+- Clear popup: `CLEARED +15s` / `+18s` / `+22s` plus one payout line per energy, in its own block. Era I has a single unlabelled ME
+  line, the era I crank-block convention (`crops/AD3-fault-clear-popups-x2.png`).
+- Overdrive: the HUD row reads `WIND-UP 1.9/1.9s · OVERDRIVE ×2 6s` and counts down; the screen-reader line carries it too.
+- Gates, with a fault forced each time: no marker and no clock behind the system menu, photo mode, TECH INDEX, the finale `sequence`,
+  the `choice` and **the postgame** (new this round, after KEEP IT RUNNING). Each spawns within 27-52 ms of closing where a close
+  exists.
+- Era card (`gates2`): 19 (era II) and 20 (era IV) samples with the card up, none with a fault alive; the fault spawns after the card.
+- Demo :4177: the teaser and the END OF DEMO card hold it; e1 pistonArray and e2 flywheel; F clears (`crops/AD3-gates-third.png`,
+  `crops/AD3-demo-half.png`).
+
+**4. HUD and tree** — PASS.
+- WIND-UP is one line inside the panel in 18 / 18 views: 1920x1080, 1280x720 and 1280x800 at UI 100 / 125 / 150, in era I and in era V
+  with `· OVERDRIVE ×2 6s` (`hud/hud.json`, `crops/AD3-hud-windup-rows-x1.png`).
+- RELEASE is the first line of the crank block: e1 `RELEASE +0.4s` / `+45`; e5 `RELEASE +1.9s` plus 5 energies
+  (`crops/AD3-release-lines-x2.png`).
+- Tree, full: tabs I-V have 10 / 11 / 11 / 10 / 13 nodes and 11 / 12 / 12 / 10 / 14 edges. No edge touches a box. Minimum distances
+  7.6 / 4.6 / 4.6 / 7.6 / 6.8 px. Shared runs are port forks only (II sparkGap 4 px, V nullChamber 18 px), plus N4.
+- Demo tabs I-II are the same; III-V read FULL GAME. Tabs fit at every view (`crops/AD3-tree-tabs-1080-half.png`).
+
+**5. Store shots** — PASS.
+- `store-shots.mjs` `SIZES=1080`: 107 checks, fail [], errors []. `_no_fault` 19 / 19 and `_no_output_tick` 19 / 19.
+- Against the round-2 set: 01, 05 and 10 are identical (at most 0.04 %); the rest differ by 0.3-2.2 % (animation phase).
+- 06 (era IV) shows the folded crow over the lit lamp (`crops/AD3-store-06-crow-x4.png`); F9 changes only the unison `look` pose.
+- Evidence: `crops/AD3-store-1080-half.png`.
+
+**6. Era I motion at +2 ME/s** — PASS, as in round 1.
+- After Worn Motor, 30 s idle gives 10 output popups (`+6 ME`); Motor Tuning makes it +2.9 / s.
+- The cast and the crow keep acting.
+- Evidence: `early/early.json`.
+
+Notes (no fix):
+- N10 (polish backlog): the clear popup uses the crank block timing (`CRANK_FEEDBACK.floatMs` 1100 ms). The header reads at once, but
+  the era V payout lines (6 lines) are gone in about 1 s. A longer hold for fault popups only would be a later polish. Overdrive is
+  shown on the HUD row, not in the popup (plan C9).
+- N11 (accepted): fault codes are per era, not per part, so an era II `COIL CHATTER` can sit on the flywheel. The flywheel drives the
+  generator, and the codes are the machine's voice. Per-anchor codes would be a later polish.
+- N3, N4, N7, N8 and N9 from rounds 1-2 are unchanged.
+
+```
+WP27-AD2R3-FIX-BEGIN
+(none)
+WP27-AD2R3-FIX-END
+```

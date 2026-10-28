@@ -10,4 +10,7 @@ export const HUD_TEXT = {
   worthSep: ' · ', clickWorth: '{s}s', clickWorthTitle: 'One turn of the crank = {s} s of machine output',
   worthFloor: '<0.01',
   autoCrankOutput: '+{v} {res}/s',
+  // WP27 C8: wind-up row (stored / cap seconds), its Overdrive suffix, and the RELEASE line of the crank gain block.
+  windup: 'WIND-UP', windupValue: '{s}/{cap}s', windupTitle: 'Stored machine output. The next turn of the crank releases it.',
+  overdrive: 'OVERDRIVE ×{f} {s}s', release: 'RELEASE +{s}s',
 } as const;

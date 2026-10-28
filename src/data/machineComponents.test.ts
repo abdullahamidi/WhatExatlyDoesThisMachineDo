@@ -1734,21 +1734,23 @@ describe('era V machine data (WP11)', () => {
     }
   });
 
-  it('coverage: every unlock tech has a component (techId, alsoVisibleWith, latch or stage gate); the ending tech primaryFunction is the only exemption', () => {
+  it('coverage: every unlock tech has a component (techId, alsoVisibleWith, latch or stage gate); the exemptions are the ending tech primaryFunction and the control upgrades faultLamp, dischargeLever, leakWhistle, dampingFork, overrunClutch', () => {
     const referenced = new Set<TechId>();
     for (const def of COMPONENTS) {
       for (const t of techsOf(def)) referenced.add(t);
       if (def.animation.kind === 'latch') referenced.add(def.animation.techId);
       if (def.animation.kind === 'stage') for (const [t] of def.animation.gates) referenced.add(t);
     }
+    // control upgrades: the fault marker and the wind-up are FX / HUD, not machine parts
+    const CONTROL_UPGRADES: readonly TechId[] = ['faultLamp', 'dischargeLever', 'leakWhistle', 'dampingFork', 'overrunClutch'];
     const exempt: TechId[] = [];
     for (const id of TECH_IDS) {
       const def = TECHNOLOGIES[id];
       if (def.kind !== 'unlock') continue;
-      if (def.effects.some((e) => e.type === 'ending')) { exempt.push(id); continue; }
+      if (def.effects.some((e) => e.type === 'ending') || CONTROL_UPGRADES.includes(id)) { exempt.push(id); continue; }
       expect(referenced.has(id), id).toBe(true);
     }
-    expect(exempt).toEqual(['primaryFunction']);
+    expect(exempt).toEqual(['primaryFunction', 'faultLamp', 'dischargeLever', 'leakWhistle', 'dampingFork', 'overrunClutch']);
   });
 
   it('era-V visibility: nothing of era V is visible at the start except the name plate', () => {

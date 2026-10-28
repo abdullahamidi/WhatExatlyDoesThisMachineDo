@@ -88,7 +88,7 @@ describe('perk table', () => {
   });
 
   it('effect payloads match the spec values', () => {
-    expect(PERKS.residualCharge.effect).toEqual({ type: 'convertPct', percent: 50 });
+    expect(PERKS.residualCharge.effect).toEqual({ type: 'convertPct', percent: 10 });
     expect(PERKS.longSilence.effect).toEqual({ type: 'offlineHours', hours: 4 });
     expect(PERKS.servoRecall.effect).toEqual({ type: 'autoClick', perSecond: 1 });
   });
@@ -142,10 +142,10 @@ describe('PERKS descriptions match their effects (WP25)', () => {
 });
 
 describe('echo rules', () => {
-  it('base 3, +15 % per Echo, counted up to 30', () => {
+  it('base 3, +14 % per Echo, counted up to 12', () => {
     expect(ECHO_RULES.base).toBe(3);
-    expect(ECHO_RULES.allPctPerEcho).toBe(15);
-    expect(ECHO_RULES.maxCountedEchoes).toBe(30);
+    expect(ECHO_RULES.allPctPerEcho).toBe(14);
+    expect(ECHO_RULES.maxCountedEchoes).toBe(12);
   });
 
   it('thresholds are positive and strictly ascending', () => {

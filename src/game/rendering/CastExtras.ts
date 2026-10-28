@@ -283,10 +283,10 @@ export class CastExtras {
 
   // The crow's ruffle drip: one drop per ruffle, started on the frame edge into 'ruffle' at the chest offset (flipped with the crow), falling
   // drip.fallPx over drip.fallMs (accelerating, never upward), then hidden. Off under reduced motion, while a film runs and while the crow
-  // is not shown: those cancel a falling drop.
+  // is not shown: those cancel a falling drop. Eras before drip.fromEra (I-II) have no drop: the ruffle there is dry (AD2 F5).
   private drawDrip(): void {
     const pose = this.poses.crow;
-    if (!this.live || this.reduced || this.script !== null || pose === null || !pose.visible) {
+    if (!this.live || this.reduced || this.script !== null || pose === null || !pose.visible || (this.state?.era ?? 1) < DRIP.fromEra) {
       this.ruffling = false;
       this.dripAt = Number.NEGATIVE_INFINITY;
       hideIfShown(this.drip);

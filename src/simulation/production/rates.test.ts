@@ -33,36 +33,40 @@ describe('computeRates', () => {
     expect(computeRates(withLevels({ gearRatio: 3 })).perClick.me).toBeCloseTo(2.5, 9);
   });
 
-  it('Reinforced Crank multiplies manual production by 1.5', () => {
-    expect(computeRates(withLevels({ gearRatio: 3, reinforcedCrank: 1 })).perClick.me).toBeCloseTo(3.75, 9);
+  // WP27: Reinforced Crank no longer multiplies the click (it gives a crank echo, see 'crank echo (C2)').
+  it('Reinforced Crank no longer multiplies manual production (3.75 -> 2.5 at Gear Ratio 3)', () => {
+    expect(computeRates(withLevels({ gearRatio: 3, reinforcedCrank: 1 })).perClick.me).toBeCloseTo(2.5, 9);
   });
 
-  it('automation additive techs', () => {
-    expect(computeRates(withLevels({ wornMotor: 1, motorTuning: 5 })).perSecond.me).toBeCloseTo(33.5, 9);
+  // WP27: Worn Motor +17 -> +2 ME/s and Motor Tuning +3.3 -> +0.9 per level (data diff, plan F2hi).
+  it('automation additive techs (Worn Motor 2 + Motor Tuning 0.9 per level: 6.5 ME/s, was 33.5)', () => {
+    expect(computeRates(withLevels({ wornMotor: 1, motorTuning: 5 })).perSecond.me).toBeCloseTo(6.5, 9);
   });
 
-  it('automation accumulates across Piston Array and Improved Pistons', () => {
+  // WP27: + Piston Array 17 -> 60 and Improved Pistons 6.7 -> 10 per level (flywheel 2 = +20 %).
+  it('automation accumulates across Piston Array and Improved Pistons (66.5, 86.5, 103.8)', () => {
     const base = { wornMotor: 1, motorTuning: 5 } as const;
-    expect(computeRates(withLevels({ ...base, pistonArray: 1 })).perSecond.me).toBeCloseTo(50.5, 9);
+    expect(computeRates(withLevels({ ...base, pistonArray: 1 })).perSecond.me).toBeCloseTo(66.5, 9);
     expect(computeRates(withLevels({ ...base, pistonArray: 1, improvedPistons: 2 })).perSecond.me).toBeCloseTo(
-      63.9,
+      86.5,
       9,
     );
     expect(
       computeRates(withLevels({ ...base, pistonArray: 1, improvedPistons: 2, flywheel: 2 })).perSecond.me,
-    ).toBeCloseTo(76.68, 9);
+    ).toBeCloseTo(103.8, 9);
   });
 
   it('Flywheel alone does nothing without an automation source', () => {
     expect(computeRates(withLevels({ flywheel: 1 })).perSecond.me).toBeCloseTo(0, 9);
   });
 
-  it('Flywheel multiplies automation by 1 + 10%', () => {
-    expect(computeRates(withLevels({ flywheel: 1, wornMotor: 1 })).perSecond.me).toBeCloseTo(18.7, 9);
+  it('Flywheel multiplies automation by 1 + 10% (Worn Motor 2 -> 2.2)', () => {
+    expect(computeRates(withLevels({ flywheel: 1, wornMotor: 1 })).perSecond.me).toBeCloseTo(2.2, 9);
   });
 
-  it('Reinforced Crank alone multiplies Hand Crank by 1.5', () => {
-    expect(computeRates(withLevels({ reinforcedCrank: 1 })).perClick.me).toBeCloseTo(1.5, 9);
+  // WP27: no clickMult any more; with no automation the crank echo adds nothing (E x perSecondPre.me = 0).
+  it('Reinforced Crank alone leaves Hand Crank at 1 (its echo needs automation)', () => {
+    expect(computeRates(withLevels({ reinforcedCrank: 1 })).perClick.me).toBeCloseTo(1, 9);
   });
 
   it('Flywheel does not change perClick', () => {
@@ -212,12 +216,14 @@ describe('computeRates', () => {
   });
 
   it('clickMult is not applied to clickEcho', () => {
+    // Injected clickMult on Reinforced Crank (the real tech no longer has one): the echo must stay unscaled.
     const techs = withEffects({
       wornMotor: [{ type: 'autoAdd', amount: 4 }],
       gearRatio: [
         { type: 'convert', amount: 0.5, res: 'ee' },
         { type: 'clickEcho', seconds: 2, res: 'ee' },
       ],
+      reinforcedCrank: [{ type: 'clickMult', factor: 1.5 }],
     });
     const r = computeRates(withLevels({ wornMotor: 1, gearRatio: 1, reinforcedCrank: 1 }), techs);
     expect(r.perClick.me).toBeCloseTo(1.5, 9);
@@ -392,5 +398,114 @@ describe('autoClicksPerSecond', () => {
     expect(rates.perClick.me).toBeCloseTo(1, 9);
     expect(rates.perSecond.me).toBeCloseTo(6, 9);
     expect(autoClicksPerSecond(levels.techLevels, autoTechs)).toBeCloseTo(6, 9);
+  });
+});
+
+describe('crank echo (C2)', () => {
+  // Injected table: wornMotor 4 ME/s and 2 ee/s; reinforcedCrank clickMult 2 and a 0.5 s crank echo per level;
+  // gearRatio 1 automatic crank per level, a 2 s ee click echo per level and a 3 s ME click echo (ignored).
+  const echoTechs = withEffects({
+    wornMotor: [
+      { type: 'autoAdd', amount: 4 },
+      { type: 'autoAdd', amount: 2, res: 'ee' },
+    ],
+    reinforcedCrank: [
+      { type: 'clickMult', factor: 2 },
+      { type: 'crankEcho', seconds: 0.5 },
+    ],
+    gearRatio: [
+      { type: 'autoClick', perSecond: 1 },
+      { type: 'clickEcho', seconds: 2, res: 'ee' },
+      { type: 'clickEcho', seconds: 3, res: 'me' },
+    ],
+  });
+  // Hand Crank 1 (clickAdd 1), Worn Motor 1, Reinforced Crank 1 (E = 0.5), Gear Ratio 2 (2 auto-cranks/s).
+  const levels = withLevels({ wornMotor: 1, reinforcedCrank: 1, gearRatio: 2 });
+
+  it('the ME echo is not multiplied by clickMult: 1 x 2 + 0.5 x 4 = 4 (not 6); the ME clickEcho stays ignored', () => {
+    expect(computeRates(levels, echoTechs).perClick.me).toBeCloseTo(4, 9);
+  });
+
+  it('the servo fold-in includes the ME echo: perSecond.me = 4 + 2 auto-cranks x 4 = 12', () => {
+    expect(computeRates(levels, echoTechs).perSecond.me).toBeCloseTo(12, 9);
+  });
+
+  it('every energy echoes E x perSecondPre plus its own clickEcho: ee (2 + 0.5) x 2 is 9; fold 2 + 2 x 9 = 20', () => {
+    const r = computeRates(levels, echoTechs);
+    // gearRatio 2 doubles its 2 s ee echo to 4 s: perClick.ee = (4 + 0.5) x 2 = 9.
+    expect(r.perClick.ee).toBeCloseTo(9, 9);
+    expect(r.perSecond.ee).toBeCloseTo(20, 9);
+  });
+
+  it('an energy with no rate gets no echo: pr stays 0', () => {
+    const r = computeRates(levels, echoTechs);
+    expect(r.perClick.pr).toBe(0);
+    expect(r.perSecond.pr).toBe(0);
+  });
+
+  it('E scales with the level: Reinforced Crank 2 gives clickMult 4 and E 1: perClick.me = 4 + 1 x 4 = 8', () => {
+    const r = computeRates(withLevels({ wornMotor: 1, reinforcedCrank: 2, gearRatio: 2 }), echoTechs);
+    expect(r.perClick.me).toBeCloseTo(8, 9);
+  });
+
+  it('with no crankEcho the floats keep the pre-WP27 order (bit for bit)', () => {
+    const techs = withEffects({
+      wornMotor: [{ type: 'autoAdd', amount: 0.3 }],
+      reinforcedCrank: [{ type: 'clickMult', factor: 1.1 }],
+      gearRatio: [{ type: 'autoClick', perSecond: 0.3 }],
+    });
+    const r = computeRates(withLevels({ wornMotor: 3, reinforcedCrank: 2, gearRatio: 3 }), techs);
+    const perClickMe = 1 * Math.pow(1.1, 2); // clickAdd 1 x clickMult
+    const wornAuto = 0.3 * 3; // ME/s before the fold-in
+    const autoClicks = 0.3 * 3;
+    expect(r.perClick.me).toBe(perClickMe);
+    expect(r.perSecond.me).toBe(wornAuto + autoClicks * perClickMe);
+  });
+});
+
+// Seeded PRNG (mulberry32) so the property sample is the same on every run.
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+describe('click parity (D2) over the real tech table', () => {
+  // Plan C2 / D2: perClick.me / perSecond.me >= perClick.r / perSecond.r for r in ee, pr, rs, xf, whenever all four
+  // numbers are > 0. The real table has no clickEcho, so perClick.r / perSecond.r = E / (1 + autoClicks x E) for
+  // every r; the ME ratio is (F + E p) / (p + autoClicks (F + E p)) with F = clickAdd x clickMult >= 0 and
+  // p = perSecondPre.me. Cross-multiplying leaves F >= 0 (proof in the header of rates.ts).
+  const SAMPLES = 240;
+  const ENERGIES = ['ee', 'pr', 'rs', 'xf'] as const;
+
+  it('ME click is never worth less than another energy click, over seeded random levels', () => {
+    const rng = mulberry32(27);
+    const failures: string[] = [];
+    let compared = 0;
+    for (let i = 0; i < SAMPLES; i++) {
+      // Repeatables: 0..maxLevel (30 when unlimited). Every other tech: 0 or 1.
+      const levels: Partial<Record<TechId, number>> = {};
+      for (const id of TECH_IDS) {
+        const def = TECHNOLOGIES[id];
+        const top = def.kind === 'repeatable' ? (def.maxLevel ?? 30) : 1;
+        levels[id] = Math.floor(rng() * (top + 1));
+      }
+      const r = computeRates(withLevels(levels));
+      for (const e of ENERGIES) {
+        if (!(r.perClick.me > 0 && r.perSecond.me > 0 && r.perClick[e] > 0 && r.perSecond[e] > 0)) continue;
+        compared++;
+        const lhs = r.perClick.me * r.perSecond[e];
+        const rhs = r.perClick[e] * r.perSecond.me * (1 - 1e-9);
+        if (!(lhs >= rhs)) failures.push(`sample ${i} ${e}: ${lhs} < ${rhs}`);
+      }
+    }
+    expect(failures).toEqual([]);
+    // Not vacuous: the sample must compare a real number of cases.
+    expect(compared).toBeGreaterThanOrEqual(100);
   });
 });
