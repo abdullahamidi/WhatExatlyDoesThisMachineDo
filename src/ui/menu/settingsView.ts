@@ -203,6 +203,7 @@ export function hotkeyHelpLines(): string[] {
   return [
     `${SETTINGS_LABELS.keyCrank}  ${SETTINGS_LABELS.hotkeyCrank}`,
     `${SETTINGS_LABELS.keyTechTree}  ${SETTINGS_LABELS.hotkeyTechTree}`,
+    `${SETTINGS_LABELS.keyFault}  ${SETTINGS_LABELS.hotkeyFault}`,
     `${SETTINGS_LABELS.keyMenu}  ${SETTINGS_LABELS.hotkeyMenu}`,
     `${DISPLAY_TEXT.fullscreenKeys}  ${DISPLAY_TEXT.fullscreen}`,
   ];

@@ -6,9 +6,10 @@
 // WP24 (T9a): the living-world v2 cases NV (variety), NC (changes), NT (teleport), NU (umbrella), NK (crank, reduced motion).
 // WP24 (T9b): ND (defer), NE (era), NY (day), NS (settle), and the existing-check rules (A_crank_step, I_chladni, I_virga_frozen, I_puddle_sprout, I_stare_dog, I_accent_still).
 // WP24 r3: NH (demo hold guard): DOG-12 suspends only the dog runner; the Inspector and the crow keep stepping (demo only).
+// WP27 T14: crowTalk_e1 and crowTalk_s8 (the era I-II crow speaks with folded wings: perchHead / perchTalk only). Each is a fresh run at UI 150.
 // Usage: PW_PATH=<playwright> node scripts/smoke/world.mjs "<url with ?debug=1>" <outdir>
 // Prints ONE JSON object { results, fail, errors }; exit code 1 when fail or errors is non-empty. Runs on :4174 and :4177.
-// ONLY=H,I,M (env, optional): a comma list of case keys to run alone (A B C D E F G H I M J JR K L NV NC NT NU NK ND NE NY NS NH F23); unset runs every case.
+// ONLY=H,I,M (env, optional): a comma list of case keys to run alone (A B C D E F G H I M J JR K L NV NC NT NU NK ND NE NY NS NH F23 crowTalk_e1 crowTalk_s8); unset runs every case.
 // Timing is deterministic: worldAdvance moves the scheduler clock and the play time, worldLogShown feeds the SYS LOG port,
 // worldSay forces a line past gaps and caps (not past hard silence). The demo edition refuses era III and everything after it, so
 // every check that needs era III or later records value.skipped there (I, M, J, JR, K, L, NV, NC, NU, NK, NE, NS, the NY tint and held checks, G_era3_visible, G_display_peak).
@@ -56,11 +57,15 @@ const HUB_X = 1920;
 const HUB_CLEAR = 96;
 const WING_CLEAR = 24;
 // Visible machine x-range per framing, world px (DENIZEN_ART §3: S7 1576-2316, S8 1576-2552, S9 1576-2808).
-const MACHINE = { e1: { left: 1576, right: 2316 }, s8: { left: 1576, right: 2552 }, s9: { left: 1576, right: 2808 } };
+const MACHINE = {
+  e1: { left: 1576, right: 2316 }, s8: { left: 1576, right: 2552 }, s8w: { left: 1576, right: 2648 }, s9: { left: 1576, right: 2808 },
+};
 // Feet x per id (DENIZEN_ART §3, WORLD_PLACEMENTS); null = off-stage. Scraps are not in the table: the overlap rule covers them.
+// WP27 F6.1: s8 has Sensor 7 and the clock; s8w (capacitorBank or sparkGap before the transformer) has no clock (documented exemption).
 const PLACED = {
   e1: { sensor7: 1384, inspector: 1472, dog: 2364, payphone: 2420, lamp: 2476, crow: 2476, clock: 2516, stakeChain: 2348, hole: 2394 },
-  s8: { inspector: 1472, dog: 2604, payphone: 2604, lamp: 2656, crow: 2656, stakeChain: 2588, hole: 2634, sensor7: null, clock: null },
+  s8: { sensor7: 1470, inspector: 1536, clock: 2680, dog: 2604, payphone: 2604, lamp: 2656, crow: 2656, stakeChain: 2588, hole: 2634 },
+  s8w: { sensor7: 1500, inspector: 1552, dog: 2694, payphone: 2678, lamp: 2720, crow: 2720, stakeChain: 2676, hole: 2716, clock: null },
   s9: { sensor7: 1384, inspector: 1472, dog: 2856, clock: 2900, payphone: 2944, lamp: 2996, crow: 2996, stakeChain: 2840, hole: 2886 },
 };
 
@@ -343,11 +348,88 @@ async function caseD(page) {
   await check(page, 'D_s8_placed', s8.ok && buyS8.length === 0, { problems: s8.problems, buyFail: buyS8 });
   await shot(page, 'world-D-s8-150.png');
 
-  const buyS9 = await buyInTree(page, S9.slice(S8.length));
+  // WP27 F6.1: the capacitorBank and sparkGap before the transformer frame s8w (the same buys as S9 up to the transformer)
+  const preTransformer = S9.indexOf('transformer');
+  const buyS8w = await buyInTree(page, S9.slice(S8.length, preTransformer));
+  await sleep(300);
+  const s8w = await waitPlaced(page, 's8w', PLACED.s8w);
+  await check(page, 'D_s8w_placed', s8w.ok && buyS8w.length === 0, { problems: s8w.problems, buyFail: buyS8w });
+  await shot(page, 'world-D-s8w-150.png');
+
+  const buyS9 = await buyInTree(page, S9.slice(preTransformer));
   await sleep(300);
   const s9 = await waitPlaced(page, 's9', PLACED.s9);
   await check(page, 'D_s9_placed', s9.ok && buyS9.length === 0, { problems: s9.problems, buyFail: buyS9 });
   await shot(page, 'world-D-s9-150.png');
+}
+
+// crowTalk (WP27 A11 [R1], T14): the era I-II crow speaks with folded wings. Each case is a fresh run at UI 150 (the framing caseD checks):
+// the hook buys, the F6.4 commit step (press t, 1.2 s, Escape) and the placements. worldSay forces the crow's line. Within 1.5 s the crow
+// entry of livingWorld() speaks; six samples 600 ms apart (3 s) show its variant in perchHead or perchTalk, and nothing else.
+const CROW_TALK_POSES = ['perchHead', 'perchTalk'];
+const CROW_TALK_SAMPLES = 6;
+const CROW_TALK_STEP_MS = 600;
+// F6.4 commit: the TECH INDEX opens and closes after the buys, so the cast placements commit before the shot.
+async function commitCast(page) {
+  await page.keyboard.press('t');
+  await sleep(1200);
+  await page.keyboard.press('Escape');
+  await sleep(600);
+}
+const crowEntry = (page) => page.evaluate(() => (window.__wedtmd.livingWorld() ?? []).find((e) => e.id === 'crow') ?? null);
+// Waits (cap 1.5 s) for the crow to speak, takes the shot, then samples its variant 3 s on. Not speaking: no samples, ok false.
+async function crowTalkWindow(page, shotName) {
+  const deadline = Date.now() + 1500;
+  let entry = await crowEntry(page);
+  while (entry?.speaking !== true && Date.now() < deadline) {
+    await sleep(100);
+    entry = await crowEntry(page);
+  }
+  await shot(page, shotName);
+  if (entry?.speaking !== true) return { speaking: false, poses: [], ok: false };
+  const poses = [];
+  for (let i = 0; i < CROW_TALK_SAMPLES; i++) {
+    if (i > 0) await sleep(CROW_TALK_STEP_MS);
+    poses.push((await crowEntry(page))?.variant ?? null);
+  }
+  return { speaking: true, poses, ok: poses.every((v) => v !== null && CROW_TALK_POSES.includes(v)) };
+}
+
+// crowTalk_e1: era I (the S7 list, framing e1) and CRW-01, the era I line.
+async function caseCrowTalkE1(page) {
+  await page.evaluate(() => window.__wedtmd.session.updateSettings({ uiScale: 150 }));
+  await crankClicks(page, 45, 0);
+  const buyFail = await buyList(page, S7);
+  await commitCast(page);
+  const placed = await waitPlaced(page, 'e1', PLACED.e1);
+  await settle(page);
+  const said = await worldSay(page, 'CRW-01');
+  const win = await crowTalkWindow(page, 'world-crowTalk-e1.png');
+  await check(page, 'crowTalk_e1', buyFail.length === 0 && placed.ok && said && win.speaking && win.ok,
+    { buyFail, problems: placed.problems, said, ...win }, true);
+}
+
+// crowTalk_s8: era II entry (the S8 list, S7 + generator blueprint and generator, then the era card) and CRW-04, the crossedLines step 2 line.
+// worldSay refuses CRW-04 until the chain reaches step 2 (the chain gate): that is a reasoned skip, not a fail. AD2 checks the shot by eye.
+async function caseCrowTalkS8(page) {
+  await page.evaluate(() => window.__wedtmd.session.updateSettings({ uiScale: 150 }));
+  await crankClicks(page, 45, 0);
+  const buyFail = await buyList(page, S8);
+  await dismissEraCard(page);
+  await sleep(300);
+  await commitCast(page);
+  const placed = await waitPlaced(page, 's8', PLACED.s8);
+  await settle(page);
+  const said = await worldSay(page, 'CRW-04');
+  if (!said) {
+    await shot(page, 'world-crowTalk-s8.png');
+    if (buyFail.length === 0 && placed.ok) skipCheck('crowTalk_s8', 'CRW-04 refused by worldSay (crossedLines step 2 chain gate): reasoned skip, AD2 checks by eye');
+    else await check(page, 'crowTalk_s8', false, { buyFail, problems: placed.problems, said });
+    return;
+  }
+  const win = await crowTalkWindow(page, 'world-crowTalk-s8.png');
+  await check(page, 'crowTalk_s8', buyFail.length === 0 && placed.ok && win.speaking && win.ok,
+    { buyFail, problems: placed.problems, ...win }, true);
 }
 
 // E settings: RARE refuses non-core lines (control: ON accepts them); OFF plays nothing, no blips, no seen change.
@@ -646,11 +728,12 @@ let eraVPeak = null;
 const rowAt = (x, r, extra = {}) => ({ x, row: r, ...extra });
 const R6 = {
   s10: {
-    inspector: rowAt(1252, 'back'), dog: rowAt(2858, 'front'), payphone: rowAt(2858, 'back'), stakeChain: rowAt(2842, 'front'), hole: null,
-    sensor7: null, clock: null, lamp: null, crow: null, scraps: null, puddles: null, sprout: null, lantern: null, girl: null,
+    sensor7: rowAt(1234, 'back'), inspector: rowAt(1276, 'back'), dog: rowAt(2858, 'front'), payphone: rowAt(2858, 'back'),
+    stakeChain: rowAt(2842, 'front'), hole: null, clock: null, lamp: null, crow: null, scraps: null, puddles: null, sprout: null,
+    lantern: null, girl: null,   // WP27 F6.5: Sensor 7 and the Inspector stand at s10 (the one Inspector spot)
   },
   s11: {
-    sensor7: rowAt(712, 'back'), inspector: rowAt(784, 'back'), dog: rowAt(2856, 'front'), clock: rowAt(2890, 'back'),
+    sensor7: rowAt(750, 'back'), inspector: rowAt(816, 'back'), dog: rowAt(2856, 'front'), clock: rowAt(2890, 'back'),
     payphone: rowAt(3050, 'back'), lamp: rowAt(3104, 'back'), crow: rowAt(3104, 'back'), stakeChain: rowAt(2840, 'front'),
     hole: rowAt(2886, 'front'), scraps: rowAt(690, 'back'), puddles: rowAt(960, 'back'), sprout: rowAt(996, 'back'), lantern: null, girl: null,
   },
@@ -2482,8 +2565,8 @@ async function runCase(browser, key, fn, viewport = { width: 1280, height: 720 }
   }
 }
 
-// ONLY (env): a comma list of case keys to run alone (A B C D E F G H I M J JR K L NV NC NT NU NK ND NE NY NS NH F23); unset runs every case. An unknown key exits 2.
-const CASE_KEYS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'M', 'J', 'JR', 'K', 'L', 'NV', 'NC', 'NT', 'NU', 'NK', 'ND', 'NE', 'NY', 'NS', 'NH', 'F23'];
+// ONLY (env): a comma list of case keys to run alone (A B C D E F G H I M J JR K L NV NC NT NU NK ND NE NY NS NH F23 crowTalk_e1 crowTalk_s8); unset runs every case. An unknown key exits 2.
+const CASE_KEYS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'M', 'J', 'JR', 'K', 'L', 'NV', 'NC', 'NT', 'NU', 'NK', 'ND', 'NE', 'NY', 'NS', 'NH', 'F23', 'crowTalk_e1', 'crowTalk_s8'];
 const ONLY = (process.env.ONLY ?? '').split(',').map((k) => k.trim()).filter((k) => k !== '');
 const badKey = ONLY.find((k) => !CASE_KEYS.includes(k));
 if (badKey !== undefined) {
@@ -2499,6 +2582,8 @@ try {
   if (runs('B')) await runCase(browser, 'B', caseB);
   if (runs('C')) await runCase(browser, 'C', caseC);
   if (runs('D')) await runCase(browser, 'D', caseD);
+  if (runs('crowTalk_e1')) await runCase(browser, 'crowTalk_e1', caseCrowTalkE1);
+  if (runs('crowTalk_s8')) await runCase(browser, 'crowTalk_s8', caseCrowTalkS8);
   if (runs('E')) await runCase(browser, 'E', caseE);
   if (runs('F')) await runCase(browser, 'F', caseF);
   if (runs('G')) await runCase(browser, 'G', caseG);

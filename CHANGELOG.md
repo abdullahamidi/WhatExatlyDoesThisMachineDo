@@ -2,6 +2,29 @@
 
 Notable changes per release, newest first. Work packages are named WPn; plans are in `docs/plan/`.
 
+## 0.11.0 — Click curve and Faults — 2026-10-28
+
+### Added
+- **WP27** Machine Faults (playtest feedback): from Fault Lamp (era I, in the demo too), a part of the machine now and then throws a fault: an amber FAULT plate with its code (BELT SLIP, ARC LEAK, SEAL HISS ...) and a draining timer bar. Click it or press F within 8 s to clear it for 15 s of every energy's output. A missed fault costs nothing. Faults come every 90-180 s of active play, never in the first 3 minutes, never offline, never behind menus, the era card, photo mode, the finale or the demo cards. Screen readers announce them; REDUCED MOTION shows a steady plate.
+- **WP27** Wind-up: from Reinforced Crank, the machine stores a little of its output while you are not cranking (the HUD WIND-UP row). The next turn of the crank releases all of it (RELEASE +Ns in the click popup), so an occasional click stays worth it late in the run.
+- **WP27** Four new nodes that keep the crank warm: Discharge Lever (era II, demo), Leak Whistle (era III), Damping Fork (era IV) and Overrun Clutch (era V). They raise the wind-up (up to 2 s), the fault payout (up to 22 s), the fault rate and window, and in era V a cleared fault gives ×2 output for 6 s (OVERDRIVE).
+- **WP27** F key: CLEAR FAULT (listed under SETTINGS keys). New fault sounds per era.
+
+### Changed
+- **WP27** Click curve (playtest feedback): the first minutes are a cranking game again. Worn Motor gives +2 ME/s (was +17), Motor Tuning +0.9 per level, Piston Array +60 for 3000 ME. Cranking earns about three quarters of era I income for the first 4 minutes, the machine passes a steady 4-click/s crank at about 7 minutes, and the click still earns about a third of era II income. From era III the machine carries the run; clicks, the wind-up and faults stay a clear bonus.
+- **WP27** Mechanical clicks: one crank echo now pays seconds of output in every energy, ME included (Reinforced Crank 0.15 s, Dynamo Crank +0.3 s, Echo Crank and Inversion Crank +0.05 s each). An ME click is never weaker than an electric one. Reinforced Crank costs 1200 and drops its ×1.5.
+- **WP27** Balance re-tuned around the new curve: converter rates for eras II-V, Crank Servo growth 2.0, Bellows Drive growth 1.5, Gravitic Anchor growth 2.0, Generator Blueprint 400 000 ME. An always-cranking player reaches the eras at the same times as 0.10.1 (final alignment about 250 min). A player who cranks only the first 5 minutes and then watches finishes in about 1.45× that time.
+- **WP27** Prestige re-tuned for the new curve: Residual Charge 10 % (was 50 %), Echo bonus 14 % per Echo (was 15 %), up to 12 Echoes counted (was 30).
+- **WP27** Crow (playtest feedback): in eras I and II the crow now sits on the lamp with folded wings and keeps busy (looks back, pecks, ruffles, shifts). The spread-wing freeze is only a rare glitch of about a second. Three new crow frames. Its feet now rest on the lamp top.
+- **WP27** Sensor 7 (playtest feedback): it stays next to the Inspector through era II (and in eras III-V). Mid era II (Capacitor Bank or Spark Gap before the Transformer), the whole cast no longer leaves the stage; the clock stays at the era II entry.
+- **WP27** Bundle budget: app JS limit 510 KB (was 500). The fault marker loads as its own small chunk.
+- Saves: no change (version 2). Wind-up and the fault clock are not saved; a load starts a fresh clock.
+
+### Verification
+- §R-lite v0.11.0 (`docs/STEAM_RELEASE.md` section 15, all 15 rows): typecheck clean; 5746 tests pass, 17 skip; new `clickCurve.sim.test.ts` (K1-K12) and `scripts/smoke/faults.mjs` (full and demo).
+- Builds and bundle budgets pass: app 507.5 / 510 KB (limit raised from 500 for the faults and wind-up code), lazy world 206.2 / 210 KB, fault marker chunk 11.0 / 12 KB.
+- GPU perf median of 3: frame p95 16.8 ms (budget 17). 30 min soak flat. Packaged demo and full exes pass `desktop.mjs`. Store set re-shot (`store-final4`); Art Director RELEASE-READY.
+
 ## 0.10.1 — Follow-ups — 2026-10-27
 
 ### Changed

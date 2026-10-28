@@ -11,7 +11,9 @@ import type {
 
 /** Payloads of every event a GameSession emits. */
 export interface SessionEvents {
-  click: { gained: number; gainedAll: ResourceMap };  // gained = ME; gainedAll = every resource
+  // gained = ME (plain click + wind-up release); gainedAll = every resource (display only); released = wind-up
+  // seconds this click released (WP27), absent when nothing was stored.
+  click: { gained: number; gainedAll: ResourceMap; released?: number };
   purchase: { id: TechId; level: number; cost: number; res: ResourceId };
   unlock: { id: TechId };            // tech level 0 -> 1, INCLUDING milestones
   milestone: { id: TechId };
@@ -22,6 +24,9 @@ export interface SessionEvents {
   ending: { phase: EndingPhase };     // WP13: emitted on startEnding / finishEndingSequence / keepRunning; fires after achievement
   cycle: { cycle: number; echoesGained: number; echoesEarned: number };   // WP14: beginNewCycle; fires after reset, before achievement
   prestige: { prestige: PrestigeState };  // WP14: buyPerk success; fires after the unlocks, before achievement
+  // WP27 Machine Faults: spawn / expire come from stepFaults, clear from clearFault (payout null unless a clear).
+  // serial counts the faults of one run from 0; overdriveSeconds is the Overdrive a clear grants (0 otherwise).
+  fault: { kind: 'spawn' | 'expire' | 'clear'; serial: number; payout: ResourceMap | null; overdriveSeconds: number };
 }
 
 export type Listener<K extends keyof SessionEvents> = (payload: SessionEvents[K]) => void;

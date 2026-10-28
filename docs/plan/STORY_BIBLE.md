@@ -43,7 +43,7 @@ The wasteland is not empty. It is playing back. At the edges of the frame a few 
 a worn tape:
 - an inspector doing rounds;
 - a chained dog;
-- a crow paused mid-flap in the air;
+- a crow perched on a lamp that stutters and skips like a worn tape;
 - a small girl in a yellow raincoat, far away in a lit window;
 - a dead payphone;
 - a survey sensor on a tripod.
@@ -343,32 +343,32 @@ off-stage for that stage and its lines wait.
 
 ### 3.3 The Crow (animal) `crow`
 
-- **What:** a large ragged crow, **paused mid-flap in the air** above the street lamp. It mimics: machine lines, other
+- **What:** a large ragged crow, **perched on the street lamp with its wings folded**. It mimics: machine lines, other
   denizens, numbers.
-- **Why near:** it was flying over the site at the instant of the intake and is stuck in that instant.
-- **Rule:** it never travels before the finale. It stays frozen, stutters in place or hovers in place, ragged and
+- **Why near:** it was flying over the site at the instant of the intake and is stuck in that instant. Its one spread-wing glitch is that instant replaying.
+- **Rule:** it never travels before the finale. It stays perched and small-moving, stutters in place or hovers in place, ragged and
   desaturated. Its first real flight leads the first flock at 38 s.
-- **Silhouette:** wedge body, two spread wing fans, hooked beak. **20×14 art px.**
+- **Silhouette:** wedge body, two wing fans (folded when perched), hooked beak. **20×14 art px.** Folded-wing perched frames (perch, look, peck, ruffle) in eras I-II.
 - **Secret:** it has heard the postgame before. CRW-08 `Thank you for holding.` arrives before the payphone ever says
   it in this cycle.
 
 | Phase | Look | Behavior |
 |---|---|---|
-| I | 1 frozen frame, no shadow below | Only the head snaps to the camera. On crank turns a wingtip jitters 1 px, as if trying to move. |
-| II | flicker | Stutters between two positions 4 px apart, like a skipping tape. |
+| I | Perched on the lamp, wings folded | It sits, looks around, pecks, ruffles; the near wing tip lifts in a rare tip try of at most 1.8 s (the old frozen beat). |
+| II | Perched, wings folded, as I | The same, with the skipping tape: a 4 px stutter and a faster skip; the tip try rarer. |
 | III | damp, dripping (no gloss) | Found perched on the lamp (it moved there unseen). Drips. |
 | IV | 50 % | Hovers 2 px above the perch, wings still. Rises 1 px on each downbeat and resets. |
 | V | 70 % | Stutters in place above the lamp. Reversed caw. |
 | Finale | whole at 33.2 s | Glossy blue-black. Takes off at 37.0 s and climbs into the flock band. At 38.0 s it **leads the first flock**: one sprite handed to the `fx.bird` pool, drawn with its whole frames. Glides back to the lamp 47.5-49.3 s. Last look at 59.83 s. |
 | Postgame | an ordinary crow | KEEP +3 s: hops to the booth roof, **scratches mark 42** (3 pecks), hops back. Real caw sound only, no bubble: the mimic is gone. Perches between flocks. |
-| Cycle 2+ | frozen again | Frozen in its **last postgame flight pose**: higher, wings up. |
+| Cycle 2+ | perched, tip try high | In eras I-II the rare tip try draws the **last postgame flight pose** (wings up, higher) for at most 1.8 s, then it is perched again. Eras III-V show no trace. |
 
 **WP24 (2026-10-26): the crow's activities.**
-- **Era I.** Frozen, with a tip try: the near wing tip lifts (the new frozenTip frame), then the crow is still again. A crank click (at most one per 2 s) or a gust starts it.
-- **Era II.** A skip: the 4 px stutter at a faster tape pace. The tip try also appears here, with no reaction.
-- **Era III.** The ruffle (new): the crow puffs up for 1.5–2.5 s, and that movement makes the dog look up. One drop falls from its wet point and clears the lamp. It is one drop per ruffle, and it is off under reduced motion.
+- **Era I.** Perched; the tip try is the rare glitch (at most 1.8 s), started by a crank click (at most one per 2 s) or a gust only after Worn Motor, never in crank playback and never as a fresh runner's first move.
+- **Era II.** The skip and the stutter on the perched frame; the tip try also appears.
+- **Era III.** The ruffle (new): the crow puffs up for 1.5–2.5 s, and that movement makes the dog look up. One drop falls from its wet point and clears the lamp. It is one drop per ruffle, and it is off under reduced motion. Eras I-II ruffle too, with no drop.
 - **Era V.** A caw: the beak opens (talk, then head) for 2–3 s, with no text. The 4 px stutter in place stays.
-- **Cycle 2+ (Revision 5 b).** From cycle 2 the crow holds its crowHigh trace (frozen mid-flight, wings up) for all of eras I–II. It is a deliberate uncanny stillness, not a stall.
+- **Cycle 2+.** In eras I-II the rare tip try draws the last postgame flight pose (wings up, higher) for at most 1.8 s, then it is perched again. Eras III-V show no trace.
 
 ### 3.4 The Girl with the Lantern (person) `girl`
 
@@ -478,14 +478,14 @@ the only large change.
 
 | Era | Sky / background | Ground and props | Light | Weather | Life | Audio |
 |---|---|---|---|---|---|---|
-| **I · Mechanical** "hand-cranked" | Canon beige sky and ruined skyline. **One window overlay: the girl's warm-rust flicker.** | Dead street lamp, dead booth with 41 faint marks, stopped clock (about 4:41; a dev easter egg, not readable), the dog's stake and cut chain, Sensor 7's tripod, 3 paper scraps. Every crank turn advances every loop one frame until `wornMotor`. | flat; nothing lit | sideways dust (canon) | dog (thin), crow frozen in the air | wind (canon) |
+| **I · Mechanical** "hand-cranked" | Canon beige sky and ruined skyline. **One window overlay: the girl's warm-rust flicker.** | Dead street lamp, dead booth with 41 faint marks, stopped clock (about 4:41; a dev easter egg, not readable), the dog's stake and cut chain, Sensor 7's tripod, 3 paper scraps. Every crank turn advances every loop one frame until `wornMotor`. | flat; nothing lit | sideways dust (canon) | dog (thin), crow perched, wings folded | wind (canon) |
 | **II · Electrical** "powered" | Pylons relit (canon). At `generator` the girl's window goes dark (she has left). At `powerLines` **six other windows light rust-amber by themselves**, never warm yellow. | Booth hood light. The dog's hole begins (§10). | **The lamp buzzes on at `powerLines`** with a slow mains flicker (off under reduced motion). | dry | **4-5 ash motes circle the lamp like moths** (ash or moths? left open) | 50 Hz hum (canon); dial tone; phone ring |
 | **III · Pressure** "weather from elsewhere" | **Virga**: a parallax strip over the mountains with rain streaks that evaporate before they land. It appears at lifetime PR ≥ 1M (the `steam-rain` condition). | **Puddles** appear on dry ground at `condenser` and grow with its tiers. They reflect **pale grey cloud that is not in this sky** (never blue). A **white, etiolated sprout** appears at the puddle edge. The fogged booth glass shows the marks sharply. Scraps burn away with firebox tiers. | The lamp turns warm. Ember rim light on the side facing the machine. | Steam vents make denizens act as if it rains: umbrella, hood, palm out. | The crow is found perched and dripping. | optional faint rain bed (−30 dB) that follows the visible virga (WP26; was `condenser`): rain that is not falling |
-| **IV · Resonance** "in sync" | Rising dust (canon). The six windows breathe on the downbeat (static under reduced motion). Virga hangs frozen. | **Chladni nodal rings** in the ground dust around the machine base (procedural; §10). Puddles ring concentrically on each downbeat. Inspector pages drift up with the dust. | The lamp pulses on the downbeat. | still air; things fall up | **Ash motes freeze mid-orbit** (a mirror of the era I crow). The crow hovers in place. | canon bells; denizens open their mouths on the downbeat without text |
+| **IV · Resonance** "in sync" | Rising dust (canon). The six windows breathe on the downbeat (static under reduced motion). Virga hangs frozen. | **Chladni nodal rings** in the ground dust around the machine base (procedural; §10). Puddles ring concentrically on each downbeat. Inspector pages drift up with the dust. | The lamp pulses on the downbeat. | still air; things fall up | **Ash motes freeze mid-orbit.** The crow hovers in place. | canon bells; denizens open their mouths on the downbeat without text |
 | **V · ???** "reverse" | Violet, eclipse, glow, beam (canon). The violet sky and horizon glow fade in over 24 s per full fade (WP26; world view only, rising stages only). **The six windows go dark stage by stage** (nullChamber 6 → 4, lensArray → 2, horizonField ≥ 5 → 1, skyAperture → 0). Virga fades out. | Puddles turn **black and reflect nothing**. The sprout grows tall, still white, and **bends toward the beam** (from skyAperture). Chladni lines glow faint violet. The dog's hole stays dug. | **The lamp goes out on the skyAperture diamond ring.** From horizonField ≥ 5 every shadow is gone (light from every side). | — | Motes drift down into the dead lamp. The crow stutters in place. Double exposures. | denizen blips reversed |
 | **Finale** (silent) | Canon restoration. The girl's window joins the restored skyline. | The wave turns each prop whole as it arrives (§9.1): the sprout greens and blooms, the puddles reflect the restored sky, the chain falls, the receiver hangs itself up, the clock's second hand starts to sweep. **The marks stay.** | lamp relit warm (restored frame) | wind stops (canon) | the crow leads the first flock | canon |
 | **Postgame** "same day" | Restored (canon). The girl at her curtain. | The lantern lies in the grass in the inner left gap: a relic. The clock's second hand sweeps; the minute hand never turns. The umbrella stays closed. | warm, constant | no wind (Sensor 7's anemometer is still) | white moths at the lamp, now real; canon flocks and seeds; dog and red ball | canon `restored`; real crow caws |
-| **Cycle 2+** "again" | Ruin returns at the white peak (canon). | Props back to ruin. The traces are listed in §9.3. | flat | dust | crow frozen in a new pose | canon |
+| **Cycle 2+** "again" | Ruin returns at the white peak (canon). | Props back to ruin. The traces are listed in §9.3. | flat | dust | crow perched; its rare tip try shows the high pose (eras I-II only) | canon |
 
 **The postgame exact loop covers only denizen and prop loops** (90 s period). Canon flocks (every 40-70 s) and seeds
 keep their own schedules. The world as a whole is never claimed to be periodic.
@@ -653,6 +653,32 @@ in table order. They follow the same rules as every other log:
 
 - **Demo.** Both entries are unreachable in the demo (eras III-IV). `copper-memory` (EE 1M) still fires at
   46.4 / 59.0 / 116.0 min, before the cap at 60.4 / 73.0 / 148.5 min.
+
+### 5.4b Fault lines (WP27; machine voice, not a SYS LOG)
+
+Machine Faults has one system line at unlock: the Fault Lamp install toast (`INSTALL_LINES`, `src/data/notifications.ts`). The other four lines are the ordinary install toasts of their nodes.
+
+| node (era) | install line (verbatim) |
+|---|---|
+| `faultLamp` (I) | Fault reporting enabled. Faults predate the report. |
+| `dischargeLever` (II) | Stored charge released by hand. Hand not logged. |
+| `leakWhistle` (III) | Leaks now announce themselves. Most of them. |
+| `dampingFork` (IV) | The second fork hums before anything slips. |
+| `overrunClutch` (V) | Clutch engaged ahead of the load. Load not found. |
+
+Fault codes by era (`FAULT_TEXT.codes`, `src/data/faultMarker.ts`; shown on the fault marker):
+
+| era | codes |
+|---|---|
+| I | BELT SLIP, BEARING DRY, SHAFT KNOCK |
+| II | ARC LEAK, COIL CHATTER, BRUSH SPARK |
+| III | SEAL HISS, VALVE STICK, GAUGE FLUTTER |
+| IV | PHASE DRIFT, FORK DETUNE, NODE SLIP |
+| V | NULL BLEED, RING SKEW, UNITS UNKNOWN |
+
+- One install toast at unlock. No new SYS LOG trigger: the SYS LOG table keeps its 23 entries.
+- The codes reveal nothing: no cause, no part name, no number.
+- `UNITS UNKNOWN` echoes the existing `units-unknown` SYS LOG line, "Units not recognized. Continuing."
 
 ### 5.5 Wordless beats (no text; not counted as moments)
 
@@ -1033,7 +1059,7 @@ Under reduced motion the lines appear whole at the same start times.
 |---|---|
 | Marks on the booth glass | 40 + cycle before this cycle's finale; 41 + cycle from the postgame on. Choosing NEW CYCLE from the choice shows the new count at the white peak. |
 | Red ball | the dog has it from cycle 2 |
-| Crow pose | frozen higher, wings up (its last postgame flight pose) |
+| Crow pose | perched; the rare tip try draws the last flight pose, higher, in eras I-II only |
 | The girl | starts one plane nearer per finished cycle (cycle 2: pylon plane; 3+: ground back row); never nearer than her era V spot |
 | Sensor 7 | readout `1` from the first minute |
 | Clipboard | one step thicker per finished cycle (max 3) |
@@ -1083,7 +1109,7 @@ while the TECH INDEX is open and play on close.
 
 | era | ripple | reduced motion |
 |---|---|---|
-| I | two pebbles hop 1 px; the booth receiver jumps one step; the frozen crow's wingtip jitters. The first ripple of the game comes with gearRatio MK II at about 4 min and teaches the link. | the receiver's held step |
+| I | two pebbles hop 1 px; the booth receiver jumps one step; the perched crow steps 2 world px sideways for one frame. The first ripple of the game comes with gearRatio MK II at about 4 min and teaches the link. | the receiver's held step |
 | II | the lamp and booth light flicker one step brighter; the dog's fur bristles (1 frame) | lamp one step brighter for 400 ms |
 | III | a warm gust: coat hem, ears, hood and feathers ruffle for 1 frame; puddle glint | a single ruffle frame |
 | IV | one shared hum beat: every denizen sways once on the next downbeat; one puddle ring | the sway pose held for one beat |
@@ -1118,7 +1144,7 @@ All sprites are side view plus one camera-facing frame.
 |---|---|---|---|
 | Inspector | 16×32 | walk 4, write 2, facing 1, talk 1, shield 1, pat 2, wave 1, watch 1 = **13**; umbrella overlay open/closed 2 | PixelLab concept at 2×, then palette snap and hand fix |
 | Dog | 24×16 | sit 2, sniff 2, walk 4, dig 2, shake 2, facing 1, talk 1, flat 1, lie-facing 1 (hold image), sleep 1, chase 2 = **19**; chain, stake, red ball 3×3 | hand-pixel |
-| Crow | 20×14 | frozen 1, perch 2, facing 1, talk 1, peck 2, takeoff and flight 3 (whole only) = **10** | hand-pixel |
+| Crow | 20×14 | frozen 1, perch 2, head 1, talk 1, peck 2, flight 3 (fly0 fly1 fly2), frozenTip 1, ruffle 1, perchTurn 1, perchHead 1, perchTalk 1 = **15** | hand-pixel |
 | Girl | 12×24 + mini 5×10 + window 2×4 | stand-facing 2, sway 2, palm 1, talk 1, shield 1, back-run 4 = **11**; minis 2; window overlay 2 frames; lantern lit / fallen 2; restored-window figure 1 | hand-pixel; Art Director tone check |
 | Sensor 7 | 16×36 | tripod 1, head L/C/R 3, head up 1, lens fog 1 = **6**; glyphs `–` and `1` at 5×7 | hand-pixel |
 | Payphone booth | 24×48 | dark, lit, ring shake 2, receiver swing 3, receiver level, on hook, restored, fog overlay = **11**; tally marks procedural | PixelLab concept + hand fix |

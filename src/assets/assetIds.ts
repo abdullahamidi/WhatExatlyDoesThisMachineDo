@@ -26,6 +26,8 @@ export const ASSET_IDS = ['bg.sky','bg.mountains','bg.skyline','bg.pylons','terr
   'world.redBall','world.crow','world.girl','world.girlMini','world.girlWindow',
   'world.lantern','world.payphone','world.receiver','world.lamp','world.lampGlow',
   'world.clock','world.sensor7','world.puddle','world.sprout','world.scraps',
-  'world.mote','world.page','world.shadow','bg.windowLit','bg.virga'
+  'world.mote','world.page','world.shadow','bg.windowLit','bg.virga',
+// WP27 machine faults: id 145
+  'fx.fault'
 ] as const;
 export type AssetId = typeof ASSET_IDS[number];

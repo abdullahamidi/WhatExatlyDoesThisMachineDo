@@ -22,9 +22,10 @@ function eraOneOptions(buyIntervalSeconds: number) {
 }
 
 // Profiles. A = main greedy run; B = slow buyer; C = casual clicker (no offline progress).
-const PROFILE_A = eraOneOptions(1);
-const PROFILE_B = { seconds: 18000, clicksPerSecond: CLICKS_PER_SECOND, stepSeconds: 1, buyIntervalSeconds: 30 };
-const PROFILE_C = { seconds: 28800, clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30 };
+// `faults` = the Machine Faults catch model of each player (WP27): chance to catch a fault, seconds to react.
+const PROFILE_A = { ...eraOneOptions(1), faults: { catchProb: 1, reactionSeconds: 2 } };
+const PROFILE_B = { seconds: 18000, clicksPerSecond: CLICKS_PER_SECOND, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 1, reactionSeconds: 3 } };
+const PROFILE_C = { seconds: 28800, clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 0.5, reactionSeconds: 4 } };
 
 // States recorded at the first ownership of the era IV convergence and the era V finale (WP17 D1).
 const SNAPSHOT_IDS: readonly TechId[] = ['harmonicConvergence', 'primaryFunction'];
@@ -156,9 +157,10 @@ describe('greedy balance simulation (WP5 pacing targets)', () => {
     expect(a.firstAt.reinforcedCrank).toBeLessThanOrEqual(300);
   });
 
-  it('pistonArray is reached at 600-900 s', () => {
-    expect(a.firstAt.pistonArray).toBeGreaterThanOrEqual(600);
-    expect(a.firstAt.pistonArray).toBeLessThanOrEqual(900);
+  // WP27 re-target: the hand-led era I crossover (ME passive passes 4-cps clicking) falls at Piston Array.
+  it('pistonArray is reached at 300-480 s (5:00-8:00)', () => {
+    expect(a.firstAt.pistonArray).toBeGreaterThanOrEqual(300);
+    expect(a.firstAt.pistonArray).toBeLessThanOrEqual(480);
   });
 
   it('generatorBlueprint is reached at 1200-1800 s', () => {
@@ -166,17 +168,17 @@ describe('greedy balance simulation (WP5 pacing targets)', () => {
     expect(a.firstAt.generatorBlueprint).toBeLessThanOrEqual(1800);
   });
 
-  // re-pinned once for WP25 (wornMotor on: passive-first retune)
+  // re-pinned for WP27 (hand-led era I; replaces the WP25 pins 4/18/23/205/297/730/761/1327). The plan harness gives the same seconds.
   it('era I exact first-purchase times (EXACT: era I must not drift)', () => {
     expect(a.firstAt.handCrank).toBe(0);
     expect(a.firstAt.gearRatio).toBe(4);
     expect(a.firstAt.wornMotor).toBe(18);
-    expect(a.firstAt.motorTuning).toBe(23);
-    expect(a.firstAt.reinforcedCrank).toBe(205);
-    expect(a.firstAt.flywheel).toBe(297);
-    expect(a.firstAt.pistonArray).toBe(730);
-    expect(a.firstAt.improvedPistons).toBe(761);
-    expect(a.firstAt.generatorBlueprint).toBe(1327);
+    expect(a.firstAt.motorTuning).toBe(28);
+    expect(a.firstAt.reinforcedCrank).toBe(235);
+    expect(a.firstAt.flywheel).toBe(502);
+    expect(a.firstAt.pistonArray).toBe(384);
+    expect(a.firstAt.improvedPistons).toBe(403);
+    expect(a.firstAt.generatorBlueprint).toBe(1334);
   });
 
   it('maxValue is finite and below the design ceiling', () => {

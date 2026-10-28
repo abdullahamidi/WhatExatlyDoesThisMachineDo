@@ -15,6 +15,7 @@ import { WORLD_FAR_PLANES, WORLD_GIRL_PLACEMENTS, WORLD_LAYOUT, WORLD_PLACEMENTS
 import type { FramingKey, GroundId, WorldPlacement } from '../../data/livingWorld';
 import { WORLD_GIRL } from '../../data/worldEras';
 import { WORLD_ENDING } from '../../data/worldEnding';
+import { TECHNOLOGIES } from '../../data/technologies';
 import { ASSET_MANIFEST } from '../../assets/manifest';
 import type { TechId } from '../../data/types';
 
@@ -35,6 +36,9 @@ const S14 = [...S13, 'nullChamber'];
 const S15 = [...S14, ...rep('containmentRing', 25), '@resonantSiphon:20', '@graviticAnchor:10', 'inversionCrank', 'lensArray',
   ...rep('horizonField', 20), 'skyAperture', ...rep('mainsBackfeed', 5), ...rep('steamLance', 5), '@finalAlignment'];
 const S16 = [...S15, 'primaryFunction'];
+// The era II entry (S8) and the state with a capacitorBank and a sparkGap before the transformer (framing s8w, WP27 F6.1).
+const S8_BUYS = [...S7, '@blueprint', 'generator'];
+const S8W_BUYS = S9.slice(0, S9.indexOf('transformer'));
 
 // Expected framing key per stage: s0-s7 frame at e1, s8 (generator) at s8, s9 (era II full) at s9, s10 at s10, s11-s14 at s11,
 // s15 and s16 at s15.
@@ -139,7 +143,7 @@ describe('framingKey', () => {
       expect(framingKeyOfPose(poseOf(ref.key)), ref.key).toBe(ref.key);
     }
     expect(framingKeyOfPose(poseOf('portrait'))).toBe('s15');
-    expect(WORLD_LAYOUT.framingPoses).toHaveLength(9);
+    expect(WORLD_LAYOUT.framingPoses).toHaveLength(10);
   });
 
   it('maps off-step poses to the nearest reference (zoom weighs 1000 per unit, then centre x; ties keep list order)', () => {
@@ -152,6 +156,14 @@ describe('framingKey', () => {
     // zoom 1, centre 1400: baseL 80 beats e1 520
     expect(framingKeyOfPose({ centerX: 1400, centerY: 1500, zoom: 1 })).toBe('baseL');
     expect(framingKeyOfPose({ centerX: 2500, centerY: 1500, zoom: 1 })).toBe('baseR');
+  });
+
+  it('frames the capacitorBank and sparkGap poses (cx 2112 and 2104, zoom 1) as s8w, and the generator pose (2064) as s8', () => {
+    expect(framingKeyOfPose({ centerX: 2104, centerY: 1500, zoom: 1 })).toBe('s8w');
+    expect(framingKeyOfPose({ centerX: 2112, centerY: 1500, zoom: 1 })).toBe('s8w');
+    expect(framingKeyOfPose({ centerX: 2064, centerY: 1500, zoom: 1 })).toBe('s8');
+    expect(framingKey(levelsOf(S8W_BUYS))).toBe('s8w');
+    expect(framingKey(levelsOf(S8_BUYS))).toBe('s8');
   });
 });
 
@@ -216,11 +228,15 @@ describe('screenOfWorld', () => {
       expect(x).toBeLessThan(VIEW.width);
       expect(x < VIEW_THIRD_LO || x > VIEW_THIRD_HI).toBe(true);
     }
-    // Clear of the machine's left edge (game x 152 at s8, 178 at s9) by the half sprite width (8 at zoom 1, 6 at zoom 0.75), and of
-    // the Inspector body edge (x 64 at s8).
+    // Clear of the machine's left edge (game x 152 at s8, 178 at s9) by the half sprite width (8 at zoom 1, 6 at zoom 0.75). At s8
+    // the mini lies between the tripod's right edge (world 1486, game 62) and the Inspector body's left edge (world 1522, game 98).
     expect(atS8.x + 8).toBeLessThan(152);
     expect(atS9.x + 6).toBeLessThan(178);
-    expect(atS8.x - 8).toBeGreaterThan(64);
+    expect(atS8.x - 8).toBeGreaterThan(62);
+    expect(atS8.x + 8).toBeLessThan(98);
+    // The two edges come from the s8 placements: Sensor 7 at 1470 (tripod to 1486) and the Inspector at 1536 (body from 1522).
+    expect(WORLD_PLACEMENTS.s8.sensor7?.x).toBe(1470);
+    expect(WORLD_PLACEMENTS.s8.inspector?.x).toBe(1536);
   });
 
   it('places the cycle 2+ era I girl mini (e1, footArtXE1) clear of the first scrap, Sensor 7 and the view edge', () => {
@@ -238,6 +254,38 @@ describe('screenOfWorld', () => {
   });
 });
 
+// The far-plane girl mini at the s8w poses (WP27 F6.3): the same order as at s8, tripod, mini, Inspector body. The s8w pair is
+// S8W_SENSOR7 1500 and S8W_INSPECTOR 1552 (hand-off, ART_AUDIT WP27 (a)); the drawn edges are the tripod's 16 px either side of its
+// foot and the flipped Inspector body's 14 px left of his foot.
+describe('the girl mini at s8w (WP27 F6.3)', () => {
+  const S8W_SENSOR7 = 1500;
+  const S8W_INSPECTOR = 1552;
+  const TRIPOD_HALF_PX = 16;
+  const BODY_LEFT_PX = 14;
+  const MINI_HALF_PX = 8;
+  const foot = {
+    x: WORLD_FAR_PLANES.pylon.tileOriginX + 2 * WORLD_FAR_PLANES.girlMini.footArtX,
+    y: WORLD_FAR_PLANES.pylon.tileTopY + 2 * WORLD_FAR_PLANES.girlMini.footArtY,
+  };
+  // Documented exemption: at cx 2112 the mini's cell reaches 0.4 px into the Inspector body (hand-off S8W_MINI_OVERLAP_PX = 1). The
+  // mini stands on the far plane, behind him. cx 2104 has no overlap.
+  const POSES: readonly { cx: number; allowPx: number }[] = [{ cx: 2104, allowPx: 0 }, { cx: 2112, allowPx: 1 }];
+
+  it('the s8w data is the hand-off pair: Sensor 7 at S8W_SENSOR7 1500, Inspector at S8W_INSPECTOR 1552', () => {
+    expect(WORLD_PLACEMENTS.s8w.sensor7?.x).toBe(S8W_SENSOR7);
+    expect(WORLD_PLACEMENTS.s8w.inspector?.x).toBe(S8W_INSPECTOR);
+  });
+
+  it.each(POSES)('cx $cx: the mini clears the tripod and overlaps the Inspector body by at most $allowPx px', ({ cx, allowPx }) => {
+    const pose: CameraPose = { centerX: cx, centerY: CAMERA.focus.y, zoom: 1 };
+    const mini = screenOfWorld(foot, WORLD_FAR_PLANES.pylon.sf, pose).x;
+    const tripodRight = screenOfWorld({ x: S8W_SENSOR7 + TRIPOD_HALF_PX, y: GROUND_Y }, 1, pose).x;
+    const bodyLeft = screenOfWorld({ x: S8W_INSPECTOR - BODY_LEFT_PX, y: GROUND_Y }, 1, pose).x;
+    expect(mini - MINI_HALF_PX, 'mini clear of the tripod').toBeGreaterThan(tripodRight);
+    expect(mini + MINI_HALF_PX - bodyLeft, 'mini overlap with the Inspector body').toBeLessThanOrEqual(allowPx);
+  });
+});
+
 describe('placeCast', () => {
   it('s0-s7 stages: all ten cast members on stage, equal to the e1 rows of DENIZEN_ART §3', () => {
     // WP23a ids only; girl, puddles, sprout and lantern are null at e1 (their rows start in later eras).
@@ -249,12 +297,10 @@ describe('placeCast', () => {
     expect(placeCast(levelsOf(S7), 'e1')).toEqual({ ...WORLD_PLACEMENTS.e1, girl: null, puddles: null, sprout: null, lantern: null });
   });
 
-  it('s8 (generator): sensor7 and clock off-stage, scraps keep only x 1530', () => {
-    const placed = placeCast(levelsOf([...S7, '@blueprint', 'generator']), 's8');
+  it('s8 (generator): nothing off-stage but the trimmed scraps (sensor7 and clock stand, WP27 F6.1)', () => {
+    const placed = placeCast(levelsOf(S8_BUYS), 's8');
     expect(placed).toEqual({
       ...WORLD_PLACEMENTS.s8,
-      sensor7: null,
-      clock: null,
       scraps: { x: 1530, row: 'back', xs: [1530] },
       girl: null,
       puddles: null,
@@ -276,11 +322,10 @@ describe('placeCast', () => {
     expect(placed.inspector?.route).toEqual([1448, 1496]);
   });
 
-  it('cycle 3 fills the girl at 1552 (ground) at e1, s8 and s9; puddles, sprout and lantern have no row there yet', () => {
-    const S8 = [...S7, '@blueprint', 'generator'];
+  it('cycle 3 fills the girl on the ground at e1 and s9 (1552) and at s8 (1504, the mini slot); puddles, sprout and lantern have no row there yet', () => {
     expect(placeCast(levelsOf(S7), 'e1', undefined, 3)).toEqual({ ...WORLD_PLACEMENTS.e1, girl: { x: 1552, row: 'back' }, puddles: null, sprout: null, lantern: null });
-    expect(placeCast(levelsOf(S8), 's8', undefined, 3)).toEqual({
-      ...placeCast(levelsOf(S8), 's8'), girl: { x: 1552, row: 'back' },
+    expect(placeCast(levelsOf(S8_BUYS), 's8', undefined, 3)).toEqual({
+      ...placeCast(levelsOf(S8_BUYS), 's8'), girl: { x: 1504, row: 'back' },
     });
     expect(placeCast(levelsOf(S9), 's9', undefined, 3).girl).toEqual({ x: 1552, row: 'back' });
   });
@@ -330,17 +375,17 @@ describe('late framings and the girl (WP23b R6)', () => {
     girl: { x: 976, row: 'front', inner: true, dy: 5 * WORLD_GIRL.stepDyWorldPx },
   };
 
-  it('s10 (era III entry): inspector, dog, payphone and stake chain stand; the hole fails the wing rule and is off', () => {
+  it('s10 (era III entry): sensor7 and inspector stand (WP27 F6.5), dog, payphone and stake chain too; the hole fails the wing rule', () => {
     expect(placeCast(levelsOf(S10), 's10')).toEqual({
-      inspector: { x: 1252, row: 'back' }, dog: { x: 2858, row: 'front' }, payphone: { x: 2858, row: 'back' },
-      stakeChain: { x: 2842, row: 'front' }, hole: null, sensor7: null, clock: null, lamp: null, crow: null, scraps: null,
+      sensor7: { x: 1234, row: 'back' }, inspector: { x: 1276, row: 'back' }, dog: { x: 2858, row: 'front' }, payphone: { x: 2858, row: 'back' },
+      stakeChain: { x: 2842, row: 'front' }, hole: null, clock: null, lamp: null, crow: null, scraps: null,
       girl: null, puddles: null, sprout: null, lantern: null,
     });
   });
 
-  it('s11 (era III full): the WP23b III rows, the girl is a mini (no ground figure yet)', () => {
+  it('s11 (era III full): the WP23b III rows (Sensor 7 750, Inspector 816 on the route 792-840), the girl is a mini (no ground figure yet)', () => {
     expect(placeCast(levelsOf(S11), 's11')).toEqual({
-      sensor7: { x: 712, row: 'back' }, inspector: { x: 784, row: 'back', route: [760, 808] }, dog: { x: 2856, row: 'front' },
+      sensor7: { x: 750, row: 'back' }, inspector: { x: 816, row: 'back', route: [792, 840] }, dog: { x: 2856, row: 'front' },
       clock: { x: 2890, row: 'back' }, payphone: { x: 3050, row: 'back' }, lamp: { x: 3104, row: 'back' }, crow: { x: 3104, row: 'back' },
       stakeChain: { x: 2840, row: 'front' }, hole: { x: 2886, row: 'front' }, scraps: { x: 690, row: 'back', xs: [690, 830, 960] },
       puddles: { x: 960, row: 'back' }, sprout: { x: 996, row: 'back' }, girl: null, lantern: null,
@@ -405,20 +450,21 @@ describe('late framings and the girl (WP23b R6)', () => {
     expect(WORLD_GIRL_PLACEMENTS.s15?.era5?.x).toBe(WORLD_ENDING.homeX.lantern + 11);
   });
 
-  it('the girl stands on the ground only: cycle 3 puts her at 1552 (back) at e1, s8 and s9; cycle 2 keeps her a mini', () => {
-    const S8 = [...S7, '@blueprint', 'generator'];
+  it('the girl stands on the ground only: cycle 3 puts her at 1552 (back) at e1 and s9, 1504 at s8; cycle 2 keeps her a mini', () => {
     expect(placeCast(levelsOf(S7), 'e1', undefined, 3).girl).toEqual({ x: 1552, row: 'back' });
-    expect(placeCast(levelsOf(S8), 's8', undefined, 3).girl).toEqual({ x: 1552, row: 'back' });
+    expect(placeCast(levelsOf(S8_BUYS), 's8', undefined, 3).girl).toEqual({ x: 1504, row: 'back' });
     expect(placeCast(levelsOf(S9), 's9', undefined, 3).girl).toEqual({ x: 1552, row: 'back' });
     expect(placeCast(levelsOf(S7), 'e1', undefined, 2).girl).toBeNull();
     expect(placeCast(levelsOf(S9), 's9').girl).toBeNull();
   });
 
-  it('cycle 3 places the girl at 1552 in every e1, s8 and s9 stage; cycles 1 and 2 place none', () => {
+  it('cycle 3 places the girl at 1552 in every e1 and s9 stage and at 1504 in every s8 stage; cycles 1 and 2 place none', () => {
+    const GIRL_X: Partial<Record<FramingKey, number>> = { e1: 1552, s8: 1504, s9: 1552 };
     for (const s of STAGES) {
-      if (s.key !== 'e1' && s.key !== 's8' && s.key !== 's9') continue;
+      const x = GIRL_X[s.key];
+      if (x === undefined) continue;
       const lv = levelsOf(s.buys);
-      expect(placeCast(lv, s.key, undefined, 3).girl, s.name).toEqual({ x: 1552, row: 'back' });
+      expect(placeCast(lv, s.key, undefined, 3).girl, s.name).toEqual({ x, row: 'back' });
       expect(placeCast(lv, s.key, undefined, 2).girl, s.name).toBeNull();
       expect(placeCast(lv, s.key, undefined, 1).girl, s.name).toBeNull();
     }
@@ -587,5 +633,88 @@ describe('unseenChangeOk', () => {
     expect(unseenChangeOk({ treeOpen: false, oldOnScreen: true, newOnScreen: false })).toBe(false);
     expect(unseenChangeOk({ treeOpen: false, oldOnScreen: false, newOnScreen: true })).toBe(false);
     expect(unseenChangeOk({ treeOpen: false, oldOnScreen: true, newOnScreen: true })).toBe(false);
+  });
+});
+
+describe('Sensor 7 beside the Inspector, the e1 objects and the era I-II pose sweep (WP27 F6.1, F6.3)', () => {
+  // A framing that places the Inspector without Sensor 7 is a documented exemption, with its reason. None: the Art Director
+  // accepted the spot in every framing (ART_AUDIT WP27 (a) to (c)).
+  const SENSOR7_EXEMPT: Partial<Record<FramingKey, string>> = {};
+
+  it('every framing that places the Inspector also places Sensor 7 (documented exemptions only)', () => {
+    for (const key of Object.keys(WORLD_PLACEMENTS) as FramingKey[]) {
+      if (WORLD_PLACEMENTS[key].inspector === undefined || SENSOR7_EXEMPT[key] !== undefined) continue;
+      expect(WORLD_PLACEMENTS[key].sensor7, key).toBeDefined();
+    }
+    for (const key of Object.keys(SENSOR7_EXEMPT) as FramingKey[]) {
+      expect(SENSOR7_EXEMPT[key], key).toBeTruthy();
+      expect(WORLD_PLACEMENTS[key].sensor7, `${key} exemption is a real gap`).toBeUndefined();
+    }
+  });
+
+  // Every object placed at e1 (cycle 3, so the girl stands) also stands at the era II entry (s8), its s8w poses and era II full (s9).
+  // Each exemption names the framing, the object and the reason.
+  const E1_IDS: readonly GroundId[] = ['sensor7', 'inspector', 'dog', 'payphone', 'lamp', 'crow', 'clock', 'stakeChain', 'hole', 'scraps', 'girl'];
+  const E1_EXEMPT: readonly { framing: FramingKey; id: GroundId; reason: string }[] = [
+    { framing: 's8w', id: 'clock', reason: 'the right wing (2672-2728) holds payphone 2678, lamp and crow 2720: no 24 px slot for a clock; the pose lasts 28-137 s (ART_AUDIT WP27 (a))' },
+    { framing: 's8w', id: 'girl', reason: 'no 24 px slot at s8w: the left wing is the tripod and the Inspector, the right wing is full (fallback b, ART_AUDIT WP27 (a))' },
+  ];
+
+  it('every object placed at e1 also stands at s8, s8w and s9, except the documented exemptions', () => {
+    const e1 = placeCast(levelsOf(S7), 'e1', undefined, 3);
+    const framings: { key: FramingKey; placed: Record<GroundId, WorldPlacement | null> }[] = [
+      { key: 's8', placed: placeCast(levelsOf(S8_BUYS), 's8', undefined, 3) },
+      { key: 's8w', placed: placeCast(levelsOf(S8W_BUYS), 's8w', undefined, 3) },
+      { key: 's9', placed: placeCast(levelsOf(S9), 's9', undefined, 3) },
+    ];
+    const isExempt = (key: FramingKey, id: GroundId): boolean => E1_EXEMPT.some((x) => x.framing === key && x.id === id);
+    const problems: string[] = [];
+    for (const { key, placed } of framings) {
+      for (const id of E1_IDS) {
+        if (e1[id] !== null && placed[id] === null && !isExempt(key, id)) problems.push(`${key} ${id}`);
+      }
+    }
+    expect(problems).toEqual([]);
+    // An exemption must name a real gap: placed at e1, off-stage at its framing, with a reason.
+    for (const x of E1_EXEMPT) {
+      expect(x.reason.length, `${x.framing} ${x.id} reason`).toBeGreaterThan(0);
+      expect(e1[x.id], `${x.framing} ${x.id} placed at e1`).not.toBeNull();
+      expect(framings.find((f) => f.key === x.framing)?.placed[x.id], `${x.framing} ${x.id} off-stage`).toBeNull();
+    }
+  });
+
+  // The pose sweep: every cumulative prefix of S15, every single era II tech on S8 and every single era III tech on S10.
+  // Each case runs framingPose -> framingKeyOfPose -> placeCast, the chain the renderer uses.
+  const ERA2_IDS = Object.values(TECHNOLOGIES).filter((t) => t.era === 2).map((t) => t.id);
+  const ERA3_IDS = Object.values(TECHNOLOGIES).filter((t) => t.era === 3).map((t) => t.id);
+  const LV8 = levelsOf(S8_BUYS);
+  const LV10 = levelsOf(S10);
+  const SWEEP: { name: string; levels: Record<TechId, number> }[] = [
+    ...Array.from({ length: S15.length + 1 }, (_, n) => ({ name: `S15 prefix ${n}`, levels: levelsOf(S15.slice(0, n)) })),
+    ...ERA2_IDS.map((id) => ({ name: `S8 + ${id}`, levels: { ...LV8, [id]: 1 } })),
+    ...ERA3_IDS.map((id) => ({ name: `S10 + ${id}`, levels: { ...LV10, [id]: 1 } })),
+  ];
+
+  it('the sweep reaches the era I-II framings e1, s8, s8w and s9', () => {
+    const keys = new Set(SWEEP.map((c) => framingKeyOfPose(framingPose(c.levels))));
+    for (const key of ['e1', 's8', 's8w', 's9'] as const) expect(keys.has(key), key).toBe(true);
+  });
+
+  it('the sweep: an Inspector placed implies Sensor 7 placed, and in eras I-II the Inspector, Sensor 7, dog, payphone, lamp and crow all stand', () => {
+    const EARLY: readonly FramingKey[] = ['e1', 's8', 's8w', 's9'];
+    const EARLY_IDS: readonly GroundId[] = ['inspector', 'sensor7', 'dog', 'payphone', 'lamp', 'crow'];
+    const problems: string[] = [];
+    for (const c of SWEEP) {
+      const pose = framingPose(c.levels);
+      const key = framingKeyOfPose(pose);
+      const placed = placeCast(c.levels, key, pose);
+      if (placed.inspector !== null && placed.sensor7 === null && SENSOR7_EXEMPT[key] === undefined) {
+        problems.push(`${c.name} (${key}): Inspector without Sensor 7`);
+      }
+      if (EARLY.includes(key)) {
+        for (const id of EARLY_IDS) if (placed[id] === null) problems.push(`${c.name} (${key}): ${id} off-stage`);
+      }
+    }
+    expect(problems).toEqual([]);
   });
 });

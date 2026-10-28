@@ -31,8 +31,9 @@ const DTS = [16.7, 100];
 const K0_PLAYED = behaviourK0(54000);
 const PLAY_CYCLE = 1;
 const TIMEOUT_MS = 120000;
-// The activities a cue can end (the sleep wakes on a ring): their short holds are interruptions, not holds.
-const WAKE_IDS: ReadonlySet<string> = wakeIdsOf();
+// The activities a cue can end (the sleep wakes on a ring) and the crow's tip try (a brief glitch of 0.8-1.8 s by design, WP27 D5): their
+// short holds are interruptions or glitches, not holds, so the shortest natural hold skips them.
+const SHORT_IDS: ReadonlySet<string> = new Set([...wakeIdsOf(), 'tipTry']);
 
 // The plan's targets (A2 V1-V8, A3). Every limit is in ms, percent or a count; the beat limits use the 2.4 s heartbeat.
 const T = {
@@ -42,7 +43,6 @@ const T = {
   v2ForcedPct: 30,
   v2MinFree: 4,
   v3HoldMs: 45000,
-  v3CrowIFrozenMs: 55000,
   v3WalkMs: 6000,
   v3StaticEarlyMs: 18000,
   v3StaticVMs: 25000,
@@ -50,7 +50,7 @@ const T = {
   v3StareBeats: 7,
   v4DenizenMs: 20000,
   v4EraVMs: 30000,
-  v4CrowIMs: 60000,
+  v4CrowIMs: 20000,
   v5AnyPct: 12,
   v5PairPct: 8,
   v5DownbeatPct: 90,
@@ -67,9 +67,9 @@ const T = {
 // The V1 table (A2): the looks minimum per 10 min window, per state and actor (the first number of each cell; the bracketed ids are not
 // the target). Absent: the actor is off-stage, or the girl is parked at the window (her V4 only).
 const V1_TARGET: Record<string, Partial<Record<BehaviourActor, number>>> = {
-  S7: { inspector: 6, dog: 5, crow: 2 },
-  S8: { inspector: 5, dog: 5, crow: 3, girl: 2 },
-  S9: { inspector: 6, dog: 5, crow: 3, girl: 2 },
+  S7: { inspector: 6, dog: 5, crow: 4 },
+  S8: { inspector: 5, dog: 5, crow: 4, girl: 2 },
+  S9: { inspector: 6, dog: 5, crow: 4, girl: 2 },
   S9lb: { inspector: 6, dog: 7, crow: 3, girl: 2 },
   S10: { inspector: 4, dog: 5, girl: 2 },
   S11: { inspector: 7, dog: 6, crow: 3, girl: 2 },
@@ -81,16 +81,18 @@ const V1_TARGET: Record<string, Partial<Record<BehaviourActor, number>>> = {
 
 // The hand simulation of plan C2 ("Pick-rule check", Revision 2, 60 min x 10 runs): V1 looks (min), forced share % (max), longest id-only
 // period (max) and V4 longest gap s (max) per state and actor. Parity: V1 within 1, forced within 5 points (report the rest).
+// WP27 re-pin (T8a): the crow rows (D5 perched crow), the S8 / S9lb / S10 Inspector and dog rows (the Sensor 7 cues and the T5 sensor-side
+// spot) are the values this harness measures now; the other rows keep the hand simulation.
 const C2_PARITY: Record<string, Partial<Record<BehaviourActor, { looks: number; forced: number; period: number; gapS: number }>>> = {
-  S7: { inspector: { looks: 7, forced: 1.8, period: 4, gapS: 12.0 }, dog: { looks: 6, forced: 3.6, period: 5, gapS: 18.0 },
-    crow: { looks: 2, forced: 75, period: 159, gapS: 56.0 } },
-  S8: { inspector: { looks: 6, forced: 3.0, period: 6, gapS: 12.0 }, dog: { looks: 6, forced: 3.6, period: 5, gapS: 18.0 },
-    crow: { looks: 3, forced: 4.5, period: 9, gapS: 15.3 }, girl: { looks: 2, forced: 99, period: 143, gapS: 0 } },
-  S9: { inspector: { looks: 7, forced: 1.8, period: 5, gapS: 12.0 }, dog: { looks: 6, forced: 3.6, period: 5, gapS: 18.0 },
-    crow: { looks: 3, forced: 4.5, period: 9, gapS: 15.3 }, girl: { looks: 2, forced: 99, period: 143, gapS: 0 } },
-  S9lb: { inspector: { looks: 7, forced: 1.8, period: 5, gapS: 12.0 }, dog: { looks: 8, forced: 1.0, period: 6, gapS: 18.0 },
-    crow: { looks: 3, forced: 4.5, period: 9, gapS: 15.3 }, girl: { looks: 2, forced: 99, period: 143, gapS: 0 } },
-  S10: { inspector: { looks: 5, forced: 7.8, period: 6, gapS: 10.0 }, dog: { looks: 6, forced: 3.6, period: 5, gapS: 18.0 },
+  S7: { inspector: { looks: 7, forced: 1.8, period: 4, gapS: 12.0 }, dog: { looks: 6, forced: 4.1, period: 5, gapS: 16.0 },
+    crow: { looks: 6, forced: 4.6, period: 5, gapS: 5.7 } },
+  S8: { inspector: { looks: 5, forced: 4.3, period: 4, gapS: 12.0 }, dog: { looks: 6, forced: 4.6, period: 4, gapS: 16.0 },
+    crow: { looks: 7, forced: 2.3, period: 6, gapS: 4.9 }, girl: { looks: 2, forced: 99, period: 143, gapS: 0 } },
+  S9: { inspector: { looks: 7, forced: 1.8, period: 5, gapS: 12.0 }, dog: { looks: 6, forced: 4.3, period: 6, gapS: 16.0 },
+    crow: { looks: 7, forced: 2.1, period: 6, gapS: 4.8 }, girl: { looks: 2, forced: 99, period: 143, gapS: 0 } },
+  S9lb: { inspector: { looks: 7, forced: 1.8, period: 5, gapS: 12.0 }, dog: { looks: 8, forced: 1.7, period: 4, gapS: 16.0 },
+    crow: { looks: 7, forced: 2.6, period: 6, gapS: 4.8 }, girl: { looks: 2, forced: 99, period: 143, gapS: 0 } },
+  S10: { inspector: { looks: 4, forced: 11.5, period: 6, gapS: 10.0 }, dog: { looks: 6, forced: 2.7, period: 6, gapS: 16.0 },
     girl: { looks: 2, forced: 99, period: 143, gapS: 0 } },
   S11: { inspector: { looks: 8, forced: 1.5, period: 6, gapS: 15.8 }, dog: { looks: 7, forced: 6.1, period: 5, gapS: 18.0 },
     crow: { looks: 4, forced: 22.8, period: 7, gapS: 2.5 }, girl: { looks: 3, forced: 90, period: 16, gapS: 0 } },
@@ -104,15 +106,15 @@ const C2_PARITY: Record<string, Partial<Record<BehaviourActor, { looks: number; 
     crow: { looks: 3, forced: 12.9, period: 14, gapS: 25.7 }, girl: { looks: 4, forced: 6.3, period: 8, gapS: 26.2 } },
 };
 
-// Per-state, per-actor V4 limit (denizens 20 s; era V 30 s; the era I crow 60 s) and static cap (eras I-IV 18 s, era V 25 s; the crow's
-// frozen 55 s).
+// Per-state, per-actor V4 limit (denizens 20 s; era V 30 s; the era I crow 20 s, WP27 D5) and static cap (eras I-IV 18 s, era V 25 s; the
+// era I crow has no frozen hold any more and is held to the hold cap).
 function gapLimitMs(state: EraState, actor: BehaviourActor): number {
   if (state.era === 5) return T.v4EraVMs;
   if (state.era === 1 && actor === 'crow') return T.v4CrowIMs;
   return T.v4DenizenMs;
 }
 function staticCapMs(state: EraState, actor: BehaviourActor): number {
-  if (state.era === 1 && actor === 'crow') return T.v3CrowIFrozenMs;
+  if (state.era === 1 && actor === 'crow') return T.v3HoldMs;
   return state.era === 5 ? T.v3StaticVMs : T.v3StaticEarlyMs;
 }
 
@@ -178,7 +180,7 @@ function foldLane(agg: LaneAgg, state: EraState, l: LaneRun, minutes: number, dt
       if (e.activity === 'stare') agg.stareMaxMs = Math.max(agg.stareMaxMs, e.durMs);
     }
   }
-  for (const e of naturalEntries(l.log, WAKE_IDS)) agg.naturalMinMs = Math.min(agg.naturalMinMs, e.durMs);
+  for (const e of naturalEntries(l.log, SHORT_IDS)) agg.naturalMinMs = Math.min(agg.naturalMinMs, e.durMs);
   const t = l.track;
   agg.staticMaxMs = Math.max(agg.staticMaxMs, t.maxStaticMs);
   agg.walkRunMaxMs = Math.max(agg.walkRunMaxMs, t.maxWalkRunMs);
@@ -229,10 +231,10 @@ describe('the era states are the smoke stage lists through the real maths', () =
   it('every state carries the stage its plan row names (era, playback mode, the girl, the stare, the vents, the sensor and scraps)', () => {
     const byId = Object.fromEntries(ERA_SPECS.map((s) => [s.id, eraStateOf(s)]));
     expect(byId.S7).toMatchObject({ era: 1, mode: 'fps4', framing: 'e1', girlStage: 'window', sensor: true, scraps: true, stare: false });
-    expect(byId.S8).toMatchObject({ era: 2, mode: 'fps8', framing: 's8', girlStage: 'mini', sensor: false, stare: false });
+    expect(byId.S8).toMatchObject({ era: 2, mode: 'fps8', framing: 's8', girlStage: 'mini', sensor: true, stare: false });
     expect(byId.S9).toMatchObject({ era: 2, mode: 'fps8', framing: 's9', girlStage: 'mini', sensor: true, holeDig: false });
     expect(byId.S9lb).toMatchObject({ era: 2, holeDig: true });
-    expect(byId.S10).toMatchObject({ era: 3, framing: 's10', girlStage: 'mini', sensor: false, scraps: false, vents: false });
+    expect(byId.S10).toMatchObject({ era: 3, framing: 's10', girlStage: 'mini', sensor: true, scraps: false, vents: false });
     expect(byId.S10?.cast.crow).toBeNull();
     expect(byId.S11).toMatchObject({ era: 3, vents: true, girlStage: 'mini', gusts: true });
     expect(byId.S11c3).toMatchObject({ era: 3, girlStage: 'ground', cycle: 3 });
@@ -293,12 +295,11 @@ describe.each(ERA_SPECS)('living world metrics over $id (60 min x seeds 1-5 x 16
     }
   }, TIMEOUT_MS);
 
-  it('V3: holds 1-45 s (the crow I frozen 55 s), travel walks <= 6 s, static runs within their caps, unison and stare within their beats', () => {
+  it('V3: holds 1-45 s, travel walks <= 6 s, static runs within their caps, unison and stare within their beats', () => {
     const a = getAgg();
     for (const lane of Object.values(a.lanes)) {
       if (lane === undefined) continue;
-      const holdCap = state.era === 1 && lane.actor === 'crow' ? T.v3CrowIFrozenMs : T.v3HoldMs;
-      expect(lane.holdMaxMs, `${spec.id} ${lane.actor} longest hold`).toBeLessThanOrEqual(holdCap);
+      expect(lane.holdMaxMs, `${spec.id} ${lane.actor} longest hold`).toBeLessThanOrEqual(T.v3HoldMs);
       expect(lane.walkedMaxMs, `${spec.id} ${lane.actor} longest travel`).toBeLessThanOrEqual(T.v3HoldMs + T.v3WalkMs);
       expect(lane.naturalMinMs, `${spec.id} ${lane.actor} shortest natural hold`).toBeGreaterThanOrEqual(UNIT_MS);
       expect(lane.walkRunMaxMs, `${spec.id} ${lane.actor} longest walk`).toBeLessThanOrEqual(T.v3WalkMs + 2 * dtMax());
@@ -312,7 +313,7 @@ describe.each(ERA_SPECS)('living world metrics over $id (60 min x seeds 1-5 x 16
     }
   }, TIMEOUT_MS);
 
-  it('V4: something changes at least every 20 s (era V 30 s, the era I crow 60 s)', () => {
+  it('V4: something changes at least every 20 s (era V 30 s, the era I crow 20 s)', () => {
     const a = getAgg();
     for (const lane of Object.values(a.lanes)) {
       if (lane === undefined || lane.gapMaxMs === 0) continue;

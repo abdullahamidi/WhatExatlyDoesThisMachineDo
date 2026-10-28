@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUDIO } from '../data/audio';
+import { FAULTS } from '../data/faults';
 import { MUSIC } from '../data/music';
 import type { FinaleBeat } from '../data/finale';
 import type { MachineComponentId } from '../data/machineComponents';
@@ -55,6 +56,8 @@ function createFakeSynth() {
     playResolveChord: vi.fn(),
     playChirps: vi.fn(),
     playStamp: vi.fn(),
+    playFaultSpawn: vi.fn(),
+    playFaultClear: vi.fn(),
     playBlip: vi.fn(),
     playRing: vi.fn(),
     setDialTone: vi.fn(),
@@ -454,6 +457,113 @@ describe('gameAudio world sounds', () => {
     clearSynthCalls();
     feedback.worldSound.emit({ kind: 'ring' });
     expect(fake.playRing).not.toHaveBeenCalled();
+  });
+});
+
+describe('gameAudio fault cues (WP27)', () => {
+  /** Spawns one fault now: the debug hook, then one eligible step (the same route the GameSession fault tests use). */
+  function spawnNow(session: GameSession): void {
+    expect(session.debugForceFault()).toBe(true);
+    session.stepFaults(FAULTS.maxStepS, true);
+  }
+
+  it('a spawn plays one spawn cue in the era of the session and counts it', () => {
+    const { session, audio } = buildRig({ faultLamp: 1, boiler: 1 });
+    clearSynthCalls();
+    spawnNow(session);
+    expect(fake.playFaultSpawn).toHaveBeenCalledTimes(1);
+    expect(lastArgs(fake.playFaultSpawn)).toEqual([3]);
+    expect(fake.playFaultClear).not.toHaveBeenCalled();
+    expect(audio.stats().faultSpawnCues).toBe(1);
+    expect(audio.stats().faultClearCues).toBe(0);
+  });
+
+  it('era I with only the Fault Lamp: the spawn cue is the era I one', () => {
+    const { session } = buildRig({ faultLamp: 1 });
+    clearSynthCalls();
+    spawnNow(session);
+    expect(lastArgs(fake.playFaultSpawn)).toEqual([1]);
+  });
+
+  it('era V with the null chamber: the spawn cue is the era V one', () => {
+    const { session } = buildRig({ faultLamp: 1, nullChamber: 1 });
+    clearSynthCalls();
+    spawnNow(session);
+    expect(lastArgs(fake.playFaultSpawn)).toEqual([5]);
+  });
+
+  it('a clear plays one clear cue and counts it; without Overdrive the tick does not rise', () => {
+    const { session, audio } = buildRig({ faultLamp: 1 });
+    spawnNow(session);
+    clearSynthCalls();
+    expect(session.clearFault()).not.toBeNull();
+    expect(fake.playFaultClear).toHaveBeenCalledTimes(1);
+    expect(lastArgs(fake.playFaultClear)).toEqual([false]);
+    expect(fake.playFaultSpawn).not.toHaveBeenCalled();
+    expect(audio.stats().faultClearCues).toBe(1);
+    expect(audio.stats().faultSpawnCues).toBe(1);
+  });
+
+  it('a clear under Overdrive passes overdrive true (overrunClutch grants it)', () => {
+    const { session } = buildRig({ faultLamp: 1, overrunClutch: 1 });
+    spawnNow(session);
+    clearSynthCalls();
+    expect(session.clearFault()).not.toBeNull();
+    expect(fake.playFaultClear).toHaveBeenCalledTimes(1);
+    expect(lastArgs(fake.playFaultClear)).toEqual([true]);
+  });
+
+  it('an expire plays no cue and counts nothing', () => {
+    const { session, audio } = buildRig({ faultLamp: 1 });
+    const kinds: string[] = [];
+    session.on('fault', (p) => kinds.push(p.kind));
+    spawnNow(session);
+    clearSynthCalls();
+    for (let i = 0; i < 80 && !kinds.includes('expire'); i++) session.stepFaults(FAULTS.maxStepS, true);
+    expect(kinds).toContain('expire');
+    expect(fake.playFaultSpawn).not.toHaveBeenCalled();
+    expect(fake.playFaultClear).not.toHaveBeenCalled();
+    expect(audio.stats().faultSpawnCues).toBe(1);
+    expect(audio.stats().faultClearCues).toBe(0);
+  });
+
+  it('muted: a spawn and a clear play nothing and count nothing', () => {
+    const { session, audio } = buildRig({ faultLamp: 1, overrunClutch: 1 });
+    session.updateSettings({ muted: true });
+    clearSynthCalls();
+    spawnNow(session);
+    session.clearFault();
+    expect(fake.playFaultSpawn).not.toHaveBeenCalled();
+    expect(fake.playFaultClear).not.toHaveBeenCalled();
+    expect(audio.stats().faultSpawnCues).toBe(0);
+    expect(audio.stats().faultClearCues).toBe(0);
+  });
+
+  it('before the first gesture nothing plays and the counters read 0', () => {
+    const { session, audio } = buildRig({ faultLamp: 1 }, false);
+    spawnNow(session);
+    expect(fake.playFaultSpawn).not.toHaveBeenCalled();
+    expect(audio.stats().faultSpawnCues).toBe(0);
+  });
+
+  it('the sfx bus carries the SFX volume the fault cues play through', () => {
+    const { session } = buildRig({ faultLamp: 1 });
+    session.updateSettings({ sfxVolume: 50 });
+    expect(lastNumber(fake.setBusGain, 1, 'sfx')).toBeCloseTo(0.5, 12);
+    spawnNow(session);
+    expect(fake.playFaultSpawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('dispose unsubscribes the fault cues and resets the counters', () => {
+    const { session, audio } = buildRig({ faultLamp: 1 });
+    spawnNow(session);
+    expect(audio.stats().faultSpawnCues).toBe(1);
+    audio.dispose();
+    expect(audio.stats().faultSpawnCues).toBe(0);
+    expect(audio.stats().faultClearCues).toBe(0);
+    clearSynthCalls();
+    session.clearFault();
+    expect(fake.playFaultClear).not.toHaveBeenCalled();
   });
 });
 

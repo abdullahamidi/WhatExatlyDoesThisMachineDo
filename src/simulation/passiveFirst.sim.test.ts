@@ -15,6 +15,8 @@ import type { GreedyOptions, GreedyResult, IncomeSplit } from './sim/greedy';
 // Profiles are literals (no import from other test files). One run per profile in beforeAll; the tests only
 // assert, and the tables are printed (console.info). No randomness, no rendering. The file clock is the only
 // clock use. Re-run: npx vitest run src/simulation/passiveFirst.sim.test.ts
+// WP27 (playtest 2026-10-27) re-targets: era I is hand-led, so the early bounds are looser and the ME check starts at
+// the Generator Blueprint. A, B, C and R15 also run the Machine Faults process (`faults`); the passive profiles do not.
 
 const MINUTE = 60; // seconds per minute (the windows are written in minutes)
 // The sim runs are heavy: 45 s is the budget for the whole file at --maxWorkers=1 (signoff uses 30 s for less work).
@@ -29,8 +31,8 @@ const FRONTIER_FACTOR = 1.5;
 const SERVO_TENTH_NOT_BEFORE = 40 * MINUTE;
 const SERVO_SUBSTATION_MIN_LEVEL = 4;
 
-// A's snapshots, in the order they are owned. The ME check runs on all of them (pistonArray is first); the frontier
-// check runs from the substation snapshot on (era II onwards).
+// A's snapshots, in the order they are owned. The ME check runs from the Generator Blueprint on (era I is hand-led, so
+// pistonArray is recorded but not checked); the frontier check runs from the substation snapshot on (era II onwards).
 const A_SNAPSHOTS: readonly TechId[] = [
   'pistonArray',
   'generatorBlueprint',
@@ -42,6 +44,9 @@ const A_SNAPSHOTS: readonly TechId[] = [
   'primaryFunction',
 ];
 const FRONTIER_SNAPSHOTS: readonly TechId[] = A_SNAPSHOTS.slice(A_SNAPSHOTS.indexOf('substationBlueprint'));
+// WHY: era I is hand-led (WP27 playtest): the ME check starts at the Generator Blueprint, where passive output reaches
+// 4 clicks' worth of output per second.
+const ME_SNAPSHOTS: readonly TechId[] = A_SNAPSHOTS.slice(A_SNAPSHOTS.indexOf('generatorBlueprint'));
 
 const ERAS: readonly EraNumber[] = [1, 2, 3, 4, 5];
 const MANUAL_SHARE_ERAS: readonly EraNumber[] = [2, 3, 4, 5]; // era I is report only
@@ -55,11 +60,12 @@ interface GateRow {
   readonly p1Max: number;
   readonly p0Max: number;
 }
+// WP27 (P8): the 2026-10-27 playtest supersedes the WP25 passive-from-minute-1 reading (era I is hand-led).
 const GATE_ROWS: readonly GateRow[] = [
-  { id: 'substationBlueprint', label: 'substation (era II)', p1Max: 1.3, p0Max: 1.5 },
-  { id: 'pressureVesselBlueprint', label: 'vessel (era III)', p1Max: 1.3, p0Max: 1.45 },
-  { id: 'harmonicConvergence', label: 'convergence (era IV)', p1Max: 1.3, p0Max: 1.4 },
-  { id: 'primaryFunction', label: 'primaryFunction (era V)', p1Max: 1.25, p0Max: 1.35 },
+  { id: 'substationBlueprint', label: 'substation (era II)', p1Max: 1.4, p0Max: 1.55 },
+  { id: 'pressureVesselBlueprint', label: 'vessel (era III)', p1Max: 1.45, p0Max: 1.6 },
+  { id: 'harmonicConvergence', label: 'convergence (era IV)', p1Max: 1.45, p0Max: 1.65 },
+  { id: 'primaryFunction', label: 'primaryFunction (era V)', p1Max: 1.45, p0Max: 1.7 },
 ];
 
 // Click rules: clicks per second for the step ending at t, read from the state before that step's clicks.
@@ -75,6 +81,8 @@ const clicksP1e = (s: Readonly<GameState>): number => (s.techLevels.motorTuning 
 // P1 = 4 cps until the Generator, then 0.5 cps, buy 1 s. P2 = P1 with buys every 30 s. P0 = 4 cps until the Generator,
 // then 0. Q = 0.5 cps for the whole run, buy 1 s. R15 = 15 cps (report only). P1e = 4 cps until Motor Tuning 5, then
 // 0.5 cps, buy 1 s, stops at the Generator Blueprint. The demo variants of P1e and Q add the edition era cap.
+// WP27: A, B, C and R15 also run the Machine Faults process (`faults`: catch chance, reaction seconds). P1, P2, P0, Q
+// and P1e run none: a missed fault costs them nothing, so they stay as they were.
 const A_OPTIONS: GreedyOptions = {
   seconds: RUN_SECONDS,
   clicksPerSecond: 4,
@@ -83,6 +91,7 @@ const A_OPTIONS: GreedyOptions = {
   stopAt: 'primaryFunction',
   trackIncome: true,
   snapshotAt: A_SNAPSHOTS,
+  faults: { catchProb: 1, reactionSeconds: 2 },
 };
 const P1_OPTIONS: GreedyOptions = {
   seconds: RUN_SECONDS,
@@ -123,6 +132,7 @@ const R15_OPTIONS: GreedyOptions = {
   stepSeconds: 1,
   buyIntervalSeconds: 1,
   stopAt: 'primaryFunction',
+  faults: { catchProb: 1, reactionSeconds: 2 },
 };
 const P1E_OPTIONS: GreedyOptions = {
   seconds: RUN_SECONDS,
@@ -139,6 +149,7 @@ const B_OPTIONS: GreedyOptions = {
   buyIntervalSeconds: 30,
   stopAt: 'substationBlueprint',
   snapshotAt: ['substationBlueprint'],
+  faults: { catchProb: 1, reactionSeconds: 3 },
 };
 const C_OPTIONS: GreedyOptions = {
   seconds: RUN_SECONDS,
@@ -147,6 +158,7 @@ const C_OPTIONS: GreedyOptions = {
   buyIntervalSeconds: 30,
   stopAt: 'substationBlueprint',
   snapshotAt: ['substationBlueprint'],
+  faults: { catchProb: 0.5, reactionSeconds: 4 },
 };
 
 /** Demo era cap from the edition data (never retyped here). A null cap would mean the edition is not the demo. */
@@ -287,15 +299,15 @@ beforeAll(() => {
           'P2 (P1, buy 30 s)',
           formatMmSs(p2.firstAt.primaryFunction),
           ratio3(ratioOf(p2, a, 'primaryFunction')),
-          '<= 1.35',
-          pass(ratioOf(p2, a, 'primaryFunction') <= 1.35),
+          '<= 1.55',
+          pass(ratioOf(p2, a, 'primaryFunction') <= 1.55),
         ],
         [
           'Q (0.5 cps, buy 1 s)',
           formatMmSs(q.firstAt.primaryFunction),
           ratio3(ratioOf(q, a, 'primaryFunction')),
-          '<= 1.50',
-          pass(ratioOf(q, a, 'primaryFunction') <= 1.5),
+          '<= 1.60',
+          pass(ratioOf(q, a, 'primaryFunction') <= 1.6),
         ],
         [
           'P0 (4 cps then 0)',
@@ -312,14 +324,14 @@ beforeAll(() => {
       'Q per-gate ratios (Q / A, active seconds)',
       ['gate', 'A (mm:ss)', 'Q (mm:ss)', 'Q / A', 'asserted', 'check'],
       [
-        ['blueprint (era I)', formatMmSs(a.firstAt.generatorBlueprint), formatMmSs(q.firstAt.generatorBlueprint), ratio3(ratioOf(q, a, 'generatorBlueprint')), '<= 2.00', pass(ratioOf(q, a, 'generatorBlueprint') <= 2)],
+        ['blueprint (era I)', formatMmSs(a.firstAt.generatorBlueprint), formatMmSs(q.firstAt.generatorBlueprint), ratio3(ratioOf(q, a, 'generatorBlueprint')), '<= 2.30', pass(ratioOf(q, a, 'generatorBlueprint') <= 2.3)],
         ...GATE_ROWS.map((row) => [
           row.label,
           formatMmSs(a.firstAt[row.id]),
           formatMmSs(q.firstAt[row.id]),
           ratio3(ratioOf(q, a, row.id)),
-          row.id === 'primaryFunction' ? '<= 1.50' : 'report',
-          row.id === 'primaryFunction' ? pass(ratioOf(q, a, row.id) <= 1.5) : 'report',
+          row.id === 'primaryFunction' ? '<= 1.60' : 'report',
+          row.id === 'primaryFunction' ? pass(ratioOf(q, a, row.id) <= 1.6) : 'report',
         ]),
       ],
     ),
@@ -384,22 +396,22 @@ beforeAll(() => {
           'P1e full (4 cps to motorTuning 5, then 0.5)',
           formatMmSs(p1eFull.firstAt.generatorBlueprint),
           ratio3(ratioOf(p1eFull, a, 'generatorBlueprint')),
-          '<= 1.35',
-          pass(ratioOf(p1eFull, a, 'generatorBlueprint') <= 1.35),
+          '<= 2.10',
+          pass(ratioOf(p1eFull, a, 'generatorBlueprint') <= 2.1),
         ],
         [
           'P1e demo (maxEra 2)',
           formatMmSs(p1eDemo.firstAt.generatorBlueprint),
           ratio3(ratioOf(p1eDemo, a, 'generatorBlueprint')),
-          '<= 1.35, = full',
-          pass(ratioOf(p1eDemo, a, 'generatorBlueprint') <= 1.35 && p1eDemo.firstAt.generatorBlueprint === p1eFull.firstAt.generatorBlueprint),
+          '<= 2.10, = full',
+          pass(ratioOf(p1eDemo, a, 'generatorBlueprint') <= 2.1 && p1eDemo.firstAt.generatorBlueprint === p1eFull.firstAt.generatorBlueprint),
         ],
         [
           'Q full (0.5 cps)',
           formatMmSs(q.firstAt.generatorBlueprint),
           ratio3(ratioOf(q, a, 'generatorBlueprint')),
-          '<= 2.00',
-          pass(ratioOf(q, a, 'generatorBlueprint') <= 2),
+          '<= 2.30',
+          pass(ratioOf(q, a, 'generatorBlueprint') <= 2.3),
         ],
         [
           'Q demo (maxEra 2, 0.5 cps)',
@@ -466,16 +478,16 @@ describe('passive-first: era gates, P1 and P0 vs A', () => {
 });
 
 describe('passive-first: P2, Q and clicks never worthless', () => {
-  it('P2 (P1 with buys every 30 s) primaryFunction <= 1.35 x A', () => {
+  it('P2 (P1 with buys every 30 s) primaryFunction <= 1.55 x A', () => {
     const r = ratioOf(p2, a, 'primaryFunction');
     expect(Number.isFinite(r)).toBe(true);
-    expect(r).toBeLessThanOrEqual(1.35);
+    expect(r).toBeLessThanOrEqual(1.55);
   });
 
-  it('Q (0.5 cps for the whole run) primaryFunction <= 1.50 x A', () => {
+  it('Q (0.5 cps for the whole run) primaryFunction <= 1.60 x A', () => {
     const r = ratioOf(q, a, 'primaryFunction');
     expect(Number.isFinite(r)).toBe(true);
-    expect(r).toBeLessThanOrEqual(1.5);
+    expect(r).toBeLessThanOrEqual(1.6);
   });
 
   it('P0 (no clicks after the Generator) primaryFunction >= 1.05 x A', () => {
@@ -486,16 +498,17 @@ describe('passive-first: P2, Q and clicks never worthless', () => {
 });
 
 describe('passive-first: era I passive target (P1e and Q at generatorBlueprint)', () => {
-  it('P1e (4 cps until motorTuning 5, then 0.5) blueprint <= 1.35 x A', () => {
+  // WHY (WP27): era I is hand-led by design (the 2026-10-27 playtest), so its passive target is looser than WP25's.
+  it('P1e (4 cps until motorTuning 5, then 0.5) blueprint <= 2.10 x A', () => {
     const r = ratioOf(p1eFull, a, 'generatorBlueprint');
     expect(Number.isFinite(r)).toBe(true);
-    expect(r).toBeLessThanOrEqual(1.35);
+    expect(r).toBeLessThanOrEqual(2.1);
   });
 
-  it('Q (0.5 cps) blueprint <= 2.00 x A', () => {
+  it('Q (0.5 cps) blueprint <= 2.30 x A', () => {
     const r = ratioOf(q, a, 'generatorBlueprint');
     expect(Number.isFinite(r)).toBe(true);
-    expect(r).toBeLessThanOrEqual(2);
+    expect(r).toBeLessThanOrEqual(2.3);
   });
 
   it('P1e full and demo reach the Generator Blueprint at the same second', () => {
@@ -521,7 +534,7 @@ describe('passive-first: manual share of A (eras II to V)', () => {
 });
 
 describe('passive-first: machine output per click (A snapshots)', () => {
-  for (const id of A_SNAPSHOTS) {
+  for (const id of ME_SNAPSHOTS) {
     it(`at ${id}: ME passive >= 4 x perClick.me`, () => {
       const rates = computeRates(snapshotOf(a, id), TECHNOLOGIES);
       expect(rates.perSecond.me).toBeGreaterThanOrEqual(REF_CPS * rates.perClick.me);

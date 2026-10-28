@@ -84,13 +84,13 @@ describe('echoMultiplier', () => {
     expect(echoMultiplier(DEFAULT_PRESTIGE)).toBe(1);
   });
 
-  it('is 1 + 15 % per earned Echo', () => {
-    expect(echoMultiplier(prestige(2, 3))).toBeCloseTo(1.45, 9);
+  it('is 1 + 14 % per earned Echo', () => {
+    expect(echoMultiplier(prestige(2, 3))).toBeCloseTo(1.42, 9);
   });
 
-  it('caps the counted Echoes at 30', () => {
-    expect(echoMultiplier(prestige(3, 40))).toBeCloseTo(5.5, 9);
-    expect(echoMultiplier(prestige(3, 30))).toBeCloseTo(5.5, 9);
+  it('caps the counted Echoes at 12', () => {
+    expect(echoMultiplier(prestige(3, 40))).toBeCloseTo(2.68, 9);
+    expect(echoMultiplier(prestige(3, 12))).toBeCloseTo(2.68, 9);
   });
 
   it('uses the given rules', () => {
@@ -191,7 +191,7 @@ describe('cycleTechs', () => {
     expect(extra?.type).toBe('rateMult');
     if (extra?.type !== 'rateMult') throw new Error('expected rateMult');
     expect(extra.res).toBe('all');
-    expect(extra.factor).toBeCloseTo(1.45, 9);
+    expect(extra.factor).toBeCloseTo(1.42, 9);
   });
 
   it('adds exactly the expected extra effects for all perks', () => {
@@ -203,10 +203,10 @@ describe('cycleTechs', () => {
     expect(effects[2]).toEqual({ type: 'offlineHours', hours: 4 });
     expect(effects[3]).toEqual({ type: 'autoClick', perSecond: 1 });
     if (effects[1]?.type !== 'rateMult') throw new Error('expected rateMult');
-    expect(effects[1].factor).toBeCloseTo(2.65, 9);
+    expect(effects[1].factor).toBeCloseTo(2.54, 9);
   });
 
-  it('residual charge multiplies every convert amount by 1.5', () => {
+  it('residual charge multiplies every convert amount by 1.1', () => {
     const out = cycleTechs(TECHNOLOGIES, prestige(2, 2, ['residualCharge']));
     let converts = 0;
     for (const id of TECH_IDS) {
@@ -216,7 +216,7 @@ describe('cycleTechs', () => {
       before.forEach((b, i) => {
         const a = after[i];
         if (b.type !== 'convert' || a?.type !== 'convert') throw new Error('expected convert');
-        expect(a.amount).toBeCloseTo(b.amount * 1.5, 9);
+        expect(a.amount).toBeCloseTo(b.amount * 1.1, 9);
         expect(a.res).toBe(b.res);
         converts += 1;
       });
@@ -256,9 +256,9 @@ describe('computeRates with cycleTechs', () => {
     const base = computeRates(eraOne, TECHNOLOGIES);
     const techs = cycleTechs(TECHNOLOGIES, prestige(2, 3));
     const boosted = computeRates(eraOne, techs);
-    expect(base.perSecond.me).toBeCloseTo(17, 9);
+    expect(base.perSecond.me).toBeCloseTo(2, 9);
     for (const r of ['me', 'ee', 'pr', 'rs', 'xf'] as const) {
-      expect(boosted.perSecond[r]).toBeCloseTo(base.perSecond[r] * 1.45, 9);
+      expect(boosted.perSecond[r]).toBeCloseTo(base.perSecond[r] * 1.42, 9);
     }
     expect(boosted.perClick.me).toBeCloseTo(base.perClick.me, 9);
   });
@@ -411,7 +411,7 @@ describe('cyclePreview', () => {
     expect(cyclePreview(withXf(5.36e8, { phase: 'postgame', engagedAt: 0 }), DEFAULT_PRESTIGE).allowed).toBe(true);
   });
 
-  it('default run: 3 Echoes, +45 % all per second, next threshold 2e9', () => {
+  it('default run: 3 Echoes, +42 % all per second, next threshold 2e9', () => {
     const preview = cyclePreview(withXf(5.36e8, revealed), DEFAULT_PRESTIGE);
     expect(preview).toEqual({
       allowed: true,
@@ -419,7 +419,7 @@ describe('cyclePreview', () => {
       label: 'CYCLE 0043',
       echoesGained: 3,
       echoesAfter: 3,
-      bonusPctAfter: 45,
+      bonusPctAfter: 42,
       nextBonusXf: 2e9,
     });
   });
@@ -432,10 +432,10 @@ describe('cyclePreview', () => {
     expect(preview.nextCycle).toBe(3);
   });
 
-  it('caps the bonus at 30 counted Echoes', () => {
+  it('caps the bonus at 12 counted Echoes', () => {
     const preview = cyclePreview(withXf(3.2e10, revealed), prestige(5, 30));
     expect(preview.echoesAfter).toBe(36);
-    expect(preview.bonusPctAfter).toBe(450);
+    expect(preview.bonusPctAfter).toBe(168);
   });
 
   it('nextBonusXf is the next threshold above the lifetime xf, null past the last one', () => {

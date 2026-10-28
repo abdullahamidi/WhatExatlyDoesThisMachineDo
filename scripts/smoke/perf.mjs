@@ -142,6 +142,18 @@ const buyFn = (buys) => {
   return o;
 };
 
+// WP27 F6.4: the hook buys do not commit cast placements (the placement gate wants the TECH INDEX open). Open the index, wait, close it,
+// clear the era card (the commit() sequence of the WP27 Art Director diagnosis), so the frames read the placements of the buys.
+async function commitPlacements(page) {
+  await page.keyboard.press('t');
+  await page.waitForTimeout(1200);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(2500);
+  await page.evaluate(() => { const c = document.getElementById('era-card'); if (c && !c.hidden) c.click(); });
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(400);
+}
+
 // ---- page helpers --------------------------------------------------------------------------------
 // WebGL renderer of a probe canvas (not the game canvas). software = SwiftShader / llvmpipe / basic render.
 async function rendererProbe(page) {
@@ -451,6 +463,8 @@ async function runStage(browser, st, ctxRes, errors, frames) {
       await page.locator('button', { hasText: 'KEEP IT RUNNING' }).first().click({ timeout: 5000 })
         .catch((e) => errors.push(`${st.name}: keep ${String(e).split('\n')[0]}`));
     }
+    // WP27 F6.4: commit the cast placements of the buys (after the postgame skip, so no finale is running)
+    if (st.buys.length > 0) await commitPlacements(page);
     await page.waitForTimeout(10000); // warm-up
     const samples = [];
     for (let k = 0; k < 3; k++) {

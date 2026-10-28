@@ -1,3 +1,4 @@
+import { FAULTS } from '../../data/faults';
 import { TECHNOLOGIES } from '../../data/technologies';
 import { RESOURCE_IDS, TECH_IDS } from '../../data/types';
 import type { GameState, ResourceId, ResourceMap, TechDefinition, TechId, TechStatus } from '../../data/types';
@@ -11,10 +12,14 @@ import { currentEra } from '../progression/era';
 import { evaluateMilestones } from '../progression/milestones';
 import type { EraCap } from '../progression/edition';
 import { createInitialState } from '../state';
-import { emptyResourceMap } from '../resources';
+import { addMaps, emptyResourceMap, scaleMap } from '../resources';
+import { clearFault, consumeOverdrive, createFaultClock, faultParams, nextUnit, stepFaultClock } from '../faults';
+import type { FaultClock } from '../faults';
+import { refillWindup, releaseWindup, windupParams } from '../production/windup';
 
 // Reusable deterministic greedy-player harness for balance simulations. Pure: no clock, no
-// randomness, no console, no timers. Policy: per resource, buy the cheapest available
+// console, no timers; the only randomness is the seeded Machine Faults clock (the `faults` option).
+// Policy: per resource, buy the cheapest available
 // non-milestone tech whose costRes is that resource (ties: TECH_IDS order), only if affordable.
 
 /**
@@ -27,10 +32,24 @@ export interface GreedySchedule {
   offlineSeconds: number;
 }
 
-/** One era's income in one run: `manual` = click gains, `passive` = automation (auto-cranks incl.) + offline credit. */
+/**
+ * One era's income in one run. `manual` = click gains, the wind-up release included; `passive` = automation (auto-cranks
+ * incl.) + offline credit; `release` = the wind-up part of `manual`; `fault` = Machine Faults payouts + Overdrive extra.
+ * manual + passive + fault is the lifetime gained in that era.
+ */
 export interface IncomeSplit {
   manual: ResourceMap;
   passive: ResourceMap;
+  release: ResourceMap;
+  fault: ResourceMap;
+}
+
+/** Machine Faults process: catchProb = chance that a spawn is cleared; reactionSeconds = seconds from spawn to the clear. */
+export interface GreedyFaults {
+  catchProb: number;
+  reactionSeconds: number;
+  /** Spawn clock seed; absent = FAULTS.seed (the catch draws use a seed derived from it). */
+  seed?: number;
 }
 
 export interface GreedyOptions {
@@ -54,8 +73,31 @@ export interface GreedyOptions {
    * Overrides clicksPerSecond. A result that is not finite or is < 0 throws RangeError.
    */
   clickRate?: (state: Readonly<GameState>, t: number) => number;
-  /** Split income into manual (clicks) and passive (automation + offline) per era. Bookkeeping only: the run is unchanged. */
+  /** Split income into manual, passive, release and fault per era. Bookkeeping only: the run is unchanged. */
   trackIncome?: boolean;
+  /** Machine Faults process. Absent = no fault process: nobody clears faults (no fault income, no `faults` result). */
+  faults?: GreedyFaults;
+  /** Take a sample at every step whose active time is a multiple of this (float-safe, like buyIntervalSeconds). */
+  sampleEverySeconds?: number;
+}
+
+/** Machine Faults counts of one run. firstSpawnAt = active t of the first spawn (null = no spawn). */
+export interface GreedyFaultStats {
+  spawned: number;
+  caught: number;
+  missed: number;
+  firstSpawnAt: number | null;
+}
+
+/** One sample of a run, taken after the step's advance and before its buys. */
+export interface GreedySample {
+  t: number;
+  perClick: ResourceMap;
+  perSecond: ResourceMap;
+  /** Wind-up capacity in seconds of output at this step (0 = no wind-up owned). */
+  windupCap: number;
+  /** Cumulative copy since t = 0 (later steps never change it). Present only when `trackIncome` is true. */
+  income?: Record<EraNumber, IncomeSplit>;
 }
 
 export interface GreedyResult {
@@ -71,6 +113,10 @@ export interface GreedyResult {
   wallSeconds?: number;
   /** Present only when `trackIncome` is true. All five eras exist; era = currentEra at the start of each step. */
   income?: Record<EraNumber, IncomeSplit>;
+  /** Present only when `faults` was given. */
+  faults?: GreedyFaultStats;
+  /** Present only when `sampleEverySeconds` was given. */
+  samples?: GreedySample[];
 }
 
 /** One purchase with its price and the level it brought the tech to. */
@@ -124,8 +170,24 @@ function pickCheapest(list: readonly Candidate[], res: ResourceId): Candidate | 
 
 /** All five eras with zero income, so a tracked run always has every era key (also the never-visited ones). */
 function emptyIncome(): Record<EraNumber, IncomeSplit> {
-  const split = (): IncomeSplit => ({ manual: emptyResourceMap(), passive: emptyResourceMap() });
+  const split = (): IncomeSplit => ({
+    manual: emptyResourceMap(),
+    passive: emptyResourceMap(),
+    release: emptyResourceMap(),
+    fault: emptyResourceMap(),
+  });
   return { 1: split(), 2: split(), 3: split(), 4: split(), 5: split() };
+}
+
+/** Deep copy of the per-era income, so a sample keeps the totals of its own step. */
+function cloneIncome(src: Readonly<Record<EraNumber, IncomeSplit>>): Record<EraNumber, IncomeSplit> {
+  const split = (s: IncomeSplit): IncomeSplit => ({
+    manual: { ...s.manual },
+    passive: { ...s.passive },
+    release: { ...s.release },
+    fault: { ...s.fault },
+  });
+  return { 1: split(src[1]), 2: split(src[2]), 3: split(src[3]), 4: split(src[4]), 5: split(src[5]) };
 }
 
 /** Adds `delta` into `into` in place. Only bookkeeping maps owned by one run are passed here, never game state. */
@@ -176,6 +238,20 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
 
   const steps = Math.floor(o.seconds / o.stepSeconds);
   const incomeByEra = o.trackIncome === true ? emptyIncome() : undefined;
+  // WHY: the wind-up store is transient (never saved): it starts empty and refills while the run advances.
+  let stored = 0;
+  const faultOpts = o.faults;
+  const faultSeed = faultOpts?.seed ?? FAULTS.seed;
+  // WHY: the spawn clock and the catch draws use separate seeds, so a catch never moves a spawn time (harness parity).
+  let clock: FaultClock = createFaultClock(faultSeed);
+  let catchRng = faultSeed * FAULTS.catchSeedMul + FAULTS.catchSeedAdd;
+  let catchFlag = false;
+  let firstSpawnAt: number | null = null;
+  const sampleEvery = o.sampleEverySeconds;
+  if (sampleEvery !== undefined && (!Number.isFinite(sampleEvery) || sampleEvery <= 0)) {
+    throw new RangeError(`runGreedy: sampleEverySeconds must be finite and > 0 (got ${sampleEvery})`);
+  }
+  const samples: GreedySample[] = [];
   let clickDebt = 0;
   let maxValue = 0;
   let activeT = 0;
@@ -199,6 +275,9 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
     activeT = t;
     // Era at the start of the step (before its clicks, advance and buys): the income bookkeeping key.
     const era = currentEra(state.techLevels);
+    // WHY: wind-up and fault numbers come from the state at the start of the step: a buy at step t counts from t + 1.
+    const wp = windupParams(state.techLevels, techs);
+    const fp = faultParams(state.techLevels, techs);
 
     // WHY: the rate is read before this step's clicks, so a rule reacts to what was bought in earlier steps.
     const rate = o.clickRate !== undefined ? o.clickRate(state, t) : o.clicksPerSecond;
@@ -213,10 +292,80 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
       state = click.state;
       if (incomeByEra !== undefined) addInto(incomeByEra[era].manual, click.gainedAll);
     }
+    // WHY: one release per step, after the plain clicks: the first manual turn of the step pays the stored output out.
+    if (clicks > 0 && stored > 0) {
+      const release = releaseWindup(state, stored, wp, computeRates(state, techs).perSecond);
+      state = release.state;
+      stored -= release.released;
+      if (incomeByEra !== undefined) {
+        addInto(incomeByEra[era].manual, release.gained);
+        addInto(incomeByEra[era].release, release.gained);
+      }
+    }
 
+    if (faultOpts !== undefined) {
+      const r = stepFaultClock(clock, fp, o.stepSeconds, true);
+      clock = r.clock;
+      if (r.event === 'spawn') {
+        if (firstSpawnAt === null) firstSpawnAt = t;
+        // WHY: one catch draw per spawn, whatever the odds, so the catch stream follows the spawns and not the clicks.
+        const drawn = nextUnit(catchRng);
+        catchRng = drawn.rng;
+        const faultWindow = clock.alive?.window ?? 0;
+        // WHY: strictly less: at equal times the clock expires the fault first, so a reaction at that age never lands.
+        catchFlag = drawn.u < faultOpts.catchProb && faultOpts.reactionSeconds < faultWindow;
+      } else if (r.event === 'expire') {
+        catchFlag = false;
+      }
+      const alive = clock.alive;
+      if (alive !== null && catchFlag && alive.age >= faultOpts.reactionSeconds) {
+        const cleared = clearFault(clock, fp, computeRates(state, techs).perSecond);
+        if (cleared !== null) {
+          clock = cleared.clock;
+          state = {
+            ...state,
+            res: addMaps(state.res, cleared.payout),
+            lifetime: addMaps(state.lifetime, cleared.payout),
+          };
+          if (incomeByEra !== undefined) addInto(incomeByEra[era].fault, cleared.payout);
+          catchFlag = false;
+        }
+      }
+    }
+
+    // Overdrive (the bonus of a clear) is spent here: the advance covers the step plus the bonus seconds.
+    let overdriveExtra = 0;
+    if (faultOpts !== undefined) {
+      const od = consumeOverdrive(clock, fp, o.stepSeconds);
+      clock = od.clock;
+      overdriveExtra = od.extraSeconds;
+    }
     const lifeBeforeAdvance = state.lifetime;
-    state = advance(state, o.stepSeconds, techs);
-    if (incomeByEra !== undefined) addDelta(incomeByEra[era].passive, lifeBeforeAdvance, state.lifetime);
+    // WHY: read before the advance, from the rates the advance pays out, so the bonus can be split off exactly.
+    const overdriveGain = overdriveExtra > 0 ? scaleMap(computeRates(state, techs).perSecond, overdriveExtra) : null;
+    state = advance(state, o.stepSeconds + overdriveExtra, techs);
+    if (incomeByEra !== undefined) {
+      addDelta(incomeByEra[era].passive, lifeBeforeAdvance, state.lifetime);
+      if (overdriveGain !== null) {
+        addInto(incomeByEra[era].passive, scaleMap(overdriveGain, -1));
+        addInto(incomeByEra[era].fault, overdriveGain);
+      }
+    }
+    stored = refillWindup(stored, wp, o.stepSeconds);
+
+    if (sampleEvery !== undefined) {
+      const sampleRatio = t / sampleEvery;
+      if (Math.abs(sampleRatio - Math.round(sampleRatio)) < 1e-9) {
+        const rates = computeRates(state, techs);
+        samples.push({
+          t,
+          perClick: { ...rates.perClick },
+          perSecond: { ...rates.perSecond },
+          windupCap: wp.cap,
+          ...(incomeByEra === undefined ? {} : { income: cloneIncome(incomeByEra) }),
+        });
+      }
+    }
     state = evaluateMilestones(state, techs, maxEra).state;
 
     const ratio = t / o.buyIntervalSeconds;
@@ -250,6 +399,8 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
         state = { ...offline.state, lastSimTime: state.lastSimTime };
         if (incomeByEra !== undefined) addDelta(incomeByEra[offlineEra].passive, lifeBeforeOffline, state.lifetime);
         offlineTotal += schedule.offlineSeconds;
+        // WHY: the store refills while the machine is away; the fault clock does not run offline.
+        stored = refillWindup(stored, wp, schedule.offlineSeconds);
         state = evaluateMilestones(state, techs, maxEra).state;
         record(t);
         observe();
@@ -266,6 +417,10 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
   };
   if (schedule !== undefined) result.wallSeconds = activeT + offlineTotal;
   if (incomeByEra !== undefined) result.income = incomeByEra;
+  if (faultOpts !== undefined) {
+    result.faults = { spawned: clock.spawned, caught: clock.caught, missed: clock.missed, firstSpawnAt };
+  }
+  if (sampleEvery !== undefined) result.samples = samples;
   return result;
 }
 
@@ -350,14 +505,26 @@ export function spendShare(
 }
 
 /**
- * Share of `res` income that came from manual clicks in `era`: manual / (manual + passive). 0 when the era has no
- * income entry, or the total is 0 or not finite.
+ * Share of `res` income that came from manual clicks in `era`: manual / (manual + passive + fault). 0 when the era has
+ * no income entry, or the total is 0 or not finite. Equals manual / (manual + passive) when fault is 0.
  */
 export function manualShare(income: Record<EraNumber, IncomeSplit>, era: EraNumber, res: ResourceId): number {
   const split: IncomeSplit | undefined = income[era];
   if (split === undefined) return 0;
   const manual = split.manual[res];
-  const total = manual + split.passive[res];
+  const total = manual + split.passive[res] + split.fault[res];
   if (!Number.isFinite(total) || total === 0) return 0;
   return manual / total;
+}
+
+/**
+ * Share of `res` income the player made actively in `era`: (manual + fault) / (manual + passive + fault). Clicks and
+ * fault clears count; 0 when the era has no income entry, or the total is 0 or not finite.
+ */
+export function activeShare(income: Record<EraNumber, IncomeSplit>, era: EraNumber, res: ResourceId): number {
+  const split: IncomeSplit | undefined = income[era];
+  if (split === undefined) return 0;
+  const total = split.manual[res] + split.passive[res] + split.fault[res];
+  if (!Number.isFinite(total) || total === 0) return 0;
+  return (split.manual[res] + split.fault[res]) / total;
 }

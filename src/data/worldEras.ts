@@ -128,6 +128,9 @@ export const WORLD_TRACES = {
 // Era III-V environment and crow tuning. Art px unless the name says world px.
 export const WORLD_ERA_ENV = {
   crowPerchLiftArtPx: 56, crowHoverPx: 2, crowBeatRisePx: 1, crowHighExtraArtPx: 8, accentMs: 250, girlSwayMs: 1200,
+  // The crow's speech-bubble poses are the folded-wing perchHead / perchTalk up to and including this era (WP27 D5, AD2 F6: eras I-IV);
+  // era V keeps head / talk (the stare).
+  crowPerchPoseToEra: 4,
   // Era IV ripple: every walker rises this many world px for accentMs on the next downbeat.
   riseWorldPx: 2,
   // Era V ripple: shadows slide this many world px toward the machine centre for shadowSlideMs.

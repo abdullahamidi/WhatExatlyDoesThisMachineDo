@@ -23,6 +23,7 @@ import type { FinaleState } from './rendering/FinaleDirector';
 import type { FinaleFrame } from './math/finale';
 import type { CycleTransitionState } from './rendering/CycleTransition';
 import type { WorldDebugApi, WorldDebugState } from './rendering/LivingWorldDirector';
+import type { FaultDebugStats } from './rendering/FaultMarker';
 import { OutputTicker } from './rendering/OutputTicker';
 import type { NewCycleController } from './newCycle';
 import type { DemoEndDebugState } from '../ui/demoEndModel';
@@ -112,6 +113,14 @@ declare global {
       // WP25: machine output popups (OutputTicker). outputStats is null without a World scene or ticker.
       outputStats(): { shown: number; visible: number; y: number | null; rising: boolean; last: string | null; meanMs: number } | null;
       setOutputTicks(on: boolean): void;
+      // WP27: machine faults (FaultMarker, C11). faultStats is null without a World scene or marker; client points are null
+      // while the marker is hidden (anchorClient: null without an anchor). Smokes click `client`.
+      faultStats(): FaultDebugStats | null;
+      forceFault(): boolean;
+      setFaults(on: boolean): void;
+      windupStats(): { stored: number; cap: number; refill: number } | null;
+      // WP27 smoke probe: the text of each line of the last gain block (FloatingText.lastBlockLines); null without a World scene.
+      gainLines(): string[] | null;
     };
   }
 }
@@ -311,6 +320,32 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
   const outputStats = (): { shown: number; visible: number; y: number | null; rising: boolean; last: string | null; meanMs: number } | null => OutputTicker.of(game.scene.getScene('World'))?.stats() ?? null;
   /** WP25: turns the machine output popups on or off (off also hides the visible ones). */
   const setOutputTicks = (on: boolean): void => { OutputTicker.of(game.scene.getScene('World'))?.setEnabled(on); };
+  /** A world point in client px: the same conversion as crankClientPoint (WP27 fault probes). */
+  const worldPointClient = (world: { x: number; y: number }): { x: number; y: number } => {
+    const cam = game.scene.getScene('World').cameras.main;
+    const rect = game.canvas.getBoundingClientRect();
+    return worldToClient(
+      world,
+      { x: cam.worldView.x, y: cam.worldView.y },
+      cam.zoom,
+      { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+      { width: game.scale.gameSize.width, height: game.scale.gameSize.height },
+    );
+  };
+  /** WP27 machine faults: the clock and the marker's stats (FaultDebugStats, built in the lazy marker chunk). Null without a World scene or marker. */
+  const faultStats = (): FaultDebugStats | null =>
+    game.scene.getScene<WorldScene>('World')?.getFaultMarker()?.debugStats(worldPointClient) ?? null;
+  /** WP27: forces the next eligible clock step to spawn a fault (session.debugForceFault); false when refused. */
+  const forceFault = (): boolean => session.debugForceFault();
+  /** WP27: the marker gate (off hides a live marker and freezes the clock); no-op without a marker. */
+  const setFaults = (on: boolean): void => { game.scene.getScene<WorldScene>('World')?.getFaultMarker()?.setEnabled(on); };
+  /** WP27 wind-up: stored seconds, cap and refill (seconds per second). */
+  const windupStats = (): { stored: number; cap: number; refill: number } | null => session.windup;
+  /** WP27 smoke probe: the text of each line of the last gain block (crank or fault popup); null without a World scene. */
+  const gainLines = (): string[] | null => {
+    const lines = game.scene.getScene<WorldScene>('World')?.getFloatingText()?.lastBlockLines() ?? null;
+    return lines === null ? null : lines.map((line) => line.text);
+  };
   window.__wedtmd = {
     session,
     crankClientPoint,
@@ -365,5 +400,10 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     worldProps,
     outputStats,
     setOutputTicks,
+    faultStats,
+    forceFault,
+    setFaults,
+    windupStats,
+    gainLines,
   };
 }

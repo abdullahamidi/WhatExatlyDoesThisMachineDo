@@ -9,7 +9,7 @@ export type DenizenId = 'inspector' | 'dog' | 'crow' | 'girl' | 'payphone' | 'se
 export type SpeakerId = Exclude<DenizenId, 'sensor7'>;   // sensor7 is wordless
 export type GroundId = 'inspector' | 'dog' | 'crow' | 'payphone' | 'sensor7' | 'lamp' | 'clock' | 'stakeChain' | 'hole' | 'scraps'
   | 'girl' | 'puddles' | 'sprout' | 'lantern';
-export type FramingKey = 'e1' | 's8' | 's9' | 's10' | 's11' | 's15' | 'portrait' | 'baseL' | 'baseR';
+export type FramingKey = 'e1' | 's8' | 's8w' | 's9' | 's10' | 's11' | 's15' | 'portrait' | 'baseL' | 'baseR';
 export type ChainId = 'crossedLines' | 'postCap' | 'synchronization' | 'oneObserver';
 export type WorldRow = 'back' | 'front';
 
@@ -190,10 +190,21 @@ export const WORLD_PLACEMENTS: Record<FramingKey, Partial<Record<GroundId, World
     lamp: { x: 2476, row: 'back' }, crow: { x: 2476, row: 'back' }, stakeChain: { x: 2348, row: 'front' },
     hole: { x: 2394, row: 'front' }, scraps: { x: 1330, row: 'back', xs: [1330, 1420, 1530] },
   },
+  // WP27 F6.1: Sensor 7 and the clock stand at the generator pose; the Inspector moves to 1536 (no route). Without a sensor7 entry
+  // placeOne returned null, so the era II entry showed no Sensor 7.
   s8: {
-    inspector: { x: 1472, row: 'back' }, dog: { x: 2604, row: 'front' }, payphone: { x: 2604, row: 'back' },
+    sensor7: { x: 1470, row: 'back' }, inspector: { x: 1536, row: 'back' }, clock: { x: 2680, row: 'back' },
+    dog: { x: 2604, row: 'front' }, payphone: { x: 2604, row: 'back' },
     lamp: { x: 2656, row: 'back' }, crow: { x: 2656, row: 'back' }, stakeChain: { x: 2588, row: 'front' },
     hole: { x: 2634, row: 'front' }, scraps: { x: 1330, row: 'back', xs: [1330, 1420, 1530] },
+  },
+  // WP27 F6.1: the framing when a capacitorBank or sparkGap stands before the transformer (cx 2104 / 2112). The sensor and the
+  // Inspector keep the wing rule at both poses. No clock: the right wing (2672-2728) holds payphone, lamp and crow (documented
+  // exemption; the pose lasts 28-137 s). No girl: no 24 px slot at this pose (fallback b, ART_AUDIT WP27 (a)).
+  s8w: {
+    sensor7: { x: 1500, row: 'back' }, inspector: { x: 1552, row: 'back' },
+    dog: { x: 2694, row: 'front' }, payphone: { x: 2678, row: 'back' }, lamp: { x: 2720, row: 'back' }, crow: { x: 2720, row: 'back' },
+    stakeChain: { x: 2676, row: 'front' }, hole: { x: 2716, row: 'front' }, scraps: { x: 1330, row: 'back', xs: [1330, 1420, 1530] },
   },
   s9: {
     sensor7: { x: 1384, row: 'back' }, inspector: { x: 1472, row: 'back', route: [1448, 1496] },
@@ -202,12 +213,14 @@ export const WORLD_PLACEMENTS: Record<FramingKey, Partial<Record<GroundId, World
     hole: { x: 2886, row: 'front' }, scraps: { x: 1330, row: 'back', xs: [1330, 1420, 1530] },
   },
   // Late framings (WP23b R6). Inner entries sit in the inner gap (WORLD_LAYOUT.innerClearPx) and skip the wing rule.
+  // WP27 F6.5 (era III, same rule): Sensor 7 at 1234 with the Inspector at 1276 (the one spot, WORLD_SPOTS.s10).
   s10: {
-    inspector: { x: 1252, row: 'back' }, dog: { x: 2858, row: 'front' }, payphone: { x: 2858, row: 'back' },
+    sensor7: { x: 1234, row: 'back' }, inspector: { x: 1276, row: 'back' }, dog: { x: 2858, row: 'front' }, payphone: { x: 2858, row: 'back' },
     stakeChain: { x: 2842, row: 'front' }, hole: { x: 2888, row: 'front' },   // hole fails the wing rule here: off-stage
   },
+  // WP27 F6.5: Sensor 7 at 750, the Inspector at 816 with the route 792-840 (the spots of WORLD_SPOTS.s11; the crouch clears the tripod by 6 px).
   s11: {
-    sensor7: { x: 712, row: 'back' }, inspector: { x: 784, row: 'back', route: [760, 808] },
+    sensor7: { x: 750, row: 'back' }, inspector: { x: 816, row: 'back', route: [792, 840] },
     dog: { x: 2856, row: 'front' }, clock: { x: 2890, row: 'back' }, payphone: { x: 3050, row: 'back' },
     lamp: { x: 3104, row: 'back' }, crow: { x: 3104, row: 'back' }, stakeChain: { x: 2840, row: 'front' },
     hole: { x: 2886, row: 'front' }, scraps: { x: 690, row: 'back', xs: [690, 830, 960] },
@@ -230,17 +243,21 @@ export const WORLD_PLACEMENTS: Record<FramingKey, Partial<Record<GroundId, World
 // in the front band (era5; worldPlacement adds the step offset). Framings without a row place no girl.
 // WP26 Q4 moved the cycle 3+ ground girl from 1538 (on the 1530 scrap) to 1552, the largest x the wing rule allows (machine left
 // 1576 less wingClearPx 24). Her boots (8 px left of x) clear the scrap's right edge 1538 by 6 px.
+// WP27 F6.1 moved the s8 girl from 1552 to 1508, the far-plane mini's slot at the generator pose: she stands between Sensor 7
+// (1470) and the Inspector (1536). AD2 F7 moved her to 1504: tripod 4 px, Inspector rest 8 px, crouch 2 art px clear.
+// e1 and s9 keep 1552. s8w has no girl (no 24 px slot there).
 export const WORLD_GIRL_PLACEMENTS: Partial<Record<FramingKey, { ground?: WorldPlacement; era5?: WorldPlacement }>> = {
-  e1: { ground: { x: 1552, row: 'back' } }, s8: { ground: { x: 1552, row: 'back' } }, s9: { ground: { x: 1552, row: 'back' } },
+  e1: { ground: { x: 1552, row: 'back' } }, s8: { ground: { x: 1504, row: 'back' } }, s9: { ground: { x: 1552, row: 'back' } },
   s11: { ground: { x: 880, row: 'back' }, era5: { x: 976, row: 'front' } },
   s15: { era5: { x: 976, row: 'front', inner: true } }, portrait: { era5: { x: 976, row: 'front', inner: true } },
 };
 // Layout rules for the cast and the bubbles (DENIZEN_ART §3, §4.2). World px unless the name says game px. Layout, not balance:
 // they sit with the placements so worldPlacement.ts and worldBubbleController.ts read one copy of each number.
 const FRAMING_POSES: readonly { key: FramingKey; zoom: number; centerX: number }[] = [
-  { key: 'e1', zoom: 1, centerX: 1920 }, { key: 's8', zoom: 1, centerX: 2064 }, { key: 's9', zoom: 0.75, centerX: 2192 },
-  { key: 's10', zoom: 0.75, centerX: 2055 }, { key: 's11', zoom: 0.5, centerX: 1922 }, { key: 's15', zoom: 0.5, centerX: 1920 },
-  { key: 'portrait', zoom: 0.5, centerX: 1920 }, { key: 'baseL', zoom: 1, centerX: 1320 }, { key: 'baseR', zoom: 1, centerX: 2520 },
+  { key: 'e1', zoom: 1, centerX: 1920 }, { key: 's8', zoom: 1, centerX: 2064 }, { key: 's8w', zoom: 1, centerX: 2112 },
+  { key: 's9', zoom: 0.75, centerX: 2192 }, { key: 's10', zoom: 0.75, centerX: 2055 }, { key: 's11', zoom: 0.5, centerX: 1922 },
+  { key: 's15', zoom: 0.5, centerX: 1920 }, { key: 'portrait', zoom: 0.5, centerX: 1920 }, { key: 'baseL', zoom: 1, centerX: 1320 },
+  { key: 'baseR', zoom: 1, centerX: 2520 },
 ];
 export const WORLD_LAYOUT = {
   // Crank hub: the bubble layout reserves a circle around it, and the gain text block sits above it.
@@ -303,7 +320,7 @@ export type WorldSheetId = 'inspector' | 'dog' | 'crow' | 'girl' | 'payphone' | 
 export const WORLD_FRAMES: Record<WorldSheetId, readonly string[]> = {
   inspector: ['idleA', 'idleB', 'walk0', 'walk1', 'walk2', 'walk3', 'write0', 'write1', 'glance', 'front', 'talk', 'shield', 'pat0', 'pat1', 'wave', 'watch', 'umbrellaOpen', 'frontUmbrella', 'talkUmbrella', 'lookUp', 'crouch', 'umbrellaHalf'],
   dog: ['sit0', 'sit1', 'sniff0', 'sniff1', 'walk0', 'walk1', 'walk2', 'walk3', 'dig0', 'dig1', 'shake0', 'shake1', 'head', 'talk', 'flat', 'lie', 'sleep', 'chase0', 'chase1', 'wag', 'scratch0', 'scratch1', 'lookUp'],
-  crow: ['frozen', 'perch0', 'perch1', 'head', 'talk', 'peck0', 'peck1', 'fly0', 'fly1', 'fly2', 'frozenTip', 'ruffle'],
+  crow: ['frozen', 'perch0', 'perch1', 'head', 'talk', 'peck0', 'peck1', 'fly0', 'fly1', 'fly2', 'frozenTip', 'ruffle', 'perchTurn', 'perchHead', 'perchTalk'],
   girl: ['stand0', 'stand1', 'palm', 'talk', 'shield', 'run0', 'run1', 'run2', 'run3', 'lanternDrop', 'lanternUp', 'tilt'],
   payphone: ['dark', 'lit', 'ring0', 'ring1', 'fog', 'restored'],
   receiver: ['hang', 'swing0', 'swing1', 'swing2', 'level', 'onHook'],

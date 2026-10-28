@@ -3,7 +3,7 @@
 
 import { CRANK_KEYS, HOTKEYS } from '../data/settings';
 
-export type HotkeyAction = 'crank' | 'techTree' | 'menu';
+export type HotkeyAction = 'crank' | 'techTree' | 'fault' | 'menu';
 export type HotkeyTargetKind = 'editable' | 'interactive' | 'other';
 
 export interface HotkeyEventLike {
@@ -34,6 +34,12 @@ export function resolveHotkey(e: HotkeyEventLike, lastCrankMs: number, nowMs: nu
 
   if (e.key.toLowerCase() === HOTKEYS.techTree) {
     return e.repeat ? null : 'techTree';
+  }
+
+  // F clears a machine fault (WP27). Like t it works on an interactive target (a focused button) and is
+  // blocked by an open modal, so a dialog never sees the fault action behind it.
+  if (e.key.toLowerCase() === HOTKEYS.fault) {
+    return !e.repeat && !e.modalOpen ? 'fault' : null;
   }
 
   if (e.key === HOTKEYS.menu) {

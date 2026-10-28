@@ -438,9 +438,10 @@ describe('FLOATING_TEXT and CRANK_PULSE', () => {
     expect(FLOATING_TEXT.spireComponent).toBe('spireTower');
   });
 
-  it('a block shows at most maxLines (5) lines and the whole pool stays within 30 texts', () => {
-    expect(FLOATING_TEXT.maxLines).toBe(5);
-    expect(FLOATING_TEXT.blockPoolSize * FLOATING_TEXT.maxLines).toBeLessThanOrEqual(30);
+  it('a block shows at most maxLines (6) lines and the whole pool stays within 36 texts', () => {
+    // Six = the RELEASE line (WP27) plus five energies. Texts are created lazily (FloatingText.textAt), so 36 is a ceiling, not a count.
+    expect(FLOATING_TEXT.maxLines).toBe(6);
+    expect(FLOATING_TEXT.blockPoolSize * FLOATING_TEXT.maxLines).toBeLessThanOrEqual(36);
   });
 
   it('CRANK_FEEDBACK has no dead floatPoolSize (the pool is FLOATING_TEXT.blockPoolSize)', () => {

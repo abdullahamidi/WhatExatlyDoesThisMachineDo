@@ -86,6 +86,11 @@ export const INSTALL_LINES: Record<TechId, string> = {
   gridExciter: 'Exciter fed from the mains. The spire hums in phase.',
   mainsBackfeed: 'Backfeed live. The grid answers from above.',
   steamLance: 'Lance seated. Steam climbs where steam should not.',
+  faultLamp: 'Fault reporting enabled. Faults predate the report.',
+  dischargeLever: 'Stored charge released by hand. Hand not logged.',
+  leakWhistle: 'Leaks now announce themselves. Most of them.',
+  dampingFork: 'The second fork hums before anything slips.',
+  overrunClutch: 'Clutch engaged ahead of the load. Load not found.',
 };
 
 // Achievement toast (WP12 D5) and RECORDS panel texts.

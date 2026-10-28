@@ -7,7 +7,7 @@ import type { FinaleBeat } from '../data/finale';
 import type { NewCycleHook } from './newCycle';
 import type { TechId } from '../data/types';
 
-export interface GameCommands { refocus: Signal<void>; openTechTree: Signal<void>; openSystemMenu: Signal<void>; crank: Signal<void> }
+export interface GameCommands { refocus: Signal<void>; openTechTree: Signal<void>; openSystemMenu: Signal<void>; crank: Signal<void>; clearFault: Signal<void> }
 /** WP22: a part track crossed a visual tier (one per played beat or staged change). */
 export interface PartEvolvedEvent { techId: TechId; fromTier: number; toTier: number; topTier: number; hosts: readonly MachineComponentId[] }
 /** WP22: a level bought between two tiers (small torque spark + tick). */

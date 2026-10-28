@@ -24,3 +24,7 @@ export type { EraCap } from './progression/edition';
 export { DEFAULT_PRESTIGE, echoesForCycle, spentEchoes, unspentEchoes, echoMultiplier, perkStatus, buyPerk, cycleTechs, applyStartLevels, newCycleState, cycleLabel, normalizePrestige, cyclePreview } from './prestige';
 export type { EchoRules, PerkStatus, BuyPerkResult, CyclePreview } from './prestige';
 export { normalizeWorld } from './worldSave';
+export { windupParams, refillWindup, releaseWindup } from './production/windup';
+export type { WindupParams } from './production/windup';
+export { faultParams, createFaultClock, nextUnit, stepFaultClock, clearFault, consumeOverdrive } from './faults';
+export type { FaultParams, FaultAlive, FaultClock } from './faults';

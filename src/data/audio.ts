@@ -7,6 +7,9 @@ export type BedId = 'hum' | 'gear' | 'mains' | 'boiler' | 'pad' | 'servo' | 'dro
 // One-shot cue on a purchase; chosen by the era of the paying resource (see AUDIO.purchaseCueByEra).
 export type PurchaseCue = 'purchase' | 'relay' | 'hiss' | 'forkPing' | 'swell';
 
+// Machine Fault spawn cue shape by era (AUDIO.faultSpawn.flavourByEra, WP27).
+export type FaultFlavour = 'crackle' | 'hiss' | 'ping' | 'static';
+
 export const AUDIO = {
   // Master bus: target level, fade time when toggled, and how often the ambient loop updates.
   masterGain: 0.3,
@@ -39,7 +42,8 @@ export const AUDIO = {
 
   // Ambient machine hum: frequency and gain rise with ME/s on a log curve up to maxPerSecond.
   // maxPerSecond is at least 3x the post-finale (PF) rate of that resource (WP15R D2), so the bed does not saturate.
-  hum: { minHz: 48, maxHz: 96, minGain: 0.04, maxGain: 0.16, refPerSecond: 1, maxPerSecond: 40000 },
+  // WP27 P9 refit: 1000000 (the PF ME/s is about 2.8e5, so the curve sits near 0.91 there, under the 0.95 guard).
+  hum: { minHz: 48, maxHz: 96, minGain: 0.04, maxGain: 0.16, refPerSecond: 1, maxPerSecond: 1000000 },
 
   // Gear ticks in the background: rate in ticks/s rises with ME/s on the same log curve (the hum's maxPerSecond, WP15R D2).
   gearTick: { minPerSecond: 1.5, maxPerSecond: 14, gain: 0.12, hz: 240, decayMs: 30 },
@@ -131,6 +135,27 @@ export const AUDIO = {
     clickAttackMs: 1,
     clickMs: 50,
     clickGain: 0.12,
+  },
+
+  // Machine Fault spawn cue (WP27): one cue per spawn, shaped by the era (flavourByEra[era - 1]). Every flavour ends inside 400 ms at gain
+  // 0.25 or less; no cue on expire. crackle (eras I-II, spark gap), hiss (era III, steam) and static (era V, soft static) are noise: `count`
+  // pulses of pulseMs, gapMs apart, through one filter (type at hz, Q q). ping (era IV, fork): sines at hz and hz x detuneRatio (the second
+  // at partialGain), ringing over ms. The summed peak of the two sines is gain x (1 + partialGain): 0.25 or less.
+  faultSpawn: {
+    ms: 260,
+    gain: 0.2,
+    flavourByEra: ['crackle', 'crackle', 'hiss', 'ping', 'static'] satisfies readonly [FaultFlavour, FaultFlavour, FaultFlavour, FaultFlavour, FaultFlavour],
+    crackle: { count: 3, gapMs: 70, pulseMs: 30, type: 'highpass', hz: 1800, q: 0.7 },
+    hiss: { count: 1, gapMs: 0, pulseMs: 260, type: 'highpass', hz: 2600, q: 0.7 },
+    static: { count: 1, gapMs: 0, pulseMs: 260, type: 'lowpass', hz: 2400, q: 0.7 },
+    ping: { hz: 1100, detuneRatio: 1.03, partialGain: 0.25 },
+  },
+  // Machine Fault clear cue (WP27): a ratchet clunk (`count` bandpassed noise ticks, Q q, gapMs apart), a bright sine tick at bright.atMs and,
+  // with Overdrive, a second tick that rises from overdrive.fromHz to toHz at overdrive.atMs. The whole cue ends inside 300 ms; gain 0.35 cap.
+  faultClear: {
+    ratchet: { count: 2, gapMs: 40, pulseMs: 35, type: 'bandpass', hz: 900, q: 3, gain: 0.3 },
+    bright: { hz: 2600, atMs: 100, ms: 30, gain: 0.25 },
+    overdrive: { fromHz: 1800, toHz: 3600, atMs: 150, ms: 60, gain: 0.2 },
   },
 
   // Ambient bed trims per era I..V (WP15 D8): older beds recede as later eras arrive. 1 = no change (before the bed exists it is 1).

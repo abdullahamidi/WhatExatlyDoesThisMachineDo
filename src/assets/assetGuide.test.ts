@@ -83,6 +83,7 @@ const PLACEMENT_NOTES: Partial<Record<AssetId, string>> = {
   'world.shadow': 'living world, row -0.01 (procedural Graphics, baked once)',
   'bg.windowLit': 'living world, far window plane (6 skyline windows)',
   'bg.virga': 'living world, sf 0.15 strip at depth -89.5 (sky ramp)',
+  'fx.fault': 'fault marker (FaultMarker, FAULT_MARKER.art): above the machine, below the floating text',
 };
 
 function readGuideOrNull(): string | null {

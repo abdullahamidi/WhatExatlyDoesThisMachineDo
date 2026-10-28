@@ -47,6 +47,8 @@ export interface Activity {
   capMs?: number;
   micro?: true;
   poseSet?: 'umbrella';
+  // A brief glitch: never in crank playback, never the first pick of a fresh runner.
+  glitch?: true;
   follow?: Partial<Record<string, number>>;
 }
 
@@ -117,11 +119,15 @@ export const WORLD_BEHAVIOUR = {
 // Spots (dx from the actor's placement x, per framing). The Inspector list of a framing is trimmed to the spots actorBand accepts.
 const INS_SPOTS: readonly { id: SpotId; dx: number }[] = [{ id: 'sensor', dx: -24 }, { id: 'mid', dx: 0 }, { id: 'scrap', dx: 24 }];
 const DOG_SPOTS: readonly { id: SpotId; dx: number }[] = [{ id: 'stake', dx: -24 }, { id: 'home', dx: 0 }, { id: 'out', dx: 24 }];
+// WP27 F6.2: one Inspector spot (dx 0) where Sensor 7 stands beside him (s8, s8w, s10). The outer spots would walk him into the
+// tripod or the far-plane mini, so he keeps his placement: reading and crouch run in place and still emit atSensor.
+const INS_SENSOR_SPOT: readonly { id: SpotId; dx: number }[] = [{ id: 'sensor', dx: 0 }];
 export const WORLD_SPOTS: Partial<Record<FramingKey, Partial<Record<'inspector' | 'dog', readonly { id: SpotId; dx: number }[]>>>> = {
   e1: { inspector: INS_SPOTS, dog: DOG_SPOTS },
-  s8: { inspector: INS_SPOTS, dog: DOG_SPOTS },
+  s8: { inspector: INS_SENSOR_SPOT, dog: DOG_SPOTS },
+  s8w: { inspector: INS_SENSOR_SPOT, dog: DOG_SPOTS },
   s9: { inspector: INS_SPOTS, dog: DOG_SPOTS },
-  s10: { inspector: INS_SPOTS, dog: DOG_SPOTS },
+  s10: { inspector: INS_SENSOR_SPOT, dog: DOG_SPOTS },
   s11: { inspector: INS_SPOTS, dog: DOG_SPOTS },
   s15: { inspector: INS_SPOTS, dog: DOG_SPOTS },
 };
@@ -185,21 +191,26 @@ const DOG_V: readonly Activity[] = [
   { id: 'mouth', clip: c(['talk', 'head'], 1), holdMs: [2000, 4000], weight: 1.5, cooldownMs: 15000, interruptible: true },
 ];
 
-// The crow in era I: frozen, with the tip try as the reaction to a crank click or a gust (both start on the frozenTip frame).
-const CROW_I: readonly Activity[] = [
-  { id: 'frozen', clip: one('frozen'), holdMs: [10000, 30000], weight: 2, cooldownMs: 0, repeatable: true, capMs: 50000, interruptible: true },
-  { id: 'tipTry', clip: c(['frozenTip', 'frozen'], 1, { frameHoldMs: [400, 1200] }), holdMs: [2000, 4000], weight: 1, cooldownMs: 25000,
-    reaction: ['crankClick', 'gust'], interruptible: true },
+// The crow in eras I-II (WP27 D5): perched, wings folded; the spread-wing freeze is a rare glitch of at most 1.8 s (tipTry, the old story beat).
+const crowPerched = (bob: readonly [number, number]): readonly Activity[] => [
+  { id: 'perch', clip: c(['perch0', 'perch1'], 1, { frameHoldMs: bob }), holdMs: [6000, 16000], weight: 3, cooldownMs: 0, repeatable: true, interruptible: true },
+  { id: 'look', clip: c(['perchTurn', 'perch0'], 1, { frameHoldMs: [800, 2000] }), holdMs: [2000, 5000], weight: 2, cooldownMs: 15000, interruptible: true },
+  { id: 'peck', clip: c(['peck0', 'peck1'], 3), holdMs: [1500, 3500], weight: 1.5, cooldownMs: 25000, emits: 'crowMove', emitsAt: 'start', interruptible: true },
+  { id: 'ruffle', clip: one('ruffle'), holdMs: [1200, 2200], weight: 1, cooldownMs: 30000, emits: 'crowMove', emitsAt: 'start', interruptible: true },
 ];
-// The crow in era II: the stutter (a 4 px jitter on irregular holds), the skip (faster), a freeze and the tip try (no reaction).
+const CROW_GLITCH: Activity = { id: 'tipTry', clip: c(['frozenTip', 'frozen'], 2, { frameHoldMs: [300, 700] }), holdMs: [800, 1800], weight: 0.3,
+  cooldownMs: 60000, reaction: ['crankClick', 'gust'], interruptible: true, glitch: true };
+const CROW_I: readonly Activity[] = [
+  ...crowPerched([1200, 3500]),
+  { id: 'shift', clip: c(['perch0', 'perch0', 'perch0', 'perch0'], 1, { dxPx: [0, 2, 0, -2], frameHoldMs: [1000, 2500] }), holdMs: [2000, 5000],
+    weight: 1, cooldownMs: 30000, interruptible: true },
+  CROW_GLITCH,
+];
 const CROW_II: readonly Activity[] = [
-  { id: 'stutter', clip: c(['frozen', 'frozen'], 1, { dxPx: [0, 4], frameHoldMs: [500, 2500] }), holdMs: [6000, 15000], weight: 3, cooldownMs: 0,
-    repeatable: true, interruptible: true },
-  { id: 'skip', clip: c(['frozen', 'frozen'], 1, { dxPx: [0, 4], frameHoldMs: [350, 600] }), holdMs: [2000, 4000], weight: 1, cooldownMs: 30000,
-    interruptible: true },
-  { id: 'freeze', clip: one('frozen'), holdMs: [5000, 15000], weight: 2, cooldownMs: 0, interruptible: true },
-  { id: 'tipTry', clip: c(['frozenTip', 'frozen'], 1, { frameHoldMs: [400, 1200] }), holdMs: [2000, 4000], weight: 1, cooldownMs: 30000,
-    interruptible: true },
+  ...crowPerched([800, 3000]),
+  { id: 'stutter', clip: c(['perch0', 'perch0'], 1, { dxPx: [0, 4], frameHoldMs: [500, 2500] }), holdMs: [3000, 8000], weight: 1.5, cooldownMs: 20000, interruptible: true },
+  { id: 'skip', clip: c(['perch0', 'perch1'], 1, { dxPx: [0, 4], frameHoldMs: [150, 350] }), holdMs: [1000, 2500], weight: 0.7, cooldownMs: 30000, interruptible: true },
+  { ...CROW_GLITCH, weight: 0.4, clip: c(['frozenTip', 'frozen'], 2, { frameHoldMs: [250, 600] }) },
 ];
 // The crow in era III: perch, the ruffle and the peck (each emits crowMove at its start), and a 2 px shift on the perch.
 const CROW_III: readonly Activity[] = [
@@ -280,9 +291,10 @@ export const WORLD_UNISON: {
         still: U1('sit0', { accent: 'wag' }), sway: U(['sit0', 'sit1'], 1, { perBeat: true }), look: U1('lookUp'),
         mouth: U1('sit0', { accent: 'talk' }), hold: U1('sit0'), rise: U(['sit0', 'sit1'], 1, { risePx: RISE }),
       },
+      // Before the observer the crow turns its head with folded wings (AD2 round 2 F9); the spread-wing head / talk frames stay for the stare (post).
       crow: {
-        still: U1('perch0', { pulse: true }), sway: U(['perch0', 'perch1'], 1, { perBeat: true }), look: U1('head'),
-        mouth: U1('perch0', { accent: 'talk' }), hold: U1('perch0'), rise: U1('perch0', { risePx: RISE }),
+        still: U1('perch0', { pulse: true }), sway: U(['perch0', 'perch1'], 1, { perBeat: true }), look: U1('perchHead'),
+        mouth: U1('perch0', { accent: 'perchTalk' }), hold: U1('perch0'), rise: U1('perch0', { risePx: RISE }),
       },
       girl: {
         still: U(['stand0', 'stand1'], 1, { perBeat: true }), sway: U(['stand0', 'tilt'], 1, { perBeat: true }), look: U1('lanternUp'),

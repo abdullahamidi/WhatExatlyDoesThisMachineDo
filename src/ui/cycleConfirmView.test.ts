@@ -14,7 +14,7 @@ const PREVIEW_8B: CyclePreview = {
   label: 'CYCLE 0043',
   echoesGained: 3,
   echoesAfter: 3,
-  bonusPctAfter: 45,
+  bonusPctAfter: 42,
   nextBonusXf: 8e9,
 };
 
@@ -35,8 +35,8 @@ describe('buildCycleConfirm texts', () => {
   it('builds the exact dialog lines for the cycle-2 preview', () => {
     const m: CycleConfirmModel = buildCycleConfirm(PREVIEW_8B, 'RF');
     expect(m.title).toBe('BEGIN CYCLE 0043?');
-    expect(m.gainLine).toBe('+3 ECHOES -> ECHOES 3 (+45% ALL/S)');
-    expect(m.bonusLine).toBe('NEXT CYCLE: +45% ALL/S');
+    expect(m.gainLine).toBe('+3 ECHOES -> ECHOES 3 (+42% ALL/S)');
+    expect(m.bonusLine).toBe('NEXT CYCLE: +42% ALL/S');
     expect(m.thresholdHint).toBe('+1 ECHO AT 8B RF');
     expect(m.confirmLabel).toBe('BEGIN CYCLE 0043');
     expect(m.cancelLabel).toBe('CANCEL');
@@ -92,7 +92,7 @@ describe('buildCycleConfirm with the real preview', () => {
 
   it('first run at PF xf (5.36e8): 3 Echoes, next threshold 2B', () => {
     const m = buildCycleConfirm(previewAt(5.36e8), 'RF');
-    expect(m.gainLine).toBe('+3 ECHOES -> ECHOES 3 (+45% ALL/S)');
+    expect(m.gainLine).toBe('+3 ECHOES -> ECHOES 3 (+42% ALL/S)');
     expect(m.thresholdHint).toBe('+1 ECHO AT 2B RF');
   });
 

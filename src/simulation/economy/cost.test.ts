@@ -22,13 +22,13 @@ describe('costAt', () => {
   });
 
   it('improvedPistons costs', () => {
-    expect(costAt(improvedPistons, 0)).toBe(6000);
-    expect(costAt(improvedPistons, 1)).toBe(7800);
+    expect(costAt(improvedPistons, 0)).toBe(3000);
+    expect(costAt(improvedPistons, 1)).toBe(3900);
   });
 
   it('unlock costs ignore the level', () => {
     expect(costAt(wornMotor, 0)).toBe(40);
-    expect(costAt(pistonArray, 0)).toBe(12000);
+    expect(costAt(pistonArray, 0)).toBe(3000);
     expect(costAt(wornMotor, 1)).toBe(40);
   });
 

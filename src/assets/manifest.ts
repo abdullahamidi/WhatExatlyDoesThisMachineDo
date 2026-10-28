@@ -745,10 +745,10 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     description: 'Red ball prop, one 3x3 frame: mutedOrange ball with a glint and a shadow (cycle 2+ trace by the dog, postgame); file world/red-ball.png.',
   },
   'world.crow': {
-    id: 'world.crow', file: 'world/crow.png', width: 288, height: 108, origin: { x: 0.5, y: 1 }, tileable: 'none',
-    frame: { width: 24, height: 18, count: 72 },
+    id: 'world.crow', file: 'world/crow.png', width: 360, height: 108, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 24, height: 18, count: 90 },
     eraRows: 6,
-    description: 'Crow sheet, 10 frames per era row (wedge body, two wing fans, hooked beak) in rows I, II, III, IV, V, whole; file world/crow.png.',
+    description: 'Crow sheet, 15 frames per era row (wedge body, two wing fans, hooked beak) in rows I, II, III, IV, V, whole; file world/crow.png.',
   },
   'world.girl': {
     id: 'world.girl', file: 'world/girl.png', width: 192, height: 168, origin: { x: 0.5, y: 1 }, tileable: 'none',
@@ -842,6 +842,12 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     id: 'bg.virga', file: 'bg/virga.png', width: 512, height: 128, origin: { x: 0, y: 1 }, tileable: 'x',
     frame: { width: 512, height: 64, count: 2 },
     description: 'Rain streak strip tiling on x above the mountain ridge, 2 frames stacked (falling, frozen: streaks held as beads), sky ramp only; file bg/virga.png.',
+  },
+  // WP27 machine faults (ART_AUDIT WP27 ADb): the marker over a faulted part; the tag shape is the same in every era.
+  'fx.fault': {
+    id: 'fx.fault', file: 'fx/fault.png', width: 288, height: 24, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 24, height: 24, count: 12 },
+    description: 'Twelve-frame fault marker sheet: 0 tag lit and 1 tag dim (amber plate, ink exclamation mark, pointer), 2-3 spark (eras I-II), 4-5 steam hiss (III), 6-7 ring wobble (IV), 8-9 null static (V), 10 clear puff, 11 spare (empty); file fx/fault.png.',
   },
 };
 

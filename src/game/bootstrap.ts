@@ -89,6 +89,8 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
   // WP23a: the living world director is a lazy chunk (the app chunk is budgeted). Warming it here lets it arrive during the asset
   // load, so it exists by the first World frame; WorldScene's own import then gets the cached module. A failed load is reported there.
   void import('./rendering/LivingWorldDirector').catch(() => undefined);
+  // WP27: the fault marker is a lazy chunk as well; warmed here so it is ready when WorldScene builds it (WorldScene reports a failure).
+  void import('./rendering/FaultMarker').catch(() => undefined);
   const search = opts.search ?? window.location.search;
   const edition = opts.edition ?? EDITIONS.full;
   const host = getHost(window);
@@ -147,7 +149,7 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
 
   const ctx: GameContext = {
     session,
-    commands: { refocus: createSignal(), openTechTree: createSignal(), openSystemMenu: createSignal(), crank: createSignal() },
+    commands: { refocus: createSignal(), openTechTree: createSignal(), openSystemMenu: createSignal(), crank: createSignal(), clearFault: createSignal() },
     feedback: {
       purchaseDenied: createSignal<PurchaseFailure>(), partLanded: createSignal<MachineComponentId>(), finaleBeat: createSignal<FinaleBeat>(),
       partEvolved: createSignal<PartEvolvedEvent>(), partTorqued: createSignal<PartTorquedEvent>(),
@@ -340,6 +342,7 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
   bindHotkeys(window, {
     modals,
     crank: () => ctx.commands.crank.emit(),
+    clearFault: () => ctx.commands.clearFault.emit(),
     toggleTechTree: () => {
       if (isFinaleLocked(session.state.ending) || newCycleHoldsKeys() || shellHoldsKeys() || demoEnd?.isBusy() === true) return;
       if (techTree.isOpen()) techTree.close();

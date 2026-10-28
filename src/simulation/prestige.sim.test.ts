@@ -6,7 +6,7 @@ import { TECHNOLOGIES } from '../data/technologies';
 import type { PrestigeState } from '../data/types';
 import { cycleTechs, echoesForCycle, newCycleState } from './prestige';
 import { runGreedy, maxPurchaseGap } from './sim/greedy';
-import type { GreedyResult } from './sim/greedy';
+import type { GreedyOptions, GreedyResult } from './sim/greedy';
 
 // Cycle-2 and cycle-3 pacing (WP14 T5). Deterministic greedy players replay each new cycle up to
 // primaryFunction with the Memory perks applied through the pure derived tech table (cycleTechs).
@@ -18,8 +18,9 @@ const MAX_SECONDS = 30000;
 const CASUAL_MAX_SECONDS = 40000;
 
 // Profile A = main player (4 clicks/s, buys every second). Profile C = casual (1 click/s, buys every 30 s).
-const PROFILE_A = { clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 1 };
-const PROFILE_C = { clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30 };
+// `faults` = the Machine Faults catch model of each player (WP27): chance to catch a fault, seconds to react.
+const PROFILE_A = { clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 1, faults: { catchProb: 1, reactionSeconds: 2 } };
+const PROFILE_C = { clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 0.5, reactionSeconds: 4 } };
 
 interface Spend {
   name: string;
@@ -53,7 +54,7 @@ function prestige(cycle: number, echoesEarned: number, perks: readonly PerkId[])
 
 function cycleRun(
   p: PrestigeState,
-  profile: { clicksPerSecond: number; stepSeconds: number; buyIntervalSeconds: number },
+  profile: Pick<GreedyOptions, 'clicksPerSecond' | 'stepSeconds' | 'buyIntervalSeconds' | 'faults'>,
   seconds: number,
 ): GreedyResult {
   return runGreedy({

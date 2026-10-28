@@ -245,6 +245,8 @@ Frame sizes are art px. The pivot is (0.5, 1): feet on the bottom row, body cent
   | 4 | talk (beak open) |
   | 5-6 | peck ×2 (mark 42) |
   | 7-9 | takeoff and flight ×3 (whole only, handed to the `fx.bird` pool at 38 s) |
+  | 10-11 | tip try, ruffle (WP24, below) |
+  | 12-14 | perched, wings folded: head turned back (`perchTurn`), head to camera (`perchHead`), talk (`perchTalk`) (WP27, below) |
 
 - **Placement:** 56 art px above the lamp foot. It never travels before the finale. The stutter is a code offset of
   4 world px.
@@ -255,6 +257,15 @@ Frame sizes are art px. The pivot is (0.5, 1): feet on the bottom row, body cent
 - 10 `frozenTip`: frozen with the near wing tip lifted 2 px. Used by the tip try (eras I–II). The III-to-whole cells carry frozen's layers.
 - 11 `ruffle`: perch0 puffed and damp, crown and breast 1 px out, one wet point under the breast (the falling drop is code). Used by the era III ruffle round.
 - The cycle 2+ hold (`fly2`, frozen mid-flight) reuses existing frames.
+
+**WP27 (2026-10-27): the crow's perched frames** (frames 12–14; sheet 360 × 108, 15 frames per row). Eras I–II rest on these and
+on perch0 / perch1 / peck / ruffle: wings folded, the spread-wing frames only in the tip-try glitch (at most 1.8 s).
+- 12 `perchTurn`: perch0 with the head turned back over the shoulder, beak pointing left over the back (perch0's beak mirrored about
+  the head axis, eye (13, 3) from row III). Rows 6–17 are perch0. Used by the look clip (perchTurn ↔ perch0).
+- 13 `perchHead`: the perch0 body with the camera-facing head of `head` (iron 2 brows, eyes from row III, a 1 px beak stroke).
+  The crow's front and glance pose in eras I–II.
+- 14 `perchTalk`: perchHead with the lower mandible 1 px longer and, from row III, the open-beak mouth pixel. The crow's talk
+  pose in eras I–II.
 
 ### 2.4 The Girl with the Lantern `world.girl`, `world.girlMini`, `world.girlWindow`
 
@@ -334,7 +345,8 @@ is open or off-screen.
 | framing | view x | machine x | Sensor 7 | Inspector (rest / route) | girl | dog (front) | clock | booth | lamp + crow |
 |---|---|---|---|---|---|---|---|---|---|
 | s0-s7 (era I; cycle 2+) | 1280-2560 | 1720 / 1576 → 2120 / 2316 | 1384 | 1472 / 1448-1496 | window (sf .3) | 2364 | 2516 | 2420 | 2476 |
-| s8 (era II, generator: CROSSED LINES) | 1424-2704 | 1576-2552 | off | 1472 / none | pylon foot (sf .55; feet strip 868, 1160 = game x ≈ 85) | 2604 | off | 2604 | 2656 |
+| s8 (era II, generator: CROSSED LINES) | 1424-2704 | 1576-2552 | 1470 (WP27) | 1536 / none, one spot (WP27) | pylon foot (sf .55; feet strip 868, 1160 = game x ≈ 85, between the tripod and the Inspector); cycle 3+ ground 1504 (WP27; ART_AUDIT WP27 ADa and AD2 F7: 1504 clears the in-place crouch) | 2604 | 2680 (WP27) | 2604 | 2656 |
+| s8w (era II, capacitorBank or sparkGap before transformer; cx 2104-2112, WP27) | 1464-2752 | 1576-2632 / 2648 | 1500 | 1552 / none, one spot | pylon foot (game x ≈ 63 / 58; the mini cell touches the Inspector's clipboard by 0.4 px at cx 2112, drawn px 1.6 px clear); cycle 3+: none (no 24 px slot, ART_AUDIT WP27) | 2694 | off (exempt: right wing holds booth, lamp, crow) | 2678 | 2720 |
 | s9 (era II full) | 1339-3045 | 1576-2808 | 1384 | 1472 / ± 24 | pylon foot (game x ≈ 171) | 2856 | 2900 | 2944 | 2996 |
 | s10 (era III entry: PAY-06) | 1202-2908 | 1302-2808 | off | 1252 / none | pylon (nearer) | 2858 | off | 2858 | off |
 | s11-s14 (III-IV, V start) | 642-3202 | 1036-2808 | 712 | 784 / 760-808 | III pylon; IV back row 880 | 2856 | 2890 | 3050 | 3104 |
@@ -491,8 +503,8 @@ six windows coming up at `generator` (AD2c proof pairs).
 
 | era | sky / far planes | ground and props | light | weather / life |
 |---|---|---|---|---|
-| I | `world.girlWindow` flicker on the far window plane (1.5-4 s irregular; one frame per crank click before `wornMotor`) | booth dark (41 marks faint), lamp dead, clock stopped, stake + cut chain, 3 scraps, Sensor 7 | none | canon dust; the crow frozen; the dog sitting |
-| II | at `generator` the girl's window goes dark (frame 2) and **6 × `bg.windowLit`** come up dim (`WORLD_ENV.windowDimLevel` .85, fade `windowGlow.fadeMs`; the Q6 era II entry change, AD2c); at `powerLines` they go full (1, + mains flicker) | booth lit hood, receiver swing; hole stage 1 at `load-beneath` | `world.lampGlow` on at `powerLines`; mains flicker ±.08 alpha (code) | 4-5 `world.mote` ash motes orbit the lamp (1 emitter) |
+| I | `world.girlWindow` flicker on the far window plane (1.5-4 s irregular; one frame per crank click before `wornMotor`) | booth dark (41 marks faint), lamp dead, clock stopped, stake + cut chain, 3 scraps, Sensor 7 | none | canon dust; the crow perched, wings folded (tip-try glitch of at most 1.8 s); the dog sitting |
+| II | at `generator` the girl's window goes dark (frame 2) and **6 × `bg.windowLit`** come up dim (`WORLD_ENV.windowDimLevel` .85, fade `windowGlow.fadeMs`; the Q6 era II entry change, AD2c); at `powerLines` they go full (1, + mains flicker) | booth lit hood, receiver swing; hole stage 1 at `load-beneath` | `world.lampGlow` on at `powerLines`; mains flicker ±.08 alpha (code) | 4-5 `world.mote` ash motes orbit the lamp (1 emitter); the crow perched, wings folded (tip-try glitch of at most 1.8 s) |
 | III | **`bg.virga`** on an sf 0.15 strip above the mountain ridge at lifetime PR ≥ 1M: rain streaks that stop 6 art px above the ridge | `world.puddle` 1-3 at `condenser` MK I/III/V (reflect `#b8a98f`/`#d2bf9c` cloud, never blue); `world.sprout` white stages 1-2; booth fog overlay at vents (marks sharp); scraps burn away with firebox tiers | lamp warm frame | Inspector umbrella, girl hood and palm at vents; damp crow perched |
 | IV | windows breathe on the downbeat (alpha .85 ↔ 1; static under reduced motion); `bg.virga` frame 2 (frozen) | Chladni rings (procedural Graphics around the machine base, `#c9b28a` 1 px dashes, intensity 1/2 from `standingWave` MK I/III (AD4 F7, Q6 scale-up; alpha 1)); puddles ring on downbeats (1-px ring frames 2); `world.page` lifts every ≈ 40 s | lamp pulses on the downbeat | motes freeze mid-orbit; the crow hovers 2 px |
 | V | windows off by stage 6 → 4 → 2 → 1 → 0 (nullChamber, lensArray, horizonField ≥ 5, skyAperture); virga fades out | puddles black frame (reflect nothing); sprout stages 3-4 (tall, white, bent toward the beam); Chladni lines tinted `violetLight`; hole stays | lamp dead at the skyAperture diamond; no shadows from horizonField ≥ 5; violet rim rows | motes fall into the dead lamp; double exposure (code: one frame, violet tint, 15 % alpha) |

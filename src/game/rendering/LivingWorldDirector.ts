@@ -1514,9 +1514,9 @@ export class LivingWorldDirector implements WorldFinalePort {
         ctx.holeDig = state.dogPose === 'dig';
         ctx.sensor = sensor;
         ctx.scraps = scraps;
-        // The dog holds on its lie pose (the demo DOG-12 hold image); the crow parks while LivingWorld draws its high pose (cycle 2+,
-        // traces.crowHigh), so its log and the variety metrics do not count it.
-        ctx.demoHold = (actor === 'dog' && state.dogPose === 'lie') || (actor === 'crow' && state.traces.crowHigh);
+        // The dog holds on its lie pose (the demo DOG-12 hold image). The crow is never held: its cycle 2+ high pose (traces.crowHigh) is a
+        // tipTry of its own runner (WP27 F5.4). tipTry exists only in the era I-II tables, so the high pose shows only there.
+        ctx.demoHold = actor === 'dog' && state.dogPose === 'lie';
         ctx.settle = settle;
         // The girl is busy only on the ground (her cast member is drawn there alone); a busy cast member holds its runner.
         const castBusy = actor === 'girl' && girlStage !== 'ground' ? false : this.cast.busy(actor);

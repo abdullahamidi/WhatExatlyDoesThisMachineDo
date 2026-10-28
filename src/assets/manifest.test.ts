@@ -551,7 +551,7 @@ const WP13_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; he
 
 describe('WP13 restored world, finale fx and UI assets', () => {
   it('appends the 14 WP13 ids after the era V ids, in contract order (ids 98..111; WP17 ids follow)', () => {
-    expect(ASSET_IDS.length).toBe(145);
+    expect(ASSET_IDS.length).toBe(146);
     expect(ASSET_IDS.slice(98, 112)).toEqual(WP13_ENTRIES.map((e) => e.id));
     expect(ASSET_IDS.slice(112, 117)).toEqual(WP17_ENTRIES.map((e) => e.id));
   });
@@ -722,7 +722,7 @@ const WP17_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; he
 
 describe('WP17 legacy feed assets', () => {
   it('appends the 5 WP17 ids after the WP13 ids, in contract order (ids 112..116; the WP22 decal ids and the WP23a ids follow)', () => {
-    expect(ASSET_IDS.length).toBe(145);
+    expect(ASSET_IDS.length).toBe(146);
     expect(ASSET_IDS.slice(112, 117)).toEqual(WP17_ENTRIES.map((e) => e.id));
   });
 
@@ -1102,7 +1102,7 @@ const WP23A_ENTRIES: ReadonlyArray<{ id: AssetId; width: number; height: number;
   { id: 'world.stakeChain', width: 20, height: 6, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 10, height: 6, count: 2 } },
   { id: 'world.hole', width: 64, height: 6, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 16, height: 6, count: 4 } },
   { id: 'world.redBall', width: 3, height: 3, origin: { x: 0.5, y: 1 }, tileable: 'none' },
-  { id: 'world.crow', width: 288, height: 108, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 24, height: 18, count: 72 }, eraRows: 6 },
+  { id: 'world.crow', width: 360, height: 108, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 24, height: 18, count: 90 }, eraRows: 6 },
   { id: 'world.girl', width: 192, height: 168, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 16, height: 28, count: 72 }, eraRows: 6 },
   { id: 'world.girlMini', width: 24, height: 12, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 8, height: 12, count: 3 } },
   { id: 'world.girlWindow', width: 16, height: 6, origin: { x: 0, y: 0 }, tileable: 'none', frame: { width: 4, height: 6, count: 4 } },
@@ -1124,9 +1124,9 @@ const WP23A_ENTRIES: ReadonlyArray<{ id: AssetId; width: number; height: number;
 ];
 
 describe('WP23a world assets', () => {
-  it('appends the 25 WP23a ids after the WP22 decal ids, in contract order (ids 120..144; 145 total)', () => {
-    expect(ASSET_IDS.length).toBe(145);
-    expect(ASSET_IDS.slice(120)).toEqual(WP23A_ENTRIES.map((e) => e.id));
+  it('appends the 25 WP23a ids after the WP22 decal ids, in contract order (ids 120..144; the WP27 fx.fault id 145 follows)', () => {
+    expect(ASSET_IDS.length).toBe(146);
+    expect(ASSET_IDS.slice(120, 145)).toEqual(WP23A_ENTRIES.map((e) => e.id));
   });
 
   it('has the contract size, origin, tileable, frame and era rows for each id', () => {

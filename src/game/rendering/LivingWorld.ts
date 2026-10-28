@@ -58,6 +58,8 @@ const POSE_FRAMES: Record<LivingId, PoseNames> = {
 };
 // The Inspector under the open umbrella (R9): its front and talk poses carry the umbrella.
 const UMBRELLA_POSE_NAMES: PoseNames = { front: 'frontUmbrella', talk: 'talkUmbrella', glance: 'glance' };
+// The crow's speech-bubble poses while it is perched with folded wings (WP27 D5, crowPerchPoseToEra): the bubble never shows spread wings.
+const CROW_PERCH_POSE_NAMES: PoseNames = { front: 'perchHead', talk: 'perchTalk', glance: 'perchHead' };
 // The lying dog (demo hold image, DENIZEN_ART 2.2): one static frame, drawn without a runner.
 const LIE_FRAME = 'lie';
 // Sensor 7 foot dots: art px from the feet, each dot 2 art px wide and 1 high (DENIZEN_ART 1.4).
@@ -80,8 +82,15 @@ const TIMING_WINDOW = 120;
 const LED_DIM = PALETTE.rustDark;
 // Sensor 7 LED frame names by crossfade level (0 red, 1 amber); the sensorRows frame of a lit LED.
 const LED_FRAMES: readonly string[] = ['red', 'amber'];
-// The cycle 2+ crow trace pose (WORLD_ERA_LOOPS.crowHigh, one frame at dx 0): the crow holds it while state.traces.crowHigh (D7).
-const CROW_HIGH_POSE = WORLD_ERA_LOOPS.crowHigh[0];
+// The cycle 2+ high pose (WORLD_ERA_LOOPS.crowHigh): the crow draws it on its tipTry while state.traces.crowHigh (WP27 F5.4). tipTry exists
+// only in the era I-II tables, so the high pose shows only there and never in crank playback.
+// The frame name is read once here (the '' fallback as frontOf does; the data always carries the frame).
+const CROW_HIGH_FRAME = WORLD_ERA_LOOPS.crowHigh[0]?.frame ?? '';
+// The crow's glitch activity id (CROW_GLITCH in src/data/worldBehaviour.ts): the runner's activity that draws the high pose.
+const CROW_TIP_ACTIVITY = 'tipTry';
+// The high pose lifts the body this far above the perch feet, world px: the high lift (crowLiftArtPx + crowHighExtraArtPx) less the
+// perch lift (crowPerchLiftArtPx). The shadows stay on the ground (bobOf).
+const CROW_HIGH_LIFT_WORLD_PX = (WORLD_ENV.crowLiftArtPx + WORLD_ERA_ENV.crowHighExtraArtPx - WORLD_ERA_ENV.crowPerchLiftArtPx) * PIXEL_SCALE;
 // Alpha steps of the 8-bit grid (writeAlpha quantizes to them) and the era crossfade midpoint (the to row takes over the lens fog).
 // Both are structural, not tuning.
 const ALPHA_LEVELS = 255;
@@ -100,11 +109,13 @@ interface Beat { startMs: number; endMs: number; stepMs: number; frames: readonl
 
 /**
  * The last runner frame of a walker, held while its runner is parked or the member is busy (R5). frame is the raw clip frame
- * (stareFrame applies at draw); x is the runner x in world px (null until the first draw); umbrella is the Inspector's pose set.
+ * (stareFrame applies at draw); activity is the runner's activity id (the crow's tipTry reads it); x is the runner x in world px (null
+ * until the first draw); umbrella is the Inspector's pose set.
  */
 interface RunHold {
   x: number | null;
   frame: string;
+  activity: string;
   walking: boolean;
   flip: boolean;
   alpha: number;
@@ -310,12 +321,6 @@ function blinkDark(startMs: number | null, now: number): boolean {
   return step === 0 || step === 2;
 }
 
-// Crow feet lift in art px: highest while it flies (cycle 2+), perched from era III, low on the wire before.
-function crowLiftArtOf(state: WorldVisualState): number {
-  if (state.traces.crowHigh) return WORLD_ENV.crowLiftArtPx + WORLD_ERA_ENV.crowHighExtraArtPx;
-  return state.era >= 3 ? WORLD_ERA_ENV.crowPerchLiftArtPx : WORLD_ENV.crowLiftArtPx;
-}
-
 // Shadow alpha of the film: the era's scale, whatever state.shadows says (the dog fade drives the pose alpha).
 function filmShadowAlpha(state: WorldVisualState): number {
   return WORLD_PLAYBACK.shadowAlpha * shadowScale(state.era);
@@ -470,7 +475,7 @@ export class LivingWorld {
     };
     this.inspector = this.makeWalker('inspector', 'back', WORLD_ROWS.back.y, WORLD_DEPTH_OFFSETS.cast, WORLD_SHADOW_WIDTHS[0]);
     this.dog = this.makeWalker('dog', 'front', WORLD_ROWS.front.y, WORLD_DEPTH_OFFSETS.cast, WORLD_SHADOW_WIDTHS[1]);
-    this.crow = this.makeWalker('crow', 'back', WORLD_ROWS.back.y - WORLD_ENV.crowLiftArtPx * PIXEL_SCALE, WORLD_DEPTH_OFFSETS.crow, null);
+    this.crow = this.makeWalker('crow', 'back', WORLD_ROWS.back.y - WORLD_ERA_ENV.crowPerchLiftArtPx * PIXEL_SCALE, WORLD_DEPTH_OFFSETS.crow, null);
     this.girl = this.makeWalker('girl', 'back', WORLD_ROWS.back.y, WORLD_DEPTH_OFFSETS.cast, WORLD_SHADOW_WIDTHS[0]);
     this.sensor = this.makeSensor(rows.back, WORLD_ROWS.back.y);
     this.extras = new CastExtras(scene, rows);
@@ -561,7 +566,8 @@ export class LivingWorld {
     this.applyWalker(this.inspector, placements.inspector, state);
     this.applyWalker(this.dog, placements.dog, state);
     this.applyWalker(this.crow, placements.crow, state);
-    this.crow.feetY = WORLD_ROWS.back.y - crowLiftArtOf(state) * PIXEL_SCALE;
+    // The crow's feet sit on the finial in every era (crowPerchLiftArtPx); the cycle 2+ high pose lifts only its body (bobOf).
+    this.crow.feetY = WORLD_ROWS.back.y - WORLD_ERA_ENV.crowPerchLiftArtPx * PIXEL_SCALE;
     this.applyGirl(placements.girl, state);
     this.applySensor(placements.sensor7, state);
   }
@@ -667,7 +673,7 @@ export class LivingWorld {
       const w = this.walkerFor(step.id);
       // The booth (payphone) answers in WorldProps; Sensor 7 never joins the sync.
       if (w === null) continue;
-      w.beat = makeBeat(now + step.startMs, [POSE_FRAMES[w.id].glance], step.failMs, w.id === 'crow');
+      w.beat = makeBeat(now + step.startMs, [this.poseNamesOf(w, state.era).glance], step.failMs, w.id === 'crow');
     }
   }
 
@@ -819,7 +825,7 @@ export class LivingWorld {
     return {
       id, body, blend, shadow, feetY, anchorY: feetY, row, home: row, placement: null, visible: false, feetX: 0,
       frame: POSE_FRAMES[id].front, flip: false, dx: 0,
-      run: { x: null, frame: POSE_FRAMES[id].front, walking: false, flip: false, alpha: 1, rise: 0, umbrella: false },
+      run: { x: null, frame: POSE_FRAMES[id].front, activity: '', walking: false, flip: false, alpha: 1, rise: 0, umbrella: false },
       look: { valid: false, frame: '', walking: false, flip: false, stared: false, placementX: 0, shown: '', mirror: false },
       memo: { body: newSheetMemo(), twin: newSheetMemo() },
       turn: null, beat: null, talking: false,
@@ -996,7 +1002,7 @@ export class LivingWorld {
 
   // ---- update ----
 
-  // Walker draw (not the film), in priority: snapAll, the beat, the turn, the lying dog, the crow trace pose (cycle 2+), then the
+  // Walker draw (not the film), in priority: snapAll, the beat, the turn, the lying dog, the crow's cycle 2+ tipTry high pose, then the
   // runner frame. The runner frame sets the pose, the mirror, the alpha, the rise and the x. While the member is busy the runner is
   // paused by the director and the x holds (R5); a null, parked or off-sheet frame holds the last runner frame and x. The girl is
   // hidden without a runner frame. The body alpha is the presented cast alpha x the flicker x the runner alpha; the era crossfade
@@ -1020,11 +1026,11 @@ export class LivingWorld {
     if (w.beat !== null && now >= w.beat.endMs) w.beat = null;
     const held = this.busy(w.id);
     const lying = w.id === 'dog' && state.dogPose === 'lie';
-    const trace = w.id === 'crow' && state.traces.crowHigh ? CROW_HIGH_POSE : undefined;
     const stared = stareActive(w.id, state.stare, tween.stareK);
     if (f !== null && f.frame !== '' && sheetHas(w.id, f.frame)) {
       const run = w.run;
       run.frame = f.frame;
+      run.activity = f.activity;
       run.walking = f.walking;
       run.flip = f.flip;
       run.alpha = f.alpha;
@@ -1035,14 +1041,13 @@ export class LivingWorld {
     if (lying && !held) w.run.x = placement.x;
     const x = w.run.x ?? placement.x;
     w.run.x = x;
-    const names = this.poseNamesOf(w);
+    const names = this.poseNamesOf(w, state.era);
     const beat = w.beat;
     const beatName = beat !== null ? beatFrame(beat, now) : null;
     const turnName = w.turn !== null ? turnPose(w.turn, now, names) : null;
     let frame: string;
     let flip = false;
-    let at = x;          // feet x: the runner's x, or the trace pose's placement x plus its loop dx
-    let traced = false;  // the trace pose: no runner, so no rise and full alpha
+    let tipHigh = false;  // the crow's cycle 2+ tipTry shows the high pose: bobOf lifts the body for it (WP27 F5.4)
     if (this.snapped) {
       frame = names.front;
     } else if (beat !== null && beatName !== null) {
@@ -1052,10 +1057,10 @@ export class LivingWorld {
       frame = turnName;
     } else if (lying) {
       frame = LIE_FRAME;
-    } else if (trace !== undefined) {
-      frame = stareFrame(w.id, trace.frame, false, stared);
-      at = placement.x + trace.dx;
-      traced = true;
+    } else if (w.id === 'crow' && state.traces.crowHigh && w.run.activity === CROW_TIP_ACTIVITY) {
+      // The cycle 2+ tipTry: the high pose on the runner's own clock and x (WP27 F5.4).
+      frame = stareFrame(w.id, CROW_HIGH_FRAME, false, stared);
+      tipHigh = true;
     } else {
       // A walk keeps the runner's mirror; a rest frame faces away from the machine as it is drawn, so the stare onset flips with its frame.
       refreshRestLook(w.look, w.id, w.run, stared, placement.x);
@@ -1063,19 +1068,19 @@ export class LivingWorld {
       flip = w.look.mirror;
     }
     const nudge = this.gust || this.nudgeId === w.id ? RIPPLE_NUDGE_WORLD_PX : 0;
-    w.dx = at - placement.x;
+    w.dx = x - placement.x;
     w.frame = frame;
     w.flip = flip;
-    w.feetX = at + nudge;
+    w.feetX = x + nudge;
     w.anchorY = w.feetY;
     // The Inspector's tracking hitch (era II micro): its tracking-line texture for this frame, never under reduced motion.
     const hitch = w.id === 'inspector' && ambient.micro.hitch && !this.reduced;
     const key = this.keyOf(w.id, hitch || this.trackOn(w.turn, now));
-    // The lying frame and the crow trace pose have no runner: no rise, full alpha.
-    const bare = lying || traced;
+    // The lying frame has no runner: no rise, full alpha.
+    const bare = lying;
     const alpha = bare ? 1 : w.run.alpha;
     const rise = bare ? 0 : w.run.rise;
-    const bodyY = w.feetY - this.bobOf(w, state, now, rise);
+    const bodyY = w.feetY - this.bobOf(w, state, now, rise, tipHigh);
     const bodyAlpha = tween.alpha * flicker * alpha;
     paintFrame(w.body, key, w.id, frame, this.eraCross.main, w.memo.body);
     writeFlip(w.body, flip);
@@ -1120,9 +1125,12 @@ export class LivingWorld {
     writeVisible(w.body, true);
   }
 
-  // The pose names of a walker this frame: the Inspector's umbrella set while its runner has the umbrella open (R9).
-  private poseNamesOf(w: Walker): PoseNames {
-    return w.id === 'inspector' && w.run.umbrella ? UMBRELLA_POSE_NAMES : POSE_FRAMES[w.id];
+  // The pose names of a walker this frame: the Inspector's umbrella set while its runner has the umbrella open (R9); the crow's folded-wing
+  // perch set up to crowPerchPoseToEra (WP27 D5), the POSE_FRAMES set after it.
+  private poseNamesOf(w: Walker, era: number): PoseNames {
+    if (w.id === 'inspector' && w.run.umbrella) return UMBRELLA_POSE_NAMES;
+    if (w.id === 'crow' && era <= WORLD_ERA_ENV.crowPerchPoseToEra) return CROW_PERCH_POSE_NAMES;
+    return POSE_FRAMES[w.id];
   }
 
   // Film mode: the member's pose from the frame (row, frame, offset, mirror, alpha, shadow, crossfade) on its home feet line. The crow's
@@ -1328,12 +1336,17 @@ export class LivingWorld {
   }
 
   // Lift of the body above its feet, world px: the runner's rise (its unison beat; none under reduced motion), the era IV ripple rise and,
-  // for the perched crow in era IV, its static hover. Shadows stay on the ground.
-  private bobOf(w: Walker, state: WorldVisualState, now: number, rise: number): number {
+  // for the perched crow in era IV, its static hover. Shadows stay on the ground. The crow's spread-wing glitch (frozen / frozenTip in the
+  // perched eras, WP27 F5.3) pops crowHoverPx and lands, never under reduced motion; the cycle 2+ tipTry high pose lifts its body (tipHigh).
+  private bobOf(w: Walker, state: WorldVisualState, now: number, rise: number, tipHigh: boolean): number {
     let bob = (this.reduced ? 0 : rise) + (now < this.riseUntilMs ? WORLD_ERA_ENV.riseWorldPx : 0);
-    if (w.id === 'crow' && state.era === WORLD_ERA_ENV.downbeatEra && !state.traces.crowHigh) {
+    if (w.id === 'crow' && state.era <= WORLD_ERA_ENV.crowPerchPoseToEra && (w.frame === 'frozen' || w.frame === 'frozenTip') && !this.reduced) {
       bob += WORLD_ERA_ENV.crowHoverPx * PIXEL_SCALE;
     }
+    if (w.id === 'crow' && state.era === WORLD_ERA_ENV.downbeatEra) {
+      bob += WORLD_ERA_ENV.crowHoverPx * PIXEL_SCALE;
+    }
+    if (tipHigh) bob += CROW_HIGH_LIFT_WORLD_PX;
     return bob;
   }
 

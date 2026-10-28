@@ -180,11 +180,12 @@ function whenHolds(def: Activity, ctx: BehaviourCtx): boolean {
 }
 
 // The activities an actor may start now: its era list with every 'when' holding (weight-0 reactions included: the pick skips them).
-// The girl in the window stage has none: she parks (no picks, no frame).
+// The girl in the window stage has none: she parks (no picks, no frame). A glitch is never eligible in crank playback (WP27 F5.1b): the
+// crank moves only on the player's clicks, so a glitch would hold for as long as the player stopped cranking.
 export function eligible(actor: BehaviourActor, era: WorldEra, ctx: BehaviourCtx): readonly Activity[] {
   if (actor === 'girl' && ctx.girlStage === 'window') return [];
   const list: readonly Activity[] = WORLD_REPERTOIRE[actor][era] ?? [];
-  return list.filter((a) => whenHolds(a, ctx));
+  return list.filter((a) => whenHolds(a, ctx) && !(a.glitch === true && ctx.mode === 'crank'));
 }
 
 // A fresh memory: draw index k0, the home spot index (the runner's spot before the first pick), no history.
@@ -383,8 +384,12 @@ export function startSeg(mem: Memory, def: Activity, env: PickEnv, nowMs: number
 export function pickNext(mem: Memory, cur: Seg | null, pool: readonly Activity[], env: PickEnv, nowMs: number): Seg {
   const k = mem.k;
   mem.k += 1;
-  const free = pool.filter((a) => a.weight > 0);
-  if (free.length === 0) throw new Error('pickNext: no free activity');
+  const positive = pool.filter((a) => a.weight > 0);
+  if (positive.length === 0) throw new Error('pickNext: no free activity');
+  // WP27 F5.1b: a fresh runner's first pick (no current segment) never starts a glitch; the unfiltered list is used only when the
+  // glitch-free one is empty.
+  const calm = cur === null ? positive.filter((a) => a.glitch !== true) : positive;
+  const free = calm.length > 0 ? calm : positive;
   PICK_STATS.picks += 1;
   // Rule 1: candidates. The current id only when repeatable and its merged hold (and static run) still fits the cap.
   const cands = free.filter((a) => {
@@ -450,12 +455,13 @@ function nearestSpot(spots: readonly { x: number }[], x: number): number {
   });
   return best;
 }
-// Cache key of the eligible list: the era, the girl stage and the flags the 'when' conditions read.
+// Cache key of the eligible list: the era, the girl stage and the flags the 'when' conditions read, plus the crank mode (128: eligible
+// drops the glitches in crank playback, so the cached list follows the mode).
 function eligibleKey(c: BehaviourCtx): number {
   const flags = (c.vents ? 1 : 0) | (c.holeDig ? 2 : 0) | (c.sensor ? 4 : 0) | (c.scraps ? 8 : 0) | (c.stare ? 16 : 0)
-    | (c.reduced ? 32 : 0) | (c.demoHold ? 64 : 0);
+    | (c.reduced ? 32 : 0) | (c.demoHold ? 64 : 0) | (c.mode === 'crank' ? 128 : 0);
   const stage = c.girlStage === 'window' ? 0 : c.girlStage === 'mini' ? 1 : 2;
-  return (c.era * 3 + stage) * 128 + flags;
+  return (c.era * 3 + stage) * 256 + flags;
 }
 // Drawn walk ticks of a walk over dx world px: one per pxPerFrame (the last one may be short).
 function walkTicksOf(dx: number): number {

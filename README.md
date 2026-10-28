@@ -4,7 +4,7 @@ An idle game about an unexplained machine in a rust-coloured wasteland. Turn the
 
 ## Editions
 
-Version 0.10.1 (`package.json`). The full game and the Steam demo are built from one codebase.
+Version 0.11.0 (`package.json`). The full game and the Steam demo are built from one codebase.
 
 | | Full game | Demo |
 |---|---|---|
@@ -307,13 +307,13 @@ Final simulation results (`src/simulation/balance.sim.test.ts`, deterministic, p
 | First reached at | Greedy time (mm:ss) | Assertion |
 |---|---:|---|
 | Gear Ratio (level 1) | 0:04 | not asserted |
-| Worn Motor | 0:13 | under 60 s |
-| Motor Tuning | 0:20 | not asserted |
-| Reinforced Crank | 3:16 | 180-300 s |
-| Flywheel | 4:49 | not asserted |
-| Piston Array | 12:02 | 600-900 s |
-| Improved Pistons | 12:38 | not asserted |
-| Generator Blueprint | 22:06 | 1200-1800 s |
+| Worn Motor | 0:13 (see WP27) | under 60 s |
+| Motor Tuning | 0:20 (see WP27) | not asserted |
+| Reinforced Crank | 3:16 (see WP27) | 180-300 s |
+| Flywheel | 4:49 (see WP27) | not asserted |
+| Piston Array | 12:02 (see WP27) | 600-900 s (see WP27) |
+| Improved Pistons | 12:38 (see WP27) | not asserted |
+| Generator Blueprint | 22:06 (see WP27) | 1200-1800 s |
 
 **Deviation from the spec (explicit).** `docs/GAME_SPEC.md` section 6 gives initial balancing numbers. A
 greedy player reached every milestone in under a minute with those numbers, so the values were retuned.
@@ -323,13 +323,13 @@ The spec text itself is not edited; the spec calls its numbers initial targets. 
 | Tech | Spec base / growth | Current base / growth / max level |
 |---|---|---|
 | Gear Ratio | 10 / 1.15 | 15 / 1.3 / 15 (was 25) |
-| Reinforced Crank | 50 | 2000 |
+| Reinforced Crank | 50 | 2000 (see WP27) |
 | Flywheel | 150 / 1.20 | 4000 / 1.35 / 10 |
 | Worn Motor | 25 | 40 |
 | Motor Tuning | 40 / 1.18 | 60 / 1.3 / 25 |
-| Piston Array | 250 | 12000 |
-| Improved Pistons | 120 / 1.20 | 6000 / 1.3 / 25 |
-| Generator Blueprint | 1,000 lifetime ME | 200,000 lifetime ME |
+| Piston Array | 250 | 12000 (see WP27) |
+| Improved Pistons | 120 / 1.20 | 6000 / 1.3 / 25 (see WP27) |
+| Generator Blueprint | 1,000 lifetime ME | 200,000 lifetime ME (see WP27) |
 
 System log lifetime-ME triggers were scaled the same way: 25 / 120 / 600 / 2500 became 500 / 5000 / 30000 /
 100000. Effects, prerequisites and technology ids did not change.
@@ -343,6 +343,111 @@ npx vitest run src/simulation/balance.sim.test.ts
 The test prints a table of first-reached times per run and asserts the four targets above, plus the era II to V and
 energy checks in the same file. If one fails, tune one knob (Reinforced Crank base cost, Piston Array base cost,
 Generator Blueprint threshold, or Worn Motor base cost) and update the asserted ranges.
+
+### WP27 (2026-10-27): click curve and Faults
+
+The 2026-10-27 playtest said the first passive buy (+17 ME/s) killed manual clicking. WP27 makes era I hand-led,
+keeps the manual click useful through the machine eras, and adds two active mechanics: Machine Faults and the
+Wind-up. The numbers below are the planner's F2hi set (`docs/plan/WP27.md`). Older rows above that quote v0.10.1
+numbers are marked "see WP27".
+
+**Changed numbers (v0.10.1 to WP27).** Values live in `src/data/technologies.ts`, `src/data/prestige.ts` and
+`src/data/audio.ts`.
+
+| Item | Field | v0.10.1 | WP27 |
+|---|---|---:|---:|
+| Worn Motor | ME/s added | 17 | 2 |
+| Motor Tuning | ME/s added per level | 3.3 | 0.9 |
+| Reinforced Crank | base cost | 2,500 | 1,200 |
+| Reinforced Crank | effect | ×1.5 manual production | crank echo 0.15 s; wind-up 0.35 s, refill 0.035 s/s |
+| Flywheel | effect per level | +10 % automation | same, plus wind-up 0.015 s, refill 0.0015 s/s (max 10 levels) |
+| Piston Array | ME/s added; base cost | 17; 12,000 | 60; 3,000 |
+| Improved Pistons | ME/s added per level; base cost | 6.7; 6,000 | 10; 3,000 |
+| Generator Blueprint | lifetime ME | 240,000 | 400,000 |
+| Generator | base cost; convert (EE) | 25,500; 0.38 | 60,000; 0.14 |
+| Copper Winding | convert (EE) per level | 0.19 | 0.068 |
+| Boiler; Firebox | convert (PR) | 0.27; 0.14 | 0.11; 0.059 |
+| Induction Heater | PR/s added per level | 4.5 | 1.9 |
+| Resonator Spire; Harmonic Coil | convert (RS) | 0.35; 0.17 | 0.45; 0.22 |
+| Pressure Resonator | RS/s added per level | 5.3 | 6.9 |
+| Null Chamber; Containment Ring | convert (XF) | 0.094; 0.047 | 0.054; 0.027 |
+| Resonant Siphon | XF/s added per level; growth | 1.9; 1.3 | 1.1; 1.26 |
+| Gravitic Anchor | growth | 1.5 | 2.0 |
+| Crank Servo | growth | 1.5 | 2.0 |
+| Bellows Drive | growth | 2.5 | 1.5 |
+| Dynamo Crank | echo per click | 0.25 s of EE | crank echo 0.3 s, all energies |
+| Steam Hammer | echo per click | 0.25 s of PR | wind-up 0.375 s, refill 0.0375 s/s |
+| Echo Crank | echo per click | 0.5 s of RS; ×2 manual ME | crank echo 0.05 s; ×2 manual ME kept |
+| Inversion Crank | echo per click | 0.75 s of XF | crank echo 0.05 s |
+| Residual Charge (perk) | converter bonus | 50 % | 10 % |
+| Echo bonus | per counted Echo | 15 % | 14 % |
+| Counted Echo cap | Echoes | 30 | 12 |
+| Machine hum | `AUDIO.hum.maxPerSecond` | 40,000 | 1,000,000 |
+
+**New nodes.** Five unlocks after Steam Lance. Each sits in the tree tab of its era; the demo shows Fault Lamp and
+Discharge Lever only.
+
+| Node | Era | Cost | Requires | Effect (per level) |
+|---|---:|---:|---|---|
+| Fault Lamp (`faultLamp`) | I | 3,000 ME | Improved Pistons 1 | Faults start. A cleared fault pays 15 s of output. |
+| Discharge Lever (`dischargeLever`) | II | 20,000 EE | Spark Gap 1 | Wind-up 0.375 s, refill 0.0375 s/s. Cleared faults pay +3 s. |
+| Leak Whistle (`leakWhistle`) | III | 100,000 PR | Bellows Drive 1 | Fault interval × 0.9. |
+| Damping Fork (`dampingFork`) | IV | 300,000 RS | Echo Crank 1 | Wind-up 0.375 s, refill 0.0375 s/s. Faults last +4 s and pay +4 s. |
+| Overrun Clutch (`overrunClutch`) | V | 50,000 XF | Inversion Crank 1 | Wind-up 0.375 s, refill 0.0375 s/s. A cleared fault gives ×2 output for 6 s. |
+
+**First reached (profile A, planner harness F2hi).** The repo sims re-pin these if a run differs.
+
+| First reached at | v0.10.1 (mm:ss) | WP27 (mm:ss) |
+|---|---:|---:|
+| Gear Ratio (level 1) | 0:04 | 0:04 |
+| Worn Motor | 0:13 | 0:18 |
+| Motor Tuning | 0:20 | 0:28 |
+| Reinforced Crank | 3:16 | 3:55 |
+| Piston Array | 12:02 | 6:24 |
+| Flywheel | 4:49 | 8:22 |
+| Improved Pistons | 12:38 | 6:43 |
+| Generator Blueprint | 22:06 | 22:14 |
+| Fault Lamp (bought) | — | 7:01 |
+
+- Worn Motor is worth 0.67 clicks per second when bought (was 5.67). Target 0.5 to 1.
+- ME click share is at least 76.5 % until 2:00 and 73 % until 4:00 (targets 75 % and 50 %).
+- ME passive passes profile A's four clicks per second at 6:50 (target 4:00 to 8:00). The Piston Array window in
+  `balance.sim.test.ts` moves from 10:00-15:00 to 5:00-8:00; the 600-900 s assertion in the table above is the old one.
+- From the first Gear Ratio level on, a manual ME click is worth at least as many seconds of output as a manual
+  click in any other energy that has passive income.
+- Era-end gates (profile A): Blueprint 22:14, Substation 60:50, Vessel 110:29, Convergence 167:36, Primary Function
+  249:45. Primary Function for profiles B and C: 276:30 and 350:00.
+
+**Machine Faults.** Logic in `src/simulation/faults.ts`; numbers and texts in `src/data/faults.ts`.
+
+- A visible part faults after a seeded interval of 90-180 s (81-162 s after Leak Whistle). The first fault waits
+  180 s of eligible play. Faults start only while the game is visible and interactive, never run offline, and at
+  most one is alive at a time.
+- Clear a fault by clicking it or pressing F. It pays its seconds of current output in every energy with passive
+  income, ME included. Missing a fault costs nothing.
+- Payout 15 s (18 s after Discharge Lever, 22 s after Damping Fork). Window 8 s (12 s after Damping Fork).
+- Overrun Clutch adds a ×2 output Overdrive for 6 s after a cleared fault.
+
+**Wind-up.** The machine stores output. Reinforced Crank, Flywheel, Steam Hammer, Discharge Lever, Damping Fork
+and Overrun Clutch raise its capacity and refill. A manual click releases all of it at once, in every energy.
+Servo auto-cranks never release it. Stored output is not saved; it refills from the offline span on load.
+
+Faults and wind-up totals by era (profile A buys every node on its way):
+
+| From (profile A buy time) | Wind-up cap | Refill | Fault payout | Interval | Window |
+|---|---:|---:|---:|---:|---:|
+| Reinforced Crank (3:55) | 0.35 s | 0.035 s/s | — | — | — |
+| Fault Lamp (7:01) | 0.35 s | 0.035 s/s | 15 s | 90-180 s | 8 s |
+| Flywheel 1-10 (8:22) | 0.50 s | 0.05 s/s | 15 s | 90-180 s | 8 s |
+| Discharge Lever (36:12) | 0.875 s | 0.0875 s/s | 18 s | 90-180 s | 8 s |
+| Steam Hammer (71:09) | 1.25 s | 0.125 s/s | 18 s | 90-180 s | 8 s |
+| Leak Whistle (83:40) | 1.25 s | 0.125 s/s | 18 s | 81-162 s | 8 s |
+| Damping Fork (133:38) | 1.625 s | 0.1625 s/s | 22 s | 81-162 s | 12 s |
+| Overrun Clutch (177:42) | 2.0 s | 0.2 s/s | 22 s; ×2 for 6 s | 81-162 s | 12 s |
+
+**Prestige (WP27 values; bounds unchanged).** Planner harness: cycle 2 at 0.549-0.609 of cycle 1 (bound 0.50-0.65),
+cycle 3 at 0.354 (0.35-0.55), the strongest memory run at 0.190 (at least 0.12), casual cycle 2 at 0.644 (at most
+0.65).
 
 ### Sign-off numbers (WP16)
 
@@ -361,37 +466,37 @@ Era-end windows (path A):
 
 | Milestone | Tech | Window | Path A |
 |---|---|---|---|
-| Blueprint | `generatorBlueprint` | 20:00-30:00 | 22:06 |
-| Substation | `substationBlueprint` | 55:00-75:00 | 60:23 |
-| Vessel | `pressureVesselBlueprint` | 105:00-135:00 | 110:36 |
-| Convergence | `harmonicConvergence` | 165:00-205:00 | 166:30 |
-| Primary Function | `primaryFunction` | 230:00-290:00 | 249:31 |
+| Blueprint | `generatorBlueprint` | 20:00-30:00 | 22:06 (see WP27) |
+| Substation | `substationBlueprint` | 55:00-75:00 | 60:23 (see WP27) |
+| Vessel | `pressureVesselBlueprint` | 105:00-135:00 | 110:36 (see WP27) |
+| Convergence | `harmonicConvergence` | 165:00-205:00 | 166:30 (see WP27) |
+| Primary Function | `primaryFunction` | 230:00-290:00 | 249:31 (see WP27) |
 
 Primary Function by path:
 
 | Path | Active | Wall clock | Check |
 |---|---|---|---|
-| A | 249:31 | 249:31 | 230 to 290 min |
-| B | 264:00 | 264:00 | at or before 300 min |
-| C | 428:30 | 428:30 | at or before 480 min |
-| D | 289:30 | 1249:30 | at or before C (active) and 480 min |
+| A | 249:31 (see WP27) | 249:31 (see WP27) | 230 to 290 min |
+| B | 264:00 (see WP27) | 264:00 (see WP27) | at or before 300 min |
+| C | 428:30 (see WP27) | 428:30 (see WP27) | at or before 480 min |
+| D | 289:30 (see WP27) | 1249:30 (see WP27) | at or before C (active) and 480 min |
 
-Longest gap between purchases, generatorBlueprint to primaryFunction (active seconds, limit 1200 s): A 308 s,
+Longest gap between purchases (see WP27), generatorBlueprint to primaryFunction (active seconds, limit 1200 s): A 308 s,
 B 300 s, C 450 s, D 390 s.
 
 Memory cycles (ratio = Primary Function time / cycle 1 of the same profile):
 
 | Run | Primary Function | Ratio | Check |
 |---|---|---|---|
-| Cycle 2, 3 Echoes, Muscle Memory (A) | 157:57 | 0.633 | at most 0.65 |
-| Cycle 2, 3 Echoes, Residual Charge (A) | 150:25 | 0.603 | at most 0.65 |
-| Cycle 2, 3 Echoes, Servo Recall (A) | 144:14 | 0.578 | at most 0.65 |
-| Cycle 2, 3 Echoes, Ledger (A) | 152:28 | 0.611 | at most 0.65 |
-| Cycle 2, 3 Echoes, no perk (A) | 158:08 | 0.634 | reference for cycle 3 |
-| Cycle 3, 6 Echoes, Muscle Memory + Residual Charge + Servo Recall (A) | 112:39 | 0.451 | below cycle 2 with no perk |
-| Casual cycle 2, 3 Echoes, no perk (C) | 249:00 | 0.581 | at most 0.65 of casual cycle 1 |
+| Cycle 2, 3 Echoes, Muscle Memory (A) | 157:57 | 0.633 (see WP27) | at most 0.65 |
+| Cycle 2, 3 Echoes, Residual Charge (A) | 150:25 | 0.603 (see WP27) | at most 0.65 |
+| Cycle 2, 3 Echoes, Servo Recall (A) | 144:14 | 0.578 (see WP27) | at most 0.65 |
+| Cycle 2, 3 Echoes, Ledger (A) | 152:28 | 0.611 (see WP27) | at most 0.65 |
+| Cycle 2, 3 Echoes, no perk (A) | 158:08 | 0.634 (see WP27) | reference for cycle 3 |
+| Cycle 3, 6 Echoes, Muscle Memory + Residual Charge + Servo Recall (A) | 112:39 | 0.451 (see WP27) | below cycle 2 with no perk |
+| Casual cycle 2, 3 Echoes, no perk (C) | 249:00 | 0.581 (see WP27) | at most 0.65 of casual cycle 1 |
 
-Summary: cycle 2 is 0.578 to 0.634 of cycle 1 on path A. Cycle 3 is 0.451 of cycle 1 on path A. Casual cycle 2 is
+Summary (v0.10.1 numbers; see WP27): cycle 2 is 0.578 to 0.634 of cycle 1 on path A. Cycle 3 is 0.451 of cycle 1 on path A. Casual cycle 2 is
 0.581 of casual cycle 1 (path C). Every run stays finite and below `DESIGN_MAX_VALUE` (`src/data/balance.ts`).
 
 Re-run the sign-off, the balance targets and the demo cap timings:

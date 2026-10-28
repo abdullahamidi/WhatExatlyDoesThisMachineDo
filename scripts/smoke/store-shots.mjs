@@ -38,6 +38,7 @@
 //   checks <size>_<id>_plate_cap and <size>_<id>_<variant>_no_spoiler (stems 01-07, 09, not press kit); store-top5.json gets plateCap. The check also asserts the HUD plaque text (read from #hud-plaque even when the HUD is hidden) has no RESTOR.
 // WP23a: the living world is quiet for every stem (worldQuiet(true) before each stem, again after each navigation): no bubble,
 //   blip or glance reaches a shot. No check changed or added.
+// WP27: quietWorld also turns the fault marker gate off (setFaults(false)); every shot adds <size>_<id>_<variant>_no_fault (faultStats() null or marker.visible false).
 // AD R (v0.10.0): after each buy list (stems 02, 03, 04, 06, 07) the wait opens and closes the TECH INDEX once (waitWithTreeBlink):
 //   the living world moves its cast to a new framing only while the tree is open (unseenChangeOk), as in play where every buy is made
 //   in the TECH INDEX. Without it the cast keeps the previous framing's spots (era II / III cast behind the grown machine, no era IV / V girl).
@@ -169,6 +170,7 @@ async function main() {
     const shown = await page.evaluate(() => {
       window.__wedtmd?.worldQuiet?.(true);
       window.__wedtmd?.setOutputTicks?.(false);
+      window.__wedtmd?.setFaults?.(false);
       window.__wedtmd?.worldSettle?.(true);
       return window.__wedtmd?.outputStats?.()?.shown ?? null;
     });
@@ -206,6 +208,9 @@ async function main() {
     const outStats = await page.evaluate(() => window.__wedtmd?.outputStats?.() ?? null);
     const outBase = outputBase.get(page);
     report.check(`${size}_${id}_${variant}_no_output_tick`, outStats === null || (outStats.visible === 0 && (outBase === undefined || outBase === null || outStats.shown === outBase)), outStats);
+    // WP27: no fault marker in the store set (quietWorld turns the marker gate off); a build without the hook or the World scene passes.
+    const faultOut = await page.evaluate(() => window.__wedtmd?.faultStats?.() ?? null);
+    report.check(`${size}_${id}_${variant}_no_fault`, faultOut === null || faultOut.marker.visible === false, faultOut === null ? null : faultOut.marker);
     if (spoil !== null) report.check(`${size}_${id}_${variant}_no_spoiler`, spoil.frame !== null && spoil.frame <= PLATE_CAP_FRAME && spoil.hits.length === 0 && (spoil.plaque === null || !SPOILER_RE.test(spoil.plaque)), spoil);
     shots.push({ file, size, stem: name, variant, width, height });
   };

@@ -267,7 +267,8 @@ describe('GameSession stats', () => {
       const session = new GameSession({
         state: withLevels(
           { pistonArray: 1, flywheel: 1 },
-          { lastSimTime: 0, lifetime: { ...createInitialState(0).lifetime, me: 240_000 } },
+          // WP27 re-pin (F2hi): Generator Blueprint's lifetime ME requirement is 400000 (was 240000).
+          { lastSimTime: 0, lifetime: { ...createInitialState(0).lifetime, me: 400_000 } },
         ),
         now: () => 0,
       });

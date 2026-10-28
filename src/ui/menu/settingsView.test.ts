@@ -206,8 +206,14 @@ describe('confirm new cycle row visibility', () => {
 });
 
 describe('hotkeyHelpLines', () => {
-  it('lists crank, tech index, menu and fullscreen keys', () => {
-    expect(hotkeyHelpLines()).toEqual(['SPACE / ENTER  CRANK', 'T  TECH INDEX', 'ESC  MENU', 'F11 / ALT+ENTER  FULLSCREEN']);
+  it('lists crank, tech index, clear fault, menu and fullscreen keys in that order', () => {
+    expect(hotkeyHelpLines()).toEqual([
+      'SPACE / ENTER  CRANK',
+      'T  TECH INDEX',
+      'F  CLEAR FAULT',
+      'ESC  MENU',
+      'F11 / ALT+ENTER  FULLSCREEN',
+    ]);
   });
 
   it('no settings label still says TECH TREE', () => {

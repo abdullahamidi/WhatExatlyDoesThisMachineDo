@@ -139,11 +139,12 @@ describe('worldEras: tech rules', () => {
     expect(WORLD_VIRGA.frozenEra).toBeGreaterThan(WORLD_VIRGA.minEra);
   });
 
-  it('pins the era IV rise, the era V shadow slide and the downbeat era', () => {
+  it('pins the era IV rise, the era V shadow slide, the downbeat era and the crow bubble poses through era IV', () => {
     expect(WORLD_ERA_ENV.riseWorldPx).toBe(2);
     expect(WORLD_ERA_ENV.shadowSlideWorldPx).toBe(4);
     expect(WORLD_ERA_ENV.shadowSlideMs).toBe(500);
     expect(WORLD_ERA_ENV.downbeatEra).toBe(4);
+    expect(WORLD_ERA_ENV.crowPerchPoseToEra).toBe(4);
   });
 
   it('pins the era thresholds the state maths reads, each an era 1-5 in order', () => {

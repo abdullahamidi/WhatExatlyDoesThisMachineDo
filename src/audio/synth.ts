@@ -4,6 +4,7 @@
 import { AUDIO } from '../data/audio';
 import { MUSIC } from '../data/music';
 import type { MusicNoteEvent, MusicTheme, MusicThemeId, MusicVoice } from '../data/music';
+import type { EraNumber } from '../data/eras';
 import { chirpSweeps, chordFrequencies, stampPartials } from './audioMath';
 import type { ChirpSweep, StampPartial } from './audioMath';
 
@@ -78,6 +79,8 @@ export interface Synth {
   playResolveChord(): void; // AUDIO.resolveChord major triad plus octave, slow attack, long decay (finale S5)
   playChirps(): void; // AUDIO.chirp FM-ish sine sweeps, `count` of them (finale flock)
   playStamp(): void; // AUDIO.stamp low thump, lowpassed rattle and metallic click, under 300 ms (new cycle)
+  playFaultSpawn(era: EraNumber): void; // AUDIO.faultSpawn one short cue shaped by the era (crackle, hiss, ping or static), under 400 ms
+  playFaultClear(overdrive: boolean): void; // AUDIO.faultClear ratchet clunk and bright tick, under 300 ms; overdrive adds a rising second tick
   playBlip(voice: WorldBlipVoice, count: number, reversed: boolean): void; // AUDIO.world.blip: count (1..8) blips gapMs apart; reversed = ramp up then cut
   playRing(): void; // AUDIO.world.ring payphone ring: bursts of two sines, gapMs apart
   setDialTone(on: boolean): void; // AUDIO.world.dialTone two sines faded in and out; stops by itself after maxMs, never loops; on while sounding is a no-op
@@ -99,7 +102,7 @@ interface VoiceSpec {
   decay: number; // seconds from startAt until the envelope reaches the floor
   peak: number;
   hold?: number; // seconds at full peak before the decay starts (must be < decay)
-  dropFromHz?: number; // optional pitch drop from this frequency down to hz
+  dropFromHz?: number; // optional pitch glide from this frequency to hz over the first half of decay (down for a drop, up for a rising tick)
 }
 
 interface HumNodes {
@@ -288,7 +291,18 @@ function playFmBell(
   modulator.stop(end + STOP_PAD_S);
 }
 
-/** One-shot noise burst from the shared noise buffer, starting at a random offset, with an exponential envelope. */
+/** Filter on a noise burst: type at hz, with Q q when given (WebAudio's default Q otherwise). */
+interface NoiseFilter {
+  type: BiquadFilterType;
+  hz: number;
+  q?: number;
+}
+
+/**
+ * One noise burst from the shared noise buffer, starting at a random offset, with an exponential envelope from peak to the floor
+ * over decay. With `filter` the burst runs through it first (the arc, hiss, stamp rattle and fault cues). With `tally` it is counted
+ * while it sounds (the fault cues). The nodes are released when the source ends.
+ */
 function playNoise(
   context: AudioContext,
   out: AudioNode,
@@ -296,16 +310,31 @@ function playNoise(
   startAt: number,
   decay: number,
   peak: number,
+  filter?: NoiseFilter,
+  tally?: VoiceTally,
 ): void {
   const src = context.createBufferSource();
   const env = context.createGain();
+  let shaper: BiquadFilterNode | null = null;
   src.buffer = noise;
   env.gain.setValueAtTime(peak, startAt);
   env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, startAt + decay);
-  src.connect(env);
+  if (filter === undefined) {
+    src.connect(env);
+  } else {
+    shaper = context.createBiquadFilter();
+    shaper.type = filter.type;
+    shaper.frequency.value = filter.hz;
+    if (filter.q !== undefined) shaper.Q.value = filter.q;
+    src.connect(shaper);
+    shaper.connect(env);
+  }
   env.connect(out);
+  if (tally !== undefined) tally.live += 1;
   src.onended = () => {
+    if (tally !== undefined) tally.live -= 1;
     src.disconnect();
+    shaper?.disconnect();
     env.disconnect();
   };
   const offset = Math.random() * Math.max(0, noise.duration - decay);
@@ -392,31 +421,6 @@ function ensureMains(context: AudioContext, out: AudioNode, cache: MainsNodes | 
   return { fundamental, harmonic, gain };
 }
 
-/** One arc crackle: a short noise burst through a throwaway high-pass. Nodes are released when it ends. */
-function playArc(context: AudioContext, out: AudioNode, noise: AudioBuffer, startAt: number): void {
-  const a = AUDIO.arc;
-  const decay = a.ms / 1000;
-  const src = context.createBufferSource();
-  const env = context.createGain();
-  const hp = context.createBiquadFilter();
-  src.buffer = noise;
-  hp.type = 'highpass';
-  hp.frequency.value = a.highpassHz;
-  env.gain.setValueAtTime(a.gain, startAt);
-  env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, startAt + decay);
-  src.connect(env);
-  env.connect(hp);
-  hp.connect(out);
-  src.onended = () => {
-    src.disconnect();
-    env.disconnect();
-    hp.disconnect();
-  };
-  const offset = Math.random() * Math.max(0, noise.duration - decay);
-  src.start(startAt, offset);
-  src.stop(startAt + decay + STOP_PAD_S);
-}
-
 /** Boiler roar: one persistent looped noise source through a lowpass, then the level gain. */
 function ensureBoiler(context: AudioContext, out: AudioNode, cache: BoilerNodes | null, noise: AudioBuffer): BoilerNodes {
   if (cache) return cache;
@@ -455,31 +459,6 @@ function ensureRain(context: AudioContext, out: AudioNode, cache: RainNodes | nu
   gain.connect(out);
   source.start(0, Math.random() * noise.duration);
   return { source, filter, gain };
-}
-
-/** One steam hiss: a short noise burst through a throwaway high-pass. Nodes are released when it ends. */
-function playHissBurst(context: AudioContext, out: AudioNode, noise: AudioBuffer, startAt: number): void {
-  const h = AUDIO.hiss;
-  const decay = h.ms / 1000;
-  const src = context.createBufferSource();
-  const env = context.createGain();
-  const hp = context.createBiquadFilter();
-  src.buffer = noise;
-  hp.type = 'highpass';
-  hp.frequency.value = h.highpassHz;
-  env.gain.setValueAtTime(h.gain, startAt);
-  env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, startAt + decay);
-  src.connect(env);
-  env.connect(hp);
-  hp.connect(out);
-  src.onended = () => {
-    src.disconnect();
-    env.disconnect();
-    hp.disconnect();
-  };
-  const offset = Math.random() * Math.max(0, noise.duration - decay);
-  src.start(startAt, offset);
-  src.stop(startAt + decay + STOP_PAD_S);
 }
 
 /** Sines sounding together through one envelope (linear attack, exponential decay); the envelope is released after the last oscillator ends. */
@@ -682,37 +661,6 @@ function playChirpSweep(context: AudioContext, out: AudioNode, startAt: number, 
   osc.stop(endAt + STOP_PAD_S);
   mod.start(startAt);
   mod.stop(endAt + STOP_PAD_S);
-}
-
-/** Stamp rattle: a short noise burst through a lowpass (dull, low), one exponential envelope. Nodes are released when it ends. */
-function playStampRattle(
-  context: AudioContext,
-  out: AudioNode,
-  noise: AudioBuffer,
-  startAt: number,
-  decay: number,
-  peak: number,
-  lowpassHz: number,
-): void {
-  const src = context.createBufferSource();
-  const env = context.createGain();
-  const lp = context.createBiquadFilter();
-  src.buffer = noise;
-  lp.type = 'lowpass';
-  lp.frequency.value = lowpassHz;
-  env.gain.setValueAtTime(peak, startAt);
-  env.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, startAt + decay);
-  src.connect(lp);
-  lp.connect(env);
-  env.connect(out);
-  src.onended = () => {
-    src.disconnect();
-    lp.disconnect();
-    env.disconnect();
-  };
-  const offset = Math.random() * Math.max(0, noise.duration - decay);
-  src.start(startAt, offset);
-  src.stop(startAt + decay + STOP_PAD_S);
 }
 
 /** Per-speaker blip tuning as the synth reads AUDIO.world.blip. The optional keys are set only on the voices that use them. */
@@ -1430,9 +1378,10 @@ export function createSynth(context: AudioContext): Synth {
         if (nextArcTime < now) nextArcTime = now;
         const interval = 1 / Math.min(perSecond, AUDIO.arc.maxRate);
         const n = getNoise();
+        const a = AUDIO.arc;
         let count = 0;
         while (nextArcTime < now + AUDIO.lookaheadSeconds && count < MAX_ARCS_PER_CALL) {
-          playArc(context, out, n, nextArcTime);
+          playNoise(context, out, n, nextArcTime, a.ms / 1000, a.gain, { type: 'highpass', hz: a.highpassHz });
           nextArcTime += interval;
           count++;
         }
@@ -1466,7 +1415,8 @@ export function createSynth(context: AudioContext): Synth {
 
     playHiss(): void {
       run('playHiss', 'sfx', (out) => {
-        playHissBurst(context, out, getNoise(), context.currentTime);
+        const h = AUDIO.hiss;
+        playNoise(context, out, getNoise(), context.currentTime, h.ms / 1000, h.gain, { type: 'highpass', hz: h.highpassHz });
       });
     },
 
@@ -1604,7 +1554,7 @@ export function createSynth(context: AudioContext): Synth {
               });
               break;
             case 'rattle':
-              playStampRattle(context, out, getNoise(), startAt, p.durationS, p.gain, p.hz);
+              playNoise(context, out, getNoise(), startAt, p.durationS, p.gain, { type: 'lowpass', hz: p.hz });
               break;
             case 'click':
               playSineCluster(context, out, startAt, {
@@ -1615,6 +1565,41 @@ export function createSynth(context: AudioContext): Synth {
               });
               break;
           }
+        }
+      });
+    },
+
+    playFaultSpawn(era: EraNumber): void {
+      run('playFaultSpawn', 'sfx', (out) => {
+        const f = AUDIO.faultSpawn;
+        const t0 = context.currentTime;
+        const flavour = f.flavourByEra[era - 1] ?? 'crackle';
+        if (flavour === 'ping') {
+          const p = f.ping;
+          voice(out, { wave: 'sine', hz: p.hz, startAt: t0, decay: f.ms / 1000, peak: f.gain });
+          voice(out, { wave: 'sine', hz: p.hz * p.detuneRatio, startAt: t0, decay: f.ms / 1000, peak: f.gain * p.partialGain });
+          return;
+        }
+        const n = f[flavour];
+        for (let i = 0; i < n.count; i++) {
+          playNoise(context, out, getNoise(), t0 + (i * n.gapMs) / 1000, n.pulseMs / 1000, f.gain, n, oneShots);
+        }
+      });
+    },
+
+    playFaultClear(overdrive: boolean): void {
+      run('playFaultClear', 'sfx', (out) => {
+        const c = AUDIO.faultClear;
+        const t0 = context.currentTime;
+        const r = c.ratchet;
+        for (let i = 0; i < r.count; i++) {
+          playNoise(context, out, getNoise(), t0 + (i * r.gapMs) / 1000, r.pulseMs / 1000, r.gain, r, oneShots);
+        }
+        const b = c.bright;
+        voice(out, { wave: 'sine', hz: b.hz, startAt: t0 + b.atMs / 1000, decay: b.ms / 1000, peak: b.gain });
+        if (overdrive) {
+          const o = c.overdrive;
+          voice(out, { wave: 'sine', hz: o.toHz, dropFromHz: o.fromHz, startAt: t0 + o.atMs / 1000, decay: o.ms / 1000, peak: o.gain });
         }
       });
     },

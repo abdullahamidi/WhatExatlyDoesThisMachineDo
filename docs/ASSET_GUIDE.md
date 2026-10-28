@@ -63,7 +63,7 @@ Machine-local depths are relative to the machine container, which sits at world 
 | `world.stakeChain` | `world/stake-chain.png` | 20 x 6 | 0.5, 1 | none | 2 (10 x 6) | living world, front row | Stake with its cut chain on the ground, 2 frames (chained, fallen); file world/stake-chain.png. |
 | `world.hole` | `world/hole.png` | 64 x 6 | 0.5, 1 | none | 4 (16 x 6) | living world, front row -0.1 | Dig hole in the ground, 4 frames (dig stages 1-4, they only grow); file world/hole.png. |
 | `world.redBall` | `world/red-ball.png` | 3 x 3 | 0.5, 1 | none | none | living world, front row (postgame) | Red ball prop, one 3x3 frame: mutedOrange ball with a glint and a shadow (cycle 2+ trace by the dog, postgame); file world/red-ball.png. |
-| `world.crow` | `world/crow.png` | 288 x 108 | 0.5, 1 | none | 72 (24 x 18); 6 era rows | living world, back row +0.2 | Crow sheet, 10 frames per era row (wedge body, two wing fans, hooked beak) in rows I, II, III, IV, V, whole; file world/crow.png. |
+| `world.crow` | `world/crow.png` | 360 x 108 | 0.5, 1 | none | 90 (24 x 18); 6 era rows | living world, back row +0.2 | Crow sheet, 15 frames per era row (wedge body, two wing fans, hooked beak) in rows I, II, III, IV, V, whole; file world/crow.png. |
 | `world.girl` | `world/girl.png` | 192 x 168 | 0.5, 1 | none | 72 (16 x 28); 6 era rows | living world, back / front row (the girl) | Girl with the lantern, 10 frames per era row (hood, raincoat, lantern: stand, palm, talk, shield, back-run, lantern drop) in rows I, II, III, IV, V, whole; file world/girl.png. |
 | `world.girlMini` | `world/girl-mini.png` | 24 x 12 | 0.5, 1 | none | 3 (8 x 12) | living world, pylon plane | Girl seen from the pylon plane, 2 frames (lantern warm, lantern cold white); file world/girl-mini.png. |
 | `world.girlWindow` | `world/girl-window.png` | 16 x 6 | 0, 0 | none | 4 (4 x 6) | living world, far window plane | Girl in the far window, 4 frames (flicker a, flicker b, dark, restored figure at the curtain); file world/girl-window.png. |
@@ -210,6 +210,7 @@ Machine-local depths are relative to the machine container, which sits at world 
 | `fx.beamWhite` | `fx/beam-white.png` | 64 x 32 | 0.5, 1 | none | 4 (16 x 32) | finale white beam (FINALE_BEAM) | Four-frame white beam tile: the pale light shaft of the finale, one 16-px slice per frame. |
 | `fx.seed` | `fx/seed.png` | 32 x 8 | 0.5, 0.5 | none | 4 (8 x 8) | finale seeds (FINALE_SEEDS), world depth 200 | Four-frame seed mote drifting over the restored ground; one 8-px cell per frame. |
 | `fx.bird` | `fx/bird.png` | 16 x 5 | 0.5, 0.5 | none | 2 (8 x 5) | finale birds (FINALE_BIRDS) | Two-frame bird silhouette (wing up / down) for the flocks over the restored world. |
+| `fx.fault` | `fx/fault.png` | 288 x 24 | 0.5, 1 | none | 12 (24 x 24) | fault marker (FaultMarker, FAULT_MARKER.art): above the machine, below the floating text | Twelve-frame fault marker sheet: 0 tag lit and 1 tag dim (amber plate, ink exclamation mark, pointer), 2-3 spark (eras I-II), 4-5 steam hiss (III), 6-7 ring wobble (IV), 8-9 null static (V), 10 clear puff, 11 spare (empty); file fx/fault.png. |
 
 ### UI
 

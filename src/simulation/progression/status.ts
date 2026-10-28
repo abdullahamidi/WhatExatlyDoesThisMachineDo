@@ -43,6 +43,11 @@ function fmt(x: number): string {
   return String(Number(x.toFixed(2)));
 }
 
+/** Wind-up numbers need four decimals: fmt would print 0.0375 as 0.04 and 0.0015 as 0. */
+function fmtFine(x: number): string {
+  return String(Number(x.toFixed(4)));
+}
+
 /** Player-facing text for `n` levels of one effect. */
 export function describeEffect(effect: Effect, n: number): string {
   switch (effect.type) {
@@ -76,6 +81,21 @@ export function describeEffect(effect: Effect, n: number): string {
       return `+${fmt(effect.hours * n)}h offline buffer`;
     case 'autoClick':
       return `+${fmt(effect.perSecond * n)} auto-cranks/s — each yields a full click of every energy`;
+    case 'crankEcho':
+      return `Clicks echo ${fmt(effect.seconds * n)}s of all output`;
+    case 'windup':
+      return `+${fmtFine(effect.seconds * n)}s wind-up, +${fmtFine(effect.refill * n)}s/s refill`;
+    case 'faultUnlock':
+      return `Faults appear; clearing one pays ${fmt(effect.seconds * n)}s of all output`;
+    case 'faultSeconds':
+      return `Cleared faults pay +${fmt(effect.seconds * n)}s`;
+    case 'faultRate':
+      return `Fault interval ×${fmt(effect.factor ** n)}`;
+    case 'faultWindow':
+      return `Faults last +${fmt(effect.seconds * n)}s`;
+    case 'overdrive':
+      // Overdrive never stacks, so one clear gives the same factor and length at any level.
+      return `Cleared faults: ×${fmt(effect.factor)} output for ${fmt(effect.seconds)}s`;
     case 'ending':
       return 'Engages the primary function';
     case 'none':

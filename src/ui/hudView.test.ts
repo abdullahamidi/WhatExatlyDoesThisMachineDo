@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { HUD_ROW_IDS, buildHudView, clickGainLines, cycleLine, formatWorth, hudTitle, plaqueText } from './hudView';
-import type { GainLine, HudResourceRow, HudView } from './hudView';
+import { HUD_ROW_IDS, buildHudView, clickGainLines, cycleLine, formatWorth, hudTitle, plaqueText, releaseLine } from './hudView';
+import type { GainLine, HudCrankReadout, HudResourceRow, HudView } from './hudView';
 import { setRevealed } from './revealRules';
 import { createInitialState, emptyResourceMap } from '../simulation';
 import { RESOURCE_IDS } from '../data/types';
@@ -423,5 +423,72 @@ describe('formatWorth (WP25 C4)', () => {
     expect(formatWorth(Number.NaN)).toBe('<0.01');
     expect(formatWorth(Number.POSITIVE_INFINITY)).toBe('<0.01');
     expect(formatWorth(0.001)).toBe(HUD_TEXT.worthFloor);
+  });
+});
+
+describe('WIND-UP row (WP27 C8)', () => {
+  const WINDUP_TITLE = 'Stored machine output. The next turn of the crank releases it.';
+  const crank = (over: Partial<HudCrankReadout> = {}): HudCrankReadout => ({ stored: 0, cap: 0.5, overdriveLeft: 0, overdriveFactor: 2, ...over });
+  const windupOf = (readout: HudCrankReadout | undefined): HudView['windup'] =>
+    buildHudView(hudState(), ratesOf({ me: 1 }), undefined, undefined, readout).windup;
+
+  it('is null without the crank readout, so the default HUD does not change', () => {
+    expect(buildHudView(hudState(), ratesOf({ me: 1 })).windup).toBeNull();
+    expect(windupOf(undefined)).toBeNull();
+  });
+
+  it('is null at cap 0 (no wind-up owned)', () => {
+    expect(windupOf(crank({ cap: 0 }))).toBeNull();
+    expect(windupOf(crank({ cap: 0, stored: 0.3 }))).toBeNull();
+  });
+
+  it('shows the stored seconds over the cap with one decimal, half up (0.35 -> 0.4)', () => {
+    expect(windupOf(crank({ stored: 0.35, cap: 0.5 }))).toEqual({ text: 'WIND-UP 0.4/0.5s', title: WINDUP_TITLE });
+  });
+
+  it('trims a zero decimal from the seconds', () => {
+    expect(windupOf(crank({ stored: 1.4, cap: 2 }))).toEqual({ text: 'WIND-UP 1.4/2s', title: WINDUP_TITLE });
+    expect(windupOf(crank({ stored: 0, cap: 0.5 }))?.text).toBe('WIND-UP 0/0.5s');
+  });
+
+  it('shows a non-finite stored value as 0', () => {
+    expect(windupOf(crank({ stored: Number.NaN, cap: 0.5 }))?.text).toBe('WIND-UP 0/0.5s');
+  });
+
+  it('appends the Overdrive suffix while it runs: factor and seconds left, rounded up', () => {
+    expect(windupOf(crank({ stored: 1.4, cap: 2, overdriveLeft: 3.2, overdriveFactor: 2 }))?.text).toBe('WIND-UP 1.4/2s · OVERDRIVE ×2 4s');
+  });
+
+  it('shows no Overdrive suffix once it has run out', () => {
+    expect(windupOf(crank({ stored: 1.4, cap: 2, overdriveLeft: 0, overdriveFactor: 2 }))?.text).toBe('WIND-UP 1.4/2s');
+  });
+
+  it('leaves every other field unchanged', () => {
+    const rates = ratesOf({ me: 12 }, { me: 12.5 });
+    const base = buildHudView(hudState({ res: { me: 1500 } }), rates);
+    const withWindup = buildHudView(hudState({ res: { me: 1500 } }), rates, undefined, undefined, crank({ stored: 0.35, cap: 0.5 }));
+    expect({ ...withWindup, windup: null }).toEqual(base);
+  });
+});
+
+describe('releaseLine (WP27 C8)', () => {
+  it('is null below 0.05 s and for a non-finite release', () => {
+    expect(releaseLine(0)).toBeNull();
+    expect(releaseLine(0.049)).toBeNull();
+    expect(releaseLine(Number.NaN)).toBeNull();
+    expect(releaseLine(Number.POSITIVE_INFINITY)).toBeNull();
+  });
+
+  it('shows the released seconds as an ME line', () => {
+    expect(releaseLine(1.4)).toEqual({ res: 'me', text: 'RELEASE +1.4s' });
+  });
+
+  it('shows from 0.05 s, with one decimal rounded half up and a whole number trimmed', () => {
+    expect(releaseLine(0.05)?.text).toBe('RELEASE +0.1s');
+    expect(releaseLine(0.35)?.text).toBe('RELEASE +0.4s');
+    expect(releaseLine(1.44)?.text).toBe('RELEASE +1.4s');
+    expect(releaseLine(1.46)?.text).toBe('RELEASE +1.5s');
+    expect(releaseLine(2)?.text).toBe('RELEASE +2s');
+    expect(releaseLine(12.34)?.text).toBe('RELEASE +12.3s');
   });
 });
