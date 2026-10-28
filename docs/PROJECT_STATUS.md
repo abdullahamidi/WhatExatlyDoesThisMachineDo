@@ -47,6 +47,7 @@ Left for the user: Steam app/depot ids, capsule art, trailer, SteamPipe upload (
 | WP26 | Post-v0.10.0 follow-ups → v0.10.1: wind/rain audio from the world weather, slow era V sky fade-in, loop prune, girl off the scrap, servo arm rim, tech tree edges clear every node (AD §R N2) | ✅ done (v0.10.1; Opus review round 2 APPROVE, EM round 2 PASS, AD2 round 2 RELEASE-READY; §R-lite PASS) |
 | WP25b | Surge: click = very serious income (playtest reading R2), capped burst on top of WP25 | superseded by WP27 (the user's 2026-10-27 answer) |
 | WP27 | Playtest 2026-10-27: click curve (hand → hand + machine → machine), ME click parity, Machine Faults + wind-up click branch (5 new nodes), prestige re-tune, crow perched in eras I-II, Sensor 7 in era II | ✅ done (v0.11.0; Opus review round 3 APPROVE, EM round 3 PASS, AD round 3 RELEASE-READY; §R-lite all 15 rows PASS) |
+| WP28 | Playtest 2026-10-28: no dead waits, Splices (wake world objects), Finds, poke-able and roaming denizens, the machine's reach into the world | 🔄 design workflow running (research + pacing audit + AD world audit → plan → critic) |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -269,7 +270,10 @@ WP26 (v0.10.1) is merged and release-ready (§R-lite 2026-10-27).
 User playtest 2026-10-27 (v0.10.1): era I crow frozen with spread wings; first passive (+17) killed the click (wanted: click → click + passive
 → passive with the click optional but kept warm by tree upgrades and clickable events); ME clicks too weak vs EE; Sensor 7 missing in era II.
 All four answered by WP27 (v0.11.0, merged, §R-lite all 15 rows 2026-10-28). WP25b Surge is superseded by WP27. Every ROADMAP_FULL row is done.
-Open, user-owned: denizen size (postponed by the user); the next playtest of the v0.11.0 curve. For the store upload, use the 2160 set of
+User playtest 2026-10-28 (v0.11.0): the curve feels balanced; but waits for upgrades and milestones are boring once the player is tired of
+clicking; the world still feels dead (fixed in-place actions, nothing to interact with); the machine's effect on the world must be far more
+visible, with more things to do. → WP28 (in progress, branch claude/playtest-wp28 in the wedtmd-shell worktree).
+Open, user-owned: denizen size (postponed by the user). For the store upload, use the 2160 set of
 the v0.11.0 run `store-final4` (STEAM_RELEASE §15 row 14).
 wp-exec2 (workflows/scripts) orders waves by depends_on, lets AD verify run (the EM marks the AD gate N/A) and only skips a task whose
 dependency landed no files. WP24 needed Director rounds after the 6 automated fix rounds (F1–F3, AD2 fixes).
