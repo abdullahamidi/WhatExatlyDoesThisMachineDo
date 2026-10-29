@@ -3412,3 +3412,290 @@ Round 2, on the gate builds after the fixes:
 - `misc.mjs MODE=clock SECS=130` (F13).
 - `finds.mjs` s8 / s8w / s9 at UI 150 (F14).
 - `store-shots.mjs` (02, 03, 04, 06, 07, 09).
+
+### AD2 — WP28a in-game audit, round 2 (Art Director, 2026-10-29; workflow round 0)
+
+**Verdict: NOT RELEASE-READY (one S2, data + small code).** Round 1 F1-F19 all land: F1-F18 PASS, F19 PASS for era II and partial for
+era I. The one blocker is new and sits in the postgame only (F20): the whole bicycle is lost in the regrowth bush (and under SYSTEM at
+UI 150), and the postgame dog sleeps inside the organ. Store shot 09 shows both. Two S3 items (F21, F22) are cheap polish. Everything else
+in A16 passes at 1080p, 720p and Deck 1280x800, at UI 100 and 150, and in reduced motion. Canon holds.
+
+Build under audit: the gate builds of the current tree.
+- `dist/` 2026-10-29 11:27:34 and `dist-demo/` 11:27:51 (es2022, r5-F1). No file under `src/`, `public/` or `vite.config.ts` is newer.
+- Served with `vite preview` on :4174 (dist) and :4177 (dist-demo). Both were killed after the runs, netstat shows 4174 / 4177 free, and no
+  node or browser process is left.
+- One Playwright browser at a time. 1920x1080 unless stated.
+
+Evidence root `<R>` = `C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP28a/ad0/`.
+- Runs: `hd3/`, `hover/`, `frames/`, `frames-rm/`, `uiclear/`, `finds/`, `finds150/`, `finds-eras/`, `finds-rm/`, `misc/`, `crowperch/`,
+  `pokes/`, `pokes-rm/`, `post150/`, `store/`, `demo/`; logs in `logs/`.
+- Boards: `crops/`.
+- Tools: `tools/`. These are the round 1 tools, plus `hoverdbg3.mjs` (5 points per target) and `post150.mjs` (the postgame at UI 100 /
+  150, 1080p and Deck, with the cast and prop dump). `run1.sh`, `run2.sh` and `run3.sh` replay everything.
+
+| area (A16) | verdict | evidence (`<R>`) |
+|---|---|---|
+| Splice objects, era I-II, dead and woken | PASS | `crops/e1-left-dead-woken-x3.png`, `crops/e1-right-dead-woken-x3.png`, `crops/s9-left-dead-woken-x3.png`, `crops/s9-right-dead-woken-x3.png` |
+| Splice whole frames | FAIL (postgame, F20) | `crops/post-whole-x4.png`, `crops/store09-corners-x4.png`, `crops/F20-before-store09-organ-dog-x6.png`, `crops/post-ui150-corners-x3.png` |
+| Placements, UI 100 / 150, 1080p / 720p / Deck | PASS (N3 kept) | `uiclear/uiclear-*.json`, `crops/ui150-s9-s8-1080-720-deck-x2.png` |
+| Lines (1 art px, zoom 0.5) and pulses | PASS | `crops/e1-left-pulse-seq-x2.png`, `crops/s11-s15-objects-x3.png` |
+| Reduced motion | PASS; F22 (S3) | `crops/rm-e1-s9-line-ends-x4.png`, `crops/rm-dot-hidden-x6.png` |
+| Hover zones, brackets, tooltip | PASS | `hd3/*.json`, `hover/*.json`, `crops/hover-e1-ui100-board.png`, `hover/s9-ui150-1920x1080-full-tip-spliceSign.png` |
+| Finds: items, glint, ring, eras I-V, UI 150 | PASS; F21 (S3) | `crops/finds-e1-items-x3.png`, `crops/finds-eras-glint-x3.png`, `crops/finds-ui150-near-buttons-x2.png`, `crops/finds-e1-gust-x6.png` |
+| Pokes e1 / s9 / s14 at 1:1 and 3x, plus RM | PASS | `pokes/pokes-*.json`, `crops/poke-e1-*-x2.png`, `pokes-rm/` |
+| Crow hop and perches | PASS | `crowperch/*.json`, `crops/crow-perches-x3.png` |
+| Clock tick, payphone ring | PASS | `misc/misc-clock-1920x1080.json`, `crops/poke-clock-face-x8.png` |
+| SPLICES tab, UI 100 / 150 | PASS | `misc/tab-splices-ui100-1920x1080.png`, `misc/tab-splices-ui150-1920x1080.png` |
+| Store shots | 01-08 approved; 09 FAIL (F20) | `store/1080/`, `crops/store-03-04-06-07-half.png` |
+| Demo :4177 | PASS | `demo/` |
+
+**Round 1 fixes, checked in game**
+
+| F | result | what was seen |
+|---|---|---|
+| F1 | PASS | `hoverdbg3` (centre plus 4 inner points per target): e1 UI 100 / 150, s9 UI 100, and s9 UI 150 on Deck. Every centre hovers its own target. A quarter misses only where a neighbour's zone lies in front, as drawn: sign over booth, clock and lamp at e1 / s9, dog / clock at s9. At s8 UI 100 the girl-mini zone covers the Inspector's centre by 1 px, and the s8 lamp hovers only in a 30 px strip left of the clock zone (N6). |
+| F2 | PASS | The e1 gust item (lane 12) draws over the curb strip. Items draw over the lines. |
+| F3 | PASS | Wire, cable and drop wire are one art px: 3 px at 1080p zoom 1, and continuous at zoom 0.5 (s11, s15). The era I glint lights the stake cap in `#ddc9a3` and hops stake to stake toward the object (8 frames, 250 ms apart). |
+| F4 | PASS | Pulses per line: S7 1, s8 1, s8w 2, S9 2, S11 2, era V (s15) 3. |
+| F5, F6 | PASS | uiclear: 7 framings x 1920x1080 / 1280x720 / 1280x800 x UI 100 / 150. Every placed Splice object is 100 % in view. The only objects under buttons are the props there since v0.11.0 (s8 clock 4-5 %, s8 / s8w / s10 booth 7-10 %) and the s9 bicycle at UI 150 (3 %, N3, `HUD_EXEMPT`). The s9 sign stands in front of the booth and clears SYSTEM by 6 px. |
+| F7 | PARTIAL | The objects stay through the finale start (lines on) and show their whole frames in the postgame (lines off, `spliceStats` live). The postgame placements fail: see F20. |
+| F8 | PASS | The crow stands on the booth ridge (G-102), the clock finial (G-88) and the drop wire (2864, 1531). No float. |
+| F9 | PASS | Era V level 3 (s14): `insVLeave` and `dogTrot` play in place, with no walk frames. |
+| F10 | PASS | Each object answers from its own table (bicycle bell / spin, organ / puff, radio / dial, sign / flicker). The woken clock ticks (6 px hand flick, back to 4:41). The woken payphone plays ring, swing and hood. The twitch is one loop frame, so mostly sound (as specified). |
+| F11 | PASS | Window `winDark` / `winFlicker` at e1, mini `miniDim` / `miniLow` at s9, ground note at s14. Her x never changes (window, mini, ground 976). |
+| F12 | PASS | e1 Inspector 1472 → 1448 and s9 dog 2856 → 2880: outward, facing away from the machine. |
+| F13 | PASS | The first Splice ring comes 98 s after the wake: ring0 / ring1 twice, nobody on the line. The ring at 126 s is the WP24 ambient ring (the Splice gap is at least 60 s). |
+| F14 | PASS | At UI 150 the spots under the buttons are skipped. s8 spawns at the gust spot; s8w spawns at (1556, 30), so it is no longer frozen. The s9 crow spot and the dog spot (2904, 20) spawn above SYSTEM, with the ring touching the button top (1080p, 720p, Deck). |
+| F15 | PASS | 79 tooltips, at 1080p, 720p and Deck, UI 100 / 150, dead and woken. All stay on screen; the nearest slab edge is 170 px from the crank hub (s9 organ, 720p UI 150). |
+| F16 | PASS | State, cost and effect start at the same x on every row, at UI 100 and UI 150. |
+| F17 | PASS | The brackets frame the sprite (cast, the window, the mini, the objects), no longer the 56 px zone. |
+| F18 | PASS | The L2 / L3 clip starts with the amber lens pixel, then the LED holds solid. L1 is the double blink. |
+| F19 | PARTIAL | The era II steady dot sits 12 px before the end (s9 radio and sign). The era I dot shows on the e1 organ line. It is hidden where the last stake falls under the object: the s9 organ, and the e1 clock (half hidden). See F22. |
+
+**Other checks**
+- Splice art: dead and woken read at 1:1, 3x and zoom 0.5. No blue or green and no letters.
+  - The teal pixels in the s9 / s11 crops come from the existing mast insulator and the era II pylon line; the capacitor glass and the
+    postgame sky are older still.
+  - WP28a pixels stay in the warm ramp plus `#5a5f63` / `#7d8286`.
+- Finds, eras I-V: e1 shows items 0-6, the folded note at serials 4 and 9, and popups `FOUND +4s` / `+6s` / `+8s`.
+  - Glint and ring per era: III-IV amber glint with an amber ring, V paper glint with a violet ring.
+  - Reduced motion: the glint holds and the ring shows.
+  - The relic note "Clock on the corner stopped at 4:41 again." keeps the canon.
+- Pokes: e1, s9 and s14 (eras I, II and V), plus reduced motion at e1.
+  - Every answer frame is one of the actor's own frames.
+  - Reduced motion: no walk, no hop.
+  - Sensor 7 never shows `glyphOne` or `headUp` in an answer. Its idle head is `headR`, as in round 1.
+- Crow hop arc: e1 2476 → 2420, s9 2996 → 2944, s14 3104 → 3050. The apex is about 36 px above the higher end and the flight takes about
+  470 ms. It flips toward the travel direction, then lands unflipped and ruffles.
+  - Closest x to the machine: e1 2420 (right foot 2316), s9 2864 (mast 2808). Never over the machine.
+- Clock: the rest frame stays 4:41 before and after every tick.
+- Store shots (`SIZES=1080`): 126 checks, `fail []`, `errors []`.
+  - Difference against round 1 / WP27 AD3: 02 3.2 / 3.4 %, 03 4.7 / 2.0 %, 04 1.1 / 1.3 %, 06 1.2 / 1.6 %, 07 1.6 / 1.7 %, 09 1.6 / 2.2 %.
+  - 02-07 show the dead organ, radio, bicycle and sign in the yard, plus the WP27 release popup.
+  - 01-08 are re-approved. 09 waits for F20.
+- Demo (:4177): frames e1 / s9 woken (pulses 1 / 2); Finds s9 (relic 1 at serial 4); the SPLICES tab shows rows III-V as `FULL GAME`.
+  `errors []`.
+
+**New items**
+- **F20 (S2, postgame)**: `misc/post-postgame.png`, `post150/post-*.png`, `store/1080/09-postgame-portrait-clean.png`.
+  - The postgame frames as `portrait`, whose cells are the s15 rows (round 1 F7).
+  - Bicycle at 3150 back: it draws in front of the regrowth strip (all 150 opaque pixels match at Deck 1:1). The bush behind shows through
+    its wheels, and the dark outlines merge, so it does not read.
+  - At UI 150, SYSTEM (1685-1884 x 961-1044) covers its left half. At 1280x800 UI 150 it is under SYSTEM too.
+  - The right wing has no free spot: VIEW MACHINE and SYSTEM cover every yard lane from x 2113 to 3115; the back row holds the clock, the
+    anchor, the booth and the lamp.
+  - Organ at 718, lane 56 (box 690-746, G+8..G+56): the postgame dog home is 732 at G+32 (chase 732-768), and the Inspector pats at 742, so
+    the dog sleeps inside the organ (store 09).
+  - The plan keeps objects and lines as they are through the finale film. So the fix is a postgame-only placement (lines are off there),
+    not a new portrait cell.
+  - Mock (sheet cells pasted at the new feet): `crops/F20-mock2-postgame-left-ui100-x3.png`, `-ui150-x3.png`. Radio 674-706, bicycle
+    718-770, organ 782-836: a row at G+52..G+104, 20 px or more below the dog band, clear of the pillar mound, inside the G+120 frame bottom.
+- **F21 (S3)**: the e1 and s9 gust Find spot (1410) sits on the cream scrap at 1420. The era I-II glint (`#ddc9a3`) is the scrap colour,
+  so the ping is lost (`crops/finds-e1-gust-x6.png`, `crops/finds-eras-glint-x3.png` s9 tile). The gust producer stays "the scraps"; the
+  item moves to just in front of the scrap.
+- **F22 (S3, F19 rest)**: era I stakes stand every 48 px up to the object's feet, so the last stake (the reduced-motion dot) can fall under
+  the object. Stop the stakes 36 px short of the end. Measured: the e1 clock line's last stake moves 8 → 56 px from the foot; the s9 organ
+  line's last stake moves 8.6 → 56.6 px (outside the organ's 27 px half width).
+
+Notes (no fix):
+- N1-N3 hold. N3: the s9 bicycle at UI 150 sits under SYSTEM, 2 px above the screen edge; visible and pokeable (exempt in the test).
+- N6: hover zones overlap in the crowded wings. Every centre works except the s8 UI 100 Inspector (girl-mini zone, 1 px). Accepted.
+- N7: at e1 / s9 a stake hides behind the sitting dog, and its glint shows in the transparent notch at the dog's chest. The depth is
+  correct; accepted.
+- N8: at postgame UI 150 the four buttons cover the booth foot and the clock base (props since v0.11.0).
+
+| F | sev | kind | file | key | old -> new |
+|---|---|---|---|---|---|
+| F20 | S2 | DATA+CODE | `src/data/spliceWorld.ts`, `src/game/rendering/SpliceProps.ts`, `src/game/math/spliceWorld.test.ts` | `SpliceEntryBase.postgame`; `place()` | add `readonly postgame?: SplicePlacement`; `spliceBicycle.postgame = { x: 744, lane: 104 }`, `spliceOrgan.postgame = { x: 810, lane: 100 }` (radio, clock, payphone keep their portrait cells); SpliceProps places a record at `entry.postgame` while the postgame flag is on and re-places all records when the flag flips; test: postgame boxes inside x 648..848 and bottom <= G+112, 4 px apart from each other and the radio's portrait box, clear of the postgame dog band (`postgameDogHomeX` - 24 .. + 36 + 24, G-8..G+40) and the Inspector pat box (742 +- 20, G-66..G+32) |
+| F21 | S3 | DATA | `src/data/findWorld.ts` | `FIND_SPOTS` e1 / s9 gust | e1 `{ x: 1410, lane: 12 }` -> `{ x: 1420, lane: 30 }`; s9 `{ x: 1410, lane: 16 }` -> `{ x: 1420, lane: 26 }` |
+| F22 | S3 | DATA+CODE | `src/data/spliceWorld.ts`, `src/game/rendering/SpliceLines.ts` | `SPLICE_LINE_STYLE.era1.stakeEndInsetPx`; `makeLine` | add `stakeEndInsetPx: 36`; stake loop `d < len` -> `d < len - E1.stakeEndInsetPx` |
+
+```
+WP28A-AD2R2-FIX-BEGIN
+F20 DATA+CODE src/data/spliceWorld.ts postgame placements bicycle {744,104} organ {810,100}; SpliceProps uses them in the postgame; spliceWorld.test.ts postgame guard
+F21 DATA      src/data/findWorld.ts FIND_SPOTS e1 gust {1420,30} s9 gust {1420,26} (S3)
+F22 DATA+CODE src/data/spliceWorld.ts era1.stakeEndInsetPx 36; src/game/rendering/SpliceLines.ts makeLine stops stakes 36 px short (S3)
+WP28A-AD2R2-FIX-END
+```
+
+Round 3 (after F20-F22; F20 alone decides the verdict):
+- `misc.mjs MODE=post`.
+- `post150.mjs` (postgame at UI 100 / 150, 1080p and Deck).
+- `store-shots.mjs SIZES=1080`: re-approve 09.
+- `frames.mjs REDUCED=1 ONLY=e1,s9,s11` (F22; s11 is the street clock line that had no stake: its dot and glint stand on the new stake about 36 px from the clock foot). The AD tool's CASES list (`ad0/tools/frames.mjs`) holds e1, s8, s8w and s9 only and ONLY filters silently, so s11 would give no output and no error: AD2 adds `s11: [S11, SPL1]` first (`lib.mjs` exports both) and confirms the s11 files exist; the dot stands on the stake at about x 2854, clear of the clock box 2874-2906.
+- `finds.mjs` e1 and s9 (gust crops, F21).
+- KEEP click (EM round 2, deferred minor; canon C9, Q7 binding: relocations wait for an unseen moment): the ending frames as `portrait` from the finale on, so the world stays in view through `choice`, and `SpliceProps.setStates` re-places the records on the frame the phase turns `postgame` (the KEEP IT RUNNING click). The bicycle jumps from 3150 (right wing) to 744 lane 104 and the organ from 718 lane 56 to 810 lane 100 at the click, in view. `misc.mjs MODE=post` and `post150.mjs` shoot after the settle and do not see it. AD2 captures the click (a screencast from the click to KEEP + 2 s at 1080p) and records ACCEPT or a fix.
+  - If a fix is ordered (code, EM then worker): hide both objects at KEEP and show them at the postgame feet with a short alpha fade inside the dog's hidden window (KEEP + `dogFade.toS` .. `dogEnter.fromS`, 4.5-7 s, while the crow beat holds the eye); a postgame placement delay in `SPLICE_FX`, applied by the director. That also clears the organ before the dog settles at 732 (KEEP + 8 s).
+
+### AD2 — WP28a in-game audit, round 2 on the F20-F22 gate builds (Art Director, 2026-10-29; workflow round 2)
+
+**Verdict: RELEASE-READY (A16).** I re-ran the full round 2 list (F1-F19, store shots) and the round 3 list (F20-F22, KEEP click) on fresh
+gate builds of the current tree.
+- F1-F22 hold.
+- F20 (postgame) is fixed: the dog sleeps in the clear and the bicycle reads. Store 09 is re-approved.
+- Two new S3 items do not block A16. Both have code specs (EM, then worker):
+  - F23: in reduced motion, the steady dot of the radio line hides behind the radio crate at s9, s11 and s15. The s11 sign dot hides in
+    its box. This corrects round 2, which passed the radio dot.
+  - F24: at the KEEP IT RUNNING click, the bicycle and the organ jump to their postgame feet on a visible frame (canon C9). Fix: fade them
+    out with the dog and fade them in during its hidden window.
+- Canon holds:
+  - the girl's x never changes;
+  - no WP28a pixel is blue or green before the finale;
+  - the sign has no letters;
+  - the clock rests at 4:41;
+  - denizens answer pokes and effects and never touch the machine;
+  - level-3 leaves walk outward.
+
+Build under audit.
+- `npm run build` and `npm run build:demo` at 19:27 (exit 0).
+  - The chunk hashes equal the 16:34 builds (`LivingWorldDirector-Dqg_9a4i`, `WorldReach-C5-HcyRF`).
+  - No file under `src/`, `public/` or `vite.config.ts` is newer than `dist/`.
+  - The dist chunks carry `postgame:{x:744,lane:104}`, `stakeEndInsetPx` and `x:1420,lane:30`.
+- `vite preview` ran on :4174 (dist), then on :4177 (dist-demo).
+  - Both were killed after use; netstat shows 4174 / 4177 free.
+  - No node or browser process is left.
+- One Playwright browser at a time, 1920x1080 unless stated.
+
+Evidence root `<R2>` = `C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP28a/ad2/`.
+- Runs: `hd3/`, `hd4/`, `hover/`, `hold/`, `frames/`, `frames-rm/`, `frames-rm2/`, `uiclear/`, `finds/`, `finds150/`, `finds-eras/`,
+  `finds-rm/`, `misc/`, `crowperch/`, `pokes/`, `pokes-rm/`, `keep/`, `post150/`, `dogprobe/`, `store/`, `demo/`; logs in `logs/`.
+- Boards: `crops/`.
+- Geometry: `geo/steady.ts` (bundled with esbuild).
+- Tools: `tools/`. The round 2 tools, plus:
+  - `frames.mjs` cases `s11`, `s11b` (S11 + every era I-II Splice) and `s15`;
+  - `keepclick.mjs`: CDP screencast from KEEP - 1 s to KEEP + 12 s, with an rAF log of the Splice rows, the dog and the camera;
+  - `hoverdbg4.mjs`: live target boxes, plus the element and the Inspector frame on a miss;
+  - `hoverhold.mjs`: 150 samples on the s9 Inspector;
+  - `dogprobe.mjs`;
+  - `pokeall.py` and `wcrop.py` (world-box crops).
+- `run1.sh`, `run2.sh`, `run4.sh` and `run5.sh` replay everything.
+
+| area (A16) | verdict | evidence (`<R2>`) |
+|---|---|---|
+| Splice objects, era I-II, dead / woken | PASS | `crops/e1-left-dead-woken-x3.png`, `crops/e1-right-dead-woken-x3.png`, `crops/s9-left-dead-woken-x3.png`, `crops/s9-right-dead-woken-x3.png`, `crops/s11-objects-woken-t7-x3.png` |
+| Splice whole frames (postgame) | PASS (F20 fixed); KEEP click F24 (S3) | `crops/F20-post-left-before-after-x4.png`, `crops/post-left-1080-deck-ui150-x4.png`, `crops/store09-left-before-after-x4.png`, `crops/keep-click-jump-left-right-x3.png` |
+| Placements, UI 100 / 150, 1080p / 720p / Deck | PASS (N3 kept) | `uiclear/uiclear-e1-s8-s8w-s9-s10-s11-s15.json`, `uiclear/s9-1280x800-ui150.png` |
+| Lines (1 art px, zoom 0.5), pulses, wake beat | PASS | `crops/e1-organ-line-pulse-seq-x2.png`, `crops/s11-objects-woken-t7-x3.png` |
+| Reduced motion | PASS; F23 (S3) | `crops/rm-e1-line-ends-x4.png`, `crops/rm-s9-line-ends-x4.png`, `crops/F23-rm-radio-dot-hidden-s9-x6.png`, `crops/F23-rm-radio-dot-hidden-s11-s15-x6.png` |
+| Hover zones, brackets, tooltip | PASS | `hd3/*.json`, `hd4/*.json`, `hold/hoverhold.json`, `crops/hover-e1-ui100-woken-cast-x3.png`, `crops/tip-s9-ui150-1080-sign-x2.png` |
+| Finds: items, glint, ring, eras I-V, UI 150 | PASS (F21 fixed) | `crops/finds-e1-gust-after-x4.png`, `crops/finds-eras-glint-x3.png`, `crops/finds-s9-ui150-crow-dog-x3.png` |
+| Pokes e1 / s9 / s14 at 1:1 and 3x, plus RM | PASS | `crops/poke-e1-all-t650-x1.png`, `crops/poke-e1-dog-x2.png`, `crops/poke-s9-objects-t650-x2.png`, `crops/poke-s14-cast-t650-x2.png`, `pokes-rm/` |
+| Crow hop and perches | PASS | `crowperch/*.json`, `crops/crow-perches-x2.png` |
+| Clock tick (4:41), payphone ring | PASS | `crops/clock-rest-tick-x6.png`, `misc/misc-clock-1920x1080.json` |
+| SPLICES tab, UI 100 / 150 | PASS | `misc/tab-splices-ui100-1920x1080.png`, `misc/tab-splices-ui150-1920x1080.png` |
+| Store shots | 01-09 approved (09 re-approved) | `store/1080/`, `crops/store-03-04-06-07-half.png`, `crops/store09-left-before-after-x4.png` |
+| Demo :4177 | PASS | `demo/` |
+
+**Round 1 and round 2 fixes, re-checked in game**
+
+| F | result | what was seen |
+|---|---|---|
+| F1 | PASS | `hoverdbg3` / `hoverdbg4` at e1 UI 150, s9 UI 100 and s9 UI 150 on Deck: every centre hovers its own target. Corner misses come only from a neighbour's zone in front (sign over booth / clock / lamp, dog / clock; N6). One Inspector corner gave no hover per `hd3` run. `hoverhold` (150 samples) shows 1 miss, taken while the Inspector walked (`walk3`) between the box read and the pointer move. The zone follows the walker (tool artefact). |
+| F2 | PASS | The e1 gust item draws over the curb strip and the lines. |
+| F3 | PASS | 1 art px lines (3 px at 1080p zoom 1), continuous at zoom 0.5 (s11). The era I glint hops stake to stake in `#ddc9a3`. |
+| F4 | PASS | Pulses per line: e1 1, s8 1, s8w 2, s9 2, s11 2 (`frames/frames-ui100.json`, `misc/misc-pulses-1920x1080.json`). |
+| F5, F6 | PASS | `uiclear`, 7 framings x 3 views x UI 100 / 150: every Splice object is 100 % in view. Under buttons: only the props there since v0.11.0 (s8 clock 4-5 %; s8 / s8w / s10 booth 7-10 %) and the s9 bicycle at UI 150 (3 %, N3). |
+| F7 | PASS | Postgame: whole frames on, lines off, `spliceStats` live. |
+| F8 | PASS | The crow stands on the booth ridge (G-102), the clock finial (G-88) and the drop wire (2864, 1531). |
+| F9 | PASS | s14 level 3: `insVLeave` and `dogTrot` play in place (`front`, `head` / `talk` only). |
+| F10 | PASS | Each object answers from its own table. The woken clock ticks; the woken payphone swings, rings and shows its hood. |
+| F11 | PASS | Window `winFlicker` / `winDark` (e1), mini `miniLow` / `miniDim` (s9), ground note (s14). Her x never changes. |
+| F12 | PASS | e1 Inspector 1472 → 1448 and s9 dog 2856 → 2880, both outward. The e1 dog was already on its outer spot (2388). |
+| F13 | PASS | The Splice ring comes 98 s after the wake (ring0 / ring1 twice). The ring at 126 s is the WP24 ambient ring. |
+| F14 | PASS | UI 150: s8 spawns at the gust spot, s8w at (1556, 30), s9 at the crow and dog spots. Their rings touch the SYSTEM top at 1080p, 720p and Deck (as in round 2). |
+| F15 | PASS | 79 tooltips at 1080p / 720p / Deck, UI 100 / 150, all on screen. The nearest slab edge is 170 px from the crank hub (s9 organ, Deck UI 150). |
+| F16 | PASS | State, cost and effect columns line up at UI 100 and UI 150. |
+| F17 | PASS | The brackets frame the target box (N9 on the payphone). |
+| F18 | PASS | The Sensor 7 L2 answer is `s7Solid`; L1 is the blink / snap pair. |
+| F19 | PARTIAL → F23 | Era I is fixed by F22. Era II: the sign (s9) and payphone (s8, s8w, s9, s10, s11, s15) dots show. The radio dot is hidden at s9, s11 and s15, and so is the s11 sign dot (F23). |
+| F20 | PASS | Postgame bicycle 744 lane 104, organ 810 lane 100, radio 690 lane 100: one row at G+52..G+104, clear of the dog band and the pat box. The dog sleeps at 732 in the clear. The bicycle reads against the grass at 1080p and Deck, UI 100 / 150 (`post150/`). The buttons start at x 701 (1080p UI 150) and x 465 (Deck UI 150), so the row is clear. |
+| F21 | PASS | The e1 / s9 gust item stands at (1420, 30 / 26), in front of the scrap. The cream glint reads on the pavement. |
+| F22 | PASS | e1: the organ line's last stake is clear of the organ; the clock line's last stake is about 56 px from the clock foot. s9: the organ stake is clear. s11: the clock line keeps one stake at about x 2853, left of the clock box (2874-2906), with its RM dot on it. |
+
+**KEEP click (round 3 item)**: `keep/keepclick.json`, `keep/kc-0022.png` → `kc-0023.png`, `crops/keep-click-before-after-half.png`,
+`crops/keep-click-jump-left-right-x3.png`.
+- The choice phase shows the whole world, with the panel only at top left.
+- On the click frame, the panel closes, the lines switch off and the objects turn whole.
+- On the same frame:
+  - the bicycle leaves the right-wing bush (3150 back) and appears at 744 lane 104;
+  - the organ steps from 718 lane 56 to 810 lane 100.
+- The jump shows on screen, in the bottom corners at zoom 0.5. C9 says relocations wait for an unseen moment.
+- The project's own vocabulary for this is the dog's KEEP beat: it fades out at its home at 4-4.5 s (the crow beat holds the eye), stays
+  hidden 4.5-7 s, then re-enters.
+- **FIX as F24 (S3).** It affects the full game only: the demo never reaches the finale.
+
+**New items**
+- **F23 (S3, reduced motion)**: `era2.steadyInsetPx` 12 puts the steady dot inside the object box wherever the cable meets the object
+  steeply.
+  - The path leaves the box at (`geo/steady.ts`):
+
+    | object | framing | leaves the box at |
+    |---|---|---|
+    | radio | s9 | 40 px |
+    | radio | s11 | 20 px |
+    | radio | s15 | 19 px |
+    | sign | s9 | 27 px (the dot still shows, in the open area under the arrow head) |
+    | sign | s11 | 28 px |
+    | payphone drop | s11 | 18 px (the dot still shows on the gable) |
+
+  - In game (RM, pixel search for `#c98552`):
+    - no dot at the s9, s11b or s15 radio, or at the s11 sign;
+    - dots at the s9 sign, the s9 / s11 drop wires and the s15 payphone.
+  - With 48 px, and the midpoint for lines under 96 px, every era II dot is outside its object box:
+    - radio s9 (1549, 1740), s11 (939, 1748), s15 (731, 1754);
+    - sign s9 (2907, 1695), s11 (3014, 1742);
+    - payphone s8 / s8w / s15 at the cable midpoint.
+- **F24 (S3, postgame, C9)**: the KEEP-click relocation above.
+
+Notes (no fix):
+- N1, N3, N6, N7 and N8 hold.
+- N9: the payphone prop's brackets centre on the receiver, its speaker anchor (`castTargets`), so they frame the booth's right half and
+  the gap to the lamp. By design; later polish.
+- N10: the woken bicycle sits in the regrowth bush (3150 back) through the finale film and the choice phase. Round 2 accepted this (F20
+  keeps the portrait cell through the film), and F24 moves it out at KEEP.
+- N11: the dark iron piece left of the e1 / s11 dog spot is the dog's stake and cut chain (`stakeChain`, front row, DENIZEN_ART §2.4).
+  - It is identical in v0.11.0, and the dog's tail curl overlaps it at 2364.
+  - Accepted. WP28b AD3 (spots v2) may move the sit spot 12 px out.
+
+| F | sev | kind | file | key | old -> new |
+|---|---|---|---|---|---|
+| F23 | S3 | DATA+CODE | `src/data/spliceWorld.ts`, `src/game/math/spliceWorld.ts`, `src/game/rendering/SpliceLines.ts`, `src/game/math/spliceWorld.test.ts` | `SPLICE_LINE_STYLE.era2.steadyInsetPx`; `drawSteady` phase | `steadyInsetPx` 12 -> 48. New pure `steadyDotPhase(len, insetPx)` = 0 for a non-finite or non-positive len, else `min(1 - 1e-9, max(0.5, (len - max(0, insetPx)) / len))`. `drawSteady` uses `steadyDotPhase(line.len, E2.steadyInsetPx)` instead of `Math.max(0, (line.len - E2.steadyInsetPx) / line.len)`. Test: every era II placement's dot lies outside its `spliceBoxWorld`; the radio s9 dot sits at (1549, 1740) ± 2. |
+| F24 | S3 | DATA+CODE | `src/data/spliceWorld.ts`, `src/game/math/spliceWorld.ts`, `src/game/math/spliceWorld.test.ts`, `src/game/rendering/SpliceProps.ts`, `src/game/rendering/LivingWorldDirector.ts` | `SPLICE_FX.postgameMove`; `SpliceProps.setKeepClock`; `placementOf` | Data: `SPLICE_FX.postgameMove = { outFromS: 4, outToS: 4.5, inFromS: 5, inToS: 5.6 }`, inside the dog's KEEP beat (fade 4-4.5, hidden to 7). New pure `postgameMoveAt(keepS)` and `postgameMoveAlpha(keepS, reduced)`. `SpliceProps.setKeepClock(keepS)` re-places the records with `entry.postgame` on the frame the side flips and sets their alpha. The director calls it each frame in `stepSplices` with `keepClockS(scene.time.now)`. A boot into the postgame (Infinity) places at once. |
+
+```
+WP28A-AD2R3-FIX-BEGIN
+F23 DATA+CODE src/data/spliceWorld.ts era2.steadyInsetPx 48; src/game/math/spliceWorld.ts steadyDotPhase; src/game/rendering/SpliceLines.ts drawSteady uses it; spliceWorld.test.ts dot-outside-box guard (S3)
+F24 DATA+CODE src/data/spliceWorld.ts SPLICE_FX.postgameMove {4,4.5,5,5.6}; src/game/math/spliceWorld.ts postgameMoveAt / postgameMoveAlpha; SpliceProps.setKeepClock + placementOf; LivingWorldDirector.stepSplices calls it (S3)
+WP28A-AD2R3-FIX-END
+```
+
+Re-check after F23 / F24 (polish, verified on the next gate builds; A16 stands without them):
+- F23: run `frames.mjs REDUCED=1 ONLY=s9,s11b,s15`, then a pixel search for the 2 x 2 art px `#c98552` dot outside each radio and sign
+  box.
+- F24: run `keepclick.mjs SECS=12`. Expected:
+  - the bicycle and the organ stay at their portrait cells to KEEP + 4 s;
+  - their alpha reaches 0 by 4.5 s;
+  - from 5 s they stand at the postgame feet, at alpha 1 by 5.6 s;
+  - no frame shows an object in both places;
+  - the dog re-enters at 7 s with the organ already at 810.
+- After F24: run `post150.mjs` and `store-shots.mjs SIZES=1080`; store 09 should be unchanged after the settle.

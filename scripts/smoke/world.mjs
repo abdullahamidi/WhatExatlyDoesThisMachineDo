@@ -1950,8 +1950,14 @@ async function caseNT(page) {
   await check(page, 'N_no_teleport', res.violationCount === 0 && res.steps > 0 && said === true, { said, ...res }, true);
 }
 
-// N_umbrella and N_umbrella_talk (S11, vents): 1 s steps until the Inspector opens the umbrella. The same step starts INS-08 (quiet off,
-// the umbrella still open); the bubble then shows the talkUmbrella variant. The umbrella must end and be logged after the sighting.
+// N_umbrella and N_umbrella_talk (S11, vents). The trigger is read from the behaviour log only (a finished activity is logged at its end),
+// so the case does not depend on snapshot sampling. N_umbrella is seen && ended; N_umbrella_talk is said && talkSeen.
+// (a) seen: worldAdvance in 1 s steps (180 at most) until the log holds an Inspector umbrella with reaction true (the vent-puff reaction).
+// (b) talk: worldBehaviourNext('inspector', 'umbrella') pins the umbrella (it starts at the runner's next step; vents hold at S11). Real
+//     sleeps of 50 ms (4 s at most) wait until worldBehaviour() shows it open; then worldQuiet(false) and worldSay('INS-08'); real sleeps of
+//     150 ms (3 s at most) wait for the bubble and the inspector's talkUmbrella variant.
+// (c) ended: worldQuiet(true), then 1 s steps (180 at most) until the log holds an umbrella entry after the pin's cursor (the last log entry
+//     before the pin). Without the opening, ended stays false. The demo skips both checks.
 async function caseNU(page) {
   if (await isDemo(page)) {
     skipCheck('N_umbrella');
@@ -1960,31 +1966,44 @@ async function caseNU(page) {
   }
   await crankClicks(page, 45, 0);
   await stageSetup(page, S11);
-  let hit = null;
-  for (let i = 0; i < 180 && hit === null; i++) {
-    hit = await page.evaluate(() => {
+  let seen = false;
+  for (let i = 0; i < 180 && !seen; i++) {
+    seen = await page.evaluate(() => {
       const w = window.__wedtmd;
       w.worldAdvance(1000);
-      const open = (w.worldBehaviour() ?? []).some((e) => e.id === 'inspector' && e.activity === 'umbrella');
-      if (!open) return null;
-      const log = w.worldBehaviourLog() ?? [];
-      const last = log.length > 0 ? log[log.length - 1] : null;
-      w.worldQuiet(false);
-      return { said: w.worldSay('INS-08'), cursor: last === null ? null : `${last.id}|${last.atMs}` };
+      return (w.worldBehaviourLog() ?? []).some((e) => e.id === 'inspector' && e.activity === 'umbrella' && e.reaction === true);
     });
   }
+  const pin = await page.evaluate(() => {
+    const w = window.__wedtmd;
+    const log = w.worldBehaviourLog() ?? [];
+    const last = log.length > 0 ? log[log.length - 1] : null;
+    return { pinned: w.worldBehaviourNext('inspector', 'umbrella'), cursor: last === null ? null : `${last.id}|${last.atMs}` };
+  });
+  let opened = false;
+  for (let i = 0; i < 80 && pin.pinned && !opened; i++) {
+    await sleep(50);
+    opened = await page.evaluate(() => (window.__wedtmd.worldBehaviour() ?? []).some((e) => e.id === 'inspector' && e.activity === 'umbrella'));
+  }
+  let said = null;
   let talkSeen = false;
-  for (let i = 0; i < 20 && hit !== null && !talkSeen; i++) {
-    await sleep(150);
-    talkSeen = await page.evaluate(() => {
-      const w = window.__wedtmd;
-      const inspector = (w.livingWorld() ?? []).find((e) => e.id === 'inspector');
-      return w.worldBubble()?.visible === true && inspector?.variant === 'talkUmbrella';
+  if (opened) {
+    said = await page.evaluate(() => {
+      window.__wedtmd.worldQuiet(false);
+      return window.__wedtmd.worldSay('INS-08');
     });
+    for (let i = 0; i < 20 && !talkSeen; i++) {
+      await sleep(150);
+      talkSeen = await page.evaluate(() => {
+        const w = window.__wedtmd;
+        const inspector = (w.livingWorld() ?? []).find((e) => e.id === 'inspector');
+        return w.worldBubble()?.visible === true && inspector?.variant === 'talkUmbrella';
+      });
+    }
   }
   await page.evaluate(() => window.__wedtmd.worldQuiet(true));
   let ended = false;
-  for (let i = 0; i < 180 && hit !== null && !ended; i++) {
+  for (let i = 0; i < 180 && opened && !ended; i++) {
     ended = await page.evaluate((cursor) => {
       const w = window.__wedtmd;
       w.worldAdvance(1000);
@@ -1997,10 +2016,10 @@ async function caseNU(page) {
         }
       }
       return log.slice(from).some((e) => e.id === 'inspector' && e.activity === 'umbrella');
-    }, hit.cursor);
+    }, pin.cursor);
   }
-  await check(page, 'N_umbrella', hit !== null && ended, { seen: hit !== null, ended }, true);
-  await check(page, 'N_umbrella_talk', hit !== null && hit.said === true && talkSeen, { said: hit?.said ?? null, talkSeen }, true);
+  await check(page, 'N_umbrella', seen && ended, { seen, ended }, true);
+  await check(page, 'N_umbrella_talk', said === true && talkSeen, { said, talkSeen }, true);
 }
 
 // N_crank (S0, a fresh page, no purchase): one crank click steps every visible walker by 1, and the walkers' snapshot holds for 2 s

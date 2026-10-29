@@ -42,6 +42,7 @@ interface SpliceEntryBase {
   readonly bboxArt: SpliceBoxArt;
   readonly footArt: { readonly x: number; readonly y: number };
   readonly placements: Readonly<Partial<Record<FramingKey, SplicePlacement | null>>>;   // null = documented exemption; missing = era not started
+  readonly postgame?: SplicePlacement; // feet in the postgame portrait only (lines are hidden there; AD2 R2 F20). The portrait cell holds through the finale film.
   readonly line: SpliceLineRoute;
   readonly perchTop?: { readonly dx: number; readonly dy: number };
 }
@@ -91,6 +92,7 @@ export const SPLICE_WORLD: Readonly<Partial<Record<SpliceObjectId, SpliceWorldEn
     bboxArt: { x: 3, y: 9, w: 26, h: 15 },
     footArt: FOOT_STD,
     placements: expandRow([[2488, 96], null, null, [2924, 130], null, [2960, 130], [3150, BACK], [3150, BACK], null, [3150, BACK]]),
+    postgame: { x: 744, lane: 104 },
     line: FROM_RIGHT,
     perchTop: { dx: -5, dy: -26 },
   },
@@ -100,6 +102,7 @@ export const SPLICE_WORLD: Readonly<Partial<Record<SpliceObjectId, SpliceWorldEn
     bboxArt: { x: 2, y: 0, w: 27, h: 24 },
     footArt: FOOT_STD,
     placements: expandRow([[1352, 64], [1466, 56], [1510, 56], [1392, 80], null, [712, 72], [718, 56], [718, 56], [718, 56], null]),
+    postgame: { x: 810, lane: 100 },
     line: FROM_LEFT,
   },
   spliceClock: {
@@ -159,6 +162,7 @@ export const SPLICE_LINE_STYLE = {
     stakeColor: 0x3e4246, stakeTopColor: 0x7d8286, stakeArt: { w: 2, h: 3 }, stakeEveryPx: 48,
     glintColor: 0xddc9a3, glintWidthPx: 4,           // the pulse: a glint hopping stake to stake (the 2 x 2 art px stake cap)
     reducedDotColor: 0xddc9a3,                        // reduced motion: a steady lit dot at the object end
+    stakeEndInsetPx: 36,                              // no stake within this many world px of the object end, so the last stake (the reduced-motion dot) stands clear of the widest sprite half width (28) (AD2 R2 F22)
   },
   era2: {
     cableColor: 0x2b2e31, cableWidthPx: 2, cableTopColor: 0x5a5f63,

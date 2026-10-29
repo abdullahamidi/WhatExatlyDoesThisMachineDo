@@ -2,7 +2,9 @@
 // redrawn only when the routes change) and the pulses that run along it (one Graphics, redrawn at most SPLICE_FX.redrawHz). Both sit in the back
 // row at SPLICE_LINE_STYLE.depthOffset (on the ground, under the prop feet). The paths come from src/game/math/spliceWorld.ts (linePath), the pulse
 // law from the same module (pulseCount, pulseSpeed, pulsePositions) and the level from the caller (reachLevel with REACH_LEVEL).
-// Era I: a signal wire on pulley stakes; the pulse is a glint that hops stake to stake. Era II: an insulated cable with a top edge (the drop wire
+// Era I: a signal wire on pulley stakes; the pulse is a glint that hops stake to stake. Its stakes stop stakeEndInsetPx short of the object end
+// and every line longer than that keeps at least one stake (AD2 R2 F22 regression fix), so the reduced-motion dot on the last stake is never
+// under the object. Era II: an insulated cable with a top edge (the drop wire
 // too); the pulse is a 2 x 2 art px dot. Reduced motion: no pulses, one steady lit dot per line (era I on its last stake, era II steadyInsetPx
 // before the object end), no wake beat. Frozen (photo mode) holds the frame.
 // Pool only: one shared scratch array serves every pulse; update paths allocate nothing. Lines copy their routes' point lists when the routes change.
@@ -21,7 +23,7 @@ import type { Vec2 } from '../../data/machineComponents';
 import { PIXEL_SCALE } from '../../data/world';
 import { SPLICE_FX, SPLICE_LINE_STYLE } from '../../data/spliceWorld';
 import type { TechId } from '../../data/types';
-import { pulseCount, pulsePositions, pulseSpeed } from '../math/spliceWorld';
+import { pulseCount, pulsePositions, pulseSpeed, stakeDistances } from '../math/spliceWorld';
 import { sortWorldRows } from './worldRows';
 import type { WorldRows } from './worldRows';
 
@@ -56,14 +58,15 @@ function lengthOf(path: readonly Vec2[]): number {
   return total;
 }
 
-// Builds the line of a route. Era I stakes stand every stakeEveryPx along the route, short of its end (pulsePositions gives each point).
+// Builds the line of a route. Era I stakes stand every stakeEveryPx along the route and stop stakeEndInsetPx short of its end; every line longer
+// than that keeps at least one stake (AD2 R2 F22 regression fix, stakeDistances). pulsePositions gives each stake point.
 function makeLine(route: SpliceRoute): Line {
   const path = route.path.slice();
   const len = lengthOf(path);
   const stakes: Vec2[] = [];
   const at: Vec2[] = [{ x: 0, y: 0 }];
   if (route.era === 1) {
-    for (let d = E1.stakeEveryPx; d < len; d += E1.stakeEveryPx) {
+    for (const d of stakeDistances(len, E1.stakeEveryPx, E1.stakeEndInsetPx)) {
       pulsePositions(path, 1, d / len, at);
       const p = at[0];
       if (p !== undefined) stakes.push({ x: p.x, y: p.y });

@@ -47,7 +47,7 @@ Left for the user: Steam app/depot ids, capsule art, trailer, SteamPipe upload (
 | WP26 | Post-v0.10.0 follow-ups → v0.10.1: wind/rain audio from the world weather, slow era V sky fade-in, loop prune, girl off the scrap, servo arm rim, tech tree edges clear every node (AD §R N2) | ✅ done (v0.10.1; Opus review round 2 APPROVE, EM round 2 PASS, AD2 round 2 RELEASE-READY; §R-lite PASS) |
 | WP25b | Surge: click = very serious income (playtest reading R2), capped burst on top of WP25 | superseded by WP27 (the user's 2026-10-27 answer) |
 | WP27 | Playtest 2026-10-27: click curve (hand → hand + machine → machine), ME click parity, Machine Faults + wind-up click branch (5 new nodes), prestige re-tune, crow perched in eras I-II, Sensor 7 in era II | ✅ done (v0.11.0; Opus review round 3 APPROVE, EM round 3 PASS, AD round 3 RELEASE-READY; §R-lite all 15 rows PASS) |
-| WP28 | Playtest 2026-10-28: no dead waits, Splices (wake world objects), Finds, poke-able and roaming denizens, the machine's reach into the world | 🔄 design workflow running (research + pacing audit + AD world audit → plan → critic) |
+| WP28 | Playtest 2026-10-28: no dead waits, Splices (wake world objects), Finds, poke-able and roaming denizens, the machine's reach into the world | 🔄 WP28a done (REC pacing 17 split tracks, multi-buy + BUY MAX + NEXT BUY, 16 Splices era I-II, Finds + FIELD NOTES, pokes; es2022; 6471 tests; all smokes fail []; AD2 round 3 RELEASE-READY). WP28b next (roaming, machine reactions, ReachFx, era III-V Splices, v0.12.0) |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 

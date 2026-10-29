@@ -68,11 +68,12 @@ export const FIND_COLORS: Readonly<Record<EraNumber, { readonly glint: number; r
 
 // Find spots per framing (AD1 hand-off e). Feet at GROUND_Y + lane. A framing without a key has no spot, so no Find shows there.
 // Eras III-V framings use ground spots until their producers are drawn (WP28b).
+// (AD2 R2 F21: the e1 / s9 gust items stand in front of the scrap at 1420, so the glint never sits on the scrap's cream.)
 export const FIND_SPOTS: Partial<Record<FramingKey, readonly FindSpot[]>> = {
-  e1: [{ x: 2476, lane: 26, producer: 'crow' }, { x: 2420, lane: 56, producer: 'dog' }, { x: 1410, lane: 12, producer: 'gust' }, { x: 1480, lane: 88, producer: 'ground' }],
+  e1: [{ x: 2476, lane: 26, producer: 'crow' }, { x: 2420, lane: 56, producer: 'dog' }, { x: 1420, lane: 30, producer: 'gust' }, { x: 1480, lane: 88, producer: 'ground' }],
   s8: [{ x: 2656, lane: 26, producer: 'crow' }, { x: 2596, lane: 60, producer: 'dog' }, { x: 1520, lane: 20, producer: 'gust' }, { x: 1452, lane: 100, producer: 'ground' }],
   s8w: [{ x: 1520, lane: 74, producer: 'gust' }, { x: 1508, lane: 104, producer: 'ground' }, { x: 1556, lane: 30, producer: 'ground' }],
-  s9: [{ x: 2996, lane: 26, producer: 'crow' }, { x: 2866, lane: 72, producer: 'dog' }, { x: 1410, lane: 16, producer: 'gust' }, { x: 1480, lane: 140, producer: 'ground' }, { x: 2904, lane: 20, producer: 'dog' }],
+  s9: [{ x: 2996, lane: 26, producer: 'crow' }, { x: 2866, lane: 72, producer: 'dog' }, { x: 1420, lane: 26, producer: 'gust' }, { x: 1480, lane: 140, producer: 'ground' }, { x: 2904, lane: 20, producer: 'dog' }],
   s10: [{ x: 1250, lane: 60, producer: 'ground' }, { x: 1240, lane: 120, producer: 'ground' }, { x: 2870, lane: 54, producer: 'ground' }],
   s11: [{ x: 780, lane: 110, producer: 'ground' }, { x: 2920, lane: 60, producer: 'ground' }, { x: 3130, lane: 120, producer: 'ground' }],
   s15: [{ x: 790, lane: 90, producer: 'ground' }, { x: 812, lane: 40, producer: 'ground' }, { x: 3020, lane: 8, producer: 'ground' }],

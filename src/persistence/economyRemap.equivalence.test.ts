@@ -1,10 +1,13 @@
-// WP28 save equivalence (Director answer Q4; Pacing set REC, P6). A v0.11.0 save (version 2, no `econ` marker) loads onto the
-// same machine: the same visible part tiers, the same per-second output within a tolerance, and a remapped save is never
-// remapped twice. The five era snapshots come from the real greedy (profile A, REC data). Each snapshot is turned back into
+// WP28 save equivalence (Director ruling Q4, 2026-10-29; Pacing set REC, P6). A v0.11.0 save (version 2, no `econ` marker)
+// loads onto the same machine: the same visible part tiers and levels, the same per-second output within a tolerance, and a
+// remapped save is never remapped twice. The ruling (WP28.md, 'Director rulings (2026-10-29, after WP28a fix round 4)'): "a
+// v0.11.0 save loads with the same machine (same tiers and levels, never remapped twice) and the same perSecond within 1 % in
+// eras I-II and within 3 % in eras III-V". The measured maximum after round 4 is 2.41 % (skyAperture EE), inside the 3 % bound.
+// The five era snapshots come from the real greedy (profile A, REC data). Each snapshot is turned back into
 // v0.11.0 levels (split ids: floor(level / parts); Splices did not exist in v0.11.0 and load at 0), written as a v0.11.0
 // envelope and loaded through the real deserialize.
 //
-// Tolerances: 1 % at the generator snapshot (era I-II), 3 % at the later ones. The 3 % is the REC per-level rounding (the
+// Tolerances: 1 % at the generator snapshot (era I-II), 3 % at the later ones (era III-V). The 3 % is the REC per-level rounding (the
 // per-level effect times parts against the v0.11.0 effect): bellowsDrive and gridExciter autoPct 2.5 vs 8 / 3, inductionHeater
 // autoAdd 0.65 vs 1.9 / 3, resonantSiphon autoAdd 0.37 vs 1.1 / 3 and autoPct 1.7 vs 5 / 3, graviticAnchor rateMult 1.05 per level
 // (squared, 1.1025) vs 1.1. A bigger drift is a data error: stop and report it.
@@ -24,7 +27,7 @@ import { deserialize, serialize } from './codec';
 /** Era snapshots (profile A): the state right after the step each tech is first owned. generator opens era II. */
 const SNAPSHOTS = ['generator', 'boiler', 'resonatorSpire', 'nullChamber', 'skyAperture'] as const;
 
-/** Relative tolerance on perSecond per snapshot: 1 % for era I-II (generator), 3 % for the later eras (the REC rounding). */
+/** Relative tolerance on perSecond per snapshot, Director ruling Q4 (2026-10-29): 1 % in eras I-II (generator opens era II), 3 % in eras III-V (REC rounding; measured max 2.41 %, skyAperture EE). */
 function toleranceOf(snapshot: string): number {
   return snapshot === 'generator' ? 0.01 : 0.03;
 }

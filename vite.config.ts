@@ -19,6 +19,8 @@ export default defineConfig({
     // Phaser 3.90 minifies to ~1.48 MB on its own; keep it in a separate chunk so
     // the app chunk stays small and cacheable. The warning limit sits just above
     // the measured Phaser chunk so only a regression in the app chunk is flagged.
+    // Director ruling 2026-10-29 (WP28 Q14/Q8 option a): es2022 output, the tsconfig target; keeps the lazy world chunks inside their budgets.
+    target: 'es2022',
     chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {

@@ -10,7 +10,8 @@
 //     woken frame when reduced; the whole frame in the postgame (the clock's lit face hides there). beats are the ids whose wake beat is queued this
 //     frame: a record that turns woken with its id in beats is held (wake hold) on its dead frame, its loop and the clock's face off, until wake(id)
 //     runs. A hold lasts at most SPLICE_FX.wakeBeatMs + wakeHoldSlackMs from the first update after it starts. Reduced motion, the postgame and a
-//     hidden object take no hold (and drop one).
+//     hidden object take no hold (and drop one). The postgame portrait places an object with a postgame placement (entry.postgame) at those feet;
+//     the portrait cell holds through the finale film (AD2 R2 F20).
 //   wake(id, nowMs): ends the wake hold of one object (its beat ran) and restarts its woken loop at nowMs. Ids that are not placed objects are ignored.
 //   isHeld(id): whether the object of id is on its wake hold (the director keeps the clock's tick until then).
 //   twitch(id): a one-frame twitch of a woken own-art object (the next loop frame, or a 1 px shift); no-op for other ids, dead or held objects,
@@ -104,6 +105,8 @@ export class SpliceProps {
   private readonly worldRows: WorldRows;
   private readonly records: ObjectRecord[] = [];
   private postgame = false;
+  private framing: FramingKey | null = null; // the last framing and era setFraming gave (a postgame flip re-places the records with them)
+  private era = 0;
   private reduced = false;
   private frozen = false;
   private animated = 0; // the objects with a loop that is visible, woken and not held (update() returns at once while there are none)
@@ -133,15 +136,19 @@ export class SpliceProps {
 
   /** Places or hides each object for the framing and the player's era (see the header). */
   setFraming(framing: FramingKey | null, era: number): void {
-    for (const r of this.records) this.place(r, framing === null ? null : (r.entry.placements[framing] ?? null), era);
+    this.framing = framing;
+    this.era = era;
+    for (const r of this.records) this.place(r, this.placementOf(r), era);
     sortWorldRows(this.worldRows);
     this.recount();
   }
 
   /** Sets the frames from the tech levels, the postgame and the reduced-motion flag (see the header). */
   setStates(levels: Readonly<Partial<Record<TechId, number>>>, postgame: boolean, reduced: boolean, beats: readonly TechId[] = NO_BEATS): void {
+    const flipped = postgame !== this.postgame;
     this.postgame = postgame;
     this.reduced = reduced;
+    if (flipped) this.setFraming(this.framing, this.era);
     for (const r of this.records) {
       const woken = (levels[r.id] ?? 0) >= 1;
       // A hold needs a woken object with a sprite that is visible, outside reduced motion and the postgame (its beat is the only reason to hold).
@@ -267,6 +274,13 @@ export class SpliceProps {
   // The record of a Splice id (undefined for a non-Splice id). Called on events and in the debug rows, never per frame.
   private recordOf(id: TechId): ObjectRecord | undefined {
     return this.records.find((r) => r.id === id);
+  }
+
+  // The placement of a record at the framing setFraming gave (null: none). The postgame portrait takes the object's postgame feet (AD2 R2 F20).
+  private placementOf(r: ObjectRecord): SplicePlacement | null {
+    if (this.framing === null) return null;
+    if (this.postgame && this.framing === 'portrait' && r.entry.postgame !== undefined) return r.entry.postgame;
+    return r.entry.placements[this.framing] ?? null;
   }
 
   // Counts the animated objects (visible, woken, not held, with a loop): update() has nothing to do while there are none.

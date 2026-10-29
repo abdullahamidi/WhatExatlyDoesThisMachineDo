@@ -176,6 +176,15 @@ export function pulsePositions(path: readonly Vec2[], count: number, phase: numb
   return n;
 }
 
+/** Distances (world px along a line of length len) of the era I pulley stakes: one every everyPx starting at everyPx while d < len - endInsetPx, so the last stake stands at least endInsetPx short of the object end. A line longer than endInsetPx always keeps at least one stake: when the loop gives none, one stands at len - endInsetPx. Empty for a line no longer than endInsetPx, or when an input is not a finite number (everyPx must be > 0, endInsetPx >= 0). */
+export function stakeDistances(len: number, everyPx: number, endInsetPx: number): number[] {
+  const out: number[] = [];
+  if (!Number.isFinite(len) || !Number.isFinite(everyPx) || !Number.isFinite(endInsetPx) || !(len > 0) || !(everyPx > 0) || !(endInsetPx >= 0)) return out;
+  for (let d = everyPx; d < len - endInsetPx; d += everyPx) out.push(d);
+  if (out.length === 0 && len > endInsetPx) out.push(len - endInsetPx);
+  return out;
+}
+
 // The clock's tick schedule (C6): tick k sits at k x slot + jitter(seed, k), jitter in [0, slot / 2 span). A tick gap is therefore
 // 6-10 s and a tick (snapBackMs long) never reaches the next slot.
 const TICK_SLOT_MS = (SPLICE_CLOCK.tickEveryMs[0] + SPLICE_CLOCK.tickEveryMs[1]) / 2;

@@ -8,12 +8,13 @@ import { getTechView } from '../../simulation/progression/status';
 import { TECHNOLOGIES } from '../../data/technologies';
 import type { GameState, TechId, TechView } from '../../data/types';
 import {
-  SPLICE_CLOCK, SPLICE_FX, SPLICE_HUD_RECT, SPLICE_PAYPHONE, SPLICE_SHEETS, SPLICE_WORLD, SPLICE_YARD_LIMITS,
+  SPLICE_CLOCK, SPLICE_FX, SPLICE_HUD_RECT, SPLICE_LINE_STYLE, SPLICE_PAYPHONE, SPLICE_SHEETS, SPLICE_WORLD, SPLICE_YARD_LIMITS,
 } from '../../data/spliceWorld';
 import type { SpliceWorldEntry } from '../../data/spliceWorld';
 import { SPLICE_TEXT } from '../../data/ux';
 import { WORLD_ENV, WORLD_FAR_PLANES, WORLD_LAYOUT, WORLD_PLACEMENTS, WORLD_ROWS } from '../../data/livingWorld';
 import { WORLD_SPOTS } from '../../data/worldBehaviour';
+import { WORLD_ENDING } from '../../data/worldEnding';
 import { CRANK_FEEDBACK, GROUND_Y, PIXEL_SCALE } from '../../data/world';
 import type { Vec2 } from '../../data/machineComponents';
 import { MACHINE_COMPONENTS } from '../../data/machineComponents';
@@ -25,7 +26,7 @@ import { framingKey, framingPose, screenOfWorld } from './worldPlacement';
 import { STAGE_LISTS } from './worldBehaviourMetrics';
 import {
   clockTick, hasOwnArt, lineRouteAt, linePath, placementFeetY, pulseCount, pulsePositions, pulseSpeed, spliceBoxWorld,
-  spliceState, spliceTooltip,
+  spliceState, spliceTooltip, stakeDistances,
 } from './spliceWorld';
 
 // A buy list to tech levels: plain id += 1; '@tech' = 1; '@tech:n' = n ('@blueprint' is generatorBlueprint).
@@ -512,5 +513,144 @@ describe('placement guard (A14)', () => {
         expect(Math.max(gapX, gapY), `${a.name} / ${b.name}`).toBeGreaterThanOrEqual(OBJECT_GAP_PX);
       }
     }
+  });
+});
+
+// ---- postgame placements (AD2 R2 F20) ----
+
+describe('postgame placements (AD2 R2 F20)', () => {
+  // The postgame portrait (the whole Splice frames; lines are hidden there): the left wing between x 648 and the left anchor foot 848, the frame
+  // bottom at G + 120 (kept at G + 112), the postgame dog's band (home 732, chase dx 0..36, front row G + 32) and the Inspector's pat box (x 742).
+  const DOG_BAND: Bounds = {
+    left: WORLD_ENDING.postgameDogHomeX - 24, right: WORLD_ENDING.postgameDogHomeX + 36 + 24, top: GROUND_Y - 8, bottom: GROUND_Y + 40,
+  };
+  const PAT_BOX: Bounds = { left: 722, right: 762, top: GROUND_Y - 66, bottom: GROUND_Y + 32 };
+  // Every object with a postgame placement, its world box from its feet (the guard's spliceBoxWorld).
+  const POSTGAME: { name: string; box: Bounds }[] = [];
+  for (const [id, entry] of Object.entries(SPLICE_WORLD)) {
+    if (entry === undefined || entry.postgame === undefined) continue;
+    POSTGAME.push({ name: `${id} postgame`, box: spliceBoxWorld(entry, { x: entry.postgame.x, y: placementFeetY(entry.postgame) }) });
+  }
+  // The radio keeps its portrait cell; its box is the fixed one the postgame boxes are checked against.
+  const radio = SPLICE_WORLD.spliceRadio;
+  const radioCell = radio?.placements.portrait;
+  const radioBox: Bounds | null = radio && radioCell ? spliceBoxWorld(radio, { x: radioCell.x, y: placementFeetY(radioCell) }) : null;
+
+  it('the radio keeps its portrait cell and has no postgame key', () => {
+    expect(radio?.postgame).toBeUndefined();
+    expect(radioBox).not.toBeNull();
+  });
+
+  it('the boxes sit where the AD2 mock put them', () => {
+    expect(POSTGAME.find((p) => p.name === 'spliceBicycle postgame')?.box)
+      .toEqual({ left: 718, top: GROUND_Y + 74, right: 770, bottom: GROUND_Y + 104 });
+    expect(POSTGAME.find((p) => p.name === 'spliceOrgan postgame')?.box)
+      .toEqual({ left: 782, top: GROUND_Y + 52, right: 836, bottom: GROUND_Y + 100 });
+    expect(radioBox).toEqual({ left: 674, top: GROUND_Y + 60, right: 706, bottom: GROUND_Y + 100 });
+  });
+
+  it.each(POSTGAME)('$name sits in the portrait left wing, left of the left anchor foot (848)', ({ box }) => {
+    expect(box.left).toBeGreaterThanOrEqual(648);
+    expect(box.right).toBeLessThanOrEqual(848);
+  });
+
+  it.each(POSTGAME)('$name stays above the portrait frame bottom (G + 112)', ({ box }) => {
+    expect(box.bottom).toBeLessThanOrEqual(GROUND_Y + 112);
+  });
+
+  it.each(POSTGAME)('$name clears the postgame dog band', ({ box }) => {
+    expect(overlaps(box, DOG_BAND)).toBe(false);
+  });
+
+  it.each(POSTGAME)('$name clears the Inspector pat box', ({ box }) => {
+    expect(overlaps(box, PAT_BOX)).toBe(false);
+  });
+
+  it('every pair of postgame boxes and the radio portrait box is at least 4 px apart', () => {
+    const all = radioBox === null ? POSTGAME : [...POSTGAME, { name: 'spliceRadio portrait', box: radioBox }];
+    for (let i = 0; i < all.length; i++) {
+      for (let j = i + 1; j < all.length; j++) {
+        const a = all[i];
+        const b = all[j];
+        if (a === undefined || b === undefined) continue;
+        const gapX = Math.max(a.box.left - b.box.right, b.box.left - a.box.right);
+        const gapY = Math.max(a.box.top - b.box.bottom, b.box.top - a.box.bottom);
+        expect(Math.max(gapX, gapY), `${a.name} / ${b.name}`).toBeGreaterThanOrEqual(OBJECT_GAP_PX);
+      }
+    }
+  });
+});
+
+// ---- era I pulley stakes (AD2 R2 F22, A14) ----
+
+describe('stakeDistances (AD2 R2 F22 regression)', () => {
+  it('a line longer than the inset keeps one stake: the s11 street clock line (82.02 px) had none', () => {
+    const d = stakeDistances(82.02, 48, 36);
+    expect(d).toHaveLength(1);
+    expect(d[0]).toBeCloseTo(46.02, 5);
+  });
+
+  it.each([
+    [92, 48, 36, [48]],
+    [128, 48, 36, [48]],
+    [200, 48, 36, [48, 96, 144]],
+    [233, 48, 36, [48, 96, 144, 192]],
+    [49, 48, 0, [48]],
+    [36, 48, 36, []],
+    [30, 48, 36, []],
+    [0, 48, 36, []],
+    [-5, 48, 36, []],
+    [NaN, 48, 36, []],
+    [Infinity, 48, 36, []],
+    [200, 0, 36, []],
+    [200, -1, 36, []],
+    [200, 48, -1, []],
+    [200, 48, NaN, []],
+  ])('stakeDistances(%s, %s, %s) gives the era I stake distances', (len, everyPx, inset, expected) => {
+    expect(stakeDistances(len, everyPx, inset)).toEqual(expected);
+  });
+});
+
+describe('era I pulley stakes (A14)', () => {
+  // The stake points of a placement's line (world px), placed as SpliceLines.makeLine places them: the route from the machine's outer foot,
+  // one stake per stakeDistances distance along the path.
+  function stakesOf(c: Case): Vec2[] {
+    const foot = { x: c.entry.line.from === 'left' ? FOOT_TABLE[c.framing].left : FOOT_TABLE[c.framing].right, y: GROUND_Y };
+    const path = linePath(lineRouteAt(c.entry.line, c.framing), foot, c.feet);
+    let len = 0;
+    for (let i = 1; i < path.length; i++) {
+      const a = path[i - 1];
+      const b = path[i];
+      if (a !== undefined && b !== undefined) len += Math.hypot(b.x - a.x, b.y - a.y);
+    }
+    const out: Vec2[] = [];
+    const at: Vec2[] = [{ x: 0, y: 0 }];
+    for (const d of stakeDistances(len, SPLICE_LINE_STYLE.era1.stakeEveryPx, SPLICE_LINE_STYLE.era1.stakeEndInsetPx)) {
+      pulsePositions(path, 1, d / len, at);
+      const p = at[0];
+      if (p !== undefined) out.push({ x: p.x, y: p.y });
+    }
+    return out;
+  }
+
+  it.each(CASES.filter((c) => TECHNOLOGIES[c.id as TechId]?.era === 1))('$name keeps at least one stake and the last stands outside the object x range', (c) => {
+    const stakes = stakesOf(c);
+    expect(stakes.length, c.name).toBeGreaterThanOrEqual(1);
+    const last = stakes[stakes.length - 1];
+    expect(last, c.name).toBeDefined();
+    if (last === undefined) return;
+    expect(last.x < c.box.left || last.x > c.box.right, `${c.name} last stake at x ${last.x}`).toBe(true);
+  });
+
+  it('spliceClock s11 keeps exactly one stake, at about x 2854, left of the clock box', () => {
+    const c = CASES.find((k) => k.name === 'spliceClock s11');
+    expect(c).toBeDefined();
+    if (c === undefined) return;
+    const stakes = stakesOf(c);
+    expect(stakes, c.name).toHaveLength(1);
+    const x = stakes[0]?.x ?? NaN;
+    expect(x, c.name).toBeGreaterThanOrEqual(2850);
+    expect(x, c.name).toBeLessThanOrEqual(2858);
+    expect(x, c.name).toBeLessThan(c.box.left);
   });
 });
