@@ -19,8 +19,9 @@ const CASUAL_MAX_SECONDS = 40000;
 
 // Profile A = main player (4 clicks/s, buys every second). Profile C = casual (1 click/s, buys every 30 s).
 // `faults` = the Machine Faults catch model of each player (WP27): chance to catch a fault, seconds to react.
-const PROFILE_A = { clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 1, faults: { catchProb: 1, reactionSeconds: 2 } };
-const PROFILE_C = { clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 0.5, reactionSeconds: 4 } };
+// `finds` = the Finds catch model of each player (WP28): chance to pick up a Find, seconds from spawn to pick-up.
+const PROFILE_A = { clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 1, faults: { catchProb: 1, reactionSeconds: 2 }, finds: { catchProb: 0.85, reactionSeconds: 4 } };
+const PROFILE_C = { clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 0.5, reactionSeconds: 4 }, finds: { catchProb: 0.4, reactionSeconds: 6 } };
 
 interface Spend {
   name: string;
@@ -54,7 +55,7 @@ function prestige(cycle: number, echoesEarned: number, perks: readonly PerkId[])
 
 function cycleRun(
   p: PrestigeState,
-  profile: Pick<GreedyOptions, 'clicksPerSecond' | 'stepSeconds' | 'buyIntervalSeconds' | 'faults'>,
+  profile: Pick<GreedyOptions, 'clicksPerSecond' | 'stepSeconds' | 'buyIntervalSeconds' | 'faults' | 'finds'>,
   seconds: number,
 ): GreedyResult {
   return runGreedy({

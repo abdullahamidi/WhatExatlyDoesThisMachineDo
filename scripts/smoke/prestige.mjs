@@ -22,13 +22,13 @@ const TOP_TIERS = {
 
 // buy list up to the era V stage before primaryFunction (mirrors finale.mjs / stages.mjs S15)
 const S7 = ['wornMotor', 'gearRatio','gearRatio','gearRatio','reinforcedCrank','motorTuning','motorTuning','motorTuning','motorTuning','motorTuning','flywheel','pistonArray','improvedPistons'];
-const S9 = [...S7, '@blueprint', 'generator', ...Array(5).fill('motorRetrofit'), ...Array(20).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(3).fill('transformer'), 'powerLines'];
+const S9 = [...S7, '@blueprint', 'generator', ...Array(10).fill('motorRetrofit'), ...Array(40).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(6).fill('transformer'), 'powerLines'];
 const S10 = [...S9, '@substationBlueprint', 'boiler'];
-const S11 = [...S10, ...Array(3).fill('inductionHeater'), ...Array(20).fill('firebox'), 'steamHammer', 'superheater', ...Array(5).fill('condenser'), 'turbine', 'reliefValves', '@pressureVesselBlueprint'];
+const S11 = [...S10, ...Array(9).fill('inductionHeater'), ...Array(40).fill('firebox'), 'steamHammer', 'superheater', ...Array(15).fill('condenser'), 'turbine', 'reliefValves', '@pressureVesselBlueprint'];
 const S12 = [...S11, 'resonatorSpire'];
-const S13 = [...S12, ...Array(3).fill('crankServo'), ...Array(25).fill('harmonicCoil'), ...Array(3).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(3).fill('standingWave'), 'crystalLattice', '@harmonicConvergence'];
+const S13 = [...S12, ...Array(3).fill('crankServo'), ...Array(50).fill('harmonicCoil'), ...Array(6).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(6).fill('standingWave'), 'crystalLattice', '@harmonicConvergence'];
 const S14 = [...S13, 'nullChamber'];
-const S15 = [...S14, ...Array(25).fill('containmentRing'), ...Array(20).fill('resonantSiphon'), ...Array(10).fill('graviticAnchor'), 'inversionCrank', 'lensArray', ...Array(20).fill('horizonField'), 'skyAperture', '@finalAlignment'];
+const S15 = [...S14, ...Array(50).fill('containmentRing'), ...Array(60).fill('resonantSiphon'), ...Array(20).fill('graviticAnchor'), 'inversionCrank', 'lensArray', ...Array(40).fill('horizonField'), 'skyAperture', '@finalAlignment'];
 
 const browser = await chromium.launch();
 let ctx = null, page = null;

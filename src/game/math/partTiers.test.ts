@@ -135,8 +135,8 @@ describe('partTierMap and hostTiers', () => {
   it('hostTiers has one entry per swap host and none for stage hosts', () => {
     const hosts = new Set(PART_TIERS.flatMap((t) => t.swaps));
     expect(hostTiers({}).size).toBe(hosts.size);
-    expect(hostTiers({ copperWinding: 25 }).has('coilStage2')).toBe(false);
-    expect(hostTiers({ copperWinding: 25 }).has('coilStage1')).toBe(true);
+    expect(hostTiers({ copperWinding: 49 }).has('coilStage2')).toBe(false);
+    expect(hostTiers({ copperWinding: 49 }).has('coilStage1')).toBe(true);
   });
 });
 
@@ -398,7 +398,7 @@ describe('torqueStep', () => {
 describe('tierLevelSuffix', () => {
   it('shows the next mark below top', () => {
     expect(tierLevelSuffix('motorTuning', 7)).toBe(' · MK II — MK III AT 10');
-    expect(tierLevelSuffix('mainsBackfeed', 4)).toBe(' · MK II — MK III AT 7');
+    expect(tierLevelSuffix('mainsBackfeed', 10)).toBe(' · MK II — MK III AT 19');
     expect(tierLevelSuffix('gearRatio', 6)).toBe(' · MK II — MK III AT 15');
   });
 

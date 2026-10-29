@@ -14,7 +14,8 @@ export interface SessionEvents {
   // gained = ME (plain click + wind-up release); gainedAll = every resource (display only); released = wind-up
   // seconds this click released (WP27), absent when nothing was stored.
   click: { gained: number; gainedAll: ResourceMap; released?: number };
-  purchase: { id: TechId; level: number; cost: number; res: ResourceId };
+  // count (WP28, BUY MAX): levels bought by one call; absent = 1. cost is the total, level the final level.
+  purchase: { id: TechId; level: number; cost: number; res: ResourceId; count?: number };
   unlock: { id: TechId };            // tech level 0 -> 1, INCLUDING milestones
   milestone: { id: TechId };
   offline: OfflineReport;
@@ -22,11 +23,18 @@ export interface SessionEvents {
   settings: SettingsState;           // emitted when ANY settings field changes (once per updateSettings call)
   achievement: { ids: AchievementId[] };  // one per evaluation that unlocked >= 1, ids in list order; fires last
   ending: { phase: EndingPhase };     // WP13: emitted on startEnding / finishEndingSequence / keepRunning; fires after achievement
-  cycle: { cycle: number; echoesGained: number; echoesEarned: number };   // WP14: beginNewCycle; fires after reset, before achievement
+  // WP14: beginNewCycle; fires after reset, before achievement. WP28: splicesCut = Splices owned before the reset.
+  cycle: { cycle: number; echoesGained: number; echoesEarned: number; splicesCut: number };
   prestige: { prestige: PrestigeState };  // WP14: buyPerk success; fires after the unlocks, before achievement
   // WP27 Machine Faults: spawn / expire come from stepFaults, clear from clearFault (payout null unless a clear).
   // serial counts the faults of one run from 0; overdriveSeconds is the Overdrive a clear grants (0 otherwise).
   fault: { kind: 'spawn' | 'expire' | 'clear'; serial: number; payout: ResourceMap | null; overdriveSeconds: number };
+  // WP28 Finds: spawn / expire come from stepFinds, collect from collectFind. payout, noteIndex (the FIELD NOTE taken,
+  // null for a blank page or no relic) and seconds (the payout seconds; 0 for a relic and for spawn / expire) are set only on a collect.
+  find: {
+    kind: 'spawn' | 'expire' | 'collect'; serial: number; relic: boolean; payout: ResourceMap | null;
+    noteIndex: number | null; seconds: number;
+  };
 }
 
 export type Listener<K extends keyof SessionEvents> = (payload: SessionEvents[K]) => void;

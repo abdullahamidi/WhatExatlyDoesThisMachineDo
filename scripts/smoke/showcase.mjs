@@ -37,18 +37,18 @@ const failedBuys = r => r.filter(x => !x.endsWith(':true'));
 
 // buy lists: S7..S15 mirror stages.mjs; GREEDY is the same build with lower counts and no mainsBackfeed / steamLance
 const S7 = ['wornMotor', 'gearRatio','gearRatio','gearRatio','reinforcedCrank','motorTuning','motorTuning','motorTuning','motorTuning','motorTuning','flywheel','pistonArray','improvedPistons'];
-const S9 = [...S7, '@blueprint', 'generator', ...Array(5).fill('motorRetrofit'), ...Array(20).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(3).fill('transformer'), 'powerLines'];
+const S9 = [...S7, '@blueprint', 'generator', ...Array(10).fill('motorRetrofit'), ...Array(40).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(6).fill('transformer'), 'powerLines'];
 const S10 = [...S9, '@substationBlueprint', 'boiler'];
-const S11 = [...S10, ...Array(3).fill('inductionHeater'), ...Array(20).fill('firebox'), 'steamHammer', 'superheater', ...Array(5).fill('condenser'), 'turbine', 'reliefValves', ...Array(3).fill('bellowsDrive'), '@pressureVesselBlueprint'];
+const S11 = [...S10, ...Array(9).fill('inductionHeater'), ...Array(40).fill('firebox'), 'steamHammer', 'superheater', ...Array(15).fill('condenser'), 'turbine', 'reliefValves', ...Array(9).fill('bellowsDrive'), '@pressureVesselBlueprint'];
 const S12 = [...S11, 'resonatorSpire'];
-const S13 = [...S12, ...Array(3).fill('crankServo'), ...Array(25).fill('harmonicCoil'), ...Array(3).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(3).fill('standingWave'), 'crystalLattice', ...Array(5).fill('gridExciter'), '@harmonicConvergence'];
+const S13 = [...S12, ...Array(3).fill('crankServo'), ...Array(50).fill('harmonicCoil'), ...Array(6).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(6).fill('standingWave'), 'crystalLattice', ...Array(15).fill('gridExciter'), '@harmonicConvergence'];
 const S14 = [...S13, 'nullChamber'];
-const S15 = [...S14, ...Array(25).fill('containmentRing'), '@resonantSiphon:20', '@graviticAnchor:10', 'inversionCrank', 'lensArray', ...Array(20).fill('horizonField'), 'skyAperture', ...Array(5).fill('mainsBackfeed'), ...Array(5).fill('steamLance'), '@finalAlignment'];
-const G9 = [...S7, '@blueprint', 'generator', ...Array(5).fill('motorRetrofit'), ...Array(10).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(3).fill('transformer'), 'powerLines'];
+const S15 = [...S14, ...Array(50).fill('containmentRing'), '@resonantSiphon:60', '@graviticAnchor:20', 'inversionCrank', 'lensArray', ...Array(40).fill('horizonField'), 'skyAperture', ...Array(15).fill('mainsBackfeed'), ...Array(15).fill('steamLance'), '@finalAlignment'];
+const G9 = [...S7, '@blueprint', 'generator', ...Array(10).fill('motorRetrofit'), ...Array(20).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(6).fill('transformer'), 'powerLines'];
 const G10 = [...G9, '@substationBlueprint', 'boiler'];
-const G11 = [...G10, ...Array(3).fill('inductionHeater'), ...Array(10).fill('firebox'), 'steamHammer', 'superheater', ...Array(5).fill('condenser'), 'turbine', 'reliefValves', ...Array(3).fill('bellowsDrive'), '@pressureVesselBlueprint'];
-const G13 = [...G11, 'resonatorSpire', ...Array(3).fill('crankServo'), ...Array(16).fill('harmonicCoil'), ...Array(3).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(3).fill('standingWave'), 'crystalLattice', ...Array(5).fill('gridExciter'), '@harmonicConvergence'];
-const GREEDY = [...G13, 'nullChamber', ...Array(16).fill('containmentRing'), '@resonantSiphon:11', '@graviticAnchor:4', 'inversionCrank', 'lensArray', ...Array(10).fill('horizonField'), 'skyAperture', '@finalAlignment'];
+const G11 = [...G10, ...Array(9).fill('inductionHeater'), ...Array(20).fill('firebox'), 'steamHammer', 'superheater', ...Array(15).fill('condenser'), 'turbine', 'reliefValves', ...Array(9).fill('bellowsDrive'), '@pressureVesselBlueprint'];
+const G13 = [...G11, 'resonatorSpire', ...Array(3).fill('crankServo'), ...Array(32).fill('harmonicCoil'), ...Array(6).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(6).fill('standingWave'), 'crystalLattice', ...Array(15).fill('gridExciter'), '@harmonicConvergence'];
+const GREEDY = [...G13, 'nullChamber', ...Array(32).fill('containmentRing'), '@resonantSiphon:33', '@graviticAnchor:8', 'inversionCrank', 'lensArray', ...Array(20).fill('horizonField'), 'skyAperture', '@finalAlignment'];
 
 let browser = null, ctx = null, page = null;
 const ready = async () => { await page.waitForFunction(() => window.__wedtmd && window.__wedtmd.componentState && window.__wedtmd.componentState('handCrank'), null, { timeout: 15000 }); await page.waitForTimeout(400); };
@@ -226,7 +226,7 @@ try {
     const hidden25 = (await parts())?.hidden ?? null;
     const fs25 = await fin();
     check(fs25 !== null && fs25.t < 3, `showcase_B_k2_5 film clock passed the completion step: t ${fs25?.t ?? null}`);
-    // WP22 D5: siphonTube3L shows from resonantSiphon 10 and the greedy end holds 11, so it is no longer hidden here
+    // WP22 D5: siphonTube3L shows from resonantSiphon 28 and the greedy end holds 33, so it is no longer hidden here
     const must25 = ['coilStage3', 'steamLance', 'fireboxGlow3'];
     check(Array.isArray(hidden25) && hidden25.length >= 6 && must25.every(id => hidden25.includes(id)), `showcase_B_k2_5 hidden: ${JSON.stringify(hidden25)}`);
     check(fs25?.frame?.completeEra === 0, `showcase_B_k2_5 completeEra ${fs25?.frame?.completeEra ?? null}`);
@@ -251,7 +251,7 @@ try {
       if (k.mustShow === null) check(inv(hidden), `${k.key} hidden: ${JSON.stringify(hidden)}`);
       else check(Array.isArray(hidden) && !hidden.includes(k.mustShow), `${k.key} ${k.mustShow} hidden`);
       // the real session keeps its greedy levels: the completion beat is display-only
-      check(siphon === 11, `${k.key} real resonantSiphon ${siphon} want 11`);
+      check(siphon === 33, `${k.key} real resonantSiphon ${siphon} want 33`);
       res[k.key] = { seekT: k.t, t: fs?.t ?? null, completeEra, hidden, resonantSiphon: siphon, restoredSwapped: await checkRestored(k.key, 0) };
       await shot(k.shotName);
     }

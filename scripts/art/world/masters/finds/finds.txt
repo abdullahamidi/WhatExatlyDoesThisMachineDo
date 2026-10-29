@@ -1,0 +1,120 @@
+# WP28a Finds (AD1, Art Director): 11 cells of 8x8 art px, single row. Codes: scripts/art/world/pal.py.
+# Build: python -I scripts/art/world/build_sheet.py finds   Gate: python -I scripts/art/world/check_sheet.py finds
+# Items (cells 0-6) and the relic (7): iron / rust / sand only, full 1 px ink ring, feet on row 7 (pivot (0.5, 1)),
+# at most 6x6 inside the ring, no text: 0 hex nut on a bolt end, 1 blank brass tag with a punched hole, 2 small cog,
+# 3 dented tin with a rust patch, 4 skeleton key, 5 photo (white border, a sepia smudge, no face), 6 payphone token
+# (slot), 7 relic: a folded note (crease, faded ink dashes, no letters).
+# Glint (8-10): a 5x5 cross sparkle in ONE color (#ddc9a3), no outline, centered on cell pixel (4, 4) (origin (0.5,
+# 0.5) puts it +0.5 art px right/down of the cell center); frames small / cross / full, played 8 9 10 9 (ping-pong).
+# Era color at runtime (AD1 hand-off g): eras III-IV setTintFill(0xffd27a) (exact palette fill), the other eras draw the
+# art as is; the era accent goes to the ground ring.
+
+@frame bolt
+........
+..KKKK..
+.K5544K.
+K54KK32K
+K4K43K2K
+K43KK22K
+.K3222K.
+..KKKK..
+
+@frame tag
+........
+........
+.KKKKKK.
+KffffeeK
+KfKfeedK
+KfffeddK
+KeeeddcK
+.KKKKKK.
+
+@frame gear
+...KK...
+KKK45KKK
+.K4554K.
+KK5KK3KK
+KK4KK2KK
+.K4322K.
+KKK22KKK
+...KK...
+
+@frame tin
+........
+.KKKKKK.
+K554433K
+K4dd332K
+.K4e32K.
+K43dd22K
+K433222K
+KKKKKKKK
+
+@frame key
+........
+........
+.KKK....
+K54KKKKK
+K4K4444K
+K43KK3KK
+.KKKK3K.
+....KKK.
+
+@frame photo
+........
+........
+KKKKKKKK
+KwwwwwwK
+KwtuutwK
+KwstuswK
+KwwwwwvK
+KKKKKKKK
+
+@frame token
+........
+..KKKK..
+.KffeeK.
+KffeeedK
+KfKKKKdK
+KeeeeddK
+.KeeddK.
+..KKKK..
+
+@frame note
+........
+KKKKKK..
+KwwwvwK.
+KwsswvwK
+KwwwvwwK
+KwssvswK
+KwwwvwwK
+KKKKKKKK
+
+@frame glint0
+........
+........
+........
+....w...
+...www..
+....w...
+........
+........
+
+@frame glint1
+........
+........
+....w...
+....w...
+..wwwww.
+....w...
+....w...
+........
+
+@frame glint2
+........
+........
+....w...
+...www..
+..wwwww.
+...www..
+....w...
+........

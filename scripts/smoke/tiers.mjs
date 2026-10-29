@@ -43,8 +43,8 @@ const MOTOR_STEPS = [[5, 2], [10, 3], [20, 4], [25, 5]];
 const GEAR_IDS = ['gearLarge', 'mainShaft', 'gearSmall'];
 // Case C: the 15-entry prefix (every step is a tech the tree allows, see src/data/technologies.ts),
 // then six tier steps in one release (gearRatio, flywheel, motorTuning, improvedPistons, motorRetrofit, transformer).
-const PRE = ['wornMotor', '@gearRatio:5', 'reinforcedCrank', '@motorTuning:9', '@flywheel:3', 'pistonArray', '@improvedPistons:4', '@blueprint', 'generator', '@motorRetrofit:3', '@copperWinding:5', 'dynamoCrank', 'capacitorBank', 'sparkGap', '@transformer:3'];
-const BURST = ['@gearRatio:6', '@flywheel:4', '@motorTuning:10', '@improvedPistons:5', '@motorRetrofit:4', '@transformer:4'];
+const PRE = ['wornMotor', '@gearRatio:5', 'reinforcedCrank', '@motorTuning:9', '@flywheel:3', 'pistonArray', '@improvedPistons:4', '@blueprint', 'generator', '@motorRetrofit:6', '@copperWinding:10', 'dynamoCrank', 'capacitorBank', 'sparkGap', '@transformer:6'];
+const BURST = ['@gearRatio:6', '@flywheel:4', '@motorTuning:10', '@improvedPistons:5', '@motorRetrofit:8', '@transformer:8'];
 const BURST_TECHS = ['gearRatio', 'flywheel', 'motorTuning', 'improvedPistons', 'motorRetrofit', 'transformer'];
 // Tier of each BURST_TECHS track after the burst (C_all_applied waits for every one of them, within 1500 ms).
 const BURST_TIERS = { gearRatio: 2, flywheel: 2, motorTuning: 3, improvedPistons: 2, motorRetrofit: 2, transformer: 2 };

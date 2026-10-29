@@ -2306,3 +2306,177 @@ describe('a re-home after the memo (WP24 r3-F1)', () => {
     }
   });
 });
+
+// ---- The poke interrupt (WP28a T15a, C11): interrupt starts a poke-only leave after its delay, after a walk in progress; era IV and an
+// unknown id refuse; the outer travel walks to the outer spot (the one farthest from the machine anchor on the actor's side). ----
+describe('interrupt and the outer travel (WP28a T15a, C11, A13 [R1])', () => {
+  const SEED = behaviourSeed(1, 'inspector');
+  const DT = 100;
+  const insCtx = (): BehaviourCtx => ctxFor('inspector', 1, 'fps8', HOME_L);
+
+  // Steps the Inspector until it walks (at most 60 000 steps); true when a walk was in progress at the last step.
+  function stepUntilWalking(r: BehaviourRunner, ctx: BehaviourCtx): boolean {
+    for (let i = 0; i < 60000; i++) {
+      r.step(DT, ctx);
+      if (r.snapshot().walking) return true;
+    }
+    return false;
+  }
+
+  it('a walk in progress finishes first: the leave starts at the arrival, as a reaction, right after the walk entry', () => {
+    const log: BehaviourLogEntry[] = [];
+    const ctx = insCtx();
+    const r = createBehaviourRunner('inspector', SEED, STUB_CONDUCTOR, (e) => log.push(e));
+    r.reset(SEED, 0, ctx.homeX);
+    expect(stepUntilWalking(r, ctx)).toBe(true);
+    expect(r.interrupt('leaveWrite', 0)).toBe(true);
+    for (let i = 0; i < 2000; i++) r.step(DT, ctx);
+    const idx = log.findIndex((e) => e.activity === 'leaveWrite');
+    expect(idx).toBeGreaterThan(0);
+    const leave = log[idx];
+    const walk = log[idx - 1];
+    expect(leave?.reaction).toBe(true);
+    expect(walk?.walked).toBe(true);
+    expect(leave?.atMs).toBe((walk?.atMs ?? NaN) + (walk?.durMs ?? NaN));
+  });
+
+  it('the leave waits out its delay of runner time before it starts', () => {
+    const log: BehaviourLogEntry[] = [];
+    const ctx = insCtx();
+    const r = createBehaviourRunner('inspector', SEED, STUB_CONDUCTOR, (e) => log.push(e));
+    r.reset(SEED, 0, ctx.homeX);
+    for (let i = 0; i < 20; i++) r.step(DT, ctx);
+    const t0 = r.snapshot().clockMs;
+    expect(r.interrupt('leaveWrite', 3000)).toBe(true);
+    for (let i = 0; i < 1500; i++) r.step(DT, ctx);
+    const leave = log.find((e) => e.activity === 'leaveWrite');
+    expect(leave).toBeDefined();
+    expect(leave?.atMs ?? -1).toBeGreaterThanOrEqual(t0 + 3000);
+  });
+
+  it('refuses a runner not stepped yet, an id outside the era repertoire, and era IV (joined to the conductor)', () => {
+    const ctx = insCtx();
+    const r = createBehaviourRunner('inspector', SEED, STUB_CONDUCTOR, () => undefined);
+    r.reset(SEED, 0, ctx.homeX);
+    expect(r.interrupt('leaveWrite', 0)).toBe(false);
+    r.step(DT, ctx);
+    expect(r.interrupt('nope', 0)).toBe(false);
+    expect(r.interrupt('leaveSit', 0)).toBe(false);
+    expect(r.interrupt('leaveWrite', 0)).toBe(true);
+
+    const ctx4 = ctxFor('inspector', 4, 'fps8', HOME_L);
+    const r4 = createBehaviourRunner('inspector', SEED, createUnisonConductor(cycleSeedOf(1)), () => undefined);
+    r4.reset(SEED, 0, ctx4.homeX);
+    for (let i = 0; i < 50; i++) r4.step(DT, ctx4);
+    expect(r4.interrupt('leaveWrite', 0)).toBe(false);
+  });
+
+  it('is deterministic: the same inputs give the same frames and log', () => {
+    const run = (): { frames: string[]; log: string[] } => {
+      const ctx = insCtx();
+      const log: string[] = [];
+      const r = createBehaviourRunner('inspector', SEED, STUB_CONDUCTOR, (e) => log.push(`${e.activity}@${e.atMs}+${e.durMs}${e.reaction ? 'R' : ''}`));
+      r.reset(SEED, 0, ctx.homeX);
+      const frames: string[] = [];
+      for (let i = 0; i < 1500; i++) {
+        if (i === 40) r.interrupt('leaveWrite', 1200);
+        const f = r.step(DT, ctx);
+        frames.push(`${f.activity}:${f.frame}:${f.x}`);
+      }
+      return { frames, log };
+    };
+    const first = run();
+    expect(first.frames.some((f) => f.startsWith('leaveWrite:'))).toBe(true);
+    expect(run()).toEqual(first);
+  });
+
+  it('the outer travel walks to the outer spot (the one farthest from the machine anchor), never to the current spot', () => {
+    const leave = activityOf('inspector', 1, 'leaveWrite');
+    expect(leave?.travel).toBe('outer');
+    if (leave === undefined) return;
+    // The spots of INS_ENV are all left of MACHINE_ANCHOR.x: the sensor spot (x 76) is the outer one.
+    const fromScrap = startSeg(newMemory(SEED, 0, 2), leave, INS_ENV, 0);
+    expect(fromScrap.toSpot).toBe(0);
+    expect(fromScrap.toX).toBe(76);
+    expect(fromScrap.walkMs).toBeGreaterThan(0);
+    const fromMid = startSeg(newMemory(SEED, 0, 1), leave, INS_ENV, 0);
+    expect(fromMid.toSpot).toBe(0);
+    expect(fromMid.toX).toBe(76);
+  });
+
+  it('a left-wing Inspector on the outer spot stays; on an inner spot it walks left', () => {
+    const leave = activityOf('inspector', 1, 'leaveWrite');
+    if (leave === undefined) throw new Error('no inspector leave');
+    const onOuter = startSeg(newMemory(SEED, 0, 0), leave, INS_ENV, 0);
+    expect(onOuter.toSpot).toBe(0);
+    expect(onOuter.walkMs).toBe(0);
+    expect(onOuter.fromX).toBe(76);
+    expect(onOuter.toX).toBe(76);
+  });
+
+  it('a right-wing dog walks right to its outer spot; on the outer spot it stays', () => {
+    const leave = activityOf('dog', 1, 'leaveSit');
+    if (leave === undefined) throw new Error('no dog leave');
+    // The e1 dog spots (stake 2340, home 2364, out 2388) are right of MACHINE_ANCHOR.x: the out spot is the outer one.
+    const dogE1: PickEnv['spots'] = [{ id: 'stake', x: 2340 }, { id: 'home', x: 2364 }, { id: 'out', x: 2388 }];
+    const env: PickEnv = { ...envOf('dog', 1), spots: dogE1 };
+    const fromStake = startSeg(newMemory(SEED, 0, 0), leave, env, 0);
+    expect(fromStake.toSpot).toBe(2);
+    expect(fromStake.toX).toBe(2388);
+    expect(fromStake.walkMs).toBeGreaterThan(0);
+    const fromHome = startSeg(newMemory(SEED, 0, 1), leave, env, 0);
+    expect(fromHome.toSpot).toBe(2);
+    const onOuter = startSeg(newMemory(SEED, 0, 2), leave, env, 0);
+    expect(onOuter.toSpot).toBe(2);
+    expect(onOuter.walkMs).toBe(0);
+  });
+
+  it('a poke leave from the outer spot starts in place: every frame of the leave stands at the outer x and the log has no walk', () => {
+    const log: BehaviourLogEntry[] = [];
+    const ctx = insCtx();
+    const r = createBehaviourRunner('inspector', SEED, STUB_CONDUCTOR, (e) => log.push(e));
+    r.reset(SEED, 0, ctx.homeX);
+    // The outer spot of the left-wing Inspector at HOME_L is the sensor spot (HOME_L - 24); the runner walks there and rests.
+    const outerX = HOME_L - 24;
+    let atOuter = false;
+    for (let i = 0; i < 60000 && !atOuter; i++) {
+      const f = r.step(DT, ctx);
+      atOuter = f.x === outerX && !f.walking;
+    }
+    expect(atOuter).toBe(true);
+    expect(r.interrupt('leaveWrite', 0)).toBe(true);
+    const leaveFrames: BehaviourFrame[] = [];
+    for (let i = 0; i < 400; i++) {
+      const f = r.step(DT, ctx);
+      if (f.activity === 'leaveWrite') leaveFrames.push(f);
+    }
+    expect(leaveFrames.length).toBeGreaterThan(0);
+    expect(leaveFrames.every((f) => f.x === outerX && !f.walking)).toBe(true);
+    expect(log.find((e) => e.activity === 'leaveWrite')?.walked).toBe(false);
+  });
+
+  it('never toward the machine: every outer walk ends farther from the anchor on the same side; the same inputs give the same walk', () => {
+    const leave = activityOf('inspector', 1, 'leaveWrite');
+    if (leave === undefined) throw new Error('no inspector leave');
+    const anchor = MACHINE_ANCHOR.x;
+    const layouts: PickEnv['spots'][] = [
+      INS_ENV.spots,
+      [1500, 1800, 1900, 1920, 2000, 2300].map((x) => ({ id: 'mid' as const, x })),
+      [2300, 2000, 1920, 1800, 1500].map((x) => ({ id: 'home' as const, x })),
+    ];
+    for (const spots of layouts) {
+      const env: PickEnv = { ...INS_ENV, spots };
+      spots.forEach((_, i) => {
+        const seg = startSeg(newMemory(SEED, 0, i), leave, env, 0);
+        const again = startSeg(newMemory(SEED, 0, i), leave, env, 0);
+        expect(again.toSpot).toBe(seg.toSpot);
+        if (seg.toSpot === i) {
+          expect(seg.walkMs).toBe(0);
+          return;
+        }
+        expect(seg.toX < anchor).toBe(seg.fromX < anchor);
+        expect(Math.abs(seg.toX - anchor)).toBeGreaterThan(Math.abs(seg.fromX - anchor));
+      });
+    }
+  });
+});

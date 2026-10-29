@@ -51,15 +51,15 @@ const rep = (id: string, n: number): string[] => Array.from({ length: n }, () =>
 const S7: readonly string[] = ['wornMotor', ...rep('gearRatio', 3), 'reinforcedCrank', ...rep('motorTuning', 5), 'flywheel', 'pistonArray',
   'improvedPistons'];
 const S8: readonly string[] = [...S7, '@blueprint', 'generator'];
-const S9: readonly string[] = [...S7, '@blueprint', 'generator', ...rep('motorRetrofit', 5), ...rep('copperWinding', 20), 'dynamoCrank',
-  'capacitorBank', 'sparkGap', ...rep('transformer', 3), 'powerLines'];
+const S9: readonly string[] = [...S7, '@blueprint', 'generator', ...rep('motorRetrofit', 10), ...rep('copperWinding', 40), 'dynamoCrank',
+  'capacitorBank', 'sparkGap', ...rep('transformer', 6), 'powerLines'];
 const S10: readonly string[] = [...S9, '@substationBlueprint', 'boiler'];
-const S11: readonly string[] = [...S10, ...rep('inductionHeater', 3), ...rep('firebox', 20), 'steamHammer', 'superheater',
-  ...rep('condenser', 5), 'turbine', 'reliefValves', ...rep('bellowsDrive', 3), '@pressureVesselBlueprint'];
-const S13: readonly string[] = [...S11, 'resonatorSpire', ...rep('crankServo', 3), ...rep('harmonicCoil', 25), ...rep('pressureResonator', 3),
-  'echoCrank', 'phaseLock', ...rep('standingWave', 3), 'crystalLattice', ...rep('gridExciter', 5), '@harmonicConvergence'];
-const S15: readonly string[] = [...S13, 'nullChamber', ...rep('containmentRing', 25), '@resonantSiphon:20', '@graviticAnchor:10',
-  'inversionCrank', 'lensArray', ...rep('horizonField', 20), 'skyAperture', ...rep('mainsBackfeed', 5), ...rep('steamLance', 5),
+const S11: readonly string[] = [...S10, ...rep('inductionHeater', 9), ...rep('firebox', 40), 'steamHammer', 'superheater',
+  ...rep('condenser', 15), 'turbine', 'reliefValves', ...rep('bellowsDrive', 9), '@pressureVesselBlueprint'];
+const S13: readonly string[] = [...S11, 'resonatorSpire', ...rep('crankServo', 3), ...rep('harmonicCoil', 50), ...rep('pressureResonator', 6),
+  'echoCrank', 'phaseLock', ...rep('standingWave', 6), 'crystalLattice', ...rep('gridExciter', 15), '@harmonicConvergence'];
+const S15: readonly string[] = [...S13, 'nullChamber', ...rep('containmentRing', 50), '@resonantSiphon:60', '@graviticAnchor:20',
+  'inversionCrank', 'lensArray', ...rep('horizonField', 40), 'skyAperture', ...rep('mainsBackfeed', 15), ...rep('steamLance', 15),
   '@finalAlignment'];
 export const STAGE_LISTS = { S7, S8, S9, S10, S11, S13, S15 } as const;
 

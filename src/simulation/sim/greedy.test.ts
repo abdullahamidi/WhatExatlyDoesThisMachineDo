@@ -1,10 +1,11 @@
 import { beforeAll, describe, it, expect } from 'vitest';
 import { FAULTS } from '../../data/faults';
+import { FINDS } from '../../data/finds';
 import { RESOURCE_IDS, TECH_IDS } from '../../data/types';
 import type { GameState, ResourceId, ResourceMap, TechDefinition, TechId, TechView } from '../../data/types';
 import { TECHNOLOGIES } from '../../data/technologies';
-import { runGreedy, maxPurchaseGap, purchaseLedger, deadMinutes, spendShare, manualShare, activeShare } from './greedy';
-import type { GreedyOptions, GreedyResult, GreedySample, IncomeSplit, LedgerEntry } from './greedy';
+import { runGreedy, maxPurchaseGap, purchaseLedger, deadMinutes, spendShare, manualShare, activeShare, findShare } from './greedy';
+import type { GreedyInterval, GreedyOptions, GreedyResult, GreedySample, IncomeSplit, LedgerEntry } from './greedy';
 import { applyClick, advance, offlineCapSeconds } from '../production/tick';
 import { computeRates } from '../production/rates';
 import { getAllTechViews } from '../progression/status';
@@ -91,7 +92,7 @@ function referenceRun(o: GreedyOptions): GreedyResult {
     }
   }
 
-  return { firstAt, maxValue, final: state, purchases };
+  return { firstAt, maxValue, final: state, purchases, endT: steps * o.stepSeconds };
 }
 
 // Era-I table, with the generatorBlueprint lifetime requirement lowered from 200K ME to 20K ME.
@@ -168,7 +169,8 @@ describe('runGreedy', () => {
 
   it('the optimised harness matches the per-resource reference run (same picks, same order)', () => {
     // WHY: the reference loop has no wind-up release, so both sides run on the table without wind-up effects.
-    const opts = { ...options(1500), techs: plainTable };
+    // WHY (WP28 H1): the reference loop is the one-per-energy tick, so the optimized side runs buyPasses 1.
+    const opts = { ...options(1500), techs: plainTable, buyPasses: 1 };
     const fast = runGreedy(opts);
     const reference = referenceRun(opts);
     expect(fast.firstAt).toEqual(reference.firstAt);
@@ -188,15 +190,16 @@ describe('runGreedy', () => {
   // WP27: re-pinned from the repo run (no faults, wind-up release on). Old pins: motorTuning 23, reinforcedCrank 205,
   // flywheel 297, pistonArray 730, improvedPistons 761, generatorBlueprint 1327.
   it('era I exact first-purchase times hold on the optimised harness', () => {
-    const run = runGreedy(options(1500));
+    // WHY (WP28 H1): these are one-per-energy pins (buyPasses 1); the multi-buy default is the WP28 greedy.
+    const run = runGreedy({ ...options(1500), buyPasses: 1 });
     expect(run.firstAt.gearRatio).toBe(4);
     expect(run.firstAt.wornMotor).toBe(18);
     expect(run.firstAt.motorTuning).toBe(28);
     expect(run.firstAt.reinforcedCrank).toBe(235);
-    expect(run.firstAt.flywheel).toBe(502);
-    expect(run.firstAt.pistonArray).toBe(384);
-    expect(run.firstAt.improvedPistons).toBe(403);
-    expect(run.firstAt.generatorBlueprint).toBe(1392);
+    expect(run.firstAt.flywheel).toBe(512);
+    expect(run.firstAt.pistonArray).toBe(399);
+    expect(run.firstAt.improvedPistons).toBe(417);
+    expect(run.firstAt.generatorBlueprint).toBe(1385);
   });
 });
 
@@ -487,15 +490,16 @@ function sumIncome(income: Record<EraNumber, IncomeSplit>, key: keyof IncomeSpli
   return out;
 }
 
-// Every resource: manual + passive + fault summed over the eras equals the final lifetime (rel 1e-9; abs 1e-9 at 0).
+// Every resource: manual + passive + fault + find summed over the eras equals the final lifetime (rel 1e-9; abs 1e-9 at 0).
 // The wind-up release is inside manual, so it is not counted twice.
 function expectConserved(run: GreedyResult): void {
   const income = incomeOf(run);
   const manual = sumIncome(income, 'manual');
   const passive = sumIncome(income, 'passive');
   const fault = sumIncome(income, 'fault');
+  const find = sumIncome(income, 'find');
   for (const res of RESOURCE_IDS) {
-    const sum = manual[res] + passive[res] + fault[res];
+    const sum = manual[res] + passive[res] + fault[res] + find[res];
     const expected = run.final.lifetime[res];
     if (expected === 0) expect(Math.abs(sum)).toBeLessThanOrEqual(1e-9);
     else expect(Math.abs(sum - expected) / Math.abs(expected)).toBeLessThanOrEqual(1e-9);
@@ -632,6 +636,7 @@ describe('runGreedy clickRate and income tracking (WP25)', () => {
       passive: { ...emptyResourceMap(), me: passive },
       release: emptyResourceMap(),
       fault: emptyResourceMap(),
+      find: emptyResourceMap(),
     });
     const income: Record<EraNumber, IncomeSplit> = {
       1: split(25, 75),
@@ -655,7 +660,7 @@ describe('runGreedy Machine Faults, wind-up and samples (WP27)', () => {
   const faulty: GameState = { ...startState, techLevels: { ...startState.techLevels, wornMotor: 1, faultLamp: 1 } };
 
   it('without faults and without wind-up or crank-echo techs, the run is bit-identical to the pre-WP27 loop (600 s)', () => {
-    const plain = runGreedy({ ...options(600), techs: plainTable });
+    const plain = runGreedy({ ...options(600), techs: plainTable, buyPasses: 1 });
     const reference = referenceRun({ ...options(600), techs: plainTable });
     expect(plain.firstAt).toEqual(reference.firstAt);
     expect(plain.purchases).toEqual(reference.purchases);
@@ -737,18 +742,19 @@ describe('runGreedy Machine Faults, wind-up and samples (WP27)', () => {
     expect(run.faults?.firstSpawnAt).toBe(Math.max(bought + 1 + Math.ceil(interval), FAULTS.firstAfterS));
   });
 
-  it('era I with Machine Faults (profile A, 2000 s) equals the audit harness: Fault Lamp 421 s, first spawn 549 s', () => {
-    const run = runGreedy({ ...options(2000), faults: CATCH });
-    expect(run.firstAt.faultLamp).toBe(421);
+  it('era I with Machine Faults (profile A, 2000 s) equals the audit harness: Fault Lamp 434 s, first spawn 562 s', () => {
+    // WHY (WP28 H1): one-per-energy pins (buyPasses 1).
+    const run = runGreedy({ ...options(2000), faults: CATCH, buyPasses: 1 });
+    expect(run.firstAt.faultLamp).toBe(434);
     expect(run.firstAt.gearRatio).toBe(4);
     expect(run.firstAt.wornMotor).toBe(18);
     expect(run.firstAt.motorTuning).toBe(28);
     expect(run.firstAt.reinforcedCrank).toBe(235);
-    expect(run.firstAt.flywheel).toBe(502);
-    expect(run.firstAt.pistonArray).toBe(384);
-    expect(run.firstAt.improvedPistons).toBe(403);
-    expect(run.firstAt.generatorBlueprint).toBe(1334);
-    expect(run.faults).toEqual({ spawned: 12, caught: 12, missed: 0, firstSpawnAt: 549 });
+    expect(run.firstAt.flywheel).toBe(512);
+    expect(run.firstAt.pistonArray).toBe(399);
+    expect(run.firstAt.improvedPistons).toBe(417);
+    expect(run.firstAt.generatorBlueprint).toBe(1327);
+    expect(run.faults).toEqual({ spawned: 12, caught: 12, missed: 0, firstSpawnAt: 562 });
   });
 
   it('manual + passive + fault equals the lifetime gained per energy (faults and wind-up on, 2000 s)', () => {
@@ -821,6 +827,7 @@ describe('runGreedy Machine Faults, wind-up and samples (WP27)', () => {
       passive: { ...emptyResourceMap(), me: passive },
       release: { ...emptyResourceMap(), me: release },
       fault: { ...emptyResourceMap(), me: fault },
+      find: emptyResourceMap(),
     });
     const income: Record<EraNumber, IncomeSplit> = {
       1: split(25, 50, 25, 10),
@@ -837,5 +844,184 @@ describe('runGreedy Machine Faults, wind-up and samples (WP27)', () => {
     expect(activeShare(income, 5, 'me')).toBe(0);
     expect(manualShare(income, 5, 'me')).toBe(0);
     expect(activeShare(income, 1, 'ee')).toBe(0);
+  });
+});
+
+// WP28 (C4): multi-buy passes, the Finds process, the event and availability records, find income. The default is the
+// multi-buy greedy (H1); buyPasses 1 is the v0.11.0 one-per-energy tick.
+describe('runGreedy multi-buy, Finds and events (WP28)', () => {
+  const FAULT_CATCH = { catchProb: 1, reactionSeconds: 2 };
+  const FIND_CATCH = { catchProb: 1, reactionSeconds: 4 };
+  const FIND_PART = { catchProb: 0.85, reactionSeconds: 4 };
+  // One buy tick at t = 1 and no clicks: everything the fixture can afford is bought in that tick.
+  const ONE_TICK = { seconds: 1, clicksPerSecond: 0, stepSeconds: 1, buyIntervalSeconds: 1 };
+  const startState = createInitialState(0);
+  const moneyState = (me: number): GameState => ({
+    ...startState,
+    res: { ...startState.res, me },
+    techLevels: { ...startState.techLevels, handCrank: 1 },
+  });
+
+  function eventsOf(run: GreedyResult): NonNullable<GreedyResult['events']> {
+    if (run.events === undefined) throw new Error('expected events');
+    return run.events;
+  }
+
+  function findsOf(run: GreedyResult): NonNullable<GreedyResult['finds']> {
+    if (run.finds === undefined) throw new Error('expected finds');
+    return run.finds;
+  }
+
+  it('buyPasses 1 without finds equals the reference run built in the test (run twice, deep equal)', () => {
+    const opts = { ...options(1500), techs: plainTable, buyPasses: 1 };
+    const first = runGreedy(opts);
+    const second = runGreedy(opts);
+    expect(second.purchases).toEqual(first.purchases);
+    expect(second.final).toEqual(first.final);
+    const reference = referenceRun(opts);
+    expect(first.purchases).toEqual(reference.purchases);
+    expect(first.firstAt).toEqual(reference.firstAt);
+    expect(first.final).toEqual(reference.final);
+  });
+
+  it('multi-buy buys everything affordable in one tick (a fixture with three cheap items)', () => {
+    const single = runGreedy({ ...ONE_TICK, initial: moneyState(500), buyPasses: 1 });
+    const multi = runGreedy({ ...ONE_TICK, initial: moneyState(500) });
+    const boughtAtOne = (run: GreedyResult): Set<TechId> => new Set(run.purchases.filter((p) => p.t === 1).map((p) => p.id));
+    expect(single.purchases.filter((p) => p.t === 1).length).toBe(1);
+    expect(boughtAtOne(multi).size).toBeGreaterThanOrEqual(3);
+    // WHY: the last pass bought nothing, so no available energy-ME tech is affordable any more.
+    for (const view of getAllTechViews(multi.final, TECHNOLOGIES)) {
+      if (view.status !== 'available' || view.nextCost === null || view.def.kind === 'milestone') continue;
+      if (view.def.costRes !== 'me') continue;
+      expect(view.affordable).toBe(false);
+    }
+  });
+
+  it('catch 1 picks up every Find exactly reactionSeconds after its spawn', () => {
+    const run = runGreedy({ ...options(2000), trackEvents: true, finds: FIND_CATCH });
+    const finds = findsOf(run);
+    const intervals = eventsOf(run).finds;
+    expect(finds.caught).toBeGreaterThan(0);
+    expect(finds.missed).toBe(0);
+    expect(intervals.length).toBe(finds.spawned);
+    // WHY: at most one Find is alive, so the caught ones are the first `caught` intervals; the last one may still be open.
+    for (const iv of intervals.slice(0, finds.caught)) expect(iv.to - iv.from).toBe(FIND_CATCH.reactionSeconds);
+  });
+
+  it('catch 0 never pays: nothing picked up, the spawns expire, and no find income', () => {
+    const run = runGreedy({ ...options(2000), trackIncome: true, finds: { catchProb: 0, reactionSeconds: 4 } });
+    const finds = findsOf(run);
+    expect(finds.spawned).toBeGreaterThan(0);
+    expect(finds.caught).toBe(0);
+    expect(finds.relics).toBe(0);
+    expect([finds.spawned, finds.spawned - 1]).toContain(finds.missed);
+    const income = incomeOf(run);
+    for (const era of ALL_ERAS) {
+      for (const res of RESOURCE_IDS) expect(income[era].find[res]).toBe(0);
+    }
+  });
+
+  it('the first Find never comes before FINDS.firstAfterS eligible seconds', () => {
+    const run = runGreedy({ ...options(2000), finds: FIND_PART });
+    expect(findsOf(run).firstSpawnAt).toBeGreaterThanOrEqual(FINDS.firstAfterS);
+    expect(findsOf(runGreedy({ ...options(100), finds: FIND_PART })).spawned).toBe(0);
+  });
+
+  it('every fifth Find is a relic: the relic count is floor(caught / relicEvery)', () => {
+    const run = runGreedy({ ...options(3000), finds: FIND_CATCH });
+    const finds = findsOf(run);
+    expect(finds.caught).toBeGreaterThanOrEqual(10);
+    expect(finds.relics).toBe(Math.floor(finds.caught / FINDS.relicEvery));
+  });
+
+  it('manual + passive + fault + find equals the lifetime gained per energy (faults and Finds on, 2000 s)', () => {
+    const run = runGreedy({ ...options(2000), trackIncome: true, faults: FAULT_CATCH, finds: FIND_PART });
+    expectConserved(run);
+    expect(sumIncome(incomeOf(run), 'find').me).toBeGreaterThan(0);
+    expect(sumIncome(incomeOf(run), 'fault').me).toBeGreaterThan(0);
+  });
+
+  it('trackEvents and trackAvailable change nothing but the records (finds, purchases, final)', () => {
+    const plain = runGreedy({ ...options(1500), finds: FIND_PART });
+    const tracked = runGreedy({ ...options(1500), finds: FIND_PART, trackEvents: true, trackAvailable: true });
+    expect(tracked.finds).toEqual(plain.finds);
+    expect(tracked.purchases).toEqual(plain.purchases);
+    expect(tracked.final).toEqual(plain.final);
+  });
+
+  it('events: one interval per spawn; caught fault intervals last the reaction; Find intervals never overlap', () => {
+    const run = runGreedy({ ...options(2000), trackEvents: true, faults: FAULT_CATCH, finds: FIND_PART });
+    const faults = run.faults;
+    if (faults === undefined) throw new Error('expected fault counts');
+    const events = eventsOf(run);
+    expect(events.faults.length).toBe(faults.spawned);
+    expect(events.finds.length).toBe(findsOf(run).spawned);
+    expect(events.faults.slice(0, faults.caught).every((iv) => iv.to - iv.from === FAULT_CATCH.reactionSeconds)).toBe(true);
+    let prev: GreedyInterval | undefined;
+    for (const iv of events.finds) {
+      expect(iv.to).toBeGreaterThanOrEqual(iv.from);
+      if (prev !== undefined) expect(iv.from).toBeGreaterThanOrEqual(prev.to);
+      prev = iv;
+    }
+  });
+
+  it('availableAt: the first buy tick at which each tech shows as available; every purchase is at or after it', () => {
+    const run = runGreedy({ ...options(1500), trackAvailable: true });
+    const availableAt = run.availableAt;
+    if (availableAt === undefined) throw new Error('expected availableAt');
+    expect(availableAt.gearRatio).toBe(1);
+    expect(availableAt.handCrank).toBeUndefined();
+    for (const p of run.purchases) {
+      expect(availableAt[p.id]).toBeDefined();
+      expect(availableAt[p.id]).toBeLessThanOrEqual(p.t);
+    }
+  });
+
+  it('finds, events, availableAt are absent unless asked for; without finds every income.find is 0', () => {
+    const run = runGreedy({ ...options(600), trackIncome: true });
+    expect(run.finds).toBeUndefined();
+    expect('finds' in run).toBe(false);
+    expect('events' in run).toBe(false);
+    expect('availableAt' in run).toBe(false);
+    const income = incomeOf(run);
+    for (const era of ALL_ERAS) {
+      for (const res of RESOURCE_IDS) expect(income[era].find[res]).toBe(0);
+    }
+  });
+
+  it('endT is the active t of the last step run, the step that hits stopAt included', () => {
+    expect(runGreedy(options(600)).endT).toBe(600);
+    expect(runGreedy({ ...options(1500), stopAt: 'gearRatio' }).endT).toBe(4);
+    expect(runGreedy(options(0)).endT).toBe(0);
+  });
+
+  it('buyPasses must be an integer of at least 1', () => {
+    for (const bad of [0, -1, 1.5, Number.NaN]) {
+      expect(() => runGreedy({ ...options(5), buyPasses: bad })).toThrow(RangeError);
+    }
+  });
+
+  it('findShare is find / (manual + passive + fault + find); manual and active shares count find in the total', () => {
+    const split = (manual: number, passive: number, fault: number, find: number): IncomeSplit => ({
+      manual: { ...emptyResourceMap(), me: manual },
+      passive: { ...emptyResourceMap(), me: passive },
+      release: emptyResourceMap(),
+      fault: { ...emptyResourceMap(), me: fault },
+      find: { ...emptyResourceMap(), me: find },
+    });
+    const income: Record<EraNumber, IncomeSplit> = {
+      1: split(25, 50, 25, 100),
+      2: split(0, 0, 0, 0),
+      3: split(10, 0, 0, Number.POSITIVE_INFINITY),
+      4: split(0, 0, 0, 0),
+      5: split(0, 0, 0, 0),
+    };
+    expect(findShare(income, 1, 'me')).toBe(0.5);
+    expect(manualShare(income, 1, 'me')).toBe(0.125);
+    expect(activeShare(income, 1, 'me')).toBe(0.25);
+    expect(findShare(income, 2, 'me')).toBe(0);
+    expect(findShare(income, 3, 'me')).toBe(0);
+    expect(findShare(income, 1, 'ee')).toBe(0);
   });
 });

@@ -23,18 +23,18 @@ import type { TechId } from '../../data/types';
 const rep = (id: string, n: number): string[] => Array.from({ length: n }, () => id);
 const S7 = ['wornMotor', 'gearRatio', 'gearRatio', 'gearRatio', 'reinforcedCrank', 'motorTuning', 'motorTuning', 'motorTuning',
   'motorTuning', 'motorTuning', 'flywheel', 'pistonArray', 'improvedPistons'];
-const S9 = [...S7, '@blueprint', 'generator', ...rep('motorRetrofit', 5), ...rep('copperWinding', 20), 'dynamoCrank',
-  'capacitorBank', 'sparkGap', ...rep('transformer', 3), 'powerLines'];
+const S9 = [...S7, '@blueprint', 'generator', ...rep('motorRetrofit', 10), ...rep('copperWinding', 40), 'dynamoCrank',
+  'capacitorBank', 'sparkGap', ...rep('transformer', 6), 'powerLines'];
 // The late stages S10-S16 (stages.mjs), copied the same way.
 const S10 = [...S9, '@substationBlueprint', 'boiler'];
-const S11 = [...S10, ...rep('inductionHeater', 3), ...rep('firebox', 20), 'steamHammer', 'superheater', ...rep('condenser', 5),
-  'turbine', 'reliefValves', ...rep('bellowsDrive', 3), '@pressureVesselBlueprint'];
+const S11 = [...S10, ...rep('inductionHeater', 9), ...rep('firebox', 40), 'steamHammer', 'superheater', ...rep('condenser', 15),
+  'turbine', 'reliefValves', ...rep('bellowsDrive', 9), '@pressureVesselBlueprint'];
 const S12 = [...S11, 'resonatorSpire'];
-const S13 = [...S12, ...rep('crankServo', 3), ...rep('harmonicCoil', 25), ...rep('pressureResonator', 3), 'echoCrank', 'phaseLock',
-  ...rep('standingWave', 3), 'crystalLattice', ...rep('gridExciter', 5), '@harmonicConvergence'];
+const S13 = [...S12, ...rep('crankServo', 3), ...rep('harmonicCoil', 50), ...rep('pressureResonator', 6), 'echoCrank', 'phaseLock',
+  ...rep('standingWave', 6), 'crystalLattice', ...rep('gridExciter', 15), '@harmonicConvergence'];
 const S14 = [...S13, 'nullChamber'];
-const S15 = [...S14, ...rep('containmentRing', 25), '@resonantSiphon:20', '@graviticAnchor:10', 'inversionCrank', 'lensArray',
-  ...rep('horizonField', 20), 'skyAperture', ...rep('mainsBackfeed', 5), ...rep('steamLance', 5), '@finalAlignment'];
+const S15 = [...S14, ...rep('containmentRing', 50), '@resonantSiphon:60', '@graviticAnchor:20', 'inversionCrank', 'lensArray',
+  ...rep('horizonField', 40), 'skyAperture', ...rep('mainsBackfeed', 15), ...rep('steamLance', 15), '@finalAlignment'];
 const S16 = [...S15, 'primaryFunction'];
 // The era II entry (S8) and the state with a capacitorBank and a sparkGap before the transformer (framing s8w, WP27 F6.1).
 const S8_BUYS = [...S7, '@blueprint', 'generator'];

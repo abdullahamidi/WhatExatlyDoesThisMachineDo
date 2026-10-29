@@ -551,7 +551,7 @@ const WP13_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; he
 
 describe('WP13 restored world, finale fx and UI assets', () => {
   it('appends the 14 WP13 ids after the era V ids, in contract order (ids 98..111; WP17 ids follow)', () => {
-    expect(ASSET_IDS.length).toBe(146);
+    expect(ASSET_IDS.length).toBe(148);
     expect(ASSET_IDS.slice(98, 112)).toEqual(WP13_ENTRIES.map((e) => e.id));
     expect(ASSET_IDS.slice(112, 117)).toEqual(WP17_ENTRIES.map((e) => e.id));
   });
@@ -722,7 +722,7 @@ const WP17_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; he
 
 describe('WP17 legacy feed assets', () => {
   it('appends the 5 WP17 ids after the WP13 ids, in contract order (ids 112..116; the WP22 decal ids and the WP23a ids follow)', () => {
-    expect(ASSET_IDS.length).toBe(146);
+    expect(ASSET_IDS.length).toBe(148);
     expect(ASSET_IDS.slice(112, 117)).toEqual(WP17_ENTRIES.map((e) => e.id));
   });
 
@@ -1125,7 +1125,7 @@ const WP23A_ENTRIES: ReadonlyArray<{ id: AssetId; width: number; height: number;
 
 describe('WP23a world assets', () => {
   it('appends the 25 WP23a ids after the WP22 decal ids, in contract order (ids 120..144; the WP27 fx.fault id 145 follows)', () => {
-    expect(ASSET_IDS.length).toBe(146);
+    expect(ASSET_IDS.length).toBe(148);
     expect(ASSET_IDS.slice(120, 145)).toEqual(WP23A_ENTRIES.map((e) => e.id));
   });
 

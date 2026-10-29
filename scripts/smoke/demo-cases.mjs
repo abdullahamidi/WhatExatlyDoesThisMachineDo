@@ -6,6 +6,8 @@ const TEASER_END_S = 9.5;
 const PORTRAIT = { centerX: 1920, centerY: 1080, zoom: 0.5 };
 const SAVE_FULLGAME_KEY = 'wedtmd.save.fullgame';
 const POLL_MS = 50;
+// Mirrored from src/data/pacing.ts (SPLIT_PARTS.copperWinding, WP28a REC): tech levels per old level of the split track.
+const SPLIT_PARTS = { copperWinding: 2 };
 
 // Polls fn every POLL_MS until it holds. Resolves the ms waited, or null on timeout. Zero is a valid wait, so callers test !== null.
 async function pollUntil(fn, ms) {
@@ -95,7 +97,7 @@ export async function caseE(kit, page) {
     { path: 'state.techLevels.boiler', set: 1 },
     { path: 'state.techLevels.resonatorSpire', set: 1 },
     { path: 'state.techLevels.primaryFunction', set: 1 },
-    { path: 'state.techLevels.copperWinding', set: 2 },
+    { path: 'state.techLevels.copperWinding', set: 2 * SPLIT_PARTS.copperWinding },
     { path: 'state.ending.phase', set: 'postgame' },
     { path: 'state.ending.engagedAt', set: '$lastSimTime' },
     { path: 'prestige', set: { cycle: 3, echoesEarned: 6, perks: [] } },
@@ -116,7 +118,7 @@ export async function caseE(kit, page) {
   });
   kit.ok(
     'E_clamped',
-    clamped.copperWinding === 2 && clamped.boiler === 0 && clamped.resonatorSpire === 0 && clamped.primaryFunction === 0
+    clamped.copperWinding === 2 * SPLIT_PARTS.copperWinding && clamped.boiler === 0 && clamped.resonatorSpire === 0 && clamped.primaryFunction === 0
       && clamped.ending === 'none' && clamped.cycle === 1,
     clamped,
   );

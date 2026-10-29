@@ -23,12 +23,13 @@ const SIGNOFF_TIMEOUT_MS = 60000;
 // A = 4 clicks/s, buys every second. B = 4 clicks/s, buys every 30 s. C = 1 click/s, buys every 30 s, no offline.
 // D = C with a 2 h active / 8 h offline schedule. `seconds` is the ACTIVE budget for every profile.
 // `faults` = the Machine Faults catch model of each player (WP27): chance to catch a fault, seconds to react.
-const PROFILE_A = { seconds: 17400, clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 1, faults: { catchProb: 1, reactionSeconds: 2 } };
-const PROFILE_B = { seconds: 18000, clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 1, reactionSeconds: 3 } };
-const PROFILE_C = { seconds: 28800, clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 0.5, reactionSeconds: 4 } };
+// `finds` = the Finds catch model of each player (WP28): chance to pick up a Find, seconds from spawn to pick-up.
+const PROFILE_A = { seconds: 17400, clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 1, faults: { catchProb: 1, reactionSeconds: 2 }, finds: { catchProb: 0.85, reactionSeconds: 4 } };
+const PROFILE_B = { seconds: 18000, clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 1, reactionSeconds: 3 }, finds: { catchProb: 0.85, reactionSeconds: 5 } };
+const PROFILE_C = { seconds: 28800, clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 0.5, reactionSeconds: 4 }, finds: { catchProb: 0.4, reactionSeconds: 6 } };
 const PROFILE_D = { ...PROFILE_C, schedule: { activeSeconds: 2 * HOUR, offlineSeconds: 8 * HOUR } };
 
-type Profile = Pick<GreedyOptions, 'seconds' | 'clicksPerSecond' | 'stepSeconds' | 'buyIntervalSeconds' | 'schedule' | 'faults'>;
+type Profile = Pick<GreedyOptions, 'seconds' | 'clicksPerSecond' | 'stepSeconds' | 'buyIntervalSeconds' | 'schedule' | 'faults' | 'finds'>;
 
 // Roadmap §1 era-end windows for profile A, in seconds.
 const ERA_END_WINDOWS: ReadonlyArray<{ id: TechId; label: string; lo: number; hi: number }> = [

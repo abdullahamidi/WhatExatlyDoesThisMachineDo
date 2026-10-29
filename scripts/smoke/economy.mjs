@@ -234,10 +234,14 @@ const hudFitNow = () => {
     };
   };
   const panelInView = p.left >= -1 && p.top >= -1 && p.right <= window.innerWidth + 1 && p.bottom <= window.innerHeight + 1;
-  return { click: measure('hud-per-click'), auto: measure('hud-auto'), windup: measure('hud-windup'), panelInView };
+  // NEXT BUY (WP28): the goal line's buy row, when shown (not hidden, with a box); contained = its whole box inside the panel.
+  const buyEl = document.getElementById('hud-goal-buy');
+  const buyShown = !!buyEl && !buyEl.hidden && buyEl.getClientRects().length > 0;
+  const buy = buyShown ? { shown: true, ...measure('hud-goal-buy') } : { shown: false };
+  return { click: measure('hud-per-click'), auto: measure('hud-auto'), windup: measure('hud-windup'), buy, panelInView };
 };
-// F: the CLICK and AUTO-CRANK rows stay one line each inside the HUD panel, the WIND-UP row (WP27) one line wholly inside it, and the
-// panel inside the viewport, at UI 100 / 125 / 150; the UI scale goes back to 100.
+// F: the CLICK and AUTO-CRANK rows stay one line each inside the HUD panel, the WIND-UP row (WP27) one line wholly inside it, the NEXT
+// BUY line (WP28, when shown) wholly inside it, and the panel inside the viewport, at UI 100 / 125 / 150; the UI scale goes back to 100.
 const checkFit = async page => {
   const perScale = [];
   try {
@@ -247,8 +251,10 @@ const checkFit = async page => {
       const m = await page.evaluate(hudFitNow);
       // WIND-UP (WP27 C8): shown once Reinforced Crank is owned (S7); one line, wholly inside the panel, and the panel in the viewport.
       const windupOk = m !== null && m.windup !== null && m.windup.lines === 1 && m.windup.contained && m.panelInView === true;
+      // NEXT BUY (WP28): only when shown; a shown line must lie wholly inside the panel (its line count is recorded, not gated).
+      const buyOk = m === null || m.buy === undefined || m.buy.shown !== true || m.buy.contained === true;
       const pass = m !== null && m.click !== null && m.auto !== null
-        && m.click.lines === 1 && m.auto.lines === 1 && m.click.inside && m.auto.inside && windupOk;
+        && m.click.lines === 1 && m.auto.lines === 1 && m.click.inside && m.auto.inside && windupOk && buyOk;
       report.check(FIT_NAME[ui], pass, m);
       perScale.push(pass);
       await shot(page, `economy-F-${ui}.png`);

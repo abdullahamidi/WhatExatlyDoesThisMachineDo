@@ -3,7 +3,7 @@
 
 import { CRANK_KEYS, HOTKEYS } from '../data/settings';
 
-export type HotkeyAction = 'crank' | 'techTree' | 'fault' | 'menu';
+export type HotkeyAction = 'crank' | 'techTree' | 'fault' | 'find' | 'menu';
 export type HotkeyTargetKind = 'editable' | 'interactive' | 'other';
 
 export interface HotkeyEventLike {
@@ -40,6 +40,11 @@ export function resolveHotkey(e: HotkeyEventLike, lastCrankMs: number, nowMs: nu
   // blocked by an open modal, so a dialog never sees the fault action behind it.
   if (e.key.toLowerCase() === HOTKEYS.fault) {
     return !e.repeat && !e.modalOpen ? 'fault' : null;
+  }
+
+  // G picks up a Find (WP28). Same rules as F: it works on an interactive target and an open modal blocks it.
+  if (e.key.toLowerCase() === HOTKEYS.find) {
+    return !e.repeat && !e.modalOpen ? 'find' : null;
   }
 
   if (e.key === HOTKEYS.menu) {

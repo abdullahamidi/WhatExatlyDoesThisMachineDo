@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AUDIO } from '../data/audio';
-import type { BedId, FaultFlavour } from '../data/audio';
+import type { BedId, CuePart, CueParts, FaultFlavour } from '../data/audio';
 import { ERA_KEYSTONES } from '../data/eras';
 import type { EraNumber } from '../data/eras';
 import { MUSIC } from '../data/music';
@@ -8,6 +8,7 @@ import { RESOURCES } from '../data/resources';
 import { TECHNOLOGIES, TECH_LIST } from '../data/technologies';
 import { RESOURCE_IDS, TECH_IDS } from '../data/types';
 import type { EndingPhase, ResourceId, TechId } from '../data/types';
+import { isSplice } from '../simulation/progression/status';
 import type { AmbientMix, LevelSnapshot, WeatherInput, WeatherMix } from './audioMath';
 import {
   ambientMix,
@@ -27,6 +28,8 @@ import {
   mainsGain,
   masterTarget,
   padGain,
+  pokePitchScale,
+  pokeVariant,
   purchaseCue,
   servoFraction,
   servoGain,
@@ -41,6 +44,11 @@ const BEDS: BedId[] = ['hum', 'gear', 'mains', 'boiler', 'pad', 'servo', 'drone'
 const ERAS = [1, 2, 3, 4, 5] as const;
 
 const SAMPLE_INPUTS = [0, -5, NaN, Infinity, 1e12, 0.001, 1];
+
+// Every part of the WP28 cues (Finds, Splice wakes) and every poke variant (twelve ids, two each), as cue parts.
+const CUE_PARTS: CuePart[] = [...AUDIO.findSpawn, ...AUDIO.findCollect, ...AUDIO.relicCollect];
+for (const wake of AUDIO.spliceWake) CUE_PARTS.push(...wake);
+for (const pair of Object.values(AUDIO.poke.variants)) CUE_PARTS.push(...pair);
 
 function numericLeaves(value: unknown, path: string, out: Array<{ path: string; value: number }>): void {
   if (typeof value === 'number') {
@@ -814,6 +822,8 @@ describe('mix invariants (WP15 C2)', () => {
     AUDIO.faultClear.ratchet.gain,
     AUDIO.faultClear.bright.gain,
     AUDIO.faultClear.overdrive.gain,
+    // WP28 cues: every part gain of the Find, Splice wake and poke cues (CUE_PARTS; gain is the fifth field).
+    ...CUE_PARTS.map((part) => part[4]),
   ];
 
   it('bed sum x trim <= 0.45 in every era', () => {
@@ -867,7 +877,9 @@ describe('purchaseCue (WP15R D1: cue by the era of the paying resource)', () => 
   });
 
   it('exactly the 14 cross-era techs differ from their own era cue', () => {
+    // Splices (WP28) play their own wake cue by era on purchase (gameAudio), not this rule, so they are left out here.
     const differ = TECH_LIST
+      .filter((tech) => !isSplice(tech))
       .filter((tech) => purchaseCue(tech.costRes) !== AUDIO.purchaseCueByEra[tech.era - 1])
       .map((tech) => tech.id)
       .sort();
@@ -908,6 +920,103 @@ describe('fault cues (WP27): bounds of AUDIO.faultSpawn and AUDIO.faultClear', (
 
   it('the era flavours are crackle (I-II), hiss (III), ping (IV) and static (V)', () => {
     expect([...AUDIO.faultSpawn.flavourByEra]).toEqual(['crackle', 'crackle', 'hiss', 'ping', 'static']);
+  });
+});
+
+/** Cue end (ms from the cue start) and loudest gain of a list of parts. */
+function cueEndMs(parts: CueParts): number {
+  return Math.max(...parts.map((p) => p[2] + p[3]));
+}
+function cueMaxGain(parts: CueParts): number {
+  return Math.max(...parts.map((p) => p[4]));
+}
+
+describe('find, splice and poke cue bounds (WP28)', () => {
+  it('the Find chime ends inside 300 ms at gain 0.2 or less; the clink inside 200 ms at 0.3; the relic rustle inside 300 ms at 0.25', () => {
+    expect(cueEndMs(AUDIO.findSpawn)).toBeLessThanOrEqual(300);
+    expect(cueMaxGain(AUDIO.findSpawn)).toBeLessThanOrEqual(0.2);
+    expect(cueEndMs(AUDIO.findCollect)).toBeLessThanOrEqual(200);
+    expect(cueMaxGain(AUDIO.findCollect)).toBeLessThanOrEqual(0.3);
+    expect(cueEndMs(AUDIO.relicCollect)).toBeLessThanOrEqual(300);
+    expect(cueMaxGain(AUDIO.relicCollect)).toBeLessThanOrEqual(0.25);
+    for (const parts of [AUDIO.findSpawn, AUDIO.findCollect, AUDIO.relicCollect]) expect(cueMaxGain(parts)).toBeGreaterThan(0);
+  });
+
+  it('each Splice wake, by era (I-V), ends inside 600 ms at gain 0.3 or less', () => {
+    expect(AUDIO.spliceWake).toHaveLength(5);
+    for (const [i, wake] of AUDIO.spliceWake.entries()) {
+      expect(cueEndMs(wake), `era ${i + 1} end`).toBeLessThanOrEqual(600);
+      expect(cueMaxGain(wake), `era ${i + 1} gain`).toBeLessThanOrEqual(0.3);
+      expect(cueMaxGain(wake), `era ${i + 1} gain`).toBeGreaterThan(0);
+    }
+  });
+
+  it('every poke id has two variants, each one part at atMs 0 ending inside 400 ms at gain 0.3 or less, with a positive pitch', () => {
+    expect(Object.keys(AUDIO.poke.variants)).toHaveLength(12);
+    for (const [id, pair] of Object.entries(AUDIO.poke.variants)) {
+      expect(pair, id).toHaveLength(2);
+      const variants: readonly CuePart[] = pair;
+      for (const [source, hz, atMs, ms, gain, fromHz] of variants) {
+        expect(atMs, id).toBe(0);
+        expect(ms, id).toBeGreaterThan(0);
+        expect(ms, id).toBeLessThanOrEqual(400);
+        expect(gain, id).toBeGreaterThan(0);
+        expect(gain, id).toBeLessThanOrEqual(0.3);
+        expect(hz, id).toBeGreaterThan(0);
+        if (fromHz !== undefined) expect(fromHz, id).toBeGreaterThan(0);
+        expect(['sine', 'square', 'triangle', 'sawtooth', 'bandpass', 'highpass'], id).toContain(source);
+      }
+    }
+  });
+
+  it('the pitch spread is 5 %, the variant rule avoids two recent picks, and the noise Q is positive', () => {
+    expect(AUDIO.poke.pitchSpread).toBe(0.05);
+    expect(AUDIO.poke.avoidRecent).toBe(2);
+    expect(AUDIO.cueQ).toBeGreaterThan(0);
+  });
+});
+
+describe('poke helpers (WP28): variant pick and pitch', () => {
+  it('a pick is always an index in 0..count-1, and count 0 gives 0', () => {
+    for (let i = 0; i <= 20; i++) {
+      const unit = i / 20;
+      expect(pokeVariant([], 2, unit)).toBeGreaterThanOrEqual(0);
+      expect(pokeVariant([], 2, unit)).toBeLessThanOrEqual(1);
+    }
+    expect(pokeVariant([], 0, 0.5)).toBe(0);
+    expect(pokeVariant([1], 2, Number.NaN)).toBe(0);
+  });
+
+  it('avoids the last two picks while another variant is free', () => {
+    expect(pokeVariant([0, 0], 2, 0)).toBe(1);
+    expect(pokeVariant([1, 1], 2, 0.9)).toBe(0);
+    expect(pokeVariant([0, 1], 2, 0.3)).toBe(0); // both recent: any pick, the unit chooses
+  });
+
+  it('never returns the same variant three times in a row over 1000 seeded picks', () => {
+    let seed = 7;
+    let recent: number[] = [];
+    for (let i = 0; i < 1000; i++) {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      const pick = pokeVariant(recent, 2, seed / 4294967296);
+      if (recent.length === 2) expect(recent[0] === recent[1] && recent[1] === pick, `pick ${i}`).toBe(false);
+      recent = [...recent, pick].slice(-2);
+    }
+  });
+
+  it('does not change its input list', () => {
+    const recent = [0, 1];
+    pokeVariant(recent, 2, 0.5);
+    expect(recent).toEqual([0, 1]);
+  });
+
+  it('the pitch scale is 1 +- 5 % across the unit range, 1 at the middle, and 1 for a non-finite unit', () => {
+    expect(pokePitchScale(0)).toBeCloseTo(0.95, 12);
+    expect(pokePitchScale(0.5)).toBeCloseTo(1, 12);
+    expect(pokePitchScale(1)).toBeCloseTo(1.05, 12);
+    expect(pokePitchScale(Number.NaN)).toBe(1);
+    expect(pokePitchScale(-3)).toBeCloseTo(0.95, 12);
+    expect(pokePitchScale(3)).toBeCloseTo(1.05, 12);
   });
 });
 

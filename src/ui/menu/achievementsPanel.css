@@ -91,3 +91,8 @@
 .ach-card:not(.is-locked) .ach-status {
   color: var(--amber);
 }
+
+/* FIELD NOTES (WP28): under the grid, n/N in amber, the found notes in order. */
+.ach-notes-head { color: var(--amber); }
+.ach-notes-list { margin: 0; padding: 0; list-style: none; }
+.ach-notes-list li { color: var(--haze); overflow-wrap: anywhere; }

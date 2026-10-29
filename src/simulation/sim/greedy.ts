@@ -1,4 +1,5 @@
 import { FAULTS } from '../../data/faults';
+import { FINDS } from '../../data/finds';
 import { TECHNOLOGIES } from '../../data/technologies';
 import { RESOURCE_IDS, TECH_IDS } from '../../data/types';
 import type { GameState, ResourceId, ResourceMap, TechDefinition, TechId, TechStatus } from '../../data/types';
@@ -15,12 +16,19 @@ import { createInitialState } from '../state';
 import { addMaps, emptyResourceMap, scaleMap } from '../resources';
 import { clearFault, consumeOverdrive, createFaultClock, faultParams, nextUnit, stepFaultClock } from '../faults';
 import type { FaultClock } from '../faults';
+import { collectFind, createFindClock, findParams, stepFindClock } from '../finds';
+import type { FindClock } from '../finds';
 import { refillWindup, releaseWindup, windupParams } from '../production/windup';
 
 // Reusable deterministic greedy-player harness for balance simulations. Pure: no clock, no
-// console, no timers; the only randomness is the seeded Machine Faults clock (the `faults` option).
-// Policy: per resource, buy the cheapest available
-// non-milestone tech whose costRes is that resource (ties: TECH_IDS order), only if affordable.
+// console, no timers; the only randomness is the seeded Machine Faults clock (the `faults` option) and the seeded
+// Find clock (the `finds` option).
+// Policy: per resource, buy the cheapest available non-milestone tech whose costRes is that resource (ties: TECH_IDS
+// order), only if affordable. A buy tick runs up to `buyPasses` passes; a pass buys once per resource, and passes repeat
+// until one buys nothing (WP28 H1). buyPasses 1 is the v0.11.0 one-per-energy tick.
+
+/** Buy passes per buy tick when `buyPasses` is absent (sim policy, not game balance: the cap only stops the loop). */
+const DEFAULT_BUY_PASSES = 50;
 
 /**
  * Repeating play blocks (profile D). Active block: clicks, buys, production. Offline block (after each
@@ -34,14 +42,15 @@ export interface GreedySchedule {
 
 /**
  * One era's income in one run. `manual` = click gains, the wind-up release included; `passive` = automation (auto-cranks
- * incl.) + offline credit; `release` = the wind-up part of `manual`; `fault` = Machine Faults payouts + Overdrive extra.
- * manual + passive + fault is the lifetime gained in that era.
+ * incl.) + offline credit; `release` = the wind-up part of `manual`; `fault` = Machine Faults payouts + Overdrive extra;
+ * `find` = Find payouts (WP28; relics pay nothing). manual + passive + fault + find is the lifetime gained in that era.
  */
 export interface IncomeSplit {
   manual: ResourceMap;
   passive: ResourceMap;
   release: ResourceMap;
   fault: ResourceMap;
+  find: ResourceMap;
 }
 
 /** Machine Faults process: catchProb = chance that a spawn is cleared; reactionSeconds = seconds from spawn to the clear. */
@@ -49,6 +58,14 @@ export interface GreedyFaults {
   catchProb: number;
   reactionSeconds: number;
   /** Spawn clock seed; absent = FAULTS.seed (the catch draws use a seed derived from it). */
+  seed?: number;
+}
+
+/** Finds process (WP28): catchProb = chance that a spawn is picked up; reactionSeconds = seconds from spawn to the pick-up. */
+export interface GreedyFinds {
+  catchProb: number;
+  reactionSeconds: number;
+  /** Find clock seed; absent = FINDS.seed (the catch draws use a seed derived from it). */
   seed?: number;
 }
 
@@ -79,6 +96,14 @@ export interface GreedyOptions {
   faults?: GreedyFaults;
   /** Take a sample at every step whose active time is a multiple of this (float-safe, like buyIntervalSeconds). */
   sampleEverySeconds?: number;
+  /** Buy passes per buy tick (WP28 H1). Each pass buys the cheapest affordable pick per energy; passes stop when one buys nothing. 1 = v0.11.0. Default 50. */
+  buyPasses?: number;
+  /** Finds process (WP28). Absent = no Finds: nobody picks one up, no `finds` result, no find income. */
+  finds?: GreedyFinds;
+  /** Record the alive intervals of faults and Finds in `events`. Bookkeeping only: the run is unchanged. */
+  trackEvents?: boolean;
+  /** Record the first buy tick at which each tech shows as available, in `availableAt`. Bookkeeping only. */
+  trackAvailable?: boolean;
 }
 
 /** Machine Faults counts of one run. firstSpawnAt = active t of the first spawn (null = no spawn). */
@@ -87,6 +112,21 @@ export interface GreedyFaultStats {
   caught: number;
   missed: number;
   firstSpawnAt: number | null;
+}
+
+/** Finds counts of one run: caught includes relics (they pay nothing). firstSpawnAt = active t of the first spawn. */
+export interface GreedyFindStats {
+  spawned: number;
+  caught: number;
+  missed: number;
+  relics: number;
+  firstSpawnAt: number | null;
+}
+
+/** An alive fault or Find in active seconds: from the spawn to the clear or expiry (to = t + window while still alive). */
+export interface GreedyInterval {
+  from: number;
+  to: number;
 }
 
 /** One sample of a run, taken after the step's advance and before its buys. */
@@ -107,6 +147,14 @@ export interface GreedyResult {
   final: GameState;
   /** Purchase times in active seconds. */
   purchases: Array<{ t: number; id: TechId }>;
+  /** Active t of the last step run (0 when no step ran; the step that hit stopAt counts). */
+  endT: number;
+  /** Present only when `finds` was given. */
+  finds?: GreedyFindStats;
+  /** Present only when `trackEvents` is true: the alive intervals of faults and Finds, in spawn order. */
+  events?: { faults: GreedyInterval[]; finds: GreedyInterval[] };
+  /** Present only when `trackAvailable` is true: the first buy tick at which each tech shows as 'available'. */
+  availableAt?: Partial<Record<TechId, number>>;
   /** Present only when `snapshotAt` was given. Ids never owned have no key. */
   snapshots?: Partial<Record<TechId, GameState>>;
   /** Wall-clock seconds simulated (active + offline). Present only when `schedule` is set. */
@@ -175,6 +223,7 @@ function emptyIncome(): Record<EraNumber, IncomeSplit> {
     passive: emptyResourceMap(),
     release: emptyResourceMap(),
     fault: emptyResourceMap(),
+    find: emptyResourceMap(),
   });
   return { 1: split(), 2: split(), 3: split(), 4: split(), 5: split() };
 }
@@ -186,8 +235,16 @@ function cloneIncome(src: Readonly<Record<EraNumber, IncomeSplit>>): Record<EraN
     passive: { ...s.passive },
     release: { ...s.release },
     fault: { ...s.fault },
+    find: { ...s.find },
   });
   return { 1: split(src[1]), 2: split(src[2]), 3: split(src[3]), 4: split(src[4]), 5: split(src[5]) };
+}
+
+/** Records the first buy tick at which each candidate shows as 'available' (trackAvailable bookkeeping only). */
+function noteAvailable(list: readonly Candidate[], t: number, into: Partial<Record<TechId, number>>): void {
+  for (const c of list) {
+    if (c.status === 'available' && into[c.id] === undefined) into[c.id] = t;
+  }
 }
 
 /** Adds `delta` into `into` in place. Only bookkeeping maps owned by one run are passed here, never game state. */
@@ -247,6 +304,24 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
   let catchRng = faultSeed * FAULTS.catchSeedMul + FAULTS.catchSeedAdd;
   let catchFlag = false;
   let firstSpawnAt: number | null = null;
+  // WHY: the Find clock uses the same split (spawn seed, separate catch seed) as the fault clock; absent = no Finds at all.
+  const findOpts = o.finds;
+  const findSeed = findOpts?.seed ?? FINDS.seed;
+  let findClock: FindClock = createFindClock(findSeed);
+  let findCatchRng = findSeed * FINDS.catchSeedMul + FINDS.catchSeedAdd;
+  let findCatchFlag = false;
+  let findFirstSpawnAt: number | null = null;
+  // Alive intervals (trackEvents only): an open one is closed by its clear or expiry.
+  const trackEvents = o.trackEvents === true;
+  const faultIntervals: GreedyInterval[] = [];
+  let faultOpen: GreedyInterval | null = null;
+  const findIntervals: GreedyInterval[] = [];
+  let findOpen: GreedyInterval | null = null;
+  const availableAt: Partial<Record<TechId, number>> | undefined = o.trackAvailable === true ? {} : undefined;
+  const buyPasses = o.buyPasses ?? DEFAULT_BUY_PASSES;
+  if (!Number.isInteger(buyPasses) || buyPasses < 1) {
+    throw new RangeError(`runGreedy: buyPasses must be an integer >= 1 (got ${buyPasses})`);
+  }
   const sampleEvery = o.sampleEverySeconds;
   if (sampleEvery !== undefined && (!Number.isFinite(sampleEvery) || sampleEvery <= 0)) {
     throw new RangeError(`runGreedy: sampleEverySeconds must be finite and > 0 (got ${sampleEvery})`);
@@ -278,6 +353,8 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
     // WHY: wind-up and fault numbers come from the state at the start of the step: a buy at step t counts from t + 1.
     const wp = windupParams(state.techLevels, techs);
     const fp = faultParams(state.techLevels, techs);
+    // Find numbers from the same start-of-step state (only when the Finds process is on: no per-step cost otherwise).
+    const fdp = findOpts === undefined ? null : findParams(state.techLevels, techs);
 
     // WHY: the rate is read before this step's clicks, so a rule reacts to what was bought in earlier steps.
     const rate = o.clickRate !== undefined ? o.clickRate(state, t) : o.clicksPerSecond;
@@ -314,8 +391,16 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
         const faultWindow = clock.alive?.window ?? 0;
         // WHY: strictly less: at equal times the clock expires the fault first, so a reaction at that age never lands.
         catchFlag = drawn.u < faultOpts.catchProb && faultOpts.reactionSeconds < faultWindow;
+        if (trackEvents) {
+          faultOpen = { from: t, to: t + faultWindow };
+          faultIntervals.push(faultOpen);
+        }
       } else if (r.event === 'expire') {
         catchFlag = false;
+        if (faultOpen !== null) {
+          faultOpen.to = t;
+          faultOpen = null;
+        }
       }
       const alive = clock.alive;
       if (alive !== null && catchFlag && alive.age >= faultOpts.reactionSeconds) {
@@ -329,6 +414,53 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
           };
           if (incomeByEra !== undefined) addInto(incomeByEra[era].fault, cleared.payout);
           catchFlag = false;
+          if (faultOpen !== null) {
+            faultOpen.to = t;
+            faultOpen = null;
+          }
+        }
+      }
+    }
+
+    // Finds (WP28 C4 step 3): one clock per run, eligible every active step; parameters from the start-of-step levels.
+    // Same spawn / catch split as the faults above: one catch draw per spawn, collected reactionSeconds after the spawn.
+    if (findOpts !== undefined && fdp !== null) {
+      const r = stepFindClock(findClock, fdp, o.stepSeconds, true);
+      findClock = r.clock;
+      if (r.event === 'spawn') {
+        if (findFirstSpawnAt === null) findFirstSpawnAt = t;
+        const drawn = nextUnit(findCatchRng);
+        findCatchRng = drawn.rng;
+        const findWindowS = findClock.alive?.window ?? 0;
+        // WHY: strictly less: at equal times the clock expires the Find first, so a pick-up at that age never lands.
+        findCatchFlag = drawn.u < findOpts.catchProb && findOpts.reactionSeconds < findWindowS;
+        if (trackEvents) {
+          findOpen = { from: t, to: t + findWindowS };
+          findIntervals.push(findOpen);
+        }
+      } else if (r.event === 'expire') {
+        findCatchFlag = false;
+        if (findOpen !== null) {
+          findOpen.to = t;
+          findOpen = null;
+        }
+      }
+      const aliveFind = findClock.alive;
+      if (aliveFind !== null && findCatchFlag && aliveFind.age >= findOpts.reactionSeconds) {
+        const collected = collectFind(findClock, fdp, computeRates(state, techs).perSecond);
+        if (collected !== null) {
+          findClock = collected.clock;
+          state = {
+            ...state,
+            res: addMaps(state.res, collected.payout),
+            lifetime: addMaps(state.lifetime, collected.payout),
+          };
+          if (incomeByEra !== undefined) addInto(incomeByEra[era].find, collected.payout);
+          findCatchFlag = false;
+          if (findOpen !== null) {
+            findOpen.to = t;
+            findOpen = null;
+          }
         }
       }
     }
@@ -372,16 +504,24 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
     if (Math.abs(ratio - Math.round(ratio)) < 1e-9) {
       // candidates are rebuilt only after a successful purchase: identical picks, far fewer rebuilds
       let list = candidates(state, techs, maxEra);
-      for (const res of RESOURCE_IDS) {
-        const pick = pickCheapest(list, res);
-        if (pick !== null && pick.nextCost !== null && canAfford(state, pick.def.costRes, pick.nextCost)) {
-          const result = purchase(state, pick.id, techs, maxEra);
-          if (result.ok) {
-            state = result.state;
-            purchases.push({ t, id: pick.id });
-            list = candidates(state, techs, maxEra);
+      if (availableAt !== undefined) noteAvailable(list, t, availableAt);
+      // WHY (H1): a pass repeats the one-per-energy pick, so everything affordable in this tick is bought; a pass that
+      // buys nothing ends the tick.
+      for (let pass = 0; pass < buyPasses; pass++) {
+        const before = purchases.length;
+        for (const res of RESOURCE_IDS) {
+          const pick = pickCheapest(list, res);
+          if (pick !== null && pick.nextCost !== null && canAfford(state, pick.def.costRes, pick.nextCost)) {
+            const result = purchase(state, pick.id, techs, maxEra);
+            if (result.ok) {
+              state = result.state;
+              purchases.push({ t, id: pick.id });
+              list = candidates(state, techs, maxEra);
+              if (availableAt !== undefined) noteAvailable(list, t, availableAt);
+            }
           }
         }
+        if (purchases.length === before) break;
       }
     }
     record(t);
@@ -413,6 +553,7 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
     maxValue,
     final: state,
     purchases,
+    endT: activeT,
     ...(snapshotIds === undefined ? {} : { snapshots }),
   };
   if (schedule !== undefined) result.wallSeconds = activeT + offlineTotal;
@@ -420,6 +561,17 @@ export function runGreedy(o: GreedyOptions): GreedyResult {
   if (faultOpts !== undefined) {
     result.faults = { spawned: clock.spawned, caught: clock.caught, missed: clock.missed, firstSpawnAt };
   }
+  if (findOpts !== undefined) {
+    result.finds = {
+      spawned: findClock.spawned,
+      caught: findClock.caught,
+      missed: findClock.missed,
+      relics: findClock.relics,
+      firstSpawnAt: findFirstSpawnAt,
+    };
+  }
+  if (trackEvents) result.events = { faults: faultIntervals, finds: findIntervals };
+  if (availableAt !== undefined) result.availableAt = availableAt;
   if (sampleEvery !== undefined) result.samples = samples;
   return result;
 }
@@ -504,27 +656,44 @@ export function spendShare(
   return spent / produced;
 }
 
+/** Lifetime income of `res` in one era split: manual + passive + fault + find (the denominator of the shares). */
+function totalIncome(split: IncomeSplit, res: ResourceId): number {
+  return split.manual[res] + split.passive[res] + split.fault[res] + split.find[res];
+}
+
 /**
- * Share of `res` income that came from manual clicks in `era`: manual / (manual + passive + fault). 0 when the era has
- * no income entry, or the total is 0 or not finite. Equals manual / (manual + passive) when fault is 0.
+ * Share of `res` income that came from manual clicks in `era`: manual / (manual + passive + fault + find). 0 when the era
+ * has no income entry, or the total is 0 or not finite. Equals manual / (manual + passive) when fault and find are 0.
  */
 export function manualShare(income: Record<EraNumber, IncomeSplit>, era: EraNumber, res: ResourceId): number {
   const split: IncomeSplit | undefined = income[era];
   if (split === undefined) return 0;
-  const manual = split.manual[res];
-  const total = manual + split.passive[res] + split.fault[res];
+  const total = totalIncome(split, res);
   if (!Number.isFinite(total) || total === 0) return 0;
-  return manual / total;
+  return split.manual[res] / total;
 }
 
 /**
- * Share of `res` income the player made actively in `era`: (manual + fault) / (manual + passive + fault). Clicks and
- * fault clears count; 0 when the era has no income entry, or the total is 0 or not finite.
+ * Share of `res` income the player made actively in `era`: (manual + fault) / (manual + passive + fault + find). Clicks and
+ * fault clears count; Find pick-ups are not active income here (see findShare). 0 when the era has no income entry, or the
+ * total is 0 or not finite.
  */
 export function activeShare(income: Record<EraNumber, IncomeSplit>, era: EraNumber, res: ResourceId): number {
   const split: IncomeSplit | undefined = income[era];
   if (split === undefined) return 0;
-  const total = split.manual[res] + split.passive[res] + split.fault[res];
+  const total = totalIncome(split, res);
   if (!Number.isFinite(total) || total === 0) return 0;
   return (split.manual[res] + split.fault[res]) / total;
+}
+
+/**
+ * Share of `res` income that came from Find pick-ups in `era`: find / (manual + passive + fault + find). Same guards as
+ * manualShare (0 for a missing era or a total that is 0 or not finite).
+ */
+export function findShare(income: Record<EraNumber, IncomeSplit>, era: EraNumber, res: ResourceId): number {
+  const split: IncomeSplit | undefined = income[era];
+  if (split === undefined) return 0;
+  const total = totalIncome(split, res);
+  if (!Number.isFinite(total) || total === 0) return 0;
+  return split.find[res] / total;
 }

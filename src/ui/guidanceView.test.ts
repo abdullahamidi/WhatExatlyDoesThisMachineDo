@@ -6,7 +6,9 @@ import {
   crankPromptVisible,
   eraCardFor,
   goalVisible,
+  nextBuy,
   nextGoal,
+  roundEta,
   techHintVisible,
 } from './guidanceView';
 import type { GuidancePrompt, TechHintInput } from './guidanceView';
@@ -15,8 +17,12 @@ import { createInitialState } from '../simulation/state';
 import { emptyResourceMap } from '../simulation/resources';
 import { TECHNOLOGIES } from '../data/technologies';
 import { HUD_TEXT } from '../data/hud';
-import { NEXT_GOAL } from '../data/ux';
-import type { GameState, ProductionRates, ResourceMap, TechDefinition, TechId } from '../data/types';
+import { NEXT_BUY, NEXT_GOAL } from '../data/ux';
+import { TECH_IDS } from '../data/types';
+import type { GameState, ProductionRates, Requirement, ResourceMap, TechDefinition, TechId } from '../data/types';
+import { costAt } from '../simulation/economy/cost';
+import { getTechStatus } from '../simulation/progression/status';
+import { formatDuration } from '../utils/format';
 
 const RATES: ProductionRates = { perClick: emptyResourceMap(), perSecond: { ...emptyResourceMap(), me: 100 } };
 
@@ -102,7 +108,7 @@ describe('nextGoal', () => {
     expect(nextGoal(s, RATES)).toEqual({
       id: 'pressureVesselBlueprint',
       title: 'NEXT: VESSEL BLUEPRINT',
-      detail: 'NEEDS CONDENSER LV 5',
+      detail: 'NEEDS CONDENSER LV 15',
       ready: false,
       progress: 0,
     });
@@ -288,5 +294,157 @@ describe('activePrompt', () => {
       }
     }
     expect(combos).toBe(64);
+  });
+});
+
+// WP28 A9: NEXT BUY. Every tech is locked behind an unreachable lifetime gate unless the table opens it here.
+type Open = Partial<Pick<TechDefinition, 'baseCost' | 'costRes' | 'requires' | 'kind' | 'era' | 'maxLevel'>>;
+
+function tableWith(open: Partial<Record<TechId, Open>>): Record<TechId, TechDefinition> {
+  const locked: Requirement[] = [{ type: 'lifetime', res: 'me', amount: 1e300 }];
+  return Object.fromEntries(
+    TECH_IDS.map((id): [TechId, TechDefinition] => [id, { ...TECHNOLOGIES[id], requires: locked, ...open[id] }]),
+  ) as Record<TechId, TechDefinition>;
+}
+
+/** Rates with `rate` per second on every resource (or only ME when the map is partial). */
+function ratesOf(me: number, others: number = 0): ProductionRates {
+  return { perClick: emptyResourceMap(), perSecond: { me, ee: others, pr: others, rs: others, xf: others } };
+}
+
+describe('roundEta (WP28 A9)', () => {
+  it.each([
+    [0, 0],
+    [3, 5],
+    [5, 5],
+    [57, 60],
+    [60, 60],
+    [61, 70],
+    [599, 600],
+    [600, 600],
+    [601, 660],
+  ])('rounds %d s up to %d s', (seconds, rounded) => {
+    expect(roundEta(seconds)).toBe(rounded);
+  });
+
+  it('never rounds down, even for a value just above a step', () => {
+    for (let s = 0.5; s < 1500; s += 0.5) expect(roundEta(s)).toBeGreaterThanOrEqual(s);
+  });
+});
+
+describe('nextBuy (WP28 A9)', () => {
+  it('picks the smallest eta and names it in upper case with the rounded time', () => {
+    const techs = tableWith({ gearRatio: { requires: [] }, motorTuning: { requires: [] } });
+    // gearRatio costs 15 (eta 3 s at 5/s), motorTuning 60 (eta 12 s).
+    expect(nextBuy(stateOf(), ratesOf(5), techs)).toEqual({
+      id: 'gearRatio',
+      text: `${NEXT_BUY.prefix}GEAR RATIO${NEXT_BUY.sep}${NEXT_BUY.etaPrefix}5s`,
+      etaSeconds: 3,
+    });
+  });
+
+  it('prefers the cheaper of two when it is the smaller eta', () => {
+    const techs = tableWith({ gearRatio: { requires: [] }, motorTuning: { requires: [], baseCost: 10 } });
+    expect(nextBuy(stateOf(), ratesOf(5), techs)?.id).toBe('motorTuning');
+  });
+
+  it('breaks ties by TECH_IDS order', () => {
+    const techs = tableWith({ gearRatio: { requires: [], baseCost: 15 }, motorTuning: { requires: [], baseCost: 15 } });
+    expect(TECH_IDS.indexOf('gearRatio')).toBeLessThan(TECH_IDS.indexOf('motorTuning'));
+    expect(nextBuy(stateOf(), ratesOf(5), techs)?.id).toBe('gearRatio');
+  });
+
+  it('includes Splices (an unlock with a lifetime gate)', () => {
+    const techs = tableWith({
+      spliceBicycle: { requires: [{ type: 'lifetime', res: 'me', amount: 15000 }] },
+    });
+    const s = stateOf({}, {}, { me: 15000 });
+    expect(nextBuy(s, ratesOf(9), techs)).toEqual({
+      id: 'spliceBicycle',
+      text: `${NEXT_BUY.prefix}BICYCLE${NEXT_BUY.sep}${NEXT_BUY.etaPrefix}1m 40s`,
+      etaSeconds: 100,
+    });
+    expect(nextBuy(stateOf({}, {}, { me: 14999 }), ratesOf(9), techs)).toBeNull();
+  });
+
+  it('is null while any available purchase is affordable', () => {
+    const techs = tableWith({ gearRatio: { requires: [] }, motorTuning: { requires: [] } });
+    expect(nextBuy(stateOf({}, { me: 15 }), ratesOf(5), techs)).toBeNull();
+    expect(nextBuy(stateOf({}, { me: 60 }), ratesOf(5), techs)).toBeNull();
+  });
+
+  it('is null during the finale', () => {
+    const techs = tableWith({ gearRatio: { requires: [] } });
+    const s = { ...stateOf(), ending: { phase: 'sequence' as const, engagedAt: null } };
+    expect(nextBuy(s, ratesOf(5), techs)).toBeNull();
+  });
+
+  it('is null when no income feeds the cost resource, and when every eta is infinite', () => {
+    const techs = tableWith({ gearRatio: { requires: [] }, motorTuning: { requires: [] } });
+    expect(nextBuy(stateOf(), ratesOf(0), techs)).toBeNull();
+    expect(nextBuy(stateOf(), ratesOf(0, 4), techs)).toBeNull();
+  });
+
+  it('never offers the starting crank or a milestone', () => {
+    const techs = tableWith({ handCrank: { requires: [] }, generatorBlueprint: { requires: [] } });
+    expect(nextBuy(stateOf(), ratesOf(5), techs)).toBeNull();
+  });
+
+  it('offers an owned repeatable at its next level cost, and never a maxed one', () => {
+    const techs = tableWith({ gearRatio: { requires: [] } });
+    // Level 2 costs ceil(15 * 1.3^2) = 26; 26 / 2 per second = 13 s, rounded to 15 s.
+    expect(nextBuy(stateOf({ gearRatio: 2 }), ratesOf(2), techs)).toEqual({
+      id: 'gearRatio',
+      text: `${NEXT_BUY.prefix}GEAR RATIO${NEXT_BUY.sep}${NEXT_BUY.etaPrefix}15s`,
+      etaSeconds: 13,
+    });
+    expect(nextBuy(stateOf({ gearRatio: 15 }), ratesOf(2), techs)).toBeNull();
+  });
+
+  it('respects the demo era cap', () => {
+    const techs = tableWith({ spliceBicycle: { requires: [], era: 3 } });
+    expect(nextBuy(stateOf(), ratesOf(5), techs, 2)).toBeNull();
+    expect(nextBuy(stateOf(), ratesOf(5), techs, null)?.id).toBe('spliceBicycle');
+  });
+
+  it.each([
+    ['5s', 3, 1],
+    ['1m 10s', 61, 1],
+    ['11m', 601, 1],
+  ])('formats a short wait as ~%s', (formatted, cost, rate) => {
+    const techs = tableWith({ gearRatio: { requires: [], baseCost: cost } });
+    const view = nextBuy(stateOf(), ratesOf(rate), techs);
+    expect(view?.text).toBe(`${NEXT_BUY.prefix}GEAR RATIO${NEXT_BUY.sep}${NEXT_BUY.etaPrefix}${formatted}`);
+    expect(view?.text).toBe(`${NEXT_BUY.prefix}GEAR RATIO${NEXT_BUY.sep}~${formatDuration(roundEta(cost / rate))}`);
+  });
+
+  it('agrees with getTechStatus: only available unlocks and repeatables compete, the cheapest cost wins', () => {
+    const states: GameState[] = [
+      stateOf({ handCrank: 1 }),
+      stateOf({ handCrank: 1, gearRatio: 3, wornMotor: 1 }, {}, { me: 20000 }),
+      stateOf({ handCrank: 1, wornMotor: 1, motorTuning: 25 }, {}, { me: 200000 }),
+      stateOf(owned(BEFORE_PRIMARY)),
+    ];
+    // Stock 0 and one per second on every resource: the eta equals the price, so the cheapest available wins.
+    const rates = { perClick: emptyResourceMap(), perSecond: { me: 1, ee: 1, pr: 1, rs: 1, xf: 1 } };
+    for (const cap of [null, 2] as const) {
+      for (const s of states) {
+        const available = TECH_IDS.filter((id) => {
+          const def = TECHNOLOGIES[id];
+          const isPurchase = def.kind === 'unlock' || def.kind === 'repeatable';
+          return isPurchase && getTechStatus(s, id, TECHNOLOGIES, cap) === 'available';
+        });
+        const prices = available.map((id) => costAt(TECHNOLOGIES[id], s.techLevels[id]));
+        const cheapest = prices.length === 0 ? null : Math.min(...prices);
+        const view = nextBuy(s, rates, TECHNOLOGIES, cap);
+        if (cheapest === null) {
+          expect(view).toBeNull();
+        } else {
+          const firstId = available.find((id) => costAt(TECHNOLOGIES[id], s.techLevels[id]) === cheapest);
+          expect(view?.id).toBe(firstId);
+          expect(view?.etaSeconds).toBe(cheapest);
+        }
+      }
+    }
   });
 });

@@ -24,7 +24,7 @@ import { emptyResourceMap } from '../resources';
 //   offlineHours -> offline cap only (tick.ts offlineCapSeconds); no rate effect here
 //   autoClick -> autoClicks += perSecond x L; folded into perSecond after perClick: perSecond[r] += autoClicks x perClick[r]
 //   windup, faultUnlock, faultSeconds, faultRate, faultWindow, overdrive -> no rate effect here (windup.ts and
-//     the fault clock read them)
+//     the fault clock read them); findSeconds, findRate -> no rate effect here (the Find clock reads them)
 //
 // Per second, in RESOURCE_IDS order (me, ee, pr, rs, xf). A converted resource is fed by its
 // source's per-second rate. perSecondPre is this value before the servo fold-in below:
@@ -106,6 +106,10 @@ export function computeRates(
         case 'faultRate':
         case 'faultWindow':
         case 'overdrive':
+          break;
+        // WP28 Find effects with no rate here: the Find clock reads them.
+        case 'findSeconds':
+        case 'findRate':
           break;
         case 'none':
           break;

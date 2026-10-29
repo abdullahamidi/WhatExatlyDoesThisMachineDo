@@ -14,17 +14,17 @@ import { WORLD_ERA_RULES, WORLD_PUDDLE, WORLD_VIRGA } from '../../data/worldEras
 const rep = (id: string, n: number): string[] => Array.from({ length: n }, () => id);
 const S7 = ['wornMotor', 'gearRatio', 'gearRatio', 'gearRatio', 'reinforcedCrank', 'motorTuning', 'motorTuning', 'motorTuning',
   'motorTuning', 'motorTuning', 'flywheel', 'pistonArray', 'improvedPistons'];
-const S9 = [...S7, '@blueprint', 'generator', ...rep('motorRetrofit', 5), ...rep('copperWinding', 20), 'dynamoCrank',
-  'capacitorBank', 'sparkGap', ...rep('transformer', 3), 'powerLines'];
+const S9 = [...S7, '@blueprint', 'generator', ...rep('motorRetrofit', 10), ...rep('copperWinding', 40), 'dynamoCrank',
+  'capacitorBank', 'sparkGap', ...rep('transformer', 6), 'powerLines'];
 const S10 = [...S9, '@substationBlueprint', 'boiler'];
-const S11 = [...S10, ...rep('inductionHeater', 3), ...rep('firebox', 20), 'steamHammer', 'superheater', ...rep('condenser', 5), 'turbine',
-  'reliefValves', ...rep('bellowsDrive', 3), '@pressureVesselBlueprint'];
+const S11 = [...S10, ...rep('inductionHeater', 9), ...rep('firebox', 40), 'steamHammer', 'superheater', ...rep('condenser', 15), 'turbine',
+  'reliefValves', ...rep('bellowsDrive', 9), '@pressureVesselBlueprint'];
 const S12 = [...S11, 'resonatorSpire'];
-const S13 = [...S12, ...rep('crankServo', 3), ...rep('harmonicCoil', 25), ...rep('pressureResonator', 3), 'echoCrank', 'phaseLock',
-  ...rep('standingWave', 3), 'crystalLattice', ...rep('gridExciter', 5), '@harmonicConvergence'];
+const S13 = [...S12, ...rep('crankServo', 3), ...rep('harmonicCoil', 50), ...rep('pressureResonator', 6), 'echoCrank', 'phaseLock',
+  ...rep('standingWave', 6), 'crystalLattice', ...rep('gridExciter', 15), '@harmonicConvergence'];
 const S14 = [...S13, 'nullChamber'];
-const S15 = [...S14, ...rep('containmentRing', 25), '@resonantSiphon:20', '@graviticAnchor:10', 'inversionCrank', 'lensArray',
-  ...rep('horizonField', 20), 'skyAperture', ...rep('mainsBackfeed', 5), ...rep('steamLance', 5), '@finalAlignment'];
+const S15 = [...S14, ...rep('containmentRing', 50), '@resonantSiphon:60', '@graviticAnchor:20', 'inversionCrank', 'lensArray',
+  ...rep('horizonField', 40), 'skyAperture', ...rep('mainsBackfeed', 15), ...rep('steamLance', 15), '@finalAlignment'];
 const S16 = [...S15, 'primaryFunction'];
 const STAGE_BUYS = {
   s0: [] as string[],
@@ -324,9 +324,9 @@ describe('ruleMet: level, minimum level and part tier', () => {
     expect(ruleMet(levelsOf(['condenser']), { techId: 'condenser', minTier: 3 })).toBe(false);
   });
 
-  it('minLevel 5 (horizonField): 4 misses, 5 meets', () => {
-    expect(ruleMet(levelsOf(rep('horizonField', 4)), { techId: 'horizonField', minLevel: 5 })).toBe(false);
-    expect(ruleMet(levelsOf(rep('horizonField', 5)), { techId: 'horizonField', minLevel: 5 })).toBe(true);
+  it('minLevel 10 (horizonField): 8 misses, 10 meets', () => {
+    expect(ruleMet(levelsOf(rep('horizonField', 8)), { techId: 'horizonField', minLevel: 10 })).toBe(false);
+    expect(ruleMet(levelsOf(rep('horizonField', 10)), { techId: 'horizonField', minLevel: 10 })).toBe(true);
   });
 
   it('minTier reads the given tier: 2 misses 3, 3 meets; a NaN tier counts as 0; a NaN level is not owned', () => {
@@ -408,7 +408,7 @@ describe('deriveWorldState: era II to V smoke stages (S9 to S16)', () => {
     });
   });
 
-  it('S15 (era V full): shadows off at horizonField 5, windows dark behind skyAperture, lamp dead, five girl steps, sprout 4', () => {
+  it('S15 (era V full): shadows off at horizonField 10, windows dark behind skyAperture, lamp dead, five girl steps, sprout 4', () => {
     expect(deriveWorldState(input(S15))).toMatchObject({
       era: 5, reverse: true, shadows: false, shadowScale: 0, dogPose: 'roam',
       girl: { stage: 3, stageName: 'ground', row: 'front', steps: 5 },
@@ -426,12 +426,12 @@ describe('deriveWorldState: era II to V smoke stages (S9 to S16)', () => {
 });
 
 describe('deriveWorldState: windows, lamp, motes and steam fog by era', () => {
-  it('windows lit count: six through era IV; era V 4 (nullChamber), 2 (lensArray), 1 (horizonField 5), 0 (skyAperture, off)', () => {
+  it('windows lit count: six through era IV; era V 4 (nullChamber), 2 (lensArray), 1 (horizonField 10), 0 (skyAperture, off)', () => {
     expect(deriveWorldState(input(S13)).props.windowsLit).toBe(6);
     expect(deriveWorldState(input(S14)).props.windowsLit).toBe(4);
     const withLens = [...S14, 'lensArray'];
     expect(deriveWorldState(input(withLens)).props.windowsLit).toBe(2);
-    const withHorizon = [...withLens, ...rep('horizonField', 5)];
+    const withHorizon = [...withLens, ...rep('horizonField', 10)];
     expect(deriveWorldState(input(withHorizon)).props.windowsLit).toBe(1);
     const dark = deriveWorldState(input([...withHorizon, 'skyAperture']));
     expect(dark.props.windowsLit).toBe(0);
@@ -489,7 +489,7 @@ describe('deriveWorldState: puddle, sprout, scraps, Chladni, pages and virga by 
     expect(size({ condenser: 1 })).toBe(1);
     expect(size({ condenser: 3 })).toBe(2);
     expect(size({ condenser: 5 })).toBe(3);
-    expect(deriveWorldState(input([...S9, ...rep('condenser', 5)], { tiers: { condenser: 5 } })).props.puddle.size).toBe(0);
+    expect(deriveWorldState(input([...S9, ...rep('condenser', 15)], { tiers: { condenser: 5 } })).props.puddle.size).toBe(0);
     expect(deriveWorldState(input(S12)).props.puddle.look).toBe('grey');
     expect(deriveWorldState(input(S14)).props.puddle.look).toBe('black');
   });
@@ -519,7 +519,7 @@ describe('deriveWorldState: puddle, sprout, scraps, Chladni, pages and virga by 
     expect(chladni({ standingWave: 2 })).toBe(1);
     expect(chladni({ standingWave: 3 })).toBe(2);
     expect(chladni({ standingWave: 5 })).toBe(2);
-    expect(deriveWorldState(input([...S11, ...rep('standingWave', 3)], { tiers: { standingWave: 5 } })).props.chladni).toBe(0);
+    expect(deriveWorldState(input([...S11, ...rep('standingWave', 6)], { tiers: { standingWave: 5 } })).props.chladni).toBe(0);
     expect(deriveWorldState(input(S13)).props.chladniViolet).toBe(false);
     expect(deriveWorldState(input(S14)).props.chladniViolet).toBe(true);
   });
@@ -573,15 +573,15 @@ describe('deriveWorldState: dog and girl by era, cycle and steps', () => {
     expect(girl(S10, 2).stage).toBe(2);
   });
 
-  it('era V steps arrive in order: nullChamber, lensArray, horizonField 5, skyAperture, finalAlignment; steps 0 outside era V', () => {
+  it('era V steps arrive in order: nullChamber, lensArray, horizonField 10, skyAperture, finalAlignment; steps 0 outside era V', () => {
     const at = (extra: readonly string[]): number => girlStepsOf(levelsOf([...S14, ...extra]));
     expect(girlStepsOf(levelsOf([]))).toBe(0);
     expect(at([])).toBe(1);
     expect(at(['lensArray'])).toBe(2);
-    expect(at(['lensArray', ...rep('horizonField', 4)])).toBe(2);
-    expect(at(['lensArray', ...rep('horizonField', 5)])).toBe(3);
-    expect(at(['lensArray', ...rep('horizonField', 5), 'skyAperture'])).toBe(4);
-    expect(at(['lensArray', ...rep('horizonField', 5), 'skyAperture', 'finalAlignment'])).toBe(5);
+    expect(at(['lensArray', ...rep('horizonField', 8)])).toBe(2);
+    expect(at(['lensArray', ...rep('horizonField', 10)])).toBe(3);
+    expect(at(['lensArray', ...rep('horizonField', 10), 'skyAperture'])).toBe(4);
+    expect(at(['lensArray', ...rep('horizonField', 10), 'skyAperture', 'finalAlignment'])).toBe(5);
     expect(deriveWorldState(input([...S13, 'lensArray'])).girl.steps).toBe(0);
     expect(deriveWorldState(input(S15)).girl.steps).toBe(5);
   });
@@ -610,13 +610,13 @@ describe('deriveWorldState: traces, observer one, shadows, seam and reverse', ()
     expect(deriveWorldState(input(STAGE_BUYS.s0)).stare).toBe(false);
   });
 
-  it('shadows go out only in era V with horizonField at 5 or more (scale 0 then)', () => {
+  it('shadows go out only in era V with horizonField at 10 or more (scale 0 then)', () => {
     expect(deriveWorldState(input(S14)).shadows).toBe(true);
-    expect(deriveWorldState(input([...S14, ...rep('horizonField', 4)])).shadows).toBe(true);
-    const off = deriveWorldState(input([...S14, ...rep('horizonField', 5)]));
+    expect(deriveWorldState(input([...S14, ...rep('horizonField', 8)])).shadows).toBe(true);
+    const off = deriveWorldState(input([...S14, ...rep('horizonField', 10)]));
     expect(off.shadows).toBe(false);
     expect(off.shadowScale).toBe(0);
-    expect(deriveWorldState(input([...S13, ...rep('horizonField', 20)])).shadows).toBe(true);
+    expect(deriveWorldState(input([...S13, ...rep('horizonField', 40)])).shadows).toBe(true);
   });
 
   it('the seam is eras I-II only; reverse is era V with the ending at none', () => {

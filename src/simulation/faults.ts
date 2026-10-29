@@ -51,6 +51,10 @@ export function faultParams(
           p.overdriveSeconds += effect.seconds * level;
           p.overdriveFactor = Math.max(p.overdriveFactor, effect.factor);
           break;
+        // WP28 Find effects: the Find clock reads them, the fault clock ignores them.
+        case 'findSeconds':
+        case 'findRate':
+          break;
         default:
           break;
       }

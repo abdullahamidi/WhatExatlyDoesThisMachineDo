@@ -3027,3 +3027,388 @@ WP27-AD2R3-FIX-BEGIN
 (none)
 WP27-AD2R3-FIX-END
 ```
+
+## WP28a
+
+### AD1 — Splice objects (eras I-II), Finds and stage numbers (Art Director, 2026-10-28)
+
+Scope: the art for the four new era I-II Splice objects and the clock's lit face, the Finds sheet, and the stage numbers
+that T13a, T14a, T14b and T15b1 copy. Hand-off: `C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP28/plan/ad1-handoff.md` (sections a-h, one json block each). Evidence:
+`C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP28/plan/ad1/` (sheet previews at 1x and 3x, composites, tooltip mocks, `tools/` with the checks).
+
+**1. Art** — DONE (hand-pixelled; DENIZEN_ART §11).
+
+| sheet | PNG | check_sheet | workbench score | lint |
+|---|---|---|---|---|
+| world.splicesA | `world/splices-a.png` 640x24, 20 cells of 32x24 | CLEAN | 91.3 (cells 0-9) / 92.9 (cells 10-19) | 0 / 0, info only |
+| world.finds | `world/finds.png` 88x8, 11 cells of 8x8 | CLEAN | 94.9 | 0 / 0, info only |
+
+- Bicycle 26x15 (dead, spin 3, whole). A child's roadster on a rear stand; the rear wheel turns backwards (counter-clockwise).
+  The pedals follow at the 2:1 chain ratio, so the 3-frame loop is seamless.
+- Organ 27x24 (dead, crank 4, whole): an arched pipe front on a barrow.
+- Radio 16x20 (dark, lit A, lit B, whole) on a pine crate.
+- Bulb arrow sign 28x22 (dark, half A, half B, whole): bent down, the head points at the ground, no letters.
+- Clock lit face 12x12: an overlay with no hands.
+- No era rows: street furniture like the lamp and the clock, in a muted weathered ramp. No green or blue. Before the finale
+  a lit part uses `#d9822b` on rust; `#f0a848` / `#ffd27a` appear only in the whole cells.
+- Finds: 7 items, the relic note, and a 5x5 one-color glint. Eras III-IV tint it with `setTintFill(0xffd27a)`; the ground
+  ring carries the C8 era accent.
+- `check_sheet.py` gains per-frame `no_ring` and `conn8` (the bicycle's 1 px tubes and the glint). Rebuilds are pixel-identical.
+- Decoded PNG total: 54.51 MiB → 54.57 MiB (limit 56).
+- PixelLab: 20 generations (2 `create_image_pro` concept calls: bicycle and organ, 64 candidates each, flywheel anchor,
+  palette lock). Proportion reference only. The AI wheels filled their spokes with sand, which is slop, so it was rejected.
+
+**2. Placements** — DONE (hand-off c; checked by `ad1/tools/placements.py` against the worktree geometry).
+- Every placement passes all checks:
+  - the wing rule, with the bbox in view;
+  - at least 96 px from the crank hub;
+  - no overlap with any visible machine part (all parts end at `GROUND_Y`);
+  - the UI 150 HUD yard limits;
+  - 2D clear of the WORLD_SPOTS keep-out boxes, the cast, the ground girl and the far-plane girl mini;
+  - no two objects touching.
+- Only the bicycle at s8w needs the 2D reading of the spot rule: its top (G+33) is below the dog row (G+32).
+- Edits against the plan draft:
+  - bicycle s9 2924 yard130, s11 2960 yard130, s15 3150 back (was off);
+  - organ e1 1352 yard64, s8 1466, s8w 1510, s9 1392 yard80, s11 712, s15 718 yard56;
+  - radio s8 1506 yard110, s9 1530 yard104, s15 690 yard100 (AD3 had left s15 open);
+  - sign s9 2990 yard76, s11 3060 yard76.
+- These keep every line off the other objects and every object off the Inspector spots.
+- Documented exemptions: s10 for the bicycle, organ, radio and sign (52 px wings); the radio at s8w; the sign at s8, s8w
+  and s15; the clock at s8w and s10 (existing).
+
+**3. Lines, Finds, perches, colors, tooltip** — DONE (hand-off d-h).
+- Payphone drop wire at s9, s10 and s11, from the mast top (2792, 1464) to the booth gable (feet + (-8, -98)), sag 8. It
+  clears the clock by 33 px and 74 px. The ground cable is used at s8 / s8w (no mast) and at s15 (the right anchor stands
+  under the span).
+- Find spots: 2-4 per framing, each at least 24 px from every cast foot. The crow drops land 26 px in front of the lamp.
+- Perches:
+  - s8: lamp, booth roof and clock;
+  - s8w: lamp and booth roof;
+  - s10: none (no crow there);
+  - s9 / s11: the ground perch is fixed at 2924 (dog x + 36 stood the crow in the hole);
+  - s15: the clock top is dropped (a hop to the inner-gap clock crosses the right anchor).
+- Tooltip slab rule: above the object, below when the crank circle is in the way. Checked over all 87 placement x UI cases:
+  it never covers the crank and never leaves the screen.
+
+Open (not AD1 files; for the EM):
+- `src/assets/manifest.test.ts` pins `ASSET_IDS.length` at 146 (lines 554, 725, 1128). It must be 148 now: the T17a assets
+  re-pin.
+- `src/assets/assetGuide.test.ts` `PLACEMENT_NOTES` needs `world.splicesA` and `world.finds` before the next writer run.
+  The two guide rows were generated out of tree by the same code.
+- AD3 (WP28b): move the spot and Splice drafts that now sit on these objects. These are the e1 Inspector yard 1360@64, the
+  s11 hydrant 2960 yard56 and the s15 cairn 720 yard40.
+- AD2 checks in game:
+  - the lines draw behind the dog and the yard objects;
+  - the clock overlay sits under the hands;
+  - the glint tint in eras III-IV;
+  - the organ and bicycle read at zoom 0.5 (s11 / s15).
+
+```
+WP28A-AD1-FIX-BEGIN
+(none)
+WP28A-AD1-FIX-END
+```
+
+### AD2 — WP28a in-game audit, round 1 (Art Director, 2026-10-28)
+
+**Verdict: NOT RELEASE-READY.** The Splice art, the Find items and glints, the tooltip text, the poke ladder, the crow's arc, the clock
+tick, NEXT BUY, the SPLICES tab, reduced motion and the demo pass. Blocking:
+- F1 (S1): every poke zone is centred on its target's top-left corner, so only the top-left quarter of a target takes hover and clicks.
+  The payphone and the lamp never take hover at e1 / s8 / s9.
+- At UI 150 the camera refocus (WP22 F11) puts the yard under the HUD buttons. The s9 Bulb Sign sits 88 % under SYSTEM, the s8 / s8w
+  bicycle 39-50 %, and the s8 radio is off screen. Finds spawn under SYSTEM at s8 / s9, and never spawn at s8w (F5, F6, F14).
+- The Splice objects vanish on screen when the finale starts; the postgame shows no whole frame (F7).
+- The lines are half an art px wide: they dash at zoom 0.5, and the era I pulse and wake beat cannot be seen (F3).
+- Poke answers of the woken objects use another object's sound and show nothing (F10). The girl window / mini never answers (F11).
+  The level-3 leaves walk toward the machine (F12, F9).
+- The Find marker draws under the curb strip and the lines (F2). The crow floats over two perches (F8). The payphone ring is missing (F13).
+
+Build under audit. **The G builds did not exist**: `dist/` and `dist-demo/` were from 07:13 (v0.11.0, before WP28a), there was no `<O>/val/`,
+no node process ran, and :4174 / :4177 were free. The assignment allows no build, so the working tree was served by the Vite dev server,
+as in WP27 AD2 round 1:
+- `npx vite --port 4174 --strictPort` (full), then `npx vite --mode demo --port 4177 --strictPort` (demo).
+- Each server was killed after its runs; netstat for 4174 / 4177 was empty at the end, and no node process was left.
+- `tsc --noEmit` exit 0 at the start.
+- No file under `src/`, `public/` or `scripts/` changed during the audit (last edit 20:29).
+- The only DEV branch in `src/` is the debug hook gate (`bootstrap.ts:479`), so the rendering is the build's.
+- **Round 2 must run on the real gate builds.**
+- One Playwright browser at a time, 1920x1080 unless stated.
+
+Evidence root `<V>` = `<O>/val/ad2/`.
+- Runs: `frames/`, `frames-rm/`, `hover2/`, `hg/`, `uiclear/`, `finds/`, `finds-rm/`, `finds150/`, `finds-eras/`, `pokes3/`, `pokes-rm/`,
+  `crowperch/`, `misc/`, `misc2/`, `screencast/`, `store/`, `demo/`.
+- Boards: `crops/`.
+- Tools: `tools/` (`lib.mjs`, `frames.mjs`, `hover.mjs`, `hoverdbg2.mjs`, `uiclear.mjs`, `finds.mjs`, `pokes.mjs`, `crowperch.mjs`, `misc.mjs`
+  (MODE clock / post / nextbuy / tab / faultfind / pulses), `screencast.mjs` (CDP screencast, about 9 fps), `spots.cjs`, `crop.py`,
+  `grid.py`, `diff.py`, `pokeboard.py`; `run2.sh`, `run2b.sh`, `run3.sh`, `run4.sh`).
+
+| area (A16) | verdict | fixes |
+|---|---|---|
+| Splice objects, era I-II art (dead, woken) | PASS | — |
+| Splice whole frames (postgame) | FAIL | F7 |
+| Placements and composition, UI 150 | FAIL | F5, F6 |
+| Lines (geometry) | PASS | — |
+| Lines (pixel width, pulses, wake beat) | FAIL | F3, F4 |
+| Clock tick (C6) | PASS | (poke: F10) |
+| Payphone ring after its Splice | FAIL | F13 |
+| Tooltip (4 lines, UI 100 / 150, crank clear) | PASS | F15 (S3) |
+| Hover brackets and click areas | FAIL | F1, F17 (S3) |
+| Find marker, items, glint, ring, popups, fault, HUD | FAIL | F2, F14 |
+| Poke answers, eras I-V | FAIL | F9, F10, F11, F12, F18 (S3) |
+| Crow hop | PASS (arc); FAIL (perch heights) | F8 |
+| 1080p, 720p, Deck at UI 150 | FAIL (through F5, F14) | — |
+| Reduced motion | PASS | F19 (S3) |
+| NEXT BUY, SPLICES tab | PASS | F16 (S3) |
+| Store shots | changed, re-approve after the fixes | — |
+| Demo :4177 | PASS | — |
+
+**1. Splice objects** — art PASS; placements FAIL at UI 150; whole frames never shown.
+
+Dead and woken frames were checked at e1 (S7), s8, s8w (Capacitor Bank) and s9 (S9), and at s11 / s15 (zoom 0.5).
+- Art:
+  - Bicycle: the rear wheel spins backwards and the pedals follow.
+  - Organ: the side crank turns.
+  - Radio: the dial glows at 2 fps.
+  - Sign: half the bulbs swap.
+  - Clock: the lit face sits under the hands.
+  - Every object reads at 1:1, at 3x, and at zoom 0.5.
+  - Palette: 18 / 14 colours. The only cool tones are `#5a5f63` and `#7d8286` from the ART_BRIEF iron ramp; no blue or green. No letters
+    on the sign.
+  - Boards: `crops/e1-woken-loops-x4.png`, `crops/s9-woken-objects-x4.png`, `crops/s11-s15-objects-x3.png`.
+- Placements are clear of every machine part and of the crank at both UI scales.
+- UI 150: the measured HUD-button rects (`uiclear/uiclear-*.json`) are the same in game px at 1080p, 720p and Deck.
+
+  | framing | buttons at UI 150 | UI 100 |
+  |---|---|---|
+  | s8 | x 2136-2680, G-9 .. G+48 | G+90 .. G+128 |
+  | s8w | x 2170-2728, G-9 .. G+48 | — |
+  | s9 | x 2269-3013, G+25 .. G+101 | G+232 .. G+283 |
+  | s10 | x 2132-2876, G-12 .. G+64 | — |
+
+  AD1's `SPLICE_YARD_LIMITS` used the UI 100 camera. Covered parts at UI 150:
+  - s8 bicycle 39 %;
+  - s8w bicycle 50 %;
+  - s9 Bulb Sign 88 %. The DOM button also takes its hover, so it cannot be bought in the world.
+  - s8 radio 95 % below the screen edge;
+  - booth / clock feet 4-10 % (existing props, as in v0.11.0).
+
+  Boards: `crops/AD2-ui150-hud-covers-splices-x2.png`, `crops/AD2-ui150-deck-s9.png`, `crops/AD2-s8-ui150-radio-offscreen.png` → F5, F6.
+- s8w, every UI scale: the dog sits on the bicycle. Its feet are at G+32 and the handlebars at G+33, and when it walks its spots, the
+  bicycle covers its feet. Board: `crops/s8w-right-dead-woken-x3.png` → F5.
+- Finale and postgame: every ending frames as `portrait` (`LivingWorldDirector.ts:1253`), and `SPLICE_WORLD` has no `portrait` placement.
+  - The organ, radio and bicycle vanish on screen the frame the finale starts (`crops/finale-start-vs-pre.png`).
+  - The postgame shows none, and `spliceStats()` is `[]` (`misc2/post-postgame.png`) → F7.
+
+**2. Lines and pulses** — geometry PASS; pixel width, era I pulse and scaling FAIL.
+- Geometry PASS:
+  - Each line starts at the outer base foot of its side (e1 2316, s9 mast 2808), never crosses the machine, and runs behind the yard objects
+    and the dog.
+  - The s9 drop wire hangs from the mast top to the booth gable with an 8 px sag.
+  - Stakes stand every 48 px.
+- The wire, the cable, its top edge and the drop wire are 1 world px, which is half an art px (PIXEL_SCALE 2). The house rule is one art px
+  (PylonLine `PIXEL_SCALE`, `PYLON_LINE.thicknessPx` 2).
+  - At 1080p zoom 1 they are 1-2 px against 3 px art pixels.
+  - At zoom 0.5 (s11, s15) they break into dashes.
+  - Boards: `crops/s8-left-dead-woken-x3.png`, `crops/s11-s15-objects-x3.png`, `crops/poke-s11-crow-x2.png` → F3.
+- Era I pulse: a 1 world px `#a3a6a4` glint on the `#7d8286` stake cap. Frame diffs over 2 s find 1-2 changed px per line, and the wake
+  beat shows no travelling light (`crops/e1-bikeline-seq-x4.png`, `crops/wake-beat-bicycle-x3.png`, screencast frames 5-15) → F3.
+- Era II pulses read: 2x2 art px `#c98552` dots on the cable and the drop wire (`crops/s9-right-dead-woken-x3.png`).
+- Scaling (`misc/pulses.txt`): every era I-II line draws 2 pulses at S7 (ME 91/s), S9 (ME 784, EE 130) and S11 (ME 784, EE 260). Only the
+  speed moves (109 → 122 px/s). Computed from the era V HUD rates (ME 20.6K/s, EE 43.3K/s): 3 pulses; 4 never shows → F4.
+- Reduced motion: pulses 0; the woken frames hold.
+  - The era II steady dot shows under the radio crate.
+  - The era I dot is 1 px under the bicycle, so it is invisible (`crops/rm-e1-s9-line-ends-x4.png`) → F3, F19.
+
+**3. Clock and payphone**
+- Clock C6: PASS.
+  - Screencast at e1, 16 s: three ticks 7.4-7.6 s apart, each about 2 frames (≈ 250 ms). Each changes 6 px of the hand and snaps back.
+  - The 4:41 rest frame is the same before and after (`screencast/`, `crops/clock-tick-x8.png`).
+  - The tick is a 1 px flick at the rim: per spec, subtle.
+  - A poke on the woken clock answers `objOrgan` and does not tick → F10.
+- Payphone after its Splice: no 60-120 s ring exists. The only rings are WP24's ambient 300-480 s (`worldBehaviour.ts:119`), and nothing in
+  the director or the props reads `splicePayphone` except the drop-wire perch → F13 (code, T13b2 partial).
+
+**4. Tooltip and brackets**
+- Tooltip PASS.
+  - Four lines: `SPLICE · NAME` / cost / effect / state. The 14 px slab is 21 px at UI 100 and 31.5 px at UI 150 on 1080p, and readable.
+  - Placed above the object and clamped to the screen.
+  - Clear of the crank circle in 26 of 27 cases (`hover2/hover-e1-s8-s9-1920x1080.json`).
+  - The exception: s8 UI 150 locked radio. Its 781 px state line (`LINE NOT IN REACH · 34.7 / 200K LIFETIME EE`) reaches 59 px from the
+    hub (circle 144) → F15 (gone with F5, but the rule is width-blind).
+- Hover and click: FAIL (F1).
+  - `PokeLayer` creates its Zones with Phaser's default origin 0.5 and places them at the target's top-left (lx, ly). The live hit area is
+    therefore centred on that corner, and `checkHover` drops any pointer outside the intended box.
+  - Measured on all 11 e1 targets: the centre hits; (0.25 w, 0.75 h) misses (`tools/hoverdbg2.mjs`).
+  - The payphone and the lamp never hover: their quarter lies under the next zone (`hover2/*.json`).
+- Brackets: drawn 2 art px outside the ≥ 56 game px zone, not the sprite.
+  - Small targets get a loose frame.
+  - The Inspector sits about 12 px right of centre.
+  - The s9 girl-mini box frames the machine's motor (`crops/hover-e1-cast-x2.png`, `crops/hover-s9-x2.png`) → F17 (S3).
+
+**5. Finds** — art PASS; depth and UI 150 FAIL.
+- Art and text:
+  - 12 forced Finds at e1 show cells 0-6 and the folded-note relic at serials 4 and 9.
+  - The 3-frame glint ping-pong reads, and the ring breathes.
+  - Glint and ring follow C8 per era: I `#ddc9a3`; III-IV `#ffd27a` with an amber ring; V paper with a violet ring
+    (`crops/finds-e1-items-x4.png`, `crops/finds-eras-glint-x4.png`).
+  - Popups: `FOUND +4s` / `+6s` / `+8s`, one per spread (`finds/*.json`). A relic shows no gain block and the note announcement
+    (`Field note: Bread, lamp oil, string. Ask about the dog.`).
+  - Demo: the same, relic 1 at serial 4 (`demo/`).
+- Fault, Find, crank block and output popup all alive at s9: no overlap. The fault plate is over the flywheel and the Find is in a wing
+  (`misc2/faultfind-1.png`).
+- Depth: `FindMarker` sets its container depth to `0.01 × lane` as a top-level object (`FindMarker.ts:465`), below the back row (depth 5).
+  - The curb strip draws over the e1 gust item (lane 12) (`crops/finds-e1-gust-x3.png`).
+  - A line crossing a spot draws over the item.
+  - → F2.
+- UI 150 (`finds150/`, `tools/spots.cjs`):
+  - s8 crow spot (2656, 26): under SYSTEM.
+  - s9 dog spot (2866, 72): under SYSTEM.
+  - s9 crow spot: the ring touches the button top.
+  - s10 (2870, 54): under the buttons.
+  - s8w: no spot inside the 32 px view inset (the bottom is G+72), so `forceFind` ×3 spawned nothing; s8w Finds are frozen at UI 150.
+  - At UI 100, s8w ground (1500, 104) is 4 px outside the left inset and s8 ground (1452, 120) is below the bottom inset.
+  - Board: `crops/finds-ui150-underbutton-x2.png` → F14.
+
+**6. Pokes** — ladder PASS; answers FAIL.
+- Every target was poked 8 times per era: L1, L1, reset, then quick L1, L1, L2, L3 and two unavailable.
+  - Eras: e1 (I), s9 (II), s11 (III), s13 → s11 framing (IV), s14 → s11 framing (V).
+  - Results: `pokes3/pokes-*.json`, boards `crops/poke-<era>-<target>-x2.png`.
+- PASS:
+  - L1 bags vary.
+  - L2 = `insNoted` / `dogWoofs` / `crowCaws` / `payHood`.
+  - L3 = `insLeave` / `dogTrot` / `crowHopBeat`.
+  - The unavailable window alternates its two wordless answers.
+  - Era IV gives one accent frame each, with no walk and no hop (the crow rises 1 art px: 1564 → 1562).
+  - Era V uses stare frames.
+  - The girl's x never changes (e1-s11 window / mini, s13 / s14 ground 880 / 976).
+  - Answer frames take `restFlip` (Inspector flipped on the left wing, dog unflipped on the right).
+  - Sensor 7 never shows `glyphOne` or `headUp`.
+  - Reduced motion: one held frame of ≤ 600 ms, no walk, no hop (`pokes-rm/`).
+- FAIL:
+  - Woken Splice objects (F10). The `object` table is one bag per era, so every object answers with that era's objects at random:
+    - e1: the bicycle plays the organ;
+    - era II: everything crackles or buzzes;
+    - era III: the bicycle whistles;
+    - era IV: bell / gramophone;
+    - era V: vane / kite / cairn.
+    The default case draws nothing (`LivingWorldDirector.ts`, `playAnswer`). Once woken, the payphone and the clock lose their own answers
+    (ring, tick): the Splice zone covers the prop zone.
+  - Girl window / mini (eras I-III, cycle 1): `poke('girl')` returns null. `pokeKeyOf` needs `placements.girl`, which is null for the
+    window and the mini, yet the target shows brackets and a hand cursor → F11.
+  - Level-3 leaves go to the spot farthest from the actor, which is the inner one:
+    - dog e1 2388 → 2340 (24 px from the machine foot 2316);
+    - s9 2856 → 2832;
+    - s11 2880 → 2832;
+    - Inspector s11 792 → 840.
+    They walk facing the machine (A13 [R1]) → F12.
+  - Era V: Inspector 792 → 840 and dog 2832 → 2880 play profile `walk` frames during the stare → F9.
+  - Sensor 7: every clip plays `sensorBlink` + `turnToCamera`; the L2 lens glint is never drawn → F18 (S3).
+- Sensor 7 follows the pointer:
+  - `headC` within ±200 world px of the tripod, `headR` beyond, back to the camera head 3 s after the pointer stops.
+  - At e1 the tripod is 104 px from the left edge, so `headL` cannot show. Per plan.
+
+**7. Crow hop** — arc PASS; perches FAIL (F8).
+- Arc PASS (`pokes3`, `crowperch/`):
+  - lamp 2476 → booth 2420 (e1);
+  - 2996 → 2944 (s9);
+  - 3104 → 3050 (s11, s14).
+  - Then booth → clock (G-88) → drop wire (2864, 1531 = on the catenary) → lamp.
+  - Apex 38-40 px above the higher end (≤ 48); about 530 ms in flight.
+  - Never over the machine x-range; flipped toward the travel direction in flight; lands unflipped with one `ruffle`.
+  - Era V plays fly2 → fly0 (reverse). Era IV: no hop. Reduced motion: no hop.
+- Perches:
+  - The `lampTop` landing is G-116 (1564), but the crow rests at G-112 (1568, the lamp's top opaque row 4 of 60). After a hop back to the
+    lamp it floats 4 px over the finial.
+  - The booth's top opaque row is 1 of 52 (G-102), and the perch is G-104.
+  - Board: `crops/crow-perches-x3.png`.
+
+**8. NEXT BUY and SPLICES tab** — PASS.
+- NEXT BUY: `NEXT BUY: GEAR RATIO · ~5S` / `COPPER WINDING · ~5S` sits on one line at UI 100 / 125 / 150 on 1080p, 720p and Deck 1280x800.
+  `scrollWidth = clientWidth` (201-243 CSS px), and the dim colour sits under the goal (`misc2/nextbuy-*.png`).
+- SPLICES tab:
+  - Rows are readable: SPLICED rows filled, IN REACH rows outlined, DARK rows dim with the lifetime progress.
+  - The detail and the PURCHASE button work.
+  - At UI 150 the tab wraps onto its own row and the list scrolls.
+  - Demo: rows III-V read `FULL GAME`, and tabs III-V read `FULL GAME`.
+  - Each row is its own grid with `auto` columns, so the state / cost text starts at a different x on each row (510-524 px) → F16 (S3).
+  - Shots: `misc/tab-splices-ui100-1920x1080.png`, `-ui150-`, `demo/tab-*`.
+
+**9. Store shots** — `store-shots.mjs SIZES=1080`: 126 checks, fail [], errors []; `_no_find` passes.
+- Against WP27 AD3 `ad3/store/1080`:
+  - 02 era I full: 3.0 % / 3.2 %;
+  - 03 era II: 2.0 % / 4.8 %;
+  - 04 era III: 1.0 % / 1.4 %;
+  - 06 era IV: 1.0 % / 1.7 %;
+  - 07 era V: 1.3 % / 1.7 %.
+- The dead organ, radio, bicycle and sign now stand in the yard, and the HUD numbers follow the REC data (`crops/AD2-store-old-new-half.png`).
+- 01, 05, 08, 08b and 10 are animation noise (≤ 1 %).
+- 09 postgame is unchanged only because of F7; it changes with F7. The set is re-approved in round 2.
+
+Notes (no fix):
+- N1: the 4:41 hands read as a dark curved bar on the lit orange face. They are the existing WP23 hands; later polish.
+- N2: the lines pass behind the sitting dog at e1, s8 and s9. The depth is correct (the dog sits in front of the cable); accepted.
+- N3: at s9 UI 150 the bicycle sits between SYSTEM (1 px under it) and the screen edge (3 px). Visible, but cramped.
+- N4: era IV girl: `tilt` shows about 1 s after an L3. The code defers the pose to an unseen moment (`unseenMoment`), so this is her own
+  runner; re-check in round 2.
+- N5: the e1 lamp is dead in era I, so its poke is a sound only (plus the crow ruffle when the crow sits on it). Per plan.
+
+Fix list (DATA = `src/data` numbers for T18; CODE = EM call, the spec is exact; CSS within budget):
+
+| F | sev | kind | file | key | old -> new |
+|---|---|---|---|---|---|
+| F1 | S1 | CODE | `src/game/rendering/PokeLayer.ts` | constructor, zone | `scene.add.zone(0, 0, side, side).setScrollFactor(0)` -> `scene.add.zone(0, 0, side, side).setOrigin(0, 0).setScrollFactor(0)` (the zone box then equals the target box the brackets and `checkHover` use) |
+| F2 | S2 | CODE | `src/game/rendering/FindMarker.ts:465` | container depth | `FIND_LAYOUT.yardDepth * spot.lane` -> `DEPTH.machine + 3 + FIND_LAYOUT.yardDepth * spot.lane` (the Splice yard convention, `SpliceProps.ts:52`) |
+| F3 | S2 | DATA | `src/data/spliceWorld.ts` | `SPLICE_LINE_STYLE` | `era1.wireWidthPx` 1 -> 2; `era1.glintWidthPx` 1 -> 4; `era1.glintColor` `0xa3a6a4` -> `0xddc9a3`; `era1.reducedDotColor` `0xa3a6a4` -> `0xddc9a3`; `era2.cableWidthPx` 1 -> 2; `drop.widthPx` 1 -> 2 (one art px; the glint lights the whole 2x2 art px stake cap in the era I accent) |
+| F4 | S2 | DATA | `src/data/worldReach.ts` | `REACH_LEVEL` | `lo.me` 1 -> 10; `hi.me` 3e5 -> 3e4; `hi.ee` 1e6 -> 1e5 (computed pulses: S7 1, S9-S11 2, era V 3, past 30K ME/s 4; EE: S8 1, S9-S11 2, era V 3) |
+| F5 | S2 | DATA | `src/data/spliceWorld.ts` | `SPLICE_WORLD` placements | `spliceBicycle.s8` `{2668, 62}` -> `null`; `spliceBicycle.s8w` `{2700, 63}` -> `null`; `spliceRadio.s8` `{1506, 110}` -> `null`; `spliceSign.s9` `{2990, 76}` -> `{ x: 2954, lane: 22 }` (in front of the booth: box 2928-2984 x G-22..G+22, clear of the dog band 2820-2892, the clock by 12 px and the crow Find spot by 8 px; above the UI-150 buttons). Test `spliceWorld.test.ts`: `SPOT_2D_CLEARED` drops `'spliceBicycle s8w'`; the 4 px object test exempts the pair `spliceSign s9 / splicePayphone s9` (front-of-booth layering) |
+| F6 | S2 | DATA | `src/data/spliceWorld.ts` | `SPLICE_YARD_LIMITS`, `SPLICE_HUD_RECT` | limits: `s8` 63 -> -9, `s8w` 63 -> -9, `s9` 196 -> 25, `s10` 56 -> -12 (the measured UI-150 button tops; e1 119, s11 158, s15 10 hold); rect min: `s8w` 2180 -> 2170, `s9` 2283 -> 2269, `s11` 2058 -> 2037, `s15` 2056 -> 2035 |
+| F7 | S2 | DATA | `src/data/spliceWorld.ts` | `SPLICE_WORLD` placements | add `portrait` = the s15 rows: bicycle `{3150, 'back'}`, organ `{718, 56}`, clock `{2890, 'back'}`, radio `{690, 100}`, payphone `{3050, 'back'}`, sign `null` |
+| F8 | S2 | DATA | `src/data/pokes.ts` | `CROW_PERCHES` (e1, s8, s8w, s9, s11, s15) | `lampTop.y` `GROUND_Y - 116` -> `GROUND_Y - 112`; `boothRoof.y` `GROUND_Y - 104` -> `GROUND_Y - 102` |
+| F9 | S2 | DATA | `src/data/pokes.ts` | `INS_V.leave`, `DOG_V.leave` | `'leaveWrite'` -> `null`; `'leaveSit'` -> `null` (era V level 3 plays its l3 stare clip in place, as era IV) |
+| F10 | S2 | DATA+CODE | `src/data/pokes.ts`, `src/game/math/pokes.ts`, `LivingWorldDirector.ts`, `SpliceProps.ts` | `object` table | DATA: one table per Splice object instead of the per-era bag. Bicycle l1 `[objBicycle bell 800, objBicycleSpin tick 600]`; organ `[objOrgan organ 1200, objOrganPuff tick 600]`; radio `[objRadio crackle 1200, objRadioDial tick 600]`; sign `[objSign buzz 900, objSignFlicker tick 600]`; unavailable = the two sound variants. CODE: `tableKeyOf('object:<id>')` -> that id's table; `playAnswer` routes `spliceClock` to the clock answer (`clockTickOnce`) and `splicePayphone` to the payphone answer (ring / sway / hood); `SpliceProps` draws the 1-frame twitch (the default case draws nothing today) |
+| F11 | S2 | CODE | `LivingWorldDirector.ts` | `pokeKeyOf('girl')` | `p.girl === null ? null` -> key from the girl's stage (window / mini / ground) whenever her anchor is on screen |
+| F12 | S2 | CODE | `LivingWorldDirector.ts` / runner `interrupt` target | level-3 leave spot | the spot farthest from the actor -> the outer spot (the one farthest from the machine x); never the inner spot, so the walk faces away (A13 [R1]) |
+| F13 | S2 | CODE | `LivingWorldDirector.ts` (T13b2 scope) | payphone Splice ring | add the 60-120 s ring after `splicePayphone` (hash interval, receiver jump, ring burst, nobody on the line; WP28 Splice table #5) |
+| F14 | S2 | CODE+DATA | `src/game/rendering/FindMarker.ts`; `src/data/findWorld.ts` | spot eligibility; `FIND_SPOTS` | CODE: a spot whose item box meets the HUD-button rect (DOM at the current UI scale, as `PokeLayer` reads `#ui-root`) counts as off screen. DATA: `s8w` `(1500, 104)` -> `(1508, 104)` and add `{ x: 1556, lane: 30, producer: 'ground' }`; `s8` ground `(1452, 120)` -> `(1452, 100)`; `s9` add `{ x: 2904, lane: 20, producer: 'dog' }` |
+| F15 | S3 | CODE | `PokeLayer.ts` | tooltip placement | test the full slab rect (after its width) against the crank circle + clearance; flip below or shift sideways |
+| F16 | S3 | CSS | `src/ui/techTree.css` | `.tech-splice-row` | `grid-template-columns: 1.2fr auto auto 2fr 1.4fr` -> `1.2fr 7.5em 6.5em 2fr 1.4fr` |
+| F17 | S3 | CODE | `PokeLayer.ts` / director targets | brackets | bracket the sprite's opaque box (feet / head of the director's anchor), keep the zone ≥ 56 screen px |
+| F18 | S3 | CODE | `LivingWorldDirector.ts` | Sensor 7 answer | draw `lensGlint` for the L2 / L3 clip (one 150 ms glint) and the LED solid for 3 s; L1 stays the double blink |
+| F19 | S3 | CODE | `SpliceLines.ts` | `drawSteady` | the reduced-motion dot at the last stake (era I) or 12 px before the end, not at the object's feet under its sprite |
+
+```
+WP28A-AD2-FIX-BEGIN
+F1  CODE  src/game/rendering/PokeLayer.ts zone setOrigin(0, 0)
+F2  CODE  src/game/rendering/FindMarker.ts container depth = DEPTH.machine + 3 + yardDepth * lane
+F3  DATA  src/data/spliceWorld.ts SPLICE_LINE_STYLE era1.wireWidthPx 2 glintWidthPx 4 glintColor 0xddc9a3 reducedDotColor 0xddc9a3 era2.cableWidthPx 2 drop.widthPx 2
+F4  DATA  src/data/worldReach.ts REACH_LEVEL lo.me 10 hi.me 3e4 hi.ee 1e5
+F5  DATA  src/data/spliceWorld.ts spliceBicycle.s8 null spliceBicycle.s8w null spliceRadio.s8 null spliceSign.s9 {2954,22} (+ spliceWorld.test.ts exemptions)
+F6  DATA  src/data/spliceWorld.ts SPLICE_YARD_LIMITS s8 -9 s8w -9 s9 25 s10 -12 ; SPLICE_HUD_RECT min s8w 2170 s9 2269 s11 2037 s15 2035
+F7  DATA  src/data/spliceWorld.ts portrait placements = s15 rows
+F8  DATA  src/data/pokes.ts CROW_PERCHES lampTop.y G-112 boothRoof.y G-102
+F9  DATA  src/data/pokes.ts INS_V.leave null DOG_V.leave null
+F10 DATA+CODE per-object poke tables; spliceClock/splicePayphone route to the prop answers; SpliceProps twitch
+F11 CODE  LivingWorldDirector.pokeKeyOf girl by stage
+F12 CODE  level-3 leave to the outer spot
+F13 CODE  payphone Splice ring 60-120 s
+F14 CODE+DATA FindMarker skips spots under the HUD buttons; FIND_SPOTS s8w (1508,104) + (1556,30) ; s8 (1452,100) ; s9 + (2904,20 dog)
+F15 CODE  PokeLayer tooltip full-rect crank test (S3)
+F16 CSS   src/ui/techTree.css .tech-splice-row columns 1.2fr 7.5em 6.5em 2fr 1.4fr (S3)
+F17 CODE  brackets on the sprite box (S3)
+F18 CODE  Sensor 7 L2 lens glint (S3)
+F19 CODE  SpliceLines steady dot off the object's feet (S3)
+WP28A-AD2-FIX-END
+```
+
+Round 2, on the gate builds after the fixes:
+- `hoverdbg2.mjs` + `hover.mjs` (F1: every quarter of every target).
+- `finds.mjs` e1 (F2).
+- `frames.mjs` e1 / s9, + s11 / s15 crops (F3).
+- `misc.mjs MODE=pulses` + S7 (F4).
+- `uiclear.mjs` all framings at UI 100 / 150 (F5, F6).
+- `misc.mjs MODE=post` (F7).
+- `crowperch.mjs` e1 / s9 (F8).
+- `pokes.mjs` e1 / s9 / s14 (F9-F12).
+- `misc.mjs MODE=clock SECS=130` (F13).
+- `finds.mjs` s8 / s8w / s9 at UI 150 (F14).
+- `store-shots.mjs` (02, 03, 04, 06, 07, 09).

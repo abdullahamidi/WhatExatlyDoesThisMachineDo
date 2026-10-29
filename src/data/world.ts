@@ -9,7 +9,7 @@ export const GROUND_Y = 1680;                                   // world y of th
 export const PIXEL_SCALE = 2;                                   // art px -> world px
 export const MACHINE_ANCHOR = { x: 1920, y: GROUND_Y } as const;
 export const CAMERA = { focus: { x: 1920, y: GROUND_Y - 160 }, defaultZoom: 1, maxZoom: 2, minZoom: 0.5,
-  wheelZoomFactor: 1.1, wheelStepCooldownMs: 80, dragThresholdPx: 4, refocusMs: 450,
+  wheelZoomFactor: 1.1, wheelStepCooldownMs: 80, dragThresholdPx: 4, dragPassName: 'pokeZone', refocusMs: 450,
   fitMarginPx: 72, autoFrame: true, hudTopInsetPx: 240, hudTopInsetPadPx: 16,
   fullViewGroundBandPx: 160, fullViewTopMinPx: 24 } as const;   // minZoom explicit (below 0.5 one art px is smaller than a screen px); fitMarginPx: world px kept clear around the machine when auto-framing; hudTopInsetPx: screen px under the HUD panel at UI 100, the machine top is kept below it when auto-framing; hudTopInsetPadPx: extra px per 100 % of UI scale above 100 (WP22 F11); fullView*: framing at the min zoom (ART_ERA5 in-game review F2): ground line kept fullViewGroundBandPx above the screen bottom (pre-WP11 eras III-IV framing), machine top >= fullViewTopMinPx, base + fitMarginPx above the bottom edge
 /** World x the tiled background patterns are phased to: the pre-WP11 machine anchor, so eras I-IV backgrounds stay pixel-identical. */
@@ -36,10 +36,10 @@ export const PARALLAX_LAYERS: readonly ParallaxLayerDef[] = [
   { id: 'pylons',    assetId: 'bg.pylons',    scrollFactor: 0.55, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 30, alpha: 0.45, underfill: null, tint: 0xb8a98f },
   { id: 'pylonsLit', assetId: 'bg.pylonsLit', scrollFactor: 0.55, bottomY: GROUND_Y + PARALLAX_BOTTOM_MARGIN, depth: DEPTH.background + 31, alpha: 0.7, underfill: null, fadeMs: PYLONS_LIT_FADE_MS, visibleWhen: { techId: 'powerLines', minLevel: 1 } },
   { id: 'skyViolet', assetId: 'bg.skyViolet', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 1, alpha: 1, underfill: null, fadeInMs: ERA5_SKY_FADE_IN_MS,
-    alphaStages: [{ techId: 'nullChamber', minLevel: 1, alpha: 0.25 }, { techId: 'lensArray', minLevel: 1, alpha: 0.5 }, { techId: 'horizonField', minLevel: 5, alpha: 0.75 }, { techId: 'skyAperture', minLevel: 1, alpha: 1 }],
+    alphaStages: [{ techId: 'nullChamber', minLevel: 1, alpha: 0.25 }, { techId: 'lensArray', minLevel: 1, alpha: 0.5 }, { techId: 'horizonField', minLevel: 9, alpha: 0.75 }, { techId: 'skyAperture', minLevel: 1, alpha: 1 }],
     finale: { track: 'sky', dir: 'out' } },
   { id: 'horizonGlow', assetId: 'bg.horizonGlow', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 3, alpha: 1, underfill: null, fadeInMs: ERA5_SKY_FADE_IN_MS,
-    alphaStages: [{ techId: 'horizonField', minLevel: 1, alpha: 0.35 }, { techId: 'horizonField', minLevel: 10, alpha: 0.55 }, { techId: 'horizonField', minLevel: 20, alpha: 0.75 }],
+    alphaStages: [{ techId: 'horizonField', minLevel: 1, alpha: 0.35 }, { techId: 'horizonField', minLevel: 19, alpha: 0.55 }, { techId: 'horizonField', minLevel: 39, alpha: 0.75 }],
     finale: { track: 'glow', dir: 'out' } },
   // WP13 restored world: twins of sky / mountains / skyline (same scrollFactor, bottomY and art size), faded in by the finale track.
   { id: 'skyRestored', assetId: 'bg.skyRestored', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 4, alpha: 1, underfill: null,
@@ -54,7 +54,7 @@ export const DAY_TINT_LAYERS = ['sky', 'mountains', 'skyline', 'pylons'] as cons
 export const DAY_TINT_TAU_MS = 1500;                            // ms of the exponential ease of the day tint toward its target (WP24 D5)
 /** Era V eclipse sprite in the sky (sky px, origin centre): frame 0 = the baked sun, hidden; stages step the frame up as techs arrive; diamond = the one-off flash frame. */
 export const ECLIPSE = { assetId: 'bg.eclipse', skyPx: { x: 372, y: 290 }, depth: DEPTH.background + 2,
-  stages: [{ techId: 'nullChamber', minLevel: 1, frame: 1 }, { techId: 'lensArray', minLevel: 1, frame: 2 }, { techId: 'horizonField', minLevel: 5, frame: 3 }, { techId: 'skyAperture', minLevel: 1, frame: 5 }],
+  stages: [{ techId: 'nullChamber', minLevel: 1, frame: 1 }, { techId: 'lensArray', minLevel: 1, frame: 2 }, { techId: 'horizonField', minLevel: 9, frame: 3 }, { techId: 'skyAperture', minLevel: 1, frame: 5 }],
   diamond: { techId: 'skyAperture', frame: 4, ms: 1200 } } as const;
 /** Era V aperture beam: a world-space light shaft from the aperture part up to the sky (tile 32 world px wide). `component` is the MachineComponentId 'aperture' as a plain literal. */
 export const APERTURE_BEAM = { assetId: 'fx.beam', component: 'aperture', minLatchFrame: 3, artX: 64, footArtY: -588, fps: 8, alpha: 0.85, depth: DEPTH.machine + 1 } as const;

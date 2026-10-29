@@ -849,6 +849,17 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     frame: { width: 24, height: 24, count: 12 },
     description: 'Twelve-frame fault marker sheet: 0 tag lit and 1 tag dim (amber plate, ink exclamation mark, pointer), 2-3 spark (eras I-II), 4-5 steam hiss (III), 6-7 ring wobble (IV), 8-9 null static (V), 10 clear puff, 11 spare (empty); file fx/fault.png.',
   },
+  // WP28a AD1: the era I-II Splice objects (one uniform-cell sheet, objects bottom-centred) and the Finds sheet.
+  'world.splicesA': {
+    id: 'world.splicesA', file: 'world/splices-a.png', width: 640, height: 24, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 32, height: 24, count: 20 },
+    description: 'Era I-II Splice objects: bicycle, barrel organ, valve radio, bulb arrow sign, lit clock face.',
+  },
+  'world.finds': {
+    id: 'world.finds', file: 'world/finds.png', width: 88, height: 8, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 8, height: 8, count: 11 },
+    description: 'Finds: items 0-6, relic note 7, one-color glint 8-10 (tinted per era).',
+  },
 };
 
 export interface AssetLoad {

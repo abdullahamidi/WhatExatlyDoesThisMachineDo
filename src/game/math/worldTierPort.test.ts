@@ -133,7 +133,7 @@ describe('createTierTracker over WP22_TIER_PORT', () => {
 });
 
 describe('hole stage through the port', () => {
-  it('is 2 / 3 / 4 at motorRetrofit 8 / 13 / 18 (tiers 3 / 4 / 5) once load-beneath EE is reached, and 0 below it', () => {
+  it('is 2 / 3 / 4 at motorRetrofit 15 / 25 / 35 (tiers 3 / 4 / 5) once load-beneath EE is reached, and 0 below it', () => {
     const stage = (level: number, lifetimeEe: number): number => {
       const levels = levelsWith('motorRetrofit', level);
       return deriveWorldState({
@@ -146,8 +146,8 @@ describe('hole stage through the port', () => {
         phase: 'none',
       }).props.holeStage;
     };
-    expect([8, 13, 18].map((level) => stage(level, 100000))).toEqual([2, 3, 4]);
-    expect(stage(18, 99999)).toBe(0);
+    expect([15, 25, 35].map((level) => stage(level, 100000))).toEqual([2, 3, 4]);
+    expect(stage(35, 99999)).toBe(0);
   });
 });
 

@@ -33,13 +33,13 @@ python -I scripts/art/world/composite.py <store shot 1080p> <out.png> --pose e1 
 python -I scripts/art/world/composite.py <shot> <out.png> --pose s9 --windows lit [--window-set proposed]
 ```
 
-Rebuild and gate everything (24 PNGs since WP23b AD3c: 22 under `world/` + `bg/window-lit.png` + `bg/virga.png`). Every
+Rebuild and gate everything (26 PNGs since WP28a AD1: 24 under `world/` + `bg/window-lit.png` + `bg/virga.png`). Every
 rebuild is pixel-identical to the shipped PNG (AD-d checked all 17, AD3a all 20, AD3c and AD3d all 24), so the masters are the
 source of truth:
 
 ```sh
 for s in inspector dog crow girl payphone receiver sensor7 girlWindow girlMini lamp lampGlow clock stakeChain hole scraps mote windowLit \
-         lantern redBall clipboardPages puddle sprout page virga; do
+         lantern redBall clipboardPages puddle sprout page virga splicesA finds; do
   python -I scripts/art/world/build_sheet.py $s && python -I scripts/art/world/check_sheet.py $s || break
 done
 npx vitest run src/assets/worldSheets.test.ts   # size, 8-bit RGBA, alpha 0/255, palette-only on every wired file (+ the
@@ -133,6 +133,8 @@ minimum on-screen sizes, and `src/assets/worldSheets.test.ts` once the manifest 
 | sprout | `world/sprout.png` 40x24 | 100.0 (AD3c) | 0 / 0, 2 info | CLEAN | 5 = 1 per cell, 0 holes; stages only grow (`grow`); `bloom` restored colours (`restored_frames`) |
 | page | `world/page.png` 6x4 | 100.0 (AD3c) | 0 / 0, 3 info | CLEAN | 1 per cell (lint: 1 on the sheet, the cells touch); every colour cluster >= 2 px |
 | virga | `bg/virga.png` 512x128 | 100.0 (AD3c) | 0 / 0, 2 info (1-2 px clusters = the deliberate dashes and beads) | CLEAN | `parts` (a strip of streaks: 1137 components), 0 isolated px (4-connected streaks), sky ramp only (`p q`, `only`) |
+| splicesA | `world/splices-a.png` 640x24 | 91.3 / 92.9 (WP28a AD1; halves of 320 px: cells 0-9 / 10-19) | 0 / 0, 4 info each | CLEAN | 20 = 1 per cell (bicycle cells 8-connected, `conn8`), full ink ring except the bicycle (`no_ring`); single row; objects bottom-centered in 32x24 cells |
+| finds | `world/finds.png` 88x8 | 94.9 (WP28a AD1) | 0 / 0, 2 info | CLEAN | 11 = 1 per cell; items and the relic note on the bottom row with a full ink ring; glint cells 8-10 one color, centered (`no_ring`, `overlays`) |
 
 AD-d final re-run (2026-10-24, all 17 PNGs): every score and lint result above reproduced exactly (dog halves 99.3 / 99.4);
 check_sheet CLEAN on all 17; `worldSheets.test.ts` 20 / 20 pass with all 17 files wired.
@@ -174,6 +176,8 @@ Era-row sheets (6 rows I, II, III, IV, V, whole): inspector, dog, crow, girl, pa
 | sprout | world.sprout | world/sprout.png 40x24 | 8x24 | stage1, stage2, stage3, stage4, bloom | AD3c (5 drawn) |
 | page | world.page | world/page.png 6x4 | 3x4 | flat, tilt | AD3c (2 drawn) |
 | virga | bg.virga | bg/virga.png 512x128 | 512x64, frames stacked (frame 0 on top) | fall, frozen | AD3c (2 drawn, generated) |
+| splicesA | world.splicesA | world/splices-a.png 640x24 | 32x24, objects bottom-centered | bicycleDead, bicycleSpin0, bicycleSpin1, bicycleSpin2, bicycleWhole, organDead, organCrank0, organCrank1, organCrank2, organCrank3, organWhole, radioDark, radioLitA, radioLitB, radioWhole, signDark, signHalfA, signHalfB, signWhole, clockLit | WP28a AD1 (20 drawn) |
+| finds | world.finds | world/finds.png 88x8 | 8x8 | bolt, tag, gear, tin, key, photo, token, note, glint0, glint1, glint2 | WP28a AD1 (11 drawn) |
 
 `bg.windowLit`: lit = pane `#ad6236` with a 2x4 `#c98552` centre; breathe = the exhale (centre 2x2), era IV downbeat.
 The renderer crops each placement to its pane from the top-left (`WORLD_FAR_PLANES.windows`, AD2c): (306, 120) /
@@ -917,3 +921,28 @@ their neighbours, 6x-16x), `view/clipboard-check.png`, `view/dog-B.png` / `dog-C
 `uploads.txt`, `workbench.txt`); `rebuild/`, `check/`, `frames/`; `before/` (PNGs, masters, README before AD1b-3);
 `draft/` (the scratch toolchain copy with the rejected dog drafts); `work/` (`gate_prep.py`, `storyboard.py`,
 `ad1b3_comp.py`, `clipcheck.py`, `view.py`, `dogview.py`, `mkscratch.py`, `apply.py`).
+
+## WP28a AD1 (Splice objects eras I-II and Finds, 2026-10-28)
+
+New sheets (single row, no era rows: street furniture like the lamp and the clock; DENIZEN_ART §11):
+- `world.splicesA` (`masters/splicesA/splicesA.txt`): ONE uniform-cell sheet, 20 cells of 32x24, every object bottom-centered
+  (pivot (0.5, 1) = its feet). Bicycle 26x15 (dead, spin 3, whole), barrel organ 27x24 (dead, crank 4, whole), valve radio
+  16x20 (dark, lit A, lit B, whole), bulb arrow sign 28x22 (dark, half A, half B, whole), and the street clock's lit face
+  12x12 (an overlay on `world.clock`, no hands). 60 KiB decoded; a split would save under 64 KiB, so no split.
+- `world.finds` (`masters/finds/finds.txt`): 11 cells of 8x8. Items 0-6 and the relic note 7 (iron / rust / sand, full ink
+  ring, no text), plus a one-color 5x5 glint in 3 frames (8-10, tinted per era at runtime).
+
+Gate options added to `check_sheet.py` (per frame, listed in `sheets.py`):
+- `no_ring`: no full ink ring on that cell. Used for the bicycle's 1 px tubes, spokes and stand, and for the glint sparkle.
+- `conn8`: the silhouette counts 8-connected, so the bicycle's diagonal 1 px tubes are one component.
+
+Palette rules for these sheets:
+- No green or blue, and no letters.
+- Before the finale, a lit part uses `#d9822b` on rust (the lamp's lit rule). `#f0a848` / `#ffd27a` appear only in the
+  `*Whole` (postgame) cells.
+
+The masters are the source of truth. They were first written from scratch drafts in the session scratchpad (`WP28/plan/ad1/tools/draft_*.py`), then
+hand-edited: the bicycle cells got 1 px bridges so the workbench lint finds no isolated pixel. Rebuilds are pixel-identical.
+PixelLab: 2 `create_image_pro` concept calls, 20 generations (bicycle and organ: proportion reference only, D9).
+Stage numbers (placements per framing, lines, Find spots, perches, glint and bracket colors, tooltip) are in the AD1
+hand-off, `WP28/plan/ad1-handoff.md` in the session scratchpad.

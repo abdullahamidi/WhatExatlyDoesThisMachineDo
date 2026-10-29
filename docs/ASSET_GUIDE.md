@@ -80,6 +80,8 @@ Machine-local depths are relative to the machine container, which sits at world 
 | `world.mote` | `world/mote.png` | 4 x 2 | 0.5, 0.5 | none | 2 (2 x 2) | living world, dust depth (1 emitter, pool 5) | Ash mote and white moth speck, 2 frames (ash, moth); one emitter with a pool of 5; file world/mote.png. |
 | `world.page` | `world/page.png` | 6 x 4 | 0.5, 0.5 | none | 2 (3 x 4) | living world, dust depth | Paper page that lifts from the clipboard about every 40 s in era IV, 2 frames (flat, tilt); file world/page.png. |
 | `world.shadow` | none (procedural) | 26 x 3 | 0.5, 0.5 | none | none | living world, row -0.01 (procedural Graphics, baked once) | Procedural shadow ellipse baked once in game; this 26x3 texture is a fallback only and never gets a file. |
+| `world.splicesA` | `world/splices-a.png` | 640 x 24 | 0.5, 1 | none | 20 (32 x 24) | living world, Splice objects: back row or yard lanes (SPLICE_WORLD, Director chunk) | Era I-II Splice objects: bicycle, barrel organ, valve radio, bulb arrow sign, lit clock face. |
+| `world.finds` | `world/finds.png` | 88 x 8 | 0.5, 1 | none | 11 (8 x 8) | living world, Find marker (FindMarker, WorldReach chunk): yard lane of the spot | Finds: items 0-6, relic note 7, one-color glint 8-10 (tinted per era). |
 
 ### Machine — Era I
 

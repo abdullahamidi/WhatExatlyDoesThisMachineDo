@@ -4,10 +4,11 @@ import { RESOURCES } from '../data/resources';
 import { TECHNOLOGIES } from '../data/technologies';
 import { TECH_IDS } from '../data/types';
 import type { EndingPhase, GameState, ProductionRates, TechDefinition, TechId } from '../data/types';
-import { AFFORDABLE_BADGE, ERA_CARD, NEXT_GOAL } from '../data/ux';
+import { AFFORDABLE_BADGE, ERA_CARD, NEXT_BUY, NEXT_GOAL } from '../data/ux';
 import { canAfford, costAt } from '../simulation/economy/cost';
+import { eraAllowed } from '../simulation/progression/edition';
 import { eraResource } from '../simulation/progression/era';
-import { isRequirementMet, requirementLabel } from '../simulation/progression/requirements';
+import { isRequirementMet, requirementLabel, requirementsMet } from '../simulation/progression/requirements';
 import { formatCost, formatDuration, formatNumber } from '../utils/format';
 import { resourceShort } from './revealRules';
 
@@ -69,6 +70,69 @@ export function nextGoal(
       + etaSuffix(cost - have, rates.perSecond[def.costRes]),
     ready: false,
     progress: Math.min(1, have / cost),
+  };
+}
+
+export interface NextBuyView { id: TechId; text: string; etaSeconds: number }
+
+/** ETA rounded up to a readable step: 5 s under a minute, 10 s under ten minutes, a minute above. Never rounds down. */
+export function roundEta(seconds: number): number {
+  const step = seconds < 60 ? 5 : seconds < 600 ? 10 : 60;
+  return Math.max(0, Math.ceil(seconds / step - 1e-9)) * step;
+}
+
+/**
+ * The status.ts 'available' rule for an unlock or a repeatable, on the Pick the HUD holds (getTechStatus takes a full
+ * GameState). Parity with getTechStatus is pinned in guidanceView.test.ts. Milestones and the starting crank never pass.
+ */
+function isBuyable(
+  state: Pick<GameState, 'techLevels' | 'lifetime'>,
+  id: TechId,
+  def: TechDefinition,
+  maxEra: number | null,
+): boolean {
+  if (!eraAllowed(def, maxEra)) return false;
+  const level = state.techLevels[id];
+  if (def.kind === 'unlock') return level < 1 && requirementsMet(state, def);
+  return def.kind === 'repeatable' && (def.maxLevel === null || level < def.maxLevel) && (level >= 1 || requirementsMet(state, def));
+}
+
+/**
+ * NEXT BUY (WP28): the purchase the machine reaches first. Among the available unlocks and repeatables (Splices included),
+ * eta = (cost - stock) / perSecond of the cost resource; the smallest wins, ties go to TECH_IDS order, and a rate of 0 never
+ * arrives. Null during the finale, while any of them is affordable (the TECH INDEX badge covers that) and when no eta is finite.
+ * The ETA is the passive rate only (clicks, Faults, Finds and wind-up excluded): it never promises faster than the machine.
+ */
+export function nextBuy(
+  state: Pick<GameState, 'res' | 'lifetime' | 'techLevels' | 'ending'>,
+  rates: Readonly<ProductionRates>,
+  techs: Readonly<Record<TechId, TechDefinition>> = TECHNOLOGIES,
+  maxEra: number | null = null,
+): NextBuyView | null {
+  if (state.ending.phase !== 'none') return null;
+  let bestId: TechId | null = null;
+  let bestEta = Infinity;
+  for (const id of TECH_IDS) {
+    const def = techs[id];
+    if (!isBuyable(state, id, def, maxEra)) continue;
+    const cost = costAt(def, state.techLevels[id]);
+    const stock = state.res[def.costRes];
+    if (stock >= cost) return null;
+    const perSecond = rates.perSecond[def.costRes];
+    if (!(perSecond > 0)) continue;
+    const eta = (cost - stock) / perSecond;
+    if (eta < bestEta) {
+      bestId = id;
+      bestEta = eta;
+    }
+  }
+  if (bestId === null) return null;
+  const name = techs[bestId].name.toUpperCase();
+  const time = formatDuration(roundEta(bestEta));
+  return {
+    id: bestId,
+    text: `${NEXT_BUY.prefix}${name}${NEXT_BUY.sep}${NEXT_BUY.etaPrefix}${time}`,
+    etaSeconds: bestEta,
   };
 }
 

@@ -8,7 +8,10 @@ export const TECH_IDS = ['handCrank','gearRatio','reinforcedCrank','flywheel','w
   'resonatorSpire','harmonicCoil','pressureResonator','crankServo','echoCrank','phaseLock','standingWave','crystalLattice','harmonicConvergence',
   'nullChamber','containmentRing','resonantSiphon','graviticAnchor','inversionCrank','lensArray','horizonField','skyAperture','finalAlignment','primaryFunction',
   'bellowsDrive','gridExciter','mainsBackfeed','steamLance',
-  'faultLamp','dischargeLever','leakWhistle','dampingFork','overrunClutch'] as const;
+  'faultLamp','dischargeLever','leakWhistle','dampingFork','overrunClutch',
+  // WP28 Splices (one-time unlocks wired to dead world objects; src/data/splices.ts)
+  'spliceBicycle','spliceOrgan','spliceClock','spliceRadio','splicePayphone','spliceSign','splicePump','spliceWhistle',
+  'spliceHydrant','spliceBell','spliceGramophone','spliceChimes','spliceVane','spliceKite','spliceCairn','spliceCoinReturn'] as const;
 export type TechId = typeof TECH_IDS[number];
 export const RESOURCE_IDS = ['me', 'ee', 'pr', 'rs', 'xf'] as const;
 export type ResourceId = typeof RESOURCE_IDS[number];
@@ -19,7 +22,7 @@ export interface ResourceDefinition {
   convExp: number;                         // exponent applied to the source per-second rate
 }
 export type TechKind = 'starting' | 'unlock' | 'repeatable' | 'milestone';
-export type Branch = 'origin' | 'mechanical' | 'automation' | 'convergence';
+export type Branch = 'origin' | 'mechanical' | 'automation' | 'convergence' | 'splice';   // 'splice' = a Splice (WP28)
 export type Effect =                                      // repeatable effects apply per level
   | { type: 'clickAdd'; amount: number }                  // additive ME/click
   | { type: 'clickMult'; factor: number }                 // multiplicative manual ME
@@ -37,6 +40,8 @@ export type Effect =                                      // repeatable effects 
   | { type: 'faultRate'; factor: number }                  // spawn interval x factor^level
   | { type: 'faultWindow'; seconds: number }               // + seconds a fault stays
   | { type: 'overdrive'; seconds: number; factor: number } // on a clear: perSecond x factor for `seconds` (refresh, never stack)
+  | { type: 'findSeconds'; seconds: number }               // WP28: + Find payout seconds (no rate effect)
+  | { type: 'findRate'; factor: number }                   // WP28: Find interval x factor^level (no rate effect)
   | { type: 'ending' } // marker: starts the finale (WP12); no rate, click or offline effect
   | { type: 'none' };
 export type Requirement =

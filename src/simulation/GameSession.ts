@@ -1,5 +1,6 @@
 import { MAX_UPDATE_SECONDS, OFFLINE_REPORT_THRESHOLD_SECONDS } from '../data/balance';
 import { FAULTS } from '../data/faults';
+import { FINDS, RELIC_NOTES } from '../data/finds';
 import { DEFAULT_SETTINGS_VALUES } from '../data/settings';
 import { TECHNOLOGIES } from '../data/technologies';
 import { TECH_IDS } from '../data/types';
@@ -9,6 +10,7 @@ import type {
   OfflineReport,
   PrestigeState,
   ProductionRates,
+  PurchaseFailure,
   PurchaseResult,
   ResourceMap,
   SettingsState,
@@ -28,13 +30,16 @@ import { refillWindup, releaseWindup, windupParams } from './production/windup';
 import type { WindupParams } from './production/windup';
 import { clearFault as clearFaultClock, consumeOverdrive, createFaultClock, faultParams, stepFaultClock } from './faults';
 import type { FaultAlive, FaultClock, FaultParams } from './faults';
+import { collectFind as collectFindClock, createFindClock, findParams, stepFindClock } from './finds';
+import type { FindAlive, FindClock, FindParams } from './finds';
 import { addMaps } from './resources';
 import { evaluateMilestones } from './progression/milestones';
 import { clampStateToEra } from './progression/edition';
 import type { EraCap } from './progression/edition';
+import { currentEra } from './progression/era';
 import { advanceEnding, isRevealed, startEnding } from './progression/ending';
 import { purchase as purchaseTech } from './progression/purchase';
-import { getAllTechViews, getTechView } from './progression/status';
+import { getAllTechViews, getTechView, isSplice } from './progression/status';
 import { createInitialState } from './state';
 import { normalizeSettings } from './settings';
 import { addLifetimeDelta, bumpMaxRates, deriveStats, emptyStats } from './stats';
@@ -78,6 +83,8 @@ export interface GameSessionOptions {
   maxEra?: EraCap;
   /** WP27: seed of the Machine Faults clock. Defaults to the clock in ms as an unsigned 32-bit int; tests inject one. */
   faultSeed?: number;
+  /** WP28: seed of the Finds clock. Defaults to the clock in ms XOR FINDS.seedSalt (unsigned 32-bit); tests inject one. */
+  findSeed?: number;
 }
 
 /**
@@ -89,7 +96,9 @@ export interface GameSessionOptions {
  * Transient machine state (WP27, not saved; SAVE_VERSION stays 2): the wind-up store (seconds of
  * output that the next manual click releases; it refills in update() and across an offline span
  * on load) and the Machine Faults clock (one per run; it moves only through stepFaults, never
- * offline, and a fresh session waits 180 eligible seconds before its first fault).
+ * offline, and a fresh session waits 180 eligible seconds before its first fault). WP28 adds the Finds clock
+ * (same contract: moves only through stepFinds, never offline; a fresh run waits 120 eligible seconds). FIELD NOTES
+ * (world.relics) are the only Find state that is saved.
  *
  * Host lifecycle (required order):
  *  1. Load the save (SaveManager.load) to obtain state, settings, stats and achievements.
@@ -106,7 +115,7 @@ export interface GameSessionOptions {
  * reset() starts a fresh game but does NOT clear storage: the host must call SaveManager.reset()
  * or save afterwards. Settings survive reset(); stats, achievements, prestige and the living-world block do not.
  * beginNewCycle() (WP14) is the in-game replay: it keeps settings, stats, achievements and prestige.
- * Its living-world block keeps only seenEver (WP23a).
+ * Its living-world block keeps only seenEver (WP23a) and the FIELD NOTES count (WP28).
  *
  * `state`, `rates`, `settings`, `stats` and `achievements` are immutable snapshots: never mutate
  * them. Each change replaces the object. Compare `revision` between frames to skip re-rendering
@@ -133,6 +142,9 @@ export class GameSession {
   private windupParams: WindupParams;
   private faultParams: FaultParams;
   private faultClock: FaultClock;
+  // WP28 transient Find clock (never saved). Params follow the tech levels; see setState.
+  private findParams: FindParams;
+  private findClock: FindClock;
   private readonly clock: () => number;
   private readonly capEra: EraCap;
   private readonly emitter = new TypedEmitter();
@@ -148,6 +160,8 @@ export class GameSession {
     this.windupParams = windupParams(this.current.techLevels, this.cachedTechs);
     this.faultParams = faultParams(this.current.techLevels, this.cachedTechs);
     this.faultClock = createFaultClock(options.faultSeed ?? (Math.floor(this.clock()) >>> 0));
+    this.findParams = findParams(this.current.techLevels, this.cachedTechs);
+    this.findClock = createFindClock(options.findSeed ?? ((Math.floor(this.clock()) ^ FINDS.seedSalt) >>> 0));
     this.currentStats = {
       ...bumpMaxRates(options.stats ?? deriveStats(this.current, this.clock()), this.cachedRates.perSecond),
       cycles: this.currentPrestige.cycle,
@@ -251,6 +265,29 @@ export class GameSession {
   }
 
   /**
+   * Finds (WP28): the Find clock's public numbers. Transient, not saved, except `relics`, the FIELD NOTES count of
+   * the world block (it survives a new cycle, not a reset). payoutSeconds is FINDS.payoutS plus the findSeconds
+   * effects, without the per-Find spread (4, 6 or 8 s per Find). alive is the clock's own object: the clock replaces
+   * it on every change and never mutates it.
+   */
+  get finds(): Readonly<{
+    unlocked: boolean; alive: FindAlive | null; nextIn: number | null; spawned: number; caught: number;
+    missed: number; relics: number; payoutSeconds: number;
+  }> {
+    const c = this.findClock;
+    return {
+      unlocked: this.findParams.unlocked,
+      alive: c.alive,
+      nextIn: c.nextIn,
+      spawned: c.spawned,
+      caught: c.caught,
+      missed: c.missed,
+      relics: this.currentWorld.relics ?? 0,
+      payoutSeconds: this.findParams.payoutSeconds,
+    };
+  }
+
+  /**
    * Manual click. A plain click first (applyClick). When wind-up is stored, the same click then releases it as a
    * second state step (releaseWindup); the two gains are summed only for the event and the return value. Emits ONE
    * 'click' (gained = ME of both steps, gainedAll = every resource of both, released = wind-up seconds, absent when
@@ -274,8 +311,7 @@ export class GameSession {
     const gained = gainedAll.me;
     this.patchStats({ clicks: this.currentStats.clicks + 1 });
     this.emitter.emit('click', released > 0 ? { gained, gainedAll, released } : { gained, gainedAll });
-    this.checkMilestones();
-    this.checkAchievements();
+    this.checkProgress();
     return gained;
   }
 
@@ -289,22 +325,41 @@ export class GameSession {
     const result = purchaseTech(this.current, id, this.cachedTechs, this.capEra);
     if (!result.ok) return result;
 
-    const previousLevel = this.current.techLevels[id];
-    this.setState(result.state);
-    this.patchStats({ purchases: this.currentStats.purchases + 1 });
-    this.emitter.emit('purchase', {
-      id,
-      level: result.newLevel,
-      cost: result.cost,
-      res: this.cachedTechs[id].costRes,
-    });
-    if (previousLevel === 0) {
-      this.emitter.emit('unlock', { id });
-    }
-    this.checkMilestones();
-    this.checkAchievements();
-    this.checkEnding();
+    this.commitPurchase(id, result.state, this.current.techLevels[id], {
+      id, level: result.newLevel, cost: result.cost, res: this.cachedTechs[id].costRes,
+    }, 1);
     return result;
+  }
+
+  /**
+   * BUY MAX (WP28 C6). Buys levels of one technology in a loop on a local state until a purchase fails or `guard`
+   * levels are bought (at least one attempt). Nothing bought: the first failure is returned, with no change and no
+   * events. Otherwise ONE state replacement, stats.purchases grows by `count`, ONE 'purchase' event carries the total
+   * cost and the final level, ONE 'unlock' when the tech started at level 0, then the milestone, achievement and
+   * finale checks. The result equals the same number of purchase() calls.
+   */
+  purchaseMax(
+    id: TechId,
+    guard = 1000,
+  ): { ok: true; state: GameState; cost: number; newLevel: number; count: number } | { ok: false; reason: PurchaseFailure } {
+    const first = purchaseTech(this.current, id, this.cachedTechs, this.capEra);
+    if (!first.ok) return first;
+
+    const previousLevel = this.current.techLevels[id];
+    let state = first.state;
+    let cost = first.cost;
+    let newLevel = first.newLevel;
+    let count = 1;
+    while (count < guard) {
+      const next = purchaseTech(state, id, this.cachedTechs, this.capEra);
+      if (!next.ok) break;
+      state = next.state;
+      cost += next.cost;
+      newLevel = next.newLevel;
+      count += 1;
+    }
+    this.commitPurchase(id, state, previousLevel, { id, level: newLevel, cost, res: this.cachedTechs[id].costRes, count }, count);
+    return { ok: true, state, cost, newLevel, count };
   }
 
   /**
@@ -341,8 +396,7 @@ export class GameSession {
       this.setState({ ...advanced, lastSimTime: t });
       if (dt > 0) this.patchStats({ activeSeconds: this.currentStats.activeSeconds + dt });
     }
-    this.checkMilestones();
-    this.checkAchievements();
+    this.checkProgress();
   }
 
   /**
@@ -364,8 +418,7 @@ export class GameSession {
       longestOfflineSeconds: Math.max(this.currentStats.longestOfflineSeconds, report.elapsedSeconds),
     });
     this.emitter.emit('offline', report);
-    this.checkMilestones();
-    this.checkAchievements();
+    this.checkProgress();
     return report;
   }
 
@@ -401,7 +454,8 @@ export class GameSession {
    * New cycle (WP14), only from a revealed run (isRevealed). Grants Echoes from this run's lifetime xf,
    * bumps the cycle, and starts a fresh run with the owned perks' start levels. Keeps settings, stats
    * (cumulative counters, max rates, achievements) and prestige. Returns false with no events otherwise.
-   * Emits 'reset' (renderers rebuild), then 'cycle', then runs the achievement check.
+   * Emits 'reset' (renderers rebuild), then 'cycle' (with splicesCut: the Splices owned before the reset), then runs
+   * the achievement check.
    */
   beginNewCycle(nowMs?: number): boolean {
     if (!isRevealed(this.current.ending)) return false;
@@ -417,16 +471,21 @@ export class GameSession {
     const bestCycleSeconds =
       cycleSeconds === null ? best : best === null ? cycleSeconds : Math.min(best, cycleSeconds);
 
+    const splicesCut = this.splicesOwned();
     this.applyPrestige(next);
     this.offlineApplied = true; // the fresh run has no offline progress to award
     this.resetMachineState();
     this.setState(clampStateToEra(newCycleState(t, next), this.capEra).state, true);
-    // Living world (WP23a): a new cycle keeps only seenEver; seen, eraMoments and youEras restart.
-    this.currentWorld = { ...normalizeWorld(undefined), seenEver: [...this.currentWorld.seenEver] };
+    // Living world (WP23a): a new cycle keeps only seenEver; seen, eraMoments and youEras restart. FIELD NOTES (WP28) stay.
+    this.currentWorld = {
+      ...normalizeWorld(undefined),
+      seenEver: [...this.currentWorld.seenEver],
+      relics: this.currentWorld.relics ?? 0,
+    };
     this.currentWorldRevision += 1;
     this.patchStats({ cycles: next.cycle, bestCycleSeconds });
     this.emitter.emit('reset', {});
-    this.emitter.emit('cycle', { cycle: next.cycle, echoesGained: gained, echoesEarned: next.echoesEarned });
+    this.emitter.emit('cycle', { cycle: next.cycle, echoesGained: gained, echoesEarned: next.echoesEarned, splicesCut });
     this.checkAchievements();
     return true;
   }
@@ -492,9 +551,10 @@ export class GameSession {
   /**
    * Stores the living-world block (WP23a) as a normalized copy. Emits nothing, does not bump `revision` and
    * triggers no save: the director persists on its own schedule and the next save writes it.
+   * FIELD NOTES (WP28): the session owns the relic count, so whatever `next` holds, the current count is kept.
    */
   recordWorld(next: WorldSaveState): void {
-    this.currentWorld = normalizeWorld(next);
+    this.currentWorld = { ...normalizeWorld(next), relics: this.currentWorld.relics ?? 0 };
     this.currentWorldRevision += 1;
   }
 
@@ -527,19 +587,14 @@ export class GameSession {
     const r = clearFaultClock(this.faultClock, this.faultParams, this.cachedRates.perSecond);
     if (alive === null || r === null) return null;
     this.faultClock = r.clock;
-    this.setState({
-      ...this.current,
-      res: addMaps(this.current.res, r.payout),
-      lifetime: addMaps(this.current.lifetime, r.payout),
-    });
+    this.credit(r.payout);
     this.emitter.emit('fault', {
       kind: 'clear',
       serial: alive.serial,
       payout: r.payout,
       overdriveSeconds: this.faultParams.overdriveSeconds,
     });
-    this.checkMilestones();
-    this.checkAchievements();
+    this.checkProgress();
     return r.payout;
   }
 
@@ -554,6 +609,60 @@ export class GameSession {
     return true;
   }
 
+  /**
+   * Finds clock (WP28 C6), called by the host once per frame. `eligible` is the host's "visible and interactive"
+   * test: when false nothing changes. dt is clamped to FINDS.maxStepS first, so one long frame can neither age a
+   * Find out nor skip the countdown. Emits 'find' (spawn or expire, seconds 0) and bumps the revision only when
+   * something happened.
+   */
+  stepFinds(dtSeconds: number, eligible: boolean): void {
+    const dt = Number.isFinite(dtSeconds) ? Math.min(dtSeconds, FINDS.maxStepS) : dtSeconds;
+    const aliveBefore = this.findClock.alive;
+    const r = stepFindClock(this.findClock, this.findParams, dt, eligible);
+    this.findClock = r.clock;
+    if (r.event === null) return;
+    // A spawn reports the new Find; an expire reports the Find that was alive before this step.
+    const find = r.event === 'spawn' ? r.clock.alive : aliveBefore;
+    if (find === null) return;
+    this.currentRevision += 1;
+    this.emitter.emit('find', {
+      kind: r.event, serial: find.serial, relic: find.relic, payout: null, noteIndex: null, seconds: 0,
+    });
+  }
+
+  /**
+   * Picks up the live Find (WP28 C6). A Find pays `seconds` of each energy with a rate (the Q6 spread: 4, 6 or 8 s,
+   * plus the findSeconds effects); a relic pays nothing and takes the next FIELD NOTE when that note's era is not
+   * later than the current era (otherwise a blank page, no count change). The payout goes through setState (res and
+   * lifetime), then one 'find' { kind: 'collect' } event, then the milestone and achievement checks. Returns null with
+   * no events when no Find is alive.
+   */
+  collectFind(): { payout: ResourceMap; relic: boolean; noteIndex: number | null; seconds: number } | null {
+    const alive = this.findClock.alive;
+    if (alive === null) return null;
+    const r = collectFindClock(this.findClock, this.findParams, this.cachedRates.perSecond);
+    if (r === null) return null;
+    this.findClock = r.clock;
+    const noteIndex = r.relic ? this.takeFieldNote() : null;
+    this.credit(r.payout);
+    this.emitter.emit('find', {
+      kind: 'collect', serial: alive.serial, relic: r.relic, payout: r.payout, noteIndex, seconds: r.seconds,
+    });
+    this.checkProgress();
+    return { payout: r.payout, relic: r.relic, noteIndex, seconds: r.seconds };
+  }
+
+  /**
+   * Debug hook only (WP28, the window.__wedtmd smoke hook; the game never calls it): makes the next eligible
+   * stepFinds spawn a Find, even before the 120 s first-Find wait. False and no change when Worn Motor is not owned
+   * or a Find is already alive.
+   */
+  debugForceFind(): boolean {
+    if (!this.findParams.unlocked || this.findClock.alive !== null) return false;
+    this.findClock = { ...this.findClock, nextIn: 0 };
+    return true;
+  }
+
   /** Subscribes to a session event. Returns an unsubscribe function. */
   on<K extends keyof SessionEvents>(type: K, fn: Listener<K>): () => void {
     return this.emitter.on(type, fn);
@@ -562,8 +671,8 @@ export class GameSession {
   /**
    * Replaces the state snapshot and bumps the revision. Rates are recomputed when the techLevels
    * object changed or `ratesChanged` is set (the tech table changed). Lifetime stats gain the positive
-   * lifetime growth of this step; max rates are raised whenever the rates are recomputed. The wind-up and
-   * fault params follow the same condition; a shrinking wind-up cap clamps the stored seconds.
+   * lifetime growth of this step; max rates are raised whenever the rates are recomputed. The wind-up, fault and
+   * Find params follow the same condition; a shrinking wind-up cap clamps the stored seconds.
    */
   private setState(next: GameState, ratesChanged = false): void {
     this.currentStats = addLifetimeDelta(this.currentStats, this.current.lifetime, next.lifetime);
@@ -572,16 +681,44 @@ export class GameSession {
       this.currentStats = bumpMaxRates(this.currentStats, this.cachedRates.perSecond);
       this.windupParams = windupParams(next.techLevels, this.cachedTechs);
       this.faultParams = faultParams(next.techLevels, this.cachedTechs);
+      this.findParams = findParams(next.techLevels, this.cachedTechs);
       this.windupStored = Math.min(this.windupStored, this.windupParams.cap);
     }
     this.current = next;
     this.currentRevision += 1;
   }
 
-  /** WP27: a fresh run starts with an empty wind-up and a fresh fault clock, seeded from the old clock's rng. */
+  /**
+   * WP27: a fresh run starts with an empty wind-up and a fresh fault clock, seeded from the old clock's rng.
+   * WP28: and a fresh Find clock (counters and eligible time restart; FIELD NOTES are not part of the clock).
+   */
   private resetMachineState(): void {
     this.windupStored = 0;
     this.faultClock = createFaultClock(this.faultClock.rng);
+    this.findClock = createFindClock(this.findClock.rng);
+  }
+
+  /**
+   * FIELD NOTES (WP28): a relic takes note n = world.relics when RELIC_NOTES[n] exists and its era is not later than
+   * the current era. Then the count goes up and the world block is replaced. Otherwise nothing changes (blank page).
+   * Returns the note index taken, or null.
+   */
+  private takeFieldNote(): number | null {
+    const n = this.currentWorld.relics ?? 0;
+    const note = RELIC_NOTES[n];
+    if (note === undefined || note.era > currentEra(this.current.techLevels)) return null;
+    this.currentWorld = { ...this.currentWorld, relics: n + 1 };
+    this.currentWorldRevision += 1;
+    return n;
+  }
+
+  /** Splices owned (level >= 1) in this run: the 'cycle' event reports them, counted before the reset (WP28). */
+  private splicesOwned(): number {
+    let owned = 0;
+    for (const id of TECH_IDS) {
+      if (this.current.techLevels[id] > 0 && isSplice(this.cachedTechs[id])) owned += 1;
+    }
+    return owned;
   }
 
   /** Replaces the prestige and rebuilds the cached tech table. Callers recompute rates via setState(_, true). */
@@ -601,6 +738,32 @@ export class GameSession {
   /** Replaces the stats snapshot with a copy that has the given fields changed. No revision bump. */
   private patchStats(patch: Partial<StatsState>): void {
     this.currentStats = { ...this.currentStats, ...patch };
+  }
+
+  /**
+   * Shared tail of every purchase (WP28): one state step, stats.purchases grows by `count`, the 'purchase' event, one
+   * 'unlock' when the tech started at level 0, then the milestone and achievement checks and the finale check.
+   */
+  private commitPurchase(id: TechId, state: GameState, previousLevel: number, event: SessionEvents['purchase'], count: number): void {
+    this.setState(state);
+    this.patchStats({ purchases: this.currentStats.purchases + count });
+    this.emitter.emit('purchase', event);
+    if (previousLevel === 0) {
+      this.emitter.emit('unlock', { id });
+    }
+    this.checkProgress();
+    this.checkEnding();
+  }
+
+  /** Pays a payout into res and lifetime in one state step (collectFind and clearFault). */
+  private credit(payout: ResourceMap): void {
+    this.setState({ ...this.current, res: addMaps(this.current.res, payout), lifetime: addMaps(this.current.lifetime, payout) });
+  }
+
+  /** The check pair every state change ends with: milestones, then achievements. */
+  private checkProgress(): void {
+    this.checkMilestones();
+    this.checkAchievements();
   }
 
   /**

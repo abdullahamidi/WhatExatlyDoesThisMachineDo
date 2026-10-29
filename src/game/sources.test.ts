@@ -27,7 +27,7 @@ describe('createDisplaySource: override floor', () => {
     const floor = visualMaxForEra(5);
     display.setOverride(floor);
     expect(display.getOverride()).toBe(floor);
-    expect(display.state.techLevels.resonantSiphon).toBe(10);
+    expect(display.state.techLevels.resonantSiphon).toBe(28);
     expect(session.state.techLevels.resonantSiphon).toBe(0);
     expect(display.state.techLevels).not.toBe(session.state.techLevels);
   });

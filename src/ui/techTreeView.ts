@@ -3,9 +3,11 @@ import { DEMO_TEXT } from '../data/demo';
 import { ERA_KEYSTONES } from '../data/eras';
 import { INSTALL_LINES } from '../data/notifications';
 import { RESOURCES } from '../data/resources';
+import { NEXT_GOAL, SPLICE_TAB, SPLICE_TEXT } from '../data/ux';
 import { RESOURCE_IDS } from '../data/types';
-import type { PurchaseFailure, ResourceId, ResourceMap, TechId, TechStatus, TechView } from '../data/types';
+import type { GameState, PurchaseFailure, ResourceId, ResourceMap, TechId, TechStatus, TechView } from '../data/types';
 import { tierLevelSuffix } from '../game/math/partTiers';
+import { isSplice } from '../simulation/progression/status';
 import { resourceShort } from './revealRules';
 
 // Pure view model for the TECH INDEX overlay. No DOM, no Phaser.
@@ -28,14 +30,26 @@ export interface TechDetailView {
   statusLabel: 'LOCKED' | 'AVAILABLE' | 'PURCHASED' | 'MAXED' | 'ACHIEVED';
   description: string; flavor: string | null; requirements: Array<{ label: string; met: boolean }>; levelText: string;
   currentEffect: string; nextEffect: string | null; costText: string | null;
-  buyState: BuyState; buyLabel: string; buyEnabled: boolean; shortfallText: string | null;
+  buyState: BuyState; buyLabel: string; buyEnabled: boolean; buyMax: boolean; shortfallText: string | null;
 }
 export interface TechTreeView { width: number; height: number; headerText: string; nodes: TechNodeView[]; edges: TechEdgeView[]; detail: TechDetailView | null }
 // affordable: buyable techs in the era (0 when unreached). ariaLabel appends the count when > 0.
 // fullGame: the era lies above the demo cap (shown as FULL GAME, never reached).
 export interface EraTabView { era: number; label: string; reached: boolean; fullGame: boolean; selected: boolean; resourceText: string; affordable: number; ariaLabel: string }
+// WP28 C9 SPLICES tab: the rows (table order), the tab after the era tabs, and the detail of one Splice (world tooltip lines).
+export interface SpliceTabView { label: 'SPLICES'; affordable: number; selected: boolean; ariaLabel: string }
+export interface SpliceRowView { id: TechId; era: number; name: string; state: 'DARK' | 'IN REACH' | 'SPLICED' | 'FULL GAME'; costText: string; effectText: string; progressText: string; affordable: boolean; ariaLabel: string }
+export interface SpliceDetailView {
+  id: TechId; title: string; costText: string; effectText: string; stateText: string; description: string;
+  requirements: Array<{ label: string; met: boolean }>; buyState: BuyState; buyLabel: string; buyEnabled: boolean;
+}
 
 const ROMAN_ERAS = ['I', 'II', 'III', 'IV', 'V'] as const;
+
+/** Splices (WP28) sit in the SPLICES tab only: every era builder works on the views without them. */
+function noSplices(views: readonly TechView[]): TechView[] {
+  return views.filter((view) => !isSplice(view.def));
+}
 
 /** Resource that marks an era: the one whose era matches, else ME. */
 function eraResourceOf(era: number): ResourceId {
@@ -121,7 +135,8 @@ export function edgePathAround(
 }
 
 /** WP20: primaryFunction when open, else the first open era keystone (table order). Open = available and not installed. Null when none. */
-export function priorityTech(views: readonly TechView[]): TechId | null {
+export function priorityTech(all: readonly TechView[]): TechId | null {
+  const views = noSplices(all);
   const open = (id: TechId): boolean =>
     views.some((view) => view.id === id && view.status === 'available' && view.level === 0);
   if (open('primaryFunction')) return 'primaryFunction';
@@ -132,7 +147,8 @@ export function priorityTech(views: readonly TechView[]): TechId | null {
  * Default selection (WP20): open keystone; else first affordable unlock; else first affordable tech;
  * else first available non-starting tech; else the crank (or the first view).
  */
-export function defaultSelection(views: readonly TechView[]): TechId {
+export function defaultSelection(all: readonly TechView[]): TechId {
+  const views = noSplices(all);
   const priority = priorityTech(views);
   if (priority) return priority;
   const affordableUnlock = views.find((view) => view.affordable && view.def.kind === 'unlock');
@@ -149,7 +165,8 @@ export function defaultSelection(views: readonly TechView[]): TechId {
  * Era header (WP20): `N RES · M RES` over the distinct costRes of the era's unlocks and repeatables,
  * in RESOURCE_IDS order. No such view: the era's own resource alone.
  */
-export function eraHeaderText(views: readonly TechView[], res: Readonly<ResourceMap>, era: number): string {
+export function eraHeaderText(all: readonly TechView[], res: Readonly<ResourceMap>, era: number): string {
+  const views = noSplices(all);
   const priced = new Set(views.filter((view) => view.def.kind === 'unlock' || view.def.kind === 'repeatable').map((view) => view.def.costRes));
   const shown = RESOURCE_IDS.filter((id) => priced.has(id));
   const ids = shown.length > 0 ? shown : [eraResourceOf(era)];
@@ -157,9 +174,9 @@ export function eraHeaderText(views: readonly TechView[], res: Readonly<Resource
 }
 
 /** Eras whose tab is open: era 1 always; era n > 1 once any of its techs is not locked. Ascending. */
-export function reachedEras(views: readonly TechView[]): number[] {
+export function reachedEras(all: readonly TechView[]): number[] {
   const eras = new Set<number>([1]);
-  for (const view of views) {
+  for (const view of noSplices(all)) {
     if (view.status !== 'locked') eras.add(view.def.era);
   }
   return [...eras].sort((a, b) => a - b);
@@ -167,10 +184,11 @@ export function reachedEras(views: readonly TechView[]): number[] {
 
 /** One tab per era present in `views` (ascending). Unreached eras show a placeholder; demo-capped eras show FULL GAME. */
 export function buildEraTabs(
-  views: readonly TechView[],
+  all: readonly TechView[],
   res: Readonly<ResourceMap>,
   selectedEra: number,
 ): EraTabView[] {
+  const views = noSplices(all);
   const reached = new Set(reachedEras(views));
   // Checked before the placeholder: a capped era is never reached, but it is not an unknown signal either.
   const fullGameEras = new Set(views.filter((view) => view.demoLocked).map((view) => view.def.era));
@@ -325,7 +343,7 @@ function buyLabelOf(state: BuyState, view: TechView, costText: string | null): s
 function detailOf(view: TechView, res: Readonly<ResourceMap>): TechDetailView {
   const costText = costTextOf(view);
   const buyState = buyStateOf(view);
-  const buyEnabled = buyState === 'buy' || buyState === 'insufficient';
+  const buyEnabled = buyEnabledOf(buyState);
   const costRes = view.def.costRes;
   // shortfall = max(0, nextCost - res[costRes]) when the buy is blocked by money
   const shortfallText = buyState === 'insufficient' && view.nextCost !== null
@@ -338,7 +356,7 @@ function detailOf(view: TechView, res: Readonly<ResourceMap>): TechDetailView {
     statusLabel: statusLabelOf(view),
     description: view.def.description,
     flavor: view.def.flavor ?? null,
-    requirements: view.requirements.map((r) => ({ label: r.label, met: r.met })),
+    requirements: requirementsOf(view),
     levelText: levelTextOf(view) + (tierLevelSuffix(view.id, view.level) ?? ''),
     currentEffect: view.currentEffectText,
     nextEffect: view.nextEffectText,
@@ -346,18 +364,131 @@ function detailOf(view: TechView, res: Readonly<ResourceMap>): TechDetailView {
     buyState,
     buyLabel: buyLabelOf(buyState, view, costText),
     buyEnabled,
+    buyMax: buyMaxAllowed(view),
     shortfallText,
+  };
+}
+
+/** BUY MAX (WP28 C9): a repeatable that is available and affordable now. Unlocks never qualify. */
+export function buyMaxAllowed(view: TechView): boolean {
+  return view.def.kind === 'repeatable' && view.status === 'available' && view.affordable;
+}
+
+/** The Splices of a view list (C9). */
+function splicesOf(views: readonly TechView[]): TechView[] {
+  return views.filter((view) => isSplice(view.def));
+}
+
+/** Price of a Splice as its row and its tooltip write it. Splices never cost xf, so the reveal does not change it. */
+function spliceCostOf(view: TechView): string {
+  return `${formatCost(view.def.baseCost)} ${resourceShort(view.def.costRes)}`;
+}
+
+/** The first lifetime requirement that is still unmet, if any. */
+function unmetLifetimeOf(view: TechView) {
+  return view.requirements.find((r) => !r.met && r.req.type === 'lifetime')?.req;
+}
+
+/** Requirement lines of a view for the detail panel. */
+function requirementsOf(view: TechView): Array<{ label: string; met: boolean }> {
+  return view.requirements.map((r) => ({ label: r.label, met: r.met }));
+}
+
+/** A buy button is enabled while the buy is open, or only the money is short (the denied flash). */
+function buyEnabledOf(state: BuyState): boolean {
+  return state === 'buy' || state === 'insufficient';
+}
+
+/** The SPLICES tab (C9): null while every Splice is locked (a demo-capped Splice counts as locked). affordable counts the buyable Splices. */
+export function buildSpliceTab(views: readonly TechView[], selected: boolean): SpliceTabView | null {
+  const splices = splicesOf(views);
+  if (!splices.some((view) => !view.demoLocked && view.status !== 'locked')) return null;
+  const affordable = splices.filter((view) => view.affordable).length;
+  const label = SPLICE_TAB.label;
+  return { label, affordable, selected, ariaLabel: affordable > 0 ? `${label}, ${affordable} ${SPLICE_TAB.affordableSuffix}` : label };
+}
+
+/** Row state (C9): SPLICED once bought, FULL GAME above the demo cap, IN REACH when its requirements are met, else DARK. */
+function spliceRowStateOf(view: TechView): SpliceRowView['state'] {
+  if (view.level >= 1) return SPLICE_TAB.spliced;
+  if (view.demoLocked) return SPLICE_TAB.fullGame;
+  return view.status === 'available' ? SPLICE_TAB.inReach : SPLICE_TAB.dark;
+}
+
+/**
+ * SPLICES rows (C9): one per Splice in table order. `lifetime` is the session's lifetime map: a DARK row shows the
+ * progress of its unmet lifetime requirement ("9.1K / 15K LIFETIME ME"); other rows show no progress.
+ */
+export function buildSpliceRows(views: readonly TechView[], lifetime: Readonly<ResourceMap>): SpliceRowView[] {
+  return splicesOf(views).map((view): SpliceRowView => {
+    const state = spliceRowStateOf(view);
+    const unmet = unmetLifetimeOf(view);
+    const progressText = state === SPLICE_TAB.dark && unmet?.type === 'lifetime'
+      ? `${formatNumber(lifetime[unmet.res])} / ${formatNumber(unmet.amount)} ${NEXT_GOAL.lifetime} ${resourceShort(unmet.res)}`
+      : '';
+    const costText = spliceCostOf(view);
+    const effectText = view.nextEffectText ?? view.currentEffectText;
+    const parts = [view.def.name, state, costText, effectText, progressText, view.affordable ? SPLICE_TAB.affordableSuffix : ''];
+    return {
+      id: view.id, era: view.def.era, name: view.def.name, state, costText, effectText, progressText, affordable: view.affordable,
+      ariaLabel: parts.filter(Boolean).join(', '),
+    };
+  });
+}
+
+/** Default SPLICES selection: the first affordable Splice, else the first in reach, else the first row. Null when there is none. */
+export function defaultSpliceSelection(views: readonly TechView[]): TechId | null {
+  const splices = splicesOf(views);
+  const pick = splices.find((view) => view.affordable) ?? splices.find((view) => view.status === 'available') ?? splices[0];
+  return pick?.id ?? null;
+}
+
+/**
+ * The four world-tooltip lines of a Splice: title, cost, effect, state. Mirrors spliceTooltip in the Splice world maths (game/math, lazy chunk),
+ * which is not imported here: that module pulls the Director-chunk world data into the app chunk. The parity test in
+ * techTreeView.test.ts pins the two to the same text.
+ */
+function spliceLinesOf(view: TechView, res: Pick<GameState, 'res' | 'lifetime'>): [string, string, string, string] {
+  const { def } = view;
+  const unmet = view.requirements.find((r) => !r.met);
+  const lifetime = unmetLifetimeOf(view);
+  let state: string;
+  if (view.level >= 1) state = SPLICE_TEXT.spliced;
+  else if (view.demoLocked) state = SPLICE_TEXT.fullGame;
+  else if (view.affordable) state = SPLICE_TEXT.click;
+  else if (view.status === 'available') {
+    const shortfall = Math.ceil(Math.max(0, def.baseCost - res.res[def.costRes]));
+    state = SPLICE_TEXT.need.replace('{n}', formatCost(shortfall)).replace('{res}', RESOURCES[def.costRes].short);
+  } else if (lifetime?.type === 'lifetime') {
+    state = SPLICE_TEXT.locked
+      .replace('{have}', formatNumber(res.lifetime[lifetime.res]))
+      .replace('{need}', formatNumber(lifetime.amount))
+      .replace('{res}', RESOURCES[lifetime.res].short);
+  } else {
+    state = SPLICE_TEXT.needsTech.replace('{name}', (unmet?.label ?? def.name).toUpperCase());
+  }
+  return [SPLICE_TEXT.title + def.name.toUpperCase(), spliceCostOf(view), view.nextEffectText ?? view.currentEffectText, state];
+}
+
+/** The detail of one Splice (C9): the world tooltip's title, cost, effect and state lines, the requirements and the buy state. */
+export function buildSpliceDetail(view: TechView, state: Pick<GameState, 'res' | 'lifetime'>): SpliceDetailView {
+  const [title, costText, effectText, stateText] = spliceLinesOf(view, state);
+  const buyState = buyStateOf(view);
+  return {
+    id: view.id, title, costText, effectText, stateText, description: view.def.description, requirements: requirementsOf(view),
+    buyState, buyLabel: buyLabelOf(buyState, view, costTextOf(view)), buyEnabled: buyEnabledOf(buyState),
   };
 }
 
 /** Full overlay view for one era: nodes, tech-requirement edges and the detail of the selection. */
 export function buildTechTreeView(
-  views: readonly TechView[],
+  all: readonly TechView[],
   res: Readonly<ResourceMap>,
   selected: TechId | null,
   era: number,
   layout: typeof TECH_TREE_LAYOUT = TECH_TREE_LAYOUT,
 ): TechTreeView {
+  const views = noSplices(all);
   // min/max col and row over the tree hints; nodes are shifted so the era's first column/row sits at 0.
   // width = 2*pad + (span+1)*w + span*gap, span = maxCol - minCol (same for rows)
   let minCol = Infinity;

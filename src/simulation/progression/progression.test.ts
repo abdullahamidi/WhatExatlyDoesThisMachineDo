@@ -6,9 +6,11 @@ import { RESOURCES } from '../../data/resources';
 import { createInitialState } from '../state';
 import { emptyResourceMap } from '../resources';
 import { isRequirementMet, requirementsMet, requirementLabel } from './requirements';
-import { describeEffect, getTechStatus, getTechView, getAllTechViews } from './status';
+import { describeEffect, getTechStatus, getTechView, getAllTechViews, isSplice } from './status';
 import { purchase } from './purchase';
 import { evaluateMilestones } from './milestones';
+import { computeRates } from '../production/rates';
+import { faultParams } from '../faults';
 
 const withLevels = (levels: Partial<Record<TechId, number>>, extra: Partial<GameState> = {}): GameState => {
   const s = createInitialState(0);
@@ -281,6 +283,19 @@ describe('describeEffect', () => {
     expect(describeEffect({ type: 'faultWindow', seconds: 4 }, 1)).toBe('Faults last +4s');
     expect(describeEffect({ type: 'overdrive', seconds: 6, factor: 2 }, 1)).toBe('Cleared faults: ×2 output for 6s');
   });
+
+  it('describes the WP28 Find effects (payout seconds and the sooner rate)', () => {
+    expect(describeEffect({ type: 'findSeconds', seconds: 1 }, 1)).toBe('Finds pay +1s');
+    expect(describeEffect({ type: 'findSeconds', seconds: 1 }, 2)).toBe('Finds pay +2s');
+    expect(describeEffect({ type: 'findRate', factor: 0.85 }, 1)).toBe('Finds come 15% sooner');
+    expect(describeEffect({ type: 'findRate', factor: 0.85 }, 2)).toBe('Finds come 28% sooner');
+  });
+
+  it('keeps the third decimal of convert rates under 0.1 (WP28 fmtFine)', () => {
+    expect(describeEffect({ type: 'convert', amount: 0.034, res: 'ee' }, 1)).toBe('Converts √(ME/s) × 0.034 into EE/s');
+    expect(describeEffect({ type: 'convert', amount: 0.0295, res: 'pr' }, 1)).toBe('Converts √(EE/s) × 0.0295 into PR/s');
+    expect(describeEffect({ type: 'convert', amount: 0.14, res: 'ee' }, 1)).toBe('Converts √(ME/s) × 0.14 into EE/s');
+  });
 });
 
 describe('purchase failures', () => {
@@ -474,5 +489,21 @@ describe('scripted two-branch run', () => {
     expect(result.unlocked).toEqual(['generatorBlueprint']);
     expect(result.state.res.me).toBe(1e6 - 8845);
     expect(result.state.lifetime.me).toBe(1e6);
+  });
+});
+
+describe('Splices (WP28)', () => {
+  it('isSplice reads the branch only', () => {
+    expect(isSplice(TECHNOLOGIES.spliceBicycle)).toBe(true);
+    expect(isSplice(TECHNOLOGIES.spliceCoinReturn)).toBe(true);
+    expect(isSplice(TECHNOLOGIES.gearRatio)).toBe(false);
+    expect(isSplice(TECHNOLOGIES.overrunClutch)).toBe(false);
+  });
+
+  it('Find effects are no-ops for the production rates and the fault clock', () => {
+    const base = createInitialState(0).techLevels;
+    const withFinds = { ...base, spliceOrgan: 2, spliceWhistle: 1, spliceKite: 1 };
+    expect(computeRates({ techLevels: withFinds })).toEqual(computeRates({ techLevels: base }));
+    expect(faultParams(withFinds)).toEqual(faultParams(base));
   });
 });

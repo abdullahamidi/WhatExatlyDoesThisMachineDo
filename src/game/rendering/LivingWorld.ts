@@ -6,28 +6,33 @@
 // Why: the cast draws what the tested maths decide (worldBehaviour, worldTransitions, worldState, worldPlacement); every sprite, shadow
 // and tracking texture is created once here and shown or hidden afterwards (WP23 D5). Numbers come from src/data. Reduced motion follows
 // STORY_BIBLE 7.7: no tracking line, no mains flicker, no ripple, no crow beat rise; the snap poses, the notices and the runners stay.
-// Rendering only: no economy state is read or written.
+// Rendering only: no economy state is read or written. WP28a r1-FixA: the crow lands and perches again after its hop (a perch offset), and
+// the girl's lantern ring (lanternRing) and Sensor 7's answer light (sensorLed) draw here.
 import Phaser from 'phaser';
 import { ASSET_MANIFEST } from '../../assets/manifest';
 import type { AssetId } from '../../assets/assetIds';
 import { AUDIO } from '../../data/audio';
 import { PALETTE } from '../../data/palette';
-import { MACHINE_ANCHOR, PIXEL_SCALE } from '../../data/world';
+import { MACHINE_ANCHOR, PIXEL_SCALE, VIEW } from '../../data/world';
 import { WORLD_DEPTH_OFFSETS, WORLD_ENV, WORLD_FRAMES, WORLD_PLAYBACK, WORLD_ROWS, WORLD_SHADOW_WIDTHS, WORLD_SHEET_KEYS } from '../../data/livingWorld';
 import type { DenizenId, GroundId, WorldPlacement, WorldRow } from '../../data/livingWorld';
 import { WORLD_ERA_ENV, WORLD_ERA_LOOPS } from '../../data/worldEras';
 import { WORLD_AMBIENT } from '../../data/worldDay';
 import { WORLD_STARE_SAFE } from '../../data/worldBehaviour';
+import type { BehaviourActor } from '../../data/worldBehaviour';
+import { CROW_HOP, POKE_RENDER, POKES } from '../../data/pokes';
 import type { CameraPose } from '../math/finale';
 import type { Ambient } from '../math/worldDay';
 import { restFlip, stareFrame } from '../math/worldBehaviour';
 import type { BehaviourFrame } from '../math/worldBehaviour';
 import { isDownbeat, sensorHead, sheetFrameIndex, shadowScale } from '../math/worldPlayback';
+import type { SensorHead } from '../math/worldPlayback';
+import { clipIndexAt, crowArcY, crowFlightFrame, crowHopSpec, crowLandFrame, sensorHeadFromPointer } from '../math/pokeRender';
+import type { HopSpan } from '../math/pokeRender';
 import { failedSyncSchedule, glancePose, glanceTimeline, talkPose, talkTimeline } from '../math/worldTurn';
 import type { GlanceTimeline, TalkTimeline } from '../math/worldTurn';
 import { stareActive } from '../math/worldTransitions';
 import type { Blend, WorldTween } from '../math/worldTransitions';
-import { screenOfWorld } from '../math/worldPlacement';
 import type { SpeakerAnchor } from '../math/worldPlacement';
 import type { CastScriptPose, WorldScriptFrame } from '../math/worldScript';
 import type { WorldVisualState } from '../math/worldState';
@@ -95,6 +100,8 @@ const CROW_HIGH_LIFT_WORLD_PX = (WORLD_ENV.crowLiftArtPx + WORLD_ERA_ENV.crowHig
 // Both are structural, not tuning.
 const ALPHA_LEVELS = 255;
 const CROSS_MIDPOINT = 0.5;
+// The crow's landing after a hop: two frames of landMs each (crowLandFrame); the hop is over after them.
+const HOP_LAND_MS = 2 * CROW_HOP.landMs;
 
 /**
  * A snap-turn to camera. talk runs open until release (tl holds the bubble window, blips the mouth alternation of the line);
@@ -179,9 +186,9 @@ interface Sensor {
   ledColor: number;
   ledFrame: string;                            // sensorRows frame of the LED: red, amber, dark or green (the film)
   ledAlpha: number;                            // sensorRows alpha: 1, or the dim factor while the reading dip runs
-  followTarget: string;                        // the camera side the head is heading for (the Sensor 7 lag)
+  followTarget: SensorHead;                        // the camera side the head is heading for (the Sensor 7 lag)
   followSince: number;                         // nowMs when followTarget last changed
-  followShown: string;                         // the head frame on screen
+  followShown: SensorHead;                         // the head frame on screen
   placement: WorldPlacement | null;
   visible: boolean;
   feetX: number;
@@ -234,13 +241,20 @@ function frameOf(id: LivingId): { width: number; height: number } {
   return entry.frame;
 }
 
-// Head and feet of a sprite whose origin is its feet (feetX, feetY in world px) and whose frame is frameHeightWorld tall, in game px.
-// The head point sits HEAD_ANCHOR_WORLD_PX below the frame top; every speaker uses the same offset.
-function speakerAnchor(feetX: number, feetY: number, frameHeightWorld: number, cam: CameraPose): SpeakerAnchor {
-  return {
-    head: screenOfWorld({ x: feetX, y: feetY - frameHeightWorld + HEAD_ANCHOR_WORLD_PX }, 1, cam),
-    feet: screenOfWorld({ x: feetX, y: feetY }, 1, cam),
-  };
+// Game px of a world x or y on the cast's layer (scroll factor 1): screenOfWorld's maths, without its allocation (anchorInto).
+function screenX(x: number, cam: CameraPose): number {
+  return (x - (cam.centerX - VIEW.width / 2) - VIEW.width / 2) * cam.zoom + VIEW.width / 2;
+}
+function screenY(y: number, cam: CameraPose): number {
+  return (y - (cam.centerY - VIEW.height / 2) - VIEW.height / 2) * cam.zoom + VIEW.height / 2;
+}
+// Head and feet of a sprite whose origin is its feet (feetX, feetY in world px) and whose frame is frameHeightWorld tall, written in game px
+// into out. The head point sits HEAD_ANCHOR_WORLD_PX below the frame top; every speaker uses the same offset.
+function writeSpeakerAnchor(out: SpeakerAnchor, feetX: number, feetY: number, frameHeightWorld: number, cam: CameraPose): void {
+  out.head.x = screenX(feetX, cam);
+  out.head.y = screenY(feetY - frameHeightWorld + HEAD_ANCHOR_WORLD_PX, cam);
+  out.feet.x = screenX(feetX, cam);
+  out.feet.y = screenY(feetY, cam);
 }
 
 function shadowKey(width: number): string {
@@ -400,6 +414,20 @@ function blankExtraPose(): ExtraPose {
 }
 
 /**
+ * A poke overlay (overlay): one timed clip drawn over a walker's runner frame. playedMs advances only while the runner is not walking (the walk
+ * read at the last frame), so the clip waits for a walk segment to end. The clip ends at totalMs (at most POKES.maxAnswerMs).
+ */
+interface Overlay { active: boolean; frames: readonly string[]; frameMs: readonly number[]; totalMs: number; playedMs: number; lastMs: number; walking: boolean }
+/**
+ * The crow's hop (crowHop): the arc from (fromX, fromY) to (toX, toY), starting at startMs and lasting durMs, then the landing frames at the
+ * destination. set holds the crow there until the next hop; x and y are the feet point last drawn.
+ */
+interface CrowHop { set: boolean; fromX: number; fromY: number; toX: number; toY: number; apexPx: number; startMs: number; durMs: number; reversed: boolean; x: number; y: number }
+function blankOverlay(): Overlay {
+  return { active: false, frames: [], frameMs: [], totalMs: 0, playedMs: 0, lastMs: 0, walking: false };
+}
+
+/**
  * The living world cast. Built once per scene: every sprite, shadow and texture exists from the constructor on and is shown or
  * hidden afterwards. apply() takes the visual state and the placements; update() draws the poses from the runner frames.
  */
@@ -439,6 +467,24 @@ export class LivingWorld {
   private risePending = false;        // era IV ripple: the walkers rise on the next downbeat
   private riseUntilMs = Number.NEGATIVE_INFINITY;
   private shadowShiftUntilMs = Number.NEGATIVE_INFINITY;
+  private pointerX: number | null = null;                 // the pointer's world x (Sensor 7 follows it); null off the canvas
+  private pointerMovedMs = Number.NEGATIVE_INFINITY;      // when the pointer last moved
+  private pointerHead: SensorHead = 'headC';              // the head the pointer rule shows
+  private pointerHeadMs = Number.NEGATIVE_INFINITY;       // when pointerHead last changed
+  private readonly overlays: Record<WalkerId, Overlay> = { inspector: blankOverlay(), dog: blankOverlay(), crow: blankOverlay(), girl: blankOverlay() };
+  private readonly hop: CrowHop = { set: false, fromX: 0, fromY: 0, toX: 0, toY: 0, apexPx: 0, startMs: 0, durMs: 0, reversed: false, x: 0, y: 0 };
+  // The crow's perch offset (WP28a r1-FixA): where its last hop landed, from its placement x and its normal feet y. dx and dy are zero while off.
+  private readonly perch = { on: false, dx: 0, dy: 0 };
+  // The crow's placement at the last apply (null while hidden): a change of its x or row snaps its hop and perch offset home.
+  private crowSeen: WorldPlacement | null = null;
+  private readonly crowAt: { x: number; y: number } = { x: 0, y: 0 };
+  // The lantern ring (lanternRing): one pooled Graphics in the girl's row, its span start and length (span 0: none), and that row.
+  private readonly lantern: Phaser.GameObjects.Graphics;
+  private lanternRow: WorldRow = 'back';
+  private lanternStartMs = 0;
+  private lanternSpanMs = 0;
+  // Sensor 7's answer lights (sensorLed): the time the solid red and the glint amber hold until.
+  private readonly ledUntil = { solid: Number.NEGATIVE_INFINITY, glint: Number.NEGATIVE_INFINITY };
   // The extras' host poses: one record per walker, rewritten by extraPoseOf each frame (CastExtras reads the latest pose of a host).
   private readonly extraPoses: Record<WalkerId, ExtraPose> = {
     inspector: blankExtraPose(), dog: blankExtraPose(), crow: blankExtraPose(), girl: blankExtraPose(),
@@ -477,6 +523,9 @@ export class LivingWorld {
     this.dog = this.makeWalker('dog', 'front', WORLD_ROWS.front.y, WORLD_DEPTH_OFFSETS.cast, WORLD_SHADOW_WIDTHS[1]);
     this.crow = this.makeWalker('crow', 'back', WORLD_ROWS.back.y - WORLD_ERA_ENV.crowPerchLiftArtPx * PIXEL_SCALE, WORLD_DEPTH_OFFSETS.crow, null);
     this.girl = this.makeWalker('girl', 'back', WORLD_ROWS.back.y, WORLD_DEPTH_OFFSETS.cast, WORLD_SHADOW_WIDTHS[0]);
+    this.lantern = this.track(this.scene.add.graphics());
+    this.lantern.setDepth(WORLD_DEPTH_OFFSETS.cast + POKE_RENDER.lantern.depthStep).setVisible(false);
+    this.rowOf('back').add(this.lantern);
     this.sensor = this.makeSensor(rows.back, WORLD_ROWS.back.y);
     this.extras = new CastExtras(scene, rows);
   }
@@ -484,6 +533,11 @@ export class LivingWorld {
   /** Takes the visual state and where each member stands. A null placement (or state.visible false) hides that member. */
   apply(state: WorldVisualState, placements: Readonly<Record<GroundId, WorldPlacement | null>>, opts: { reducedMotion: boolean }): void {
     if (this.destroyed) return;
+    // A framing or era change moves the crow, so its hop and perch offset (from the old placement) snap home; so does reduced motion turning on.
+    const crow = state.visible ? placements.crow : null;
+    if (this.crowSeen?.x !== crow?.x || this.crowSeen?.row !== crow?.row) this.crowSnapHome();
+    this.crowSeen = crow;
+    if (opts.reducedMotion && !this.reduced) this.crowSnapHome();
     this.state = state;
     this.placements = placements;
     this.reduced = opts.reducedMotion;
@@ -504,6 +558,10 @@ export class LivingWorld {
     if (!wasFilm && !isFilm) return;
     this.script = frame;
     this.extras.setScript(frame);
+    if (isFilm) {
+      this.dropOverlays();
+      this.crowSnapHome();
+    }
     // Only a switch re-applies the placed members; a film frame to the next frame draws in update() alone.
     if (wasFilm !== isFilm) this.applyAll();
   }
@@ -595,6 +653,7 @@ export class LivingWorld {
       this.drawWalker(this.crow, nowMs, frames.crow, state, flicker, tween, ambient);
       this.drawWalker(this.girl, nowMs, frames.girl, state, flicker, tween, ambient);
       this.drawSensor(nowMs, cam, state, flicker, tween, ambient);
+      this.drawLantern(nowMs);
     }
     this.extras.update(dtMs, nowMs, this.extraPoseOf);
     this.nudgeId = null;
@@ -663,6 +722,17 @@ export class LivingWorld {
     if (turn.tl.bubbleHideAtMs === Number.POSITIVE_INFINITY) turn.tl.bubbleHideAtMs = now - turn.snapMs;
   }
 
+  /**
+   * Ends a running glance turn now (WP28a r3): a poke answer starts on its actor, so the answer is the frame drawn and no glance pose
+   * outlives the cut (the glance turn would otherwise run to its own endMs). Talk turns are untouched (release() ends those); Sensor 7
+   * answers with its own turnToCamera, so it has nothing to cut.
+   */
+  cutTurn(id: LivingId): void {
+    if (id === 'sensor7') return;
+    const turn = this.walkerOf(id).turn;
+    if (turn !== null && turn.kind === 'glance') turn.endMs = this.nowMs;
+  }
+
   /** The wornMotor failed sync: each visible member in failedSyncOrder shows its glance or head pose, failMs, one after another. */
   failedSync(): void {
     const state = this.state;
@@ -700,6 +770,26 @@ export class LivingWorld {
   }
 
   /**
+   * The ground girl's answer to a poke (WP28a): a lantern ring over her lantern for ms. She does not move. Under reduced motion the ring is steady
+   * for min(ms, POKE_RENDER.lantern.reducedMs). Nothing shows while she is hidden; a film or dropOverlays drops it.
+   */
+  lanternRing(ms: number): void {
+    const span = this.reduced ? Math.min(ms, POKE_RENDER.lantern.reducedMs) : ms;
+    if (this.destroyed || !Number.isFinite(span) || span <= 0) return;
+    this.lanternStartMs = this.nowMs;
+    this.lanternSpanMs = span;
+  }
+
+  /**
+   * Sensor 7's answer light (WP28a): 'glint' shows the amber LED frame at full alpha for ms; 'solid' shows the red frame at full alpha for ms and
+   * holds the blink schedule off meanwhile. Only the red and amber frames (never green: no green before the finale).
+   */
+  sensorLed(kind: 'solid' | 'glint', ms: number): void {
+    if (this.destroyed || !Number.isFinite(ms) || ms <= 0) return;
+    this.ledUntil[kind] = this.nowMs + ms;
+  }
+
+  /**
    * Tier-up world ripple, never under reduced motion. Eras I-II: the crow or the dog nudges one frame. Era III: every walker gusts
    * one frame. Era IV: every walker rises on the next downbeat. Era V: the shadows slide toward the machine (only with shadows).
    */
@@ -715,18 +805,136 @@ export class LivingWorld {
     }
   }
 
+  /**
+   * A poke answer (T15b1): draws clip over the runner frame of actor until it ends (at most POKES.maxAnswerMs). Every frame takes its facing from
+   * restFlip at the actor's x (a clip has no flip field). A clip waits while the runner walks (never a still frame on a moving x); the runner keeps
+   * running underneath. Reduced motion holds the first frame for at most POKES.reducedHoldMs. A clip with no frames, or a frame off the actor's
+   * sheet, is refused.
+   */
+  overlay(actor: BehaviourActor, clip: { readonly frames: readonly string[]; readonly frameMs: readonly number[] }, nowMs: number): void {
+    if (this.destroyed || clip.frames.length === 0 || clip.frames.length !== clip.frameMs.length) return;
+    if (!clip.frames.every((frame) => sheetHas(actor, frame))) return;
+    const sum = clip.frameMs.reduce((acc, ms) => acc + Math.max(0, ms), 0);
+    const ov = this.overlays[actor];
+    const reduced = this.reduced;
+    ov.frames = reduced ? clip.frames.slice(0, 1) : clip.frames;
+    ov.frameMs = reduced ? [Math.min(POKES.reducedHoldMs, sum)] : clip.frameMs;
+    ov.totalMs = Math.min(reduced ? POKES.reducedHoldMs : POKES.maxAnswerMs, sum);
+    ov.active = ov.totalMs > 0;
+    ov.playedMs = 0;
+    ov.lastMs = nowMs;
+    ov.walking = this.walkerOf(actor).run.walking;
+  }
+
+  /** Whether an overlay is playing, or waiting for a walk segment to end, on actor. */
+  overlayActive(actor: BehaviourActor): boolean {
+    return this.overlays[actor].active;
+  }
+
+  /** Drops every overlay now (the director does it while the ending is not 'none'; the finale film drops them too). */
+  dropOverlays(): void {
+    this.overlays.inspector.active = false;
+    this.overlays.dog.active = false;
+    this.overlays.crow.active = false;
+    this.overlays.girl.active = false;
+    // The poke answers' lights go with them: the lantern ring and Sensor 7's answer lights.
+    this.lanternSpanMs = 0;
+    writeVisible(this.lantern, false);
+    this.ledUntil.solid = this.ledUntil.glint = Number.NEGATIVE_INFINITY;
+  }
+
+  /**
+   * Starts a crow hop from one perch feet point to another (T15b1, C3): the arc of crowHopSpec (one wing, at most CROW_HOP.maxDistPx, never over
+   * machine, the framing's visible x-range, and above the dog's head box), the flight frames flipped toward the travel direction, then the landing
+   * frames unflipped at the destination. Returns false, and starts nothing, under reduced motion, while the crow is hidden, or when the hop is
+   * refused. The crow holds the destination until the next hop.
+   */
+  crowHop(from: { readonly x: number; readonly y: number }, to: { readonly x: number; readonly y: number }, nowMs: number, reversed: boolean,
+    machine: HopSpan): boolean {
+    if (this.destroyed || this.reduced || this.crow.placement === null) return false;
+    const dog = this.dog;
+    const dogFrame = frameOf('dog');
+    const halfW = dogFrame.width * PIXEL_SCALE / 2;
+    const box = dog.visible ? { x0: dog.feetX - halfW, x1: dog.feetX + halfW, top: dog.feetY - dogFrame.height * PIXEL_SCALE } : null;
+    const spec = crowHopSpec(from.x, from.y, to.x, to.y, machine, box);
+    if (spec === null) return false;
+    const hop = this.hop;
+    hop.set = true;
+    hop.fromX = from.x;
+    hop.fromY = from.y;
+    hop.toX = to.x;
+    hop.toY = to.y;
+    hop.apexPx = spec.apexPx;
+    hop.startMs = nowMs;
+    hop.durMs = spec.durMs;
+    hop.reversed = reversed;
+    hop.x = from.x;
+    hop.y = from.y;
+    return true;
+  }
+
+  /** Clears the crow's hop and perch offset at once, no animation: the crow draws on its placement until its next hop. */
+  crowSnapHome(): void {
+    this.hop.set = false;
+    this.perch.on = false;
+    this.perch.dx = 0;
+    this.perch.dy = 0;
+    this.crow.anchorY = this.crow.feetY;
+  }
+
+  /**
+   * The crow's feet point: the hop's current point while a hop is in flight or landing, the perch point (placement x + dx, feet y + dy) while
+   * a perch offset holds, else null. The object is reused: read it at once.
+   */
+  crowPos(): { readonly x: number; readonly y: number } | null {
+    if (this.hop.set) {
+      this.crowAt.x = this.hop.x;
+      this.crowAt.y = this.hop.y;
+      return this.crowAt;
+    }
+    const placement = this.crow.placement;
+    if (!this.perch.on || placement === null) return null;
+    this.crowAt.x = placement.x + this.perch.dx;
+    this.crowAt.y = this.crow.feetY + this.perch.dy;
+    return this.crowAt;
+  }
+
+  /** The pointer over the canvas (Sensor 7 follows it): worldX is its world x (null off the canvas), movedAtMs when it last moved. */
+  setPointer(worldX: number | null, movedAtMs: number): void {
+    this.pointerX = worldX;
+    this.pointerMovedMs = movedAtMs;
+  }
+
   /** Head and feet of a speaker in game px, Sensor 7 included, or null while it is hidden. */
   anchor(id: LivingId, cam: CameraPose): SpeakerAnchor | null {
+    const out: SpeakerAnchor = { head: { x: 0, y: 0 }, feet: { x: 0, y: 0 } };
+    return this.anchorInto(id, cam, out) ? out : null;
+  }
+
+  /**
+   * anchor() written into out, allocating nothing: true with out set, or false with out untouched while the member is hidden. The crow's feet are
+   * its hop point in flight, its perch point (placement x + dx, feet y + dy) while a perch offset holds, else its placement x: the crowStutter dx
+   * and the ripple nudge never move it (AD2e F23).
+   */
+  anchorInto(id: LivingId, cam: CameraPose, out: SpeakerAnchor): boolean {
     if (id === 'sensor7') {
       const s = this.sensor;
-      if (!s.visible) return null;
-      return speakerAnchor(s.feetX, s.feetY, frameOf('sensor7').height * PIXEL_SCALE, cam);
+      if (!s.visible) return false;
+      writeSpeakerAnchor(out, s.feetX, s.feetY, frameOf('sensor7').height * PIXEL_SCALE, cam);
+      return true;
     }
     const w = this.walkerOf(id);
-    if (!w.visible) return null;
-    // The crowStutter dx and the ripple nudge must not move the crow's head reserve or its own tail (AD2e F23): anchor on the placement x.
-    const x = id === 'crow' && w.placement !== null ? w.placement.x : w.feetX;
-    return speakerAnchor(x, w.anchorY, frameOf(id).height * PIXEL_SCALE, cam);
+    if (!w.visible) return false;
+    let x = w.feetX;
+    let y = w.anchorY;
+    if (id === 'crow' && this.hop.set) {
+      x = this.hop.x;
+      y = this.hop.y;
+    } else if (id === 'crow' && w.placement !== null) {
+      x = w.placement.x + this.perch.dx;   // dx is zero while no perch offset holds
+    }
+    writeSpeakerAnchor(out, x, y, frameOf(id).height * PIXEL_SCALE, cam);
+    return true;
   }
 
   /**
@@ -764,6 +972,8 @@ export class LivingWorld {
   /** Hides every member and every extra until the next apply(). */
   hideAll(): void {
     this.forceHidden = true;
+    this.crowSnapHome();
+    this.dropOverlays();
     this.applyWalker(this.inspector, null, null);
     this.applyWalker(this.dog, null, null);
     this.applyWalker(this.crow, null, null);
@@ -859,7 +1069,7 @@ export class LivingWorld {
     row.add(led);
     return {
       feetY, dots, tripod, tripodBlend, head, headBlend, glyph, glyphBlend, fog, led, ledColor, ledFrame: 'red', ledAlpha: 1,
-      followTarget: POSE_FRAMES.sensor7.front, followSince: Number.NEGATIVE_INFINITY, followShown: POSE_FRAMES.sensor7.front,
+      followTarget: 'headC', followSince: Number.NEGATIVE_INFINITY, followShown: 'headC',
       placement: null, visible: false, feetX: 0,
       frame: POSE_FRAMES.sensor7.front, turn: null, blinkStart: null, talking: false,
       memo: {
@@ -1002,6 +1212,56 @@ export class LivingWorld {
 
   // ---- update ----
 
+  // The overlay frame of a walker this frame, or null when none shows. The clock runs only while the runner is not walking (the walk read at the
+  // last frame): a walk holds the clip, so a still frame never shows on a moving x. The clip ends after its frames (or its totalMs).
+  private overlayFrame(w: Walker, now: number, stared: boolean): string | null {
+    const ov = this.overlays[w.id];
+    if (!ov.active) return null;
+    if (!ov.walking) ov.playedMs += Math.max(0, now - ov.lastMs);
+    ov.lastMs = now;
+    ov.walking = w.run.walking;
+    if (ov.playedMs >= ov.totalMs) {
+      ov.active = false;
+      return null;
+    }
+    if (w.run.walking) return null;
+    const frame = ov.frames[clipIndexAt(ov.frameMs, ov.playedMs)];
+    return frame === undefined ? null : stareFrame(w.id, frame, false, stared);
+  }
+
+  // The crow in its hop or perched after one (crowHop): the flight frames face the travel direction (the one facing exemption, C3); the landing
+  // frames take the stare map and never flip. The body keeps the alpha and the era twin of a runner frame.
+  private drawCrowHop(w: Walker, now: number, placement: WorldPlacement, state: WorldVisualState, tween: WorldTween, flicker: number): void {
+    const hop = this.hop;
+    const t = now - hop.startMs;
+    let frame: string;
+    let flip = false;
+    let x = hop.toX;
+    let y = hop.toY;
+    if (t < hop.durMs) {
+      const p = Math.min(1, Math.max(0, t / hop.durMs));
+      frame = crowFlightFrame(t, hop.reversed);
+      flip = hop.toX < hop.fromX;
+      x = hop.fromX + (hop.toX - hop.fromX) * p;
+      y = crowArcY(hop.fromY, hop.toY, hop.apexPx, p);
+    } else {
+      frame = stareFrame('crow', crowLandFrame(t - hop.durMs, hop.reversed), false, stareActive('crow', state.stare, tween.stareK));
+    }
+    hop.x = x;
+    hop.y = y;
+    const key = this.keyOf('crow', this.trackOn(w.turn, now));
+    w.dx = x - placement.x;
+    w.frame = frame;
+    w.flip = flip;
+    w.feetX = x;
+    const alpha = tween.alpha * flicker;
+    paintFrame(w.body, key, 'crow', frame, this.eraCross.main, w.memo.body);
+    writeFlip(w.body, flip);
+    writePosition(w.body, x, y);
+    writeAlpha(w.body, alpha);
+    this.eraTwin(w, key, frame, flip, y, alpha);
+  }
+
   // Walker draw (not the film), in priority: snapAll, the beat, the turn, the lying dog, the crow's cycle 2+ tipTry high pose, then the
   // runner frame. The runner frame sets the pose, the mirror, the alpha, the rise and the x. While the member is busy the runner is
   // paused by the director and the x holds (R5); a null, parked or off-sheet frame holds the last runner frame and x. The girl is
@@ -1022,6 +1282,18 @@ export class LivingWorld {
     }
     if (!w.visible) this.showWalker(w);
     this.placeInRow(w, w.home);
+    if (w.id === 'crow' && this.hop.set) {
+      if (now - this.hop.startMs < this.hop.durMs + HOP_LAND_MS) {
+        this.drawCrowHop(w, now, placement, state, tween, flicker);
+        return;
+      }
+      // Landed: the perch offset is the landing point from the placement x and the normal feet y (read before any offset), and the runner
+      // draws the crow again from this frame (ruffle, peck, caw, unison and the poke overlays).
+      this.hop.set = false;
+      this.perch.on = true;
+      this.perch.dx = this.hop.toX - placement.x;
+      this.perch.dy = this.hop.toY - w.feetY;
+    }
     if (w.turn !== null && !turnActive(w.turn, now)) w.turn = null;
     if (w.beat !== null && now >= w.beat.endMs) w.beat = null;
     const held = this.busy(w.id);
@@ -1048,8 +1320,13 @@ export class LivingWorld {
     let frame: string;
     let flip = false;
     let tipHigh = false;  // the crow's cycle 2+ tipTry shows the high pose: bobOf lifts the body for it (WP27 F5.4)
+    const overlay = this.overlayFrame(w, now, stared);
     if (this.snapped) {
       frame = names.front;
+    } else if (overlay !== null) {
+      // A poke overlay faces restFlip at the actor's x (C3: the crow and the girl never flip).
+      frame = overlay;
+      flip = restFlip(w.id, frame, stared, x);
     } else if (beat !== null && beatName !== null) {
       frame = beatName;
       flip = beat.flip;
@@ -1068,11 +1345,14 @@ export class LivingWorld {
       flip = w.look.mirror;
     }
     const nudge = this.gust || this.nudgeId === w.id ? RIPPLE_NUDGE_WORLD_PX : 0;
+    // The landed crow's perch offset (zero for the other walkers and while none holds): its x and its feet y follow it.
+    const perchDx = w.id === 'crow' ? this.perch.dx : 0;
+    const perchDy = w.id === 'crow' ? this.perch.dy : 0;
     w.dx = x - placement.x;
     w.frame = frame;
     w.flip = flip;
-    w.feetX = x + nudge;
-    w.anchorY = w.feetY;
+    w.feetX = x + perchDx + nudge;
+    w.anchorY = w.feetY + perchDy;
     // The Inspector's tracking hitch (era II micro): its tracking-line texture for this frame, never under reduced motion.
     const hitch = w.id === 'inspector' && ambient.micro.hitch && !this.reduced;
     const key = this.keyOf(w.id, hitch || this.trackOn(w.turn, now));
@@ -1080,7 +1360,7 @@ export class LivingWorld {
     const bare = lying;
     const alpha = bare ? 1 : w.run.alpha;
     const rise = bare ? 0 : w.run.rise;
-    const bodyY = w.feetY - this.bobOf(w, state, now, rise, tipHigh);
+    const bodyY = w.feetY + perchDy - this.bobOf(w, state, now, rise, tipHigh);
     const bodyAlpha = tween.alpha * flicker * alpha;
     paintFrame(w.body, key, w.id, frame, this.eraCross.main, w.memo.body);
     writeFlip(w.body, flip);
@@ -1089,7 +1369,7 @@ export class LivingWorld {
     this.eraTwin(w, key, frame, flip, bodyY, bodyAlpha);
     if (w.shadow !== null) {
       const shadowAlpha = WORLD_PLAYBACK.shadowAlpha * tween.shadowScale * tween.shadows;
-      writePosition(w.shadow, w.feetX + ambient.shadowDx + this.shadowShiftOf(w, now), w.feetY);
+      writePosition(w.shadow, w.feetX + ambient.shadowDx + this.shadowShiftOf(w, now), w.feetY + perchDy);
       writeAlpha(w.shadow, shadowAlpha);
       writeVisible(w.shadow, shadowAlpha > 0);
       setShadowWidth(w.shadow, ambient.shadowWidth);
@@ -1175,6 +1455,28 @@ export class LivingWorld {
     }
   }
 
+  // The girl's lantern ring for this frame (lanternRing): drawn while its span runs and she is shown, in her row just above her body. Reduced
+  // motion draws the steady ring; otherwise it grows from r0 to r1 and fades from the peak alpha to 0 over the span.
+  private drawLantern(now: number): void {
+    const girl = this.girl;
+    const ring = this.lantern;
+    const t = now - this.lanternStartMs;
+    const on = girl.visible && t >= 0 && t < this.lanternSpanMs;
+    writeVisible(ring, on);
+    if (!on) return;
+    if (girl.row !== this.lanternRow) {
+      this.lanternRow = girl.row;
+      this.rowOf(girl.row).add(ring);
+      ring.setDepth(girl.body.depth + POKE_RENDER.lantern.depthStep);
+      sortWorldRows(this.rows);
+    }
+    const p = this.reduced ? 0 : clamp01(t / this.lanternSpanMs);
+    const lan = POKE_RENDER.lantern;
+    ring.clear();
+    ring.lineStyle(lan.width, lan.color, this.reduced ? lan.reducedAlpha : lan.alpha * (1 - p));
+    ring.strokeCircle(girl.feetX + lan.dx, girl.feetY + lan.dy, this.reduced ? lan.reducedR : lan.r0 + (lan.r1 - lan.r0) * p);
+  }
+
   // Sensor 7 draw. The head shows the camera side through the follow lag (followHead); the era crossfade runs on the head and the tripod
   // (their twins at alpha k); the readout keeps the from row under its twin, which fades the to row in; the lens fog takes the to row at the
   // midpoint with its alpha through 0 there; the foot dots are the shadow.
@@ -1206,7 +1508,14 @@ export class LivingWorld {
     else if (pose !== null) head = pose.frame;
     else if (turnName !== null) head = turnName;
     else if (blinkRunning(s.blinkStart, now)) head = POSE_FRAMES.sensor7.front;
-    else head = follow;
+    else {
+      const next = sensorHeadFromPointer(this.pointerX, this.pointerMovedMs, now, placement.x, follow, this.pointerHead, this.pointerHeadMs);
+      if (next !== this.pointerHead) {
+        this.pointerHead = next;
+        this.pointerHeadMs = now;
+      }
+      head = next;
+    }
     s.frame = head;
     const key = this.keyOf('sensor7', this.trackOn(s.turn, now));
     const alpha = pose === null ? tween.alpha * flicker : pose.alpha;
@@ -1290,7 +1599,7 @@ export class LivingWorld {
 
   // The Sensor 7 head's camera side through the lag: the target changes at once in the state, the shown frame only once the target has
   // been stable for WORLD_AMBIENT.sensorLagMs (reduced motion snaps).
-  private followHead(s: Sensor, sensorX: number, cam: CameraPose, now: number): string {
+  private followHead(s: Sensor, sensorX: number, cam: CameraPose, now: number): SensorHead {
     const target = sensorHead(sensorX, cam.centerX);
     if (target !== s.followTarget) {
       s.followTarget = target;
@@ -1304,6 +1613,13 @@ export class LivingWorld {
   // the downbeat pulse runs; else the presented red-to-amber crossfade (tween.led); dimmed to a mix with LED_DIM while the reading dip
   // runs (never off; the row alpha is the dim factor).
   private ledStateColour(s: Sensor, state: WorldVisualState, ambient: Ambient, tween: WorldTween, now: number): number {
+    // Sensor 7's answer lights (sensorLed, WP28a) hold over the state: the solid red one (the blink schedule is off meanwhile), then the glint amber.
+    if (now < this.ledUntil.solid || now < this.ledUntil.glint) {
+      const solid = now < this.ledUntil.solid;
+      s.ledFrame = solid ? 'red' : 'amber';
+      s.ledAlpha = 1;
+      return solid ? WORLD_ENV.sensor7.ledColors.red : WORLD_ENV.sensor7.ledColors.amber;
+    }
     const low = this.heartbeatLow(now);
     if (ambient.micro.ledBlink || blinkDark(s.blinkStart, now) || low || (state.sensor.pulse && this.beatNow)) {
       s.ledFrame = 'dark';

@@ -125,7 +125,7 @@ function kindOfLine(line: WorldLine): OfferKind {
   return line.trigger.kind;
 }
 
-// Level gate of a buy line (INS-12 plays at horizonField 5): the bought level reaches minLevel (default 1) and equals level when set.
+// Level gate of a buy line (INS-12 plays at horizonField 9): the bought level reaches minLevel (default 1) and equals level when set.
 function levelGateOk(trig: { techId: TechId; minLevel?: number; level?: number }, ctx: WorldSchedulerCtx): boolean {
   const level = ctx.levels[trig.techId] ?? 0;
   return level >= (trig.minLevel ?? 1) && (trig.level === undefined || level === trig.level);

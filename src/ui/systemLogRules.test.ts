@@ -1,11 +1,11 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { nextSystemLog, seedTracker, systemLogMessage } from './systemLogRules';
+import { cutLogMessage, gapOpen, markShown, nextSystemLog, seedTracker, systemLogMessage } from './systemLogRules';
 import type { SystemLogTracker } from './systemLogRules';
 import { INSTALL_LINES, FIRST_CLICK_MESSAGE } from '../data/notifications';
-import { SYSTEM_LOGS, SYSTEM_LOG_CONFIG } from '../data/systemLogs';
+import { SYSTEM_LOGS, SYSTEM_LOG_CONFIG, SYSTEM_LOG_CUT } from '../data/systemLogs';
 import type { SystemLogEntry } from '../data/systemLogs';
 import { TECH_IDS } from '../data/types';
-import type { ResourceMap } from '../data/types';
+import type { GameState, ResourceMap } from '../data/types';
 import { GameSession, createInitialState } from '../simulation';
 import { connectSystemLog } from './systemLog';
 import type { SystemLogHooks } from './systemLog';
@@ -234,6 +234,42 @@ describe('systemLogMessage', () => {
   });
 });
 
+// WP28 Splice cut line: the message, the tracker move and the gap rule (pure).
+describe('cutLogMessage and markShown (WP28)', () => {
+  it('is a SYS LOG system line with the cut text and its own key', () => {
+    expect(cutLogMessage(3)).toEqual({
+      key: 'log:splice-cut',
+      title: 'SYS LOG',
+      body: 'Lines cut: 3. Objects dark again.',
+      tone: 'system',
+      durationMs: SYSTEM_LOG_CONFIG.durationMs,
+    });
+    expect(cutLogMessage(3).body).toBe(SYSTEM_LOG_CUT.text.replace('{n}', '3'));
+  });
+
+  it('replaces every {n} and keeps the count as written', () => {
+    expect(cutLogMessage(1).body).toBe('Lines cut: 1. Objects dark again.');
+    expect(cutLogMessage(12).body).toBe('Lines cut: 12. Objects dark again.');
+  });
+
+  it('markShown moves lastShownAt, keeps the shown set and does not mutate its input', () => {
+    const t = seedTracker(logState(T0), T0);
+    const before = [...t.shown];
+    const moved = markShown(t, T0 + 5000);
+    expect(moved.lastShownAt).toBe(T0 + 5000);
+    expect([...moved.shown]).toEqual(before);
+    expect(t.lastShownAt).toBe(T0);
+  });
+
+  it('gapOpen follows the same minimum gap as nextSystemLog', () => {
+    const t = seedTracker(logState(T0), T0);
+    const gap = SYSTEM_LOG_CONFIG.minGapMs;
+    expect(gapOpen(t, T0 + gap - 1)).toBe(false);
+    expect(gapOpen(t, T0 + gap)).toBe(true);
+    expect(gapOpen(t, T0 + 10, 10)).toBe(true);
+  });
+});
+
 // connectSystemLog hooks (WP23a). Fake timers drive the poll, the onCleared timer and the window stub; Date is faked too.
 describe('connectSystemLog hooks', () => {
   afterEach(() => {
@@ -257,7 +293,7 @@ describe('connectSystemLog hooks', () => {
   }
 
   // Window timers resolve the global at call time, so the fake timers installed by useFakeTimers apply.
-  function startRig(withHooks: boolean): Rig {
+  function startRig(withHooks: boolean, state: GameState = createInitialState(T0)): Rig {
     vi.useFakeTimers({ now: T0 });
     vi.stubGlobal('window', {
       setInterval: (fn: () => void, ms: number) => setInterval(fn, ms),
@@ -285,7 +321,7 @@ describe('connectSystemLog hooks', () => {
           },
         }
       : {};
-    const session = new GameSession({ state: createInitialState(T0), now: () => Date.now() });
+    const session = new GameSession({ state, now: () => Date.now() });
     const dispose = connectSystemLog(session, toasts, () => Date.now(), hooks);
     return { events, gate, session, dispose };
   }
@@ -355,5 +391,83 @@ describe('connectSystemLog hooks', () => {
     vi.advanceTimersByTime(LIFE_MS * 2);
     expect(rig.events).toEqual([`show:${FIRST_KEY}`]);
     rig.dispose();
+  });
+
+  // WP28 cut line: a run that reached the choice phase and owns `count` Splices, so beginNewCycle cuts them.
+  describe('cut line (WP28)', () => {
+    const SPLICE_IDS = ['spliceBicycle', 'spliceOrgan', 'spliceClock'] as const;
+    const CUT_KEY = 'log:splice-cut';
+    const CUT_ID = SYSTEM_LOG_CUT.id;
+    const GAP = SYSTEM_LOG_CONFIG.minGapMs;
+
+    function cutState(count: number): GameState {
+      const base = createInitialState(T0);
+      const techLevels = { ...base.techLevels };
+      for (const id of SPLICE_IDS.slice(0, count)) techLevels[id] = 1;
+      return { ...base, techLevels, ending: { phase: 'choice', engagedAt: T0 } };
+    }
+
+    it('shows the line at the first poll after the cycle, ahead of a table line, and moves the tracker', () => {
+      const rig = startRig(true, cutState(2));
+      expect(rig.session.beginNewCycle(T0)).toBe(true);
+      vi.advanceTimersByTime(POLL_MS - 1);
+      expect(rig.events).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(rig.events).toEqual([`show:${CUT_KEY}`, `shown:${CUT_ID}`]);
+      // No gap check before the cut (the reset re-seeds the tracker). It moved the tracker, so the table line waits a full gap from 5 s.
+      vi.advanceTimersByTime(GAP - POLL_MS);
+      expect(rig.events).toEqual([`show:${CUT_KEY}`, `shown:${CUT_ID}`, `cleared:${CUT_ID}`]);
+      // The next table line lands at 125 s, a full gap after the cut.
+      vi.advanceTimersByTime(POLL_MS);
+      expect(rig.events).toEqual([
+        `show:${CUT_KEY}`,
+        `shown:${CUT_ID}`,
+        `cleared:${CUT_ID}`,
+        `show:${FIRST_KEY}`,
+        `shown:${FIRST_ID}`,
+      ]);
+      rig.dispose();
+    });
+
+    it('queues nothing for a cycle that cut no Splice', () => {
+      const rig = startRig(true, cutState(0));
+      expect(rig.session.beginNewCycle(T0)).toBe(true);
+      vi.advanceTimersByTime(GAP);
+      expect(rig.events).toEqual([`show:${FIRST_KEY}`, `shown:${FIRST_ID}`]);
+      rig.dispose();
+    });
+
+    it('waits while defer postpones, then shows the same line', () => {
+      const rig = startRig(true, cutState(1));
+      rig.gate.deferred = true;
+      rig.session.beginNewCycle(T0);
+      vi.advanceTimersByTime(GAP + 2 * POLL_MS);
+      expect(rig.events).toEqual([]);
+      rig.gate.deferred = false;
+      vi.advanceTimersByTime(POLL_MS);
+      expect(rig.events).toEqual([`show:${CUT_KEY}`, `shown:${CUT_ID}`]);
+      rig.dispose();
+    });
+
+    it('a reset before the poll drops the queued line', () => {
+      const rig = startRig(true, cutState(1));
+      rig.session.beginNewCycle(T0);
+      rig.session.reset(T0);
+      vi.advanceTimersByTime(GAP + POLL_MS);
+      expect(rig.events.some((e) => e.includes(CUT_ID))).toBe(false);
+      rig.dispose();
+    });
+
+    it('reports onCleared after the line duration, like a table line', () => {
+      const rig = startRig(true, cutState(2));
+      rig.session.beginNewCycle(T0);
+      vi.advanceTimersByTime(POLL_MS);
+      expect(rig.events.filter((e) => e.startsWith('cleared:'))).toEqual([]);
+      vi.advanceTimersByTime(SYSTEM_LOG_CONFIG.durationMs - 1);
+      expect(rig.events.filter((e) => e.startsWith('cleared:'))).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(rig.events.filter((e) => e.startsWith('cleared:'))).toEqual([`cleared:${CUT_ID}`]);
+      rig.dispose();
+    });
   });
 });

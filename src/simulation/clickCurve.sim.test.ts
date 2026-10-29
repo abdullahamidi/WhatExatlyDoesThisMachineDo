@@ -7,8 +7,8 @@ import type { GameState, ResourceId, TechId } from '../data/types';
 import { computeRates } from './production/rates';
 import { windupParams } from './production/windup';
 import { eraResource } from './progression/era';
-import { activeShare, manualShare, runGreedy } from './sim/greedy';
-import type { GreedyFaults, GreedyOptions, GreedyResult, GreedySample, IncomeSplit } from './sim/greedy';
+import { activeShare, findShare, manualShare, runGreedy } from './sim/greedy';
+import type { GreedyFaults, GreedyFinds, GreedyOptions, GreedyResult, GreedySample, IncomeSplit } from './sim/greedy';
 
 // WP27 click curve (playtest 2026-10-27). Deterministic greedy players on the repo harness, asserted against the WP27
 // "Balance targets" K1-K12: the hand phase (K1-K3), hand + machine (K4-K5), the machine eras (K6), the whole run (K7-K9),
@@ -30,6 +30,9 @@ const SAMPLE_EVERY_S = 10;
 const A_CPS = 4;
 // Machine Faults of profile A: every spawn is caught, 2 s after it appears.
 const A_FAULTS: GreedyFaults = { catchProb: 1, reactionSeconds: 2 };
+// Finds of profile A (WP28): 85 % of the spawns picked up, 4 s after the spawn. Finds are not clicks: K4 / K6 count them in
+// the income total, and K6 active share leaves them out of the numerator (K6' reports them).
+const A_FINDS: GreedyFinds = { catchProb: 0.85, reactionSeconds: 4 };
 // W5 clicks for 5 minutes, then 0.5 cps, and never catches a fault.
 const W5_CLICK_END_S = 300;
 const W5_LATE_CPS = 0.5;
@@ -60,6 +63,7 @@ const A_OPTIONS: GreedyOptions = {
   sampleEverySeconds: SAMPLE_EVERY_S,
   snapshotAt: SNAPSHOTS,
   faults: A_FAULTS,
+  finds: A_FINDS,
 };
 const W5_OPTIONS: GreedyOptions = {
   seconds: RUN_SECONDS,
@@ -81,6 +85,7 @@ const DEMO_A_OPTIONS: GreedyOptions = {
   sampleEverySeconds: SAMPLE_EVERY_S,
   snapshotAt: SNAPSHOTS,
   faults: A_FAULTS,
+  finds: A_FINDS,
   maxEra: DEMO_MAX_ERA,
 };
 // Report only (no assertion): A without faults, A at 2 cps and 1 cps with faults, and a 15 cps keyboard player with faults.
@@ -98,6 +103,7 @@ const A2_OPTIONS: GreedyOptions = {
   buyIntervalSeconds: 1,
   stopAt: 'primaryFunction',
   faults: A_FAULTS,
+  finds: A_FINDS,
 };
 const A1_OPTIONS: GreedyOptions = {
   seconds: RUN_SECONDS,
@@ -106,6 +112,7 @@ const A1_OPTIONS: GreedyOptions = {
   buyIntervalSeconds: 1,
   stopAt: 'primaryFunction',
   faults: A_FAULTS,
+  finds: A_FINDS,
 };
 const R15_OPTIONS: GreedyOptions = {
   seconds: RUN_SECONDS,
@@ -114,6 +121,7 @@ const R15_OPTIONS: GreedyOptions = {
   buyIntervalSeconds: 1,
   stopAt: 'primaryFunction',
   faults: A_FAULTS,
+  finds: A_FINDS,
 };
 
 type KGroup = 'hand' | 'handMachine' | 'machine' | 'whole' | 'parity' | 'windup' | 'faults';
@@ -147,6 +155,7 @@ interface Shares {
   windup: number;
   passive: number;
   fault: number;
+  find: number;
   active: number;
 }
 interface ParityCheck {
@@ -213,6 +222,14 @@ const K13_DEFS: readonly KReport[] = [
   { id: 'K13c', label: 'A at 1 cps with faults: primaryFunction / A primaryFunction', target: 'plan 1.250' },
   { id: 'K13d', label: 'R15 (15 cps) with faults: primaryFunction / A primaryFunction', target: 'plan 0.607' },
 ];
+
+// K6' (WP28, report only): the Find share of each machine era's frontier energy (Finds reported apart from the clicks).
+const K6F_DEFS: readonly KReport[] = MACHINE_ERAS.map((era) => ({
+  id: `K6f${era}`,
+  label: `era ${era} (${eraResource(era)}): Find share of income (K6', report only)`,
+  target: 'report',
+}));
+const REPORT_DEFS: readonly KReport[] = [...K13_DEFS, ...K6F_DEFS];
 
 const GROUPS: readonly { group: KGroup; title: string }[] = [
   { group: 'hand', title: 'click curve: hand phase (K1-K3)' },
@@ -281,20 +298,21 @@ function restedWorth(rates: Rates, cap: number, res: ResourceId): number {
   return ps > 0 ? (rates.perClick[res] + cap * ps) / ps : NaN;
 }
 
-/** K4a: manual share of `res` between two cumulative income copies (the later one minus the earlier one). */
+/** K4a: manual share of `res` between two cumulative income copies (the later one minus the earlier one); Finds in the total (WP28). */
 function windowManualShare(later: IncomeSplit, earlier: IncomeSplit, res: ResourceId): number {
   const manual = later.manual[res] - earlier.manual[res];
-  const total = manual + (later.passive[res] - earlier.passive[res]) + (later.fault[res] - earlier.fault[res]);
+  const total = manual + (later.passive[res] - earlier.passive[res]) + (later.fault[res] - earlier.fault[res]) + (later.find[res] - earlier.find[res]);
   return Number.isFinite(total) && total > 0 ? manual / total : NaN;
 }
 
 /**
- * Shares of one energy's lifetime income in one era (manual + passive + fault = total). Plain clicks are manual minus
- * the wind-up release; the wind-up release is its own share; active is clicks plus faults (K6).
+ * Shares of one energy's lifetime income in one era (manual + passive + fault + find = total, WP28). Plain clicks are manual
+ * minus the wind-up release; the wind-up release is its own share; active is clicks plus faults over the total (K6, Finds
+ * are not active income); find is the Find share (K6', report only).
  */
 function sharesOf(split: IncomeSplit, res: ResourceId): Shares {
   const manual = split.manual[res];
-  const total = manual + split.passive[res] + split.fault[res];
+  const total = manual + split.passive[res] + split.fault[res] + split.find[res];
   const share = (x: number): number => (Number.isFinite(total) && total > 0 ? x / total : NaN);
   return {
     total,
@@ -302,6 +320,7 @@ function sharesOf(split: IncomeSplit, res: ResourceId): Shares {
     windup: share(split.release[res]),
     passive: share(split.passive[res]),
     fault: share(split.fault[res]),
+    find: share(split.find[res]),
     active: share(manual + split.fault[res]),
   };
 }
@@ -420,6 +439,7 @@ function measureK(): void {
     const res = eraResource(era);
     setK(`K6p${era}`, sharesOf(income[era], res).plain);
     setK(`K6a${era}`, activeShare(income, era, res));
+    setK(`K6f${era}`, findShare(income, era, res));
   }
 
   // K7: W5 against A at primaryFunction.
@@ -465,11 +485,11 @@ function measureK(): void {
 function printTables(): void {
   console.info(
     mdTable(
-      'K table (WP27 click curve: value, target, verdict; K13 is report only)',
+      'K table (WP27 click curve: value, target, verdict; K13 and K6\' are report only)',
       ['id', 'check', 'value', 'target', 'verdict'],
       [
         ...K_DEFS.map((d) => [d.id, d.label, fmtValue(kOf(d.id), d.unit), d.target, verdictOf(d.id)]),
-        ...K13_DEFS.map((d) => [d.id, d.label, ratio3(kOf(d.id)), d.target, 'report']),
+        ...REPORT_DEFS.map((d) => [d.id, d.label, ratio3(kOf(d.id)), d.target, 'report']),
       ],
     ),
   );
@@ -491,11 +511,11 @@ function printTables(): void {
   console.info(
     mdTable(
       'Income shares per era, profile A (share of the frontier energy income in that era; passive includes the auto-cranks, the harness has no servo-free split)',
-      ['era', 'energy', 'plain clicks', 'wind-up', 'passive', 'fault', 'active (clicks + fault)', 'total gained'],
+      ['era', 'energy', 'plain clicks', 'wind-up', 'passive', 'fault', 'find', 'active (clicks + fault)', 'total gained'],
       ERAS.map((era) => {
         const res = eraResource(era);
         const s = sharesOf(incomeA[era], res);
-        return [`${era}`, res, percent(s.plain), percent(s.windup), percent(s.passive), percent(s.fault), percent(s.active), s.total.toExponential(2)];
+        return [`${era}`, res, percent(s.plain), percent(s.windup), percent(s.passive), percent(s.fault), percent(s.find), percent(s.active), s.total.toExponential(2)];
       }),
     ),
   );

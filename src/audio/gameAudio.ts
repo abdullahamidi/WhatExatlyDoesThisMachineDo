@@ -5,13 +5,16 @@
 // a silent no-op. Never throws into the game.
 
 import { AUDIO } from '../data/audio';
+import type { PokeSoundId } from '../data/audio';
 import { MUSIC } from '../data/music';
 import type { AudioStats, MusicThemeId } from '../data/music';
 import type { SettingsState } from '../data/types';
+import { TECHNOLOGIES } from '../data/technologies';
 import type { GameFeedback, WorldSound } from '../game/context';
 import type { GameSession, SessionEvents } from '../simulation';
 import { currentEra } from '../simulation/progression/era';
-import { ambientMix, busGain, levelsChanged, masterTarget, purchaseCue, windAllowed } from './audioMath';
+import { isSplice } from '../simulation/progression/status';
+import { ambientMix, busGain, levelsChanged, masterTarget, pokePitchScale, pokeVariant, purchaseCue, windAllowed } from './audioMath';
 import type { AmbientMix, LevelSnapshot } from './audioMath';
 import { barSeconds, crossfadeGains, duckLevel, eventsInWindow, musicAllowed, musicTheme } from './musicMath';
 import { createSynth } from './synth';
@@ -29,6 +32,16 @@ export interface GameAudioStats extends AudioStats {
   readonly faultSpawnCues: number;
   /** Fault clear cues started since unlock (WP27). Expire plays no cue and is not counted. 0 before unlock. */
   readonly faultClearCues: number;
+  /** Find pickups (collect cues, relics included) since unlock (WP28). Spawn and expire are not counted. 0 before unlock. */
+  readonly finds: number;
+  /** Relic pickups since unlock (WP28): the collect cues that were FIELD NOTE relics (a subset of finds). 0 before unlock. */
+  readonly relics: number;
+  /** Splice wake cues since unlock (WP28), one per Splice purchase event (a BUY MAX plays and counts once). 0 before unlock. */
+  readonly splices: number;
+  /** Poke cues started since unlock (WP28). Muted pokes are not counted. 0 before unlock. */
+  readonly pokes: number;
+  /** Refused purchases since unlock (WP28): the purchaseDenied handler, which plays the existing deny cue. 0 before unlock. */
+  readonly denies: number;
 }
 
 export interface GameAudio {
@@ -61,6 +74,9 @@ interface BeatClock {
 }
 
 const SLOT_INDEXES: readonly [0, 1] = [0, 1];
+
+/** Seed of the poke variant and pitch hash (WP28): a fixed start, so a run's pokes follow one sequence. */
+const POKE_SEED = 0x2f6b1d;
 
 /** Speaker of a world blip (WorldSound blip kind). */
 type WorldBlipSpeaker = Extract<WorldSound, { kind: 'blip' }>['speaker'];
@@ -120,6 +136,13 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
   let worldBlips = 0; // blip sequences started since unlock (readout)
   let faultSpawnCues = 0; // fault spawn cues started since unlock (readout, WP27)
   let faultClearCues = 0; // fault clear cues started since unlock (readout, WP27)
+  let finds = 0; // Find pickups since unlock (readout, WP28)
+  let relics = 0; // relic pickups since unlock (readout, WP28)
+  let splices = 0; // Splice wake cues since unlock (readout, WP28)
+  let pokes = 0; // poke cues since unlock (readout, WP28)
+  let denies = 0; // refused purchases since unlock (readout, WP28)
+  let pokeRecent: Partial<Record<PokeSoundId, number[]>> = {}; // last variant picks per poke id (WP28), oldest first
+  let pokeSeed = POKE_SEED; // seeded hash state for the poke variant and pitch (WP28)
   const warned = new Set<string>();
   const doc: Document | undefined = target.document;
 
@@ -169,6 +192,24 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     blipEndsS.push(nowS + (n * b.gapMs) / 1000 + b.ms / 1000);
     s.playBlip(speaker, count, reversed);
     worldBlips += 1;
+  }
+
+  /** Next unit in [0, 1) from the poke hash (WP28): a 32-bit LCG step, so every poke draws the same sequence per run. */
+  function pokeUnit(): number {
+    pokeSeed = (Math.imul(pokeSeed, 1664525) + 1013904223) >>> 0;
+    return pokeSeed / 4294967296;
+  }
+
+  /**
+   * Poke cue (WP28): one of the id's variants (not one of its last picks while another is free) at a pitch 1 +- pitchSpread.
+   * Counted in pokes; the caller has checked mute and unlock.
+   */
+  function playPoke(s: Synth, id: PokeSoundId): void {
+    const recent = pokeRecent[id] ?? [];
+    const variant = pokeVariant(recent, AUDIO.poke.variants[id].length, pokeUnit());
+    pokeRecent[id] = [...recent, variant].slice(-AUDIO.poke.avoidRecent);
+    s.playPoke(id, variant, pokePitchScale(pokeUnit()));
+    pokes += 1;
   }
 
   /**
@@ -437,11 +478,17 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
           if (session.state.techLevels[AUDIO.forkPing.techId] >= 1) s.playForkPing();
         }),
       ),
-      // Cue = era of the paying resource (WP15R D1), not the era of the tech bought.
-      session.on('purchase', ({ res }) => {
+      // Cue = era of the paying resource (WP15R D1), not the era of the tech bought. A Splice (WP28) plays its wake by its own era instead.
+      session.on('purchase', ({ id, res }) => {
         try {
           const s = synth;
           if (s && !session.settings.muted) {
+            const def = TECHNOLOGIES[id];
+            if (isSplice(def)) {
+              s.playSpliceWake(def.era);
+              splices += 1;
+              return;
+            }
             switch (purchaseCue(res)) {
               case 'purchase':
                 s.playPurchase();
@@ -494,6 +541,23 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
           }
         }),
       ),
+      // Finds (WP28): a chime when one spawns, a clink on pickup or the paper rustle for a relic. Expire is silent.
+      session.on(
+        'find',
+        oneShot('find', (s, e: SessionEvents['find']) => {
+          if (e.kind === 'spawn') {
+            s.playFindSpawn();
+          } else if (e.kind === 'collect') {
+            if (e.relic) {
+              s.playRelicCollect();
+              relics += 1;
+            } else {
+              s.playFindCollect();
+            }
+            finds += 1;
+          }
+        }),
+      ),
       feedback.partLanded.on(oneShot('partLanded', (s) => s.playClunk())),
       feedback.partEvolved.on(oneShot('partEvolved', (s) => s.playRefit())),
       feedback.partTorqued.on((event) => {
@@ -504,7 +568,13 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
           warnOnce('partTorqued', error);
         }
       }),
-      feedback.purchaseDenied.on(oneShot('purchaseDenied', (s) => s.playDeny())),
+      // Refused purchases (WP28): the existing deny cue, and the count of it (a refused Splice buy comes here too).
+      feedback.purchaseDenied.on(
+        oneShot('purchaseDenied', (s) => {
+          s.playDeny();
+          denies += 1;
+        }),
+      ),
       feedback.finaleBeat.on((beat) => {
         try {
           if (beat === 'swell') beats.swellS = wallS();
@@ -536,6 +606,9 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
               break;
             case 'dialTone':
               s.setDialTone(sound.on);
+              break;
+            case 'poke':
+              playPoke(s, sound.id);
               break;
           }
         } catch (error) {
@@ -617,6 +690,12 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
     worldBlips = 0;
     faultSpawnCues = 0;
     faultClearCues = 0;
+    finds = 0;
+    relics = 0;
+    splices = 0;
+    pokes = 0;
+    denies = 0;
+    pokeRecent = {};
     clearBeats();
     if (s) {
       try {
@@ -630,7 +709,10 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
 
   /** Idle readout: nothing has been created yet (or the controller is disposed). */
   function idleStats(): GameAudioStats {
-    return { unlocked: false, running: false, theme: null, slotGains: [0, 0], duck: 0, liveVoices: 0, musicVoices: 0, dropped: 0, peakDb: null, levels: null, ambient: null, worldBlips: 0, faultSpawnCues: 0, faultClearCues: 0 };
+    return {
+      unlocked: false, running: false, theme: null, slotGains: [0, 0], duck: 0, liveVoices: 0, musicVoices: 0, dropped: 0, peakDb: null, levels: null, ambient: null,
+      worldBlips: 0, faultSpawnCues: 0, faultClearCues: 0, finds: 0, relics: 0, splices: 0, pokes: 0, denies: 0,
+    };
   }
 
   /** Live readout for the debug hook. Never throws; reads the synth counters, the controller state, the last levels and mix. */
@@ -654,6 +736,11 @@ export function createGameAudio(session: GameSession, feedback: GameFeedback, ta
         worldBlips,
         faultSpawnCues,
         faultClearCues,
+        finds,
+        relics,
+        splices,
+        pokes,
+        denies,
       };
     } catch (error) {
       warnOnce('stats', error);

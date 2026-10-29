@@ -32,13 +32,13 @@ export type WorldOffer = LineTrigger | { kind: 'beat'; beat: string };
 
 export interface WorldLine { id: string; speaker: SpeakerId; eras: readonly number[]; trigger: LineTrigger; tones: readonly string[];
   text: string; core?: true; you?: true; demo?: true; once?: true; cyc?: true; post?: true; replaces?: string; perEra?: true; scripted?: true }
-export interface WorldSaveState { seen: string[]; seenEver: string[]; eraMoments: [number, number, number, number, number]; youEras: number }
+export interface WorldSaveState { seen: string[]; seenEver: string[]; eraMoments: [number, number, number, number, number]; youEras: number; relics?: number }
 export interface WorldPlacement { x: number; row: WorldRow; route?: readonly [number, number]; xs?: readonly number[]; dy?: number; inner?: true }
 export interface LoopFrame { frame: string; dx: number; flip?: boolean }
 
-// Era V shadows go out once the horizon field reaches level 5. INS-12 plays at the same level, so the line and the art change together.
+// Era V shadows go out once the horizon field reaches level 9. INS-12 plays at the same level, so the line and the art change together.
 // Defined above WORLD_LINES (its trigger reads it); worldEras.ts imports it, so this file must never import worldEras.ts.
-export const WORLD_SHADOWS = { offEra: 5, offRule: { techId: 'horizonField', minLevel: 5 } } as const;
+export const WORLD_SHADOWS = { offEra: 5, offRule: { techId: 'horizonField', minLevel: 9 } } as const;
 
 // The 63 lines: the 31 WP23a lines in bible order, then the 32 WP23b lines appended in bible order. Text is copied verbatim from
 // STORY_BIBLE §5.2 (the sweep and the tests check it against the bible rows).
@@ -142,7 +142,9 @@ export const WORLD_KNOWN_IDS: ReadonlySet<string> = new Set<string>([
 ]);
 // Layer ceiling: eras I-V (WP23b). The demo keeps its own cap (EDITIONS.demo.maxEra).
 export const LIVING_WORLD = { maxEra: 5 } as const;
-export const DEFAULT_WORLD_SAVE: WorldSaveState = { seen: [], seenEver: [], eraMoments: [0, 0, 0, 0, 0], youEras: 0 };
+// Relic count cap (WP28 FIELD NOTES): equals RELIC_NOTES.length (src/data/finds.ts); pinned by a GameSession test.
+export const RELICS_MAX = 15;
+export const DEFAULT_WORLD_SAVE: WorldSaveState = { seen: [], seenEver: [], eraMoments: [0, 0, 0, 0, 0], youEras: 0, relics: 0 };
 
 // Cadence and timing (bible §7.1). Milliseconds unless the name says otherwise.
 export const WORLD_VOICE_CONFIG = {

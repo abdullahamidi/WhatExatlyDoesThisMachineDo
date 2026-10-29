@@ -11,7 +11,9 @@
 import type Phaser from 'phaser';
 import type { Vec2 } from '../../data/machineComponents';
 import { PALETTE } from '../../data/palette';
-import { PIXEL_SCALE } from '../../data/world';
+import { POKE_RENDER, POKES } from '../../data/pokes';
+import { SPLICE_CLOCK, SPLICE_FX } from '../../data/spliceWorld';
+import { PIXEL_SCALE, VIEW } from '../../data/world';
 import { WORLD_AMBIENT } from '../../data/worldDay';
 import type { MicroFlags } from '../../data/worldDay';
 import {
@@ -52,6 +54,8 @@ const STAT_SAMPLES = 120;
 const FLICKER_CATCHUP_MAX = 64;
 // Second-hand repaint threshold in degrees: the hands are redrawn only when the second hand has turned this far (render throttle).
 const HAND_REDRAW_DEG = 1;
+// The clock hands sit above the Splice lit face (SpliceProps' overlay at + 0.005 over the clock sprite; WP28a C6).
+const CLOCK_HANDS_DEPTH = 0.01;
 // A window, the glow or a twin shows above this presented alpha (a render epsilon, not a balance number).
 const SHOWN_ALPHA = 0.01;
 // The 8-bit alpha maximum (0xff): alpha is compared on its 1/255 grid, the finest step a frame shows (structural, as CHANNEL_MAX in worldDay).
@@ -69,6 +73,10 @@ const TWO_PI = 2 * Math.PI;
 const UNSET_TINT = -1;
 // Index of the receiver's 'level' frame in WORLD_FRAMES.receiver (hang, swing0-2, level, onHook): the era V rise climbs from hang to it.
 const RECEIVER_LEVEL = WORLD_FRAMES.receiver.indexOf('level');
+// The payphone's answers (WP28a T15b1, C4): a receiver step (silent in era I), one ring burst with a swing, or the hood blinks.
+export type PayphoneAnswer = 'sway' | 'ring' | 'hoodBlink';
+// Length of the hood blink answer: each blink is lit, then dark, for hoodBlinkMs.
+const HOOD_TOTAL_MS = 2 * POKE_RENDER.hoodBlinks * POKE_RENDER.hoodBlinkMs;
 // Frame names built once: the hole stages (stage0 .. stage maxStage) and the paper scraps (scrap0 ..), so a frame allocates no name.
 const HOLE_NAMES: readonly string[] = Array.from({ length: WORLD_HOLE.maxStage + 1 }, (_, i) => `stage${i}`);
 const SCRAP_NAMES: readonly string[] = Array.from({ length: WORLD_FRAMES.scraps.length }, (_, i) => `scrap${i}`);
@@ -247,6 +255,18 @@ function mixRgb(a: number, b: number, t: number): number {
   return out;
 }
 
+// Span of a girl answer in ms (a non-finite or negative span is 0). Reduced motion holds a window dark or flickering for POKES.reducedHoldMs at most.
+function girlSpanOf(ms: number, reduced: boolean): number {
+  const span = Number.isFinite(ms) ? Math.max(0, ms) : 0;
+  return reduced ? Math.min(span, POKES.reducedHoldMs) : span;
+}
+
+// Screen px of a world point: the screenOfWorld maths (worldPlacement.ts), written into out so the anchors allocate nothing.
+function screenInto(out: Vec2, x: number, y: number, sf: number, cam: CameraPose): void {
+  out.x = (x - sf * (cam.centerX - VIEW.width / 2) - VIEW.width / 2) * cam.zoom + VIEW.width / 2;
+  out.y = (y - sf * (cam.centerY - VIEW.height / 2) - VIEW.height / 2) * cam.zoom + VIEW.height / 2;
+}
+
 // Environment props of eras I-V. One instance per scene; the director calls apply() with each visual state and placement set,
 // update() every frame, and hideAll() when the layer is off. setScript(frame) drives the finale and postgame props (WP23b).
 export class WorldProps {
@@ -380,6 +400,29 @@ export class WorldProps {
   private propScript: PropScript | null = null;
   private placements: Placements | null = null;
   private clockAt: Vec2 | null = null;
+  // The woken street clock (WP28a C6, setSpliceClock): clockWoken holds the minute hand (no twitch); clockTickDeg is the tick hand (null: none).
+  private clockWoken = false;
+  private clockTickDeg: number | null = null;
+  // Poke answers (T15b1): the minute twitch and the tick step of the clock, the hood blinks (hoodMs, -1 idle), the ring's span and whether the
+  // one-burst ring is held (reduced motion). Each counts down in update().
+  private clockTwitchMs = 0;
+  private clockTickPokeMs = 0;
+  private hoodMs = -1;
+  private ringSpanMs = 0;
+  private ringHeld = false;
+  // The hood as a settled blend while a blink runs (rewritten each frame; paintBooth reads it in place of the tween's hood).
+  private readonly hoodBlend: Blend = { from: 0, to: 0, k: 0 };
+  // The girl answers (AD2 F11): the window's dark and flicker spans and the mini's fade (ms left, its span, its target alpha). Counted down in
+  // update(); hideAll() cancels them.
+  private girlDarkMs = 0;
+  private girlFlickMs = 0;
+  private girlFlickFrame: FlickerFrame = 'flickerB'; // the other flicker frame, fixed when the answer starts
+  // What the window last drew (paintGirlWindow; probe() reports it): the dark frame, and the other flicker frame of an answer (WP28a r2).
+  private shownDark = false;
+  private shownAlt = false;
+  private miniMs = 0;
+  private miniSpanMs = 0;
+  private miniTo = 1;
 
   constructor(scene: Phaser.Scene, rows: WorldRows, beatLow: (nowMs: number) => boolean = () => false) {
     this.scene = scene;
@@ -459,7 +502,7 @@ export class WorldProps {
     this.owned.push(this.marks);
 
     this.clock = this.spriteIn(back, 'clock', 0.5, 1, WORLD_DEPTH_OFFSETS.clock);
-    this.hands = this.graphicsIn(back, WORLD_DEPTH_OFFSETS.clock);
+    this.hands = this.graphicsIn(back, WORLD_DEPTH_OFFSETS.clock + CLOCK_HANDS_DEPTH);
     this.pebbles = this.graphicsIn(back, WORLD_DEPTH_OFFSETS.scraps);
     for (let i = 0; i < WORLD_FRAMES.scraps.length; i++) {
       this.scraps.push(this.spriteIn(back, 'scraps', 0.5, 1, WORLD_DEPTH_OFFSETS.scraps));
@@ -524,6 +567,12 @@ export class WorldProps {
       this.breatheMs = Math.max(0, this.breatheMs - dt);
       this.pulseMs = Math.max(0, this.pulseMs - dt);
       this.puddleRingMs = Math.max(0, this.puddleRingMs - dt);
+      this.clockTwitchMs = Math.max(0, this.clockTwitchMs - dt);
+      this.clockTickPokeMs = Math.max(0, this.clockTickPokeMs - dt);
+      this.girlDarkMs = Math.max(0, this.girlDarkMs - dt);
+      this.girlFlickMs = Math.max(0, this.girlFlickMs - dt);
+      this.miniMs = Math.max(0, this.miniMs - dt);
+      this.stepHood(dt);
       // The mote orbit clock runs at the rate the motes still move (1 - freezeK): a freeze decelerates to a stop. The script (finale, postgame)
       // runs it at full rate, so every moth keeps its own orbit (D17). Static under reduced motion.
       const orbitRate = this.propScript !== null ? 1 : 1 - clamp01(tween.motesFreezeK);
@@ -570,6 +619,67 @@ export class WorldProps {
   /** Payphone ring: WORLD_ENV.ring bursts of ring0 / ring1 with the receiver jerking. Restarts if one is running. */
   ring(): void {
     this.ringMs = 0;
+    this.ringSpanMs = ringTotalMs();
+    this.ringHeld = false;
+  }
+
+  /** A payphone answer (WP28a T15b1, C4): 'sway' steps the receiver once, silent (era I); 'ring' is one ring burst (the ring frames, one burst
+   * long; the director plays the sound) with a receiver swing; 'hoodBlink' blinks the booth hood three times. Reduced motion holds the burst's
+   * first frame and the hood lit. */
+  payphoneAnswer(kind: PayphoneAnswer): void {
+    if (kind !== 'hoodBlink') this.swingKick += 1;
+    if (kind === 'ring') {
+      this.ringMs = 0;
+      this.ringSpanMs = WORLD_ENV.ring.burstMs;
+      this.ringHeld = this.reduced;
+    } else if (kind === 'hoodBlink') {
+      this.hoodMs = 0;
+    }
+  }
+
+  /** Lamp poke (C5): the lamp glow steps brighter for WORLD_ENV.rippleMs, as a lamp flicker does. */
+  lampBump(): void {
+    this.lampFlicker();
+  }
+
+  /** Girl answer (AD2 F11): the window goes dark (the dark frame at its normal alpha) for ms, then the flicker returns. Reduced motion holds it
+   * dark, without flicker, for POKES.reducedHoldMs at most. A no-op while the window is hidden. */
+  girlWindowDark(ms: number): void {
+    if (this.girlWindow.visible) this.girlDarkMs = girlSpanOf(ms, this.reduced);
+  }
+
+  /** Girl answer (AD2 F11): the window shows the other flicker frame for ms, toggled at most SPLICE_FX.maxFlashHz; reduced motion holds that frame
+   * (no toggle) for POKES.reducedHoldMs at most. A no-op while the window is hidden. */
+  girlWindowFlicker(ms: number): void {
+    if (!this.girlWindow.visible) return;
+    this.girlFlickFrame = this.flickerFrame === 'flickerA' ? 'flickerB' : 'flickerA';
+    this.girlFlickMs = girlSpanOf(ms, this.reduced);
+  }
+
+  /** Girl answer (AD2 F11): the mini girl (girlMini or girlMiniNear, whichever shows) fades to alpha and back over ms; reduced motion holds alpha for
+   * ms with no fade. A no-op while neither mini shows. */
+  girlMiniLantern(alpha: number, ms: number): void {
+    if (!this.girlMini.visible && !this.girlMiniNear.visible) return;
+    this.miniTo = clamp01(Number.isFinite(alpha) ? alpha : 1);
+    this.miniSpanMs = Number.isFinite(ms) ? Math.max(0, ms) : 0;
+    this.miniMs = this.miniSpanMs;
+  }
+
+  /** Clock poke, not woken: the minute hand twitches for POKE_RENDER.clockTwitchMs (held under reduced motion). */
+  clockTwitch(): void {
+    this.clockTwitchMs = POKE_RENDER.clockTwitchMs;
+  }
+
+  /** Clock poke, woken (C6): the tick hand steps one step and snaps back after SPLICE_CLOCK.snapBackMs; the minute and hour hands never move. */
+  clockTickOnce(): void {
+    this.clockTickPokeMs = SPLICE_CLOCK.snapBackMs;
+  }
+
+  /** The woken street clock (WP28a C6): woken holds the minute hand (no twitch); tickDeg is the tick hand's angle, null for none (not woken,
+   * reduced motion, the postgame). The director sets it every frame; a running script's second hand wins. */
+  setSpliceClock(woken: boolean, tickDeg: number | null): void {
+    this.clockWoken = woken;
+    this.clockTickDeg = tickDeg;
   }
 
   /** Holds the receiver at its level frame while on (the swing loop resumes when off). */
@@ -591,41 +701,52 @@ export class WorldProps {
 
   /** Screen anchor of a speaker: the girl (mini when shown, else the window) or the payphone (receiver top and bottom). null when hidden. */
   anchor(id: 'girl' | 'payphone', cam: CameraPose): SpeakerAnchor | null {
+    const out: SpeakerAnchor = { head: { x: 0, y: 0 }, feet: { x: 0, y: 0 } };
+    return this.anchorInto(id, cam, out) ? out : null;
+  }
+
+  /** The anchor of anchor() written into out (no allocation: the per-frame speech path). Returns false, out untouched, when hidden. */
+  anchorInto(id: 'girl' | 'payphone', cam: CameraPose, out: SpeakerAnchor): boolean {
     const state = this.state;
-    if (!this.live || state === null) return null;
+    if (!this.live || state === null) return false;
     if (id === 'payphone') {
-      if (this.boothAt === null) return null;
+      if (this.boothAt === null) return false;
       // Script (the receiver is hung up): head = the booth top, above its hood; feet = the booth feet (AD4 F2, so the bubble ladder
       // can sit below the booth). State: the receiver's top and bottom.
       if (this.propScript !== null) {
         const b = this.booth;
-        const top = screenOfWorld({ x: b.x, y: b.y - b.displayHeight }, 1, cam);
-        return { head: top, feet: screenOfWorld({ x: b.x, y: b.y }, 1, cam) };
+        screenInto(out.head, b.x, b.y - b.displayHeight, 1, cam);
+        screenInto(out.feet, b.x, b.y, 1, cam);
+        return true;
       }
       const r = this.receiver;
-      return {
-        head: screenOfWorld({ x: r.x, y: r.y }, 1, cam),
-        feet: screenOfWorld({ x: r.x, y: r.y + r.displayHeight }, 1, cam),
-      };
+      screenInto(out.head, r.x, r.y, 1, cam);
+      screenInto(out.feet, r.x, r.y + r.displayHeight, 1, cam);
+      return true;
     }
     // Ground: LivingWorld draws her (no plane here). Mini and miniNear: the pylon plane sprite of that stage.
     const stage = state.girl.stageName;
-    if (stage === 'ground') return null;
+    if (stage === 'ground') return false;
     const pylon = stage === 'mini' ? this.girlMini : stage === 'miniNear' ? this.girlMiniNear : null;
     if (pylon !== null) {
       const sf = WORLD_FAR_PLANES.pylon.sf;
-      return {
-        head: screenOfWorld({ x: pylon.x, y: pylon.y - pylon.displayHeight }, sf, cam),
-        feet: screenOfWorld({ x: pylon.x, y: pylon.y }, sf, cam),
-      };
+      screenInto(out.head, pylon.x, pylon.y - pylon.displayHeight, sf, cam);
+      screenInto(out.feet, pylon.x, pylon.y, sf, cam);
+      return true;
     }
     const w = this.girlWindow;
     const sf = WORLD_FAR_PLANES.window.sf;
     const cx = w.x + w.displayWidth / 2;
-    return {
-      head: screenOfWorld({ x: cx, y: w.y }, sf, cam),
-      feet: screenOfWorld({ x: cx, y: w.y + w.displayHeight }, sf, cam),
-    };
+    screenInto(out.head, cx, w.y, sf, cam);
+    screenInto(out.feet, cx, w.y + w.displayHeight, sf, cam);
+    return true;
+  }
+
+  // The girl window's probe variant (WP28a r2): the restored window, else what paintGirlWindow drew last: the dark frame (script, faded out or
+  // the dark answer), the answer's other flicker frame, or the flicker.
+  private windowVariant(restored: boolean): string {
+    if (restored) return 'window-restored';
+    return this.shownDark ? 'window-dark' : this.shownAlt ? 'window-flicker-alt' : 'window-flicker';
   }
 
   /** Debug view: one entry per probe id. x and y are the world position of a shown ground object (0 when hidden or on a far plane); alpha
@@ -634,7 +755,6 @@ export class WorldProps {
     const on = this.live;
     const state = this.state;
     const stage = state === null ? 'ground' : state.girl.stageName;
-    const dark = state !== null && state.props.girlWindow === 'dark';
     const at = (s: Phaser.GameObjects.Sprite): number => (on && s.visible ? s.x : 0);
     const yAt = (s: Phaser.GameObjects.Sprite): number => (on && s.visible ? Math.round(s.y) : 0);
     const alphaAt = (s: Phaser.GameObjects.Sprite): number => (on && s.visible ? s.alpha : 0);
@@ -649,7 +769,7 @@ export class WorldProps {
     const restored = this.propScript?.girlWindow === 'restored';
     const variant = stage === 'mini' ? `mini:${this.frameName(this.girlMini)}`
       : stage === 'miniNear' ? `mini-near:${this.frameName(this.girlMiniNear)}`
-        : stage === 'window' ? (restored ? 'window-restored' : dark ? 'window-dark' : 'window-flicker') : 'none';
+        : stage === 'window' ? this.windowVariant(restored) : 'none';
     return [
       { id: 'lamp', variant: this.frameName(lamp), x: at(this.lamp), y: yAt(this.lamp), alpha: alphaAt(lamp), visible: shown(this.lamp), speaking: false },
       { id: 'clock', variant: this.frameName(this.clock), x: at(this.clock), y: yAt(this.clock), alpha: alphaAt(this.clock), visible: shown(this.clock), speaking: false },
@@ -701,6 +821,13 @@ export class WorldProps {
     this.live = false;
     this.stale = true;
     this.ringMs = -1;
+    this.ringHeld = false;
+    this.clockTwitchMs = 0;
+    this.clockTickPokeMs = 0;
+    this.girlDarkMs = 0;
+    this.girlFlickMs = 0;
+    this.miniMs = 0;
+    this.hoodMs = -1;
     this.glowBumpMs = 0;
     this.breatheMs = 0;
     this.pulseMs = 0;
@@ -885,7 +1012,7 @@ export class WorldProps {
     if (tween === null || ambient === null) return;
     const script = this.propScript;
     const micro = script === null ? ambient.micro : null;
-    const phase = ringPhaseAt(this.ringMs);
+    const phase = this.ringMs >= 0 && this.ringHeld ? 0 : ringPhaseAt(this.ringMs);
 
     this.paintGirlWindow(state, tween, micro);
     this.paintWindows(state, tween);
@@ -897,10 +1024,12 @@ export class WorldProps {
     this.paintGirlMini(state);
     this.paintReceiver(state, tween, ambient, phase);
 
-    // Clock hands: 4:41 plus the script's second hand (null before the clock restores). The minute hand twitches only off script and off
-    // reduced motion (the tween's micro flag, WORLD_AMBIENT.clockTwitchDeg).
-    const twitch = micro !== null && micro.clockTwitch && !this.reduced;
-    if (this.clockAt !== null) this.paintHands(this.clockAt, script?.secondHandDeg ?? null, twitch);
+    // Clock hands: 4:41 plus the script's second hand (null before the clock restores), or off script the woken clock's tick hand. The minute
+    // hand twitches only off script, off reduced motion and while the clock is not woken (the tween's micro flag, WORLD_AMBIENT.clockTwitchDeg).
+    const pokeTwitch = script === null && !this.clockWoken && this.clockTwitchMs > 0;
+    const twitch = (micro !== null && micro.clockTwitch && !this.reduced && !this.clockWoken) || pokeTwitch;
+    const second = script === null ? this.tickHandDeg() : script.secondHandDeg;
+    if (this.clockAt !== null) this.paintHands(this.clockAt, second, twitch);
 
     // Pebbles at the booth foot: two 1 art px rects, lifted hopPx for the one frame after a ripple.
     const boothAt = this.boothAt;
@@ -920,8 +1049,15 @@ export class WorldProps {
   private paintGirlWindow(state: WorldVisualState, tween: WorldTween, micro: MicroFlags | null): void {
     const script = this.propScript;
     const restored = script?.girlWindow === 'restored';
-    const dark = script === null ? tween.girlWindow.alpha <= 0 : state.props.girlWindow === 'dark';
-    const frame = restored ? 'restored' : dark ? 'dark' : this.flickerFrame;
+    const answer = script === null;
+    const dark = answer ? tween.girlWindow.alpha <= 0 || this.girlDarkMs > 0 : state.props.girlWindow === 'dark';
+    // A girl answer's flicker shows the other flicker frame in the first half of each 1 / maxFlashHz period (never above that rate); reduced
+    // motion holds it. The flicker clock underneath keeps its frame.
+    const half = 1000 / (2 * SPLICE_FX.maxFlashHz);
+    const swapped = answer && this.girlFlickMs > 0 && (this.reduced || Math.floor(this.nowMs / half) % 2 === 0);
+    const frame = restored ? 'restored' : dark ? 'dark' : swapped ? this.girlFlickFrame : this.flickerFrame;
+    this.shownDark = !restored && dark;
+    this.shownAlt = !restored && !dark && swapped;
     this.setFrame(this.girlWindow, 'girlWindow', frame, state.eraRow);
     let level = 1;
     if (script === null) level = tween.girlWindow.alpha * dipOf(micro, 'girlWindowDim');
@@ -1023,8 +1159,16 @@ export class WorldProps {
     }
 
     const eraRow = crossOf(tween.eraRow, CROSS_BOOTH_ERA);
-    const hood = crossOf(tween.booth, CROSS_HOOD);
-    const presented = tween.booth.from + (tween.booth.to - tween.booth.from) * tween.booth.k;
+    // A hood blink (payphoneAnswer 'hoodBlink') shows the hood lit or dark in place of the tween's hood.
+    const blink = this.hoodBlinkLit();
+    if (blink !== null) {
+      this.hoodBlend.from = blink ? 1 : 0;
+      this.hoodBlend.to = this.hoodBlend.from;
+      this.hoodBlend.k = 0;
+    }
+    const hoodBlend = blink === null ? tween.booth : this.hoodBlend;
+    const hood = crossOf(hoodBlend, CROSS_HOOD);
+    const presented = hoodBlend.from + (hoodBlend.to - hoodBlend.from) * hoodBlend.k;
     // The hood's light: full alpha when dark, the mains flicker and the buzz dip when lit (by the presented value).
     const litK = clamp01(presented);
     const alpha = clamp01(1 - litK + litK * this.mainsMul * dipOf(micro, 'boothDip'));
@@ -1165,7 +1309,31 @@ export class WorldProps {
   private stepRing(dt: number): void {
     if (this.ringMs < 0) return;
     this.ringMs += dt;
-    if (this.ringMs >= ringTotalMs()) this.ringMs = -1;
+    if (this.ringMs >= this.ringSpanMs) {
+      this.ringMs = -1;
+      this.ringHeld = false;
+    }
+  }
+
+  // Hood blink clock (payphoneAnswer 'hoodBlink'): runs once and stops after the last blink.
+  private stepHood(dt: number): void {
+    if (this.hoodMs < 0) return;
+    this.hoodMs += dt;
+    if (this.hoodMs >= HOOD_TOTAL_MS) this.hoodMs = -1;
+  }
+
+  // The hood's blink this frame: null while no blink runs, else lit (true) or dark. Lit on the even steps; held lit under reduced motion.
+  private hoodBlinkLit(): boolean | null {
+    if (this.hoodMs < 0) return null;
+    return this.reduced || Math.floor(this.hoodMs / POKE_RENDER.hoodBlinkMs) % 2 === 0;
+  }
+
+  // The second hand: the director's tick (setSpliceClock) as it is, and during a clockTickOnce one step on (a woken clock with no tick
+  // holds its rest angle for the poke only).
+  private tickHandDeg(): number | null {
+    if (this.clockTickPokeMs <= 0) return this.clockTickDeg;
+    const base = this.clockTickDeg ?? (this.clockWoken ? SPLICE_CLOCK.restDeg : null);
+    return base === null ? null : base + SPLICE_CLOCK.stepDeg;
   }
 
   // Tally marks: redrawn in place when the count or the fog colour changes (fogColor while the fog shows, else color).
@@ -1268,11 +1436,19 @@ export class WorldProps {
     const g = this.girl;
     const live = this.propScript === null && g !== null && WORLD_FRAMES.girlMini.includes(g.frame) ? g : null;
     const name = live === null ? 'cold' : live.frame;
-    const alpha = live === null ? 1 : clamp01(live.alpha);
+    const base = live === null ? 1 : clamp01(live.alpha);
+    const alpha = this.miniMs > 0 ? this.lanternAlpha(base) : base;
     this.setFrame(this.girlMini, 'girlMini', name, row);
     setAlphaIf(this.girlMini, alpha);
     this.setFrame(this.girlMiniNear, 'girlMini', name, row);
     setAlphaIf(this.girlMiniNear, alpha);
+  }
+
+  // The mini's alpha during a lantern answer: base to miniTo and back over the span (the peak at its middle). Reduced motion holds miniTo.
+  private lanternAlpha(base: number): number {
+    if (this.reduced) return this.miniTo;
+    const k = 1 - Math.abs(2 * (1 - this.miniMs / this.miniSpanMs) - 1);
+    return base + (this.miniTo - base) * k;
   }
 
   // Puddle (WP24 C5): the size crossfades on the twin (from at full alpha, to on the twin at k). The look is grey, ring or black: the ring

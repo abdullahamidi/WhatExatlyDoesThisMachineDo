@@ -8,4 +8,4 @@ coverage
 .DS_Store
 __pycache__/
 out/
-build/
+/build/

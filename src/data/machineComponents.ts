@@ -457,7 +457,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   coilStage2: {
-    id: 'coilStage2', techId: 'copperWinding', minLevel: 10,
+    id: 'coilStage2', techId: 'copperWinding', minLevel: 19,
     assetId: 'machine.coils2', attach: { socket: 'generatorMount', offset: { x: 0, y: 0 } },
     size: { width: 64, height: 40 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 3,
@@ -466,7 +466,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   coilStage3: {
-    id: 'coilStage3', techId: 'copperWinding', minLevel: 20,
+    id: 'coilStage3', techId: 'copperWinding', minLevel: 39,
     assetId: 'machine.coils3', attach: { socket: 'generatorMount', offset: { x: 0, y: 0 } },
     size: { width: 64, height: 40 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 4,
@@ -605,7 +605,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   fireboxGlow2: {
-    id: 'fireboxGlow2', techId: 'firebox', minLevel: 10,
+    id: 'fireboxGlow2', techId: 'firebox', minLevel: 19,
     assetId: 'machine.fireGlow2', attach: { socket: 'fireDoor', offset: { x: 0, y: 0 } },
     size: { width: 24, height: 24 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 3,
@@ -614,7 +614,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   fireboxGlow3: {
-    id: 'fireboxGlow3', techId: 'firebox', minLevel: 20,
+    id: 'fireboxGlow3', techId: 'firebox', minLevel: 39,
     assetId: 'machine.fireGlow3', attach: { socket: 'fireDoor', offset: { x: 0, y: 0 } },
     size: { width: 24, height: 24 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 4,
@@ -743,7 +743,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   coilRing2: {
-    id: 'coilRing2', techId: 'harmonicCoil', minLevel: 8,
+    id: 'coilRing2', techId: 'harmonicCoil', minLevel: 15,
     assetId: 'machine.coilRing2', attach: { socket: 'coilRing2', offset: { x: 0, y: 0 } },
     size: { width: 48, height: 8 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 3,
@@ -752,7 +752,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   coilRing3: {
-    id: 'coilRing3', techId: 'harmonicCoil', minLevel: 16,
+    id: 'coilRing3', techId: 'harmonicCoil', minLevel: 31,
     assetId: 'machine.coilRing3', attach: { socket: 'coilRing3', offset: { x: 0, y: 0 } },
     size: { width: 36, height: 8 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 3,
@@ -761,7 +761,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   coilRing4: {
-    id: 'coilRing4', techId: 'harmonicCoil', minLevel: 25,
+    id: 'coilRing4', techId: 'harmonicCoil', minLevel: 49,
     assetId: 'machine.coilRing4', attach: { socket: 'coilRing4', offset: { x: 0, y: 0 } },
     size: { width: 30, height: 8 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 3,
@@ -908,7 +908,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   ring2Back: {
-    id: 'ring2Back', techId: 'containmentRing', minLevel: 8,
+    id: 'ring2Back', techId: 'containmentRing', minLevel: 15,
     assetId: 'machine.ring2Back', attach: { socket: 'coreHub', offset: { x: 0, y: 0 } },
     size: { width: 112, height: 72 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 6,
@@ -917,7 +917,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   ring3Back: {
-    id: 'ring3Back', techId: 'containmentRing', minLevel: 16,
+    id: 'ring3Back', techId: 'containmentRing', minLevel: 31,
     assetId: 'machine.ring3Back', attach: { socket: 'coreHub', offset: { x: 0, y: 0 } },
     size: { width: 112, height: 72 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 6,
@@ -926,7 +926,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   ring4Back: {
-    id: 'ring4Back', techId: 'containmentRing', minLevel: 25,
+    id: 'ring4Back', techId: 'containmentRing', minLevel: 49,
     assetId: 'machine.ring4Back', attach: { socket: 'coreHub', offset: { x: 0, y: 0 } },
     size: { width: 112, height: 72 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 6,
@@ -944,7 +944,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   ring2Front: {
-    id: 'ring2Front', techId: 'containmentRing', minLevel: 8,
+    id: 'ring2Front', techId: 'containmentRing', minLevel: 15,
     assetId: 'machine.ring2Front', attach: { socket: 'coreHub', offset: { x: 0, y: 0 } },
     size: { width: 112, height: 72 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 9,
@@ -953,7 +953,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   ring3Front: {
-    id: 'ring3Front', techId: 'containmentRing', minLevel: 16,
+    id: 'ring3Front', techId: 'containmentRing', minLevel: 31,
     assetId: 'machine.ring3Front', attach: { socket: 'coreHub', offset: { x: 0, y: 0 } },
     size: { width: 112, height: 72 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 9,
@@ -962,7 +962,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   ring4Front: {
-    id: 'ring4Front', techId: 'containmentRing', minLevel: 25,
+    id: 'ring4Front', techId: 'containmentRing', minLevel: 49,
     assetId: 'machine.ring4Front', attach: { socket: 'coreHub', offset: { x: 0, y: 0 } },
     size: { width: 112, height: 72 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 9,
@@ -981,7 +981,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   ring2Bead: {
-    id: 'ring2Bead', techId: 'containmentRing', minLevel: 8,
+    id: 'ring2Bead', techId: 'containmentRing', minLevel: 15,
     assetId: 'machine.ringBead', attach: { socket: 'coreHub', offset: { x: 0, y: 0 } },
     size: { width: 5, height: 5 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 6,
@@ -990,7 +990,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   ring3Bead: {
-    id: 'ring3Bead', techId: 'containmentRing', minLevel: 16,
+    id: 'ring3Bead', techId: 'containmentRing', minLevel: 31,
     assetId: 'machine.ringBead', attach: { socket: 'coreHub', offset: { x: 0, y: 0 } },
     size: { width: 5, height: 5 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 6,
@@ -999,7 +999,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   ring4Bead: {
-    id: 'ring4Bead', techId: 'containmentRing', minLevel: 25,
+    id: 'ring4Bead', techId: 'containmentRing', minLevel: 49,
     assetId: 'machine.ringBead', attach: { socket: 'coreHub', offset: { x: 0, y: 0 } },
     size: { width: 5, height: 5 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 6,
@@ -1009,7 +1009,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
   },
   // WP22: second bead on ring 1, half a turn from the first (phi0 180), containmentRing MK II; alignOffsetDeg 180 keeps the pair apart after the finalAlignment hold; phaseOf ring1Bead starts it half a turn from the lead on its first placement.
   ring1Bead2: {
-    id: 'ring1Bead2', techId: 'containmentRing', minLevel: 4,
+    id: 'ring1Bead2', techId: 'containmentRing', minLevel: 7,
     assetId: 'machine.ringBead', attach: { socket: 'coreHub', offset: { x: 0, y: 0 } },
     size: { width: 5, height: 5 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 6,
@@ -1037,7 +1037,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   siphonTube2L: {
-    id: 'siphonTube2L', techId: 'resonantSiphon', minLevel: 5,
+    id: 'siphonTube2L', techId: 'resonantSiphon', minLevel: 13,
     assetId: 'machine.siphonTube', attach: { socket: 'siphon2L', offset: { x: 0, y: 0 } },
     size: { width: 12, height: 30 }, origin: { x: 0.5, y: 1 },
     layer: 'mid', depthBias: 4,
@@ -1046,7 +1046,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   siphonTube2R: {
-    id: 'siphonTube2R', techId: 'resonantSiphon', minLevel: 5,
+    id: 'siphonTube2R', techId: 'resonantSiphon', minLevel: 13,
     assetId: 'machine.siphonTube', attach: { socket: 'siphon2R', offset: { x: 0, y: 0 } },
     size: { width: 12, height: 30 }, origin: { x: 0.5, y: 1 },
     layer: 'mid', depthBias: 4,
@@ -1055,7 +1055,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   siphonTube3L: {
-    id: 'siphonTube3L', techId: 'resonantSiphon', minLevel: 10,
+    id: 'siphonTube3L', techId: 'resonantSiphon', minLevel: 28,
     assetId: 'machine.siphonTube', attach: { socket: 'siphon3L', offset: { x: 0, y: 0 } },
     size: { width: 12, height: 30 }, origin: { x: 0.5, y: 1 },
     layer: 'mid', depthBias: 4,
@@ -1064,7 +1064,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   siphonTube3R: {
-    id: 'siphonTube3R', techId: 'resonantSiphon', minLevel: 10,
+    id: 'siphonTube3R', techId: 'resonantSiphon', minLevel: 28,
     assetId: 'machine.siphonTube', attach: { socket: 'siphon3R', offset: { x: 0, y: 0 } },
     size: { width: 12, height: 30 }, origin: { x: 0.5, y: 1 },
     layer: 'mid', depthBias: 4,
@@ -1083,7 +1083,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   siphonArcs2: {
-    id: 'siphonArcs2', techId: 'resonantSiphon', minLevel: 5,
+    id: 'siphonArcs2', techId: 'resonantSiphon', minLevel: 13,
     assetId: 'machine.siphonArcs2', attach: { socket: 'siphonArcs', offset: { x: 0, y: 0 } },
     size: { width: 128, height: 64 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 8,
@@ -1092,7 +1092,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   siphonArcs3: {
-    id: 'siphonArcs3', techId: 'resonantSiphon', minLevel: 10,
+    id: 'siphonArcs3', techId: 'resonantSiphon', minLevel: 28,
     assetId: 'machine.siphonArcs3', attach: { socket: 'siphonArcs', offset: { x: 0, y: 0 } },
     size: { width: 128, height: 64 }, origin: { x: 0.5, y: 0.5 },
     layer: 'mid', depthBias: 8,
@@ -1138,7 +1138,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   anchorGlow2L: {
-    id: 'anchorGlow2L', techId: 'graviticAnchor', minLevel: 2,
+    id: 'anchorGlow2L', techId: 'graviticAnchor', minLevel: 3,
     assetId: 'machine.anchorGlow2', attach: { socket: 'anchorL', offset: { x: 0, y: 0 } },
     size: { width: 32, height: 128 }, origin: { x: 0.5, y: 1 },
     layer: 'mid', depthBias: 1,
@@ -1147,7 +1147,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   anchorGlow2R: {
-    id: 'anchorGlow2R', techId: 'graviticAnchor', minLevel: 2,
+    id: 'anchorGlow2R', techId: 'graviticAnchor', minLevel: 3,
     assetId: 'machine.anchorGlow2', attach: { socket: 'anchorR', offset: { x: 0, y: 0 } },
     size: { width: 32, height: 128 }, origin: { x: 0.5, y: 1 },
     layer: 'mid', depthBias: 1,
@@ -1156,7 +1156,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   anchorGlow3L: {
-    id: 'anchorGlow3L', techId: 'graviticAnchor', minLevel: 3,
+    id: 'anchorGlow3L', techId: 'graviticAnchor', minLevel: 5,
     assetId: 'machine.anchorGlow3', attach: { socket: 'anchorL', offset: { x: 0, y: 0 } },
     size: { width: 32, height: 128 }, origin: { x: 0.5, y: 1 },
     layer: 'mid', depthBias: 1,
@@ -1165,7 +1165,7 @@ export const MACHINE_COMPONENTS: Record<MachineComponentId, MachineComponentDefi
     effects: [],
   },
   anchorGlow3R: {
-    id: 'anchorGlow3R', techId: 'graviticAnchor', minLevel: 3,
+    id: 'anchorGlow3R', techId: 'graviticAnchor', minLevel: 5,
     assetId: 'machine.anchorGlow3', attach: { socket: 'anchorR', offset: { x: 0, y: 0 } },
     size: { width: 32, height: 128 }, origin: { x: 0.5, y: 1 },
     layer: 'mid', depthBias: 1,

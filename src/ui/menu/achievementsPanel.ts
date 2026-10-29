@@ -2,7 +2,7 @@ import './achievementsPanel.css';
 import { ACHIEVEMENT_LIST } from '../../data/achievements';
 import type { AchievementDefinition } from '../../data/achievements';
 import type { AchievementsState } from '../../data/types';
-import { achievementCards, counterText } from './achievementsView';
+import { achievementCards, counterText, fieldNotes } from './achievementsView';
 import type { AchievementCard, SpriteView } from './achievementsView';
 
 // RECORDS tab (WP12 T8). DOM only: no Phaser, no GameSession import. Text is always written with textContent.
@@ -13,6 +13,18 @@ export interface RecordsPanelDeps {
   subscribe(fn: () => void): () => void;
   // Rows to show (an edition's subset). Default: every achievement.
   defs?: readonly AchievementDefinition[];
+  // FIELD NOTES (WP28): the found notes (world.relics) and the edition's era cap. Absent = no section. The host calls
+  // refresh through `subscribe` on the 'find' event too.
+  fieldNotes?: { relics(): number; maxEra: number | null };
+}
+
+// FIELD NOTES section: a head line (title and n/N) and the found notes in order.
+interface NotesView {
+  root: HTMLDivElement;
+  title: HTMLSpanElement;
+  count: HTMLSpanElement;
+  list: HTMLOListElement;
+  signature: string;
 }
 
 interface CardView {
@@ -45,6 +57,17 @@ function signatureOf(card: AchievementCard): string {
   return [card.unlocked, card.name, card.description, card.statusText, card.badge.sheet, card.badge.frameIndex].join('|');
 }
 
+function buildNotes(): NotesView {
+  const root = el('div', 'ach-notes');
+  const head = el('div', 'ach-notes-head');
+  const title = el('span', 'ach-notes-title');
+  const count = el('span', 'ach-notes-count');
+  head.append(title, ' ', count);
+  const list = el('ol', 'ach-notes-list');
+  root.append(head, list);
+  return { root, title, count, list, signature: '' };
+}
+
 function buildCard(): CardView {
   const root = el('li', 'ach-card');
   root.setAttribute('role', 'listitem');
@@ -74,6 +97,8 @@ export function createAchievementsPanel(
   const list = el('ul', 'ach-list');
   list.setAttribute('role', 'list');
   wrap.append(counter, list);
+  const notes = deps.fieldNotes === undefined ? null : buildNotes();
+  if (notes !== null) wrap.appendChild(notes.root);
 
   const views = new Map<string, CardView>();
   for (const def of defs) {
@@ -92,15 +117,28 @@ export function createAchievementsPanel(
     view.root.classList.toggle('is-locked', card.locked);
     view.root.classList.toggle('is-secret', card.secretHidden);
     paintSprite(view.badge, card.badge);
-    if (card.lock !== null) {
-      paintSprite(view.lock, card.lock);
-      view.lock.hidden = false;
-    } else {
-      view.lock.hidden = true;
-    }
+    if (card.lock !== null) paintSprite(view.lock, card.lock);
+    view.lock.hidden = card.lock === null;
     view.name.textContent = card.name;
     view.desc.textContent = card.description;
     view.status.textContent = card.statusText;
+  }
+
+  // FIELD NOTES: the head always, the list only when its text changed (a note is added, or a reset clears them).
+  function paintNotes(): void {
+    const source = deps.fieldNotes;
+    if (notes === null || source === undefined) return;
+    const view = fieldNotes(source.relics(), source.maxEra);
+    const signature = `${view.countText}\n${view.notes.join('\n')}`;
+    if (signature === notes.signature) return;
+    notes.signature = signature;
+    notes.title.textContent = view.title;
+    notes.count.textContent = view.countText;
+    notes.list.replaceChildren(...view.notes.map((text) => {
+      const item = el('li');
+      item.textContent = text;
+      return item;
+    }));
   }
 
   function refresh(): void {
@@ -116,6 +154,7 @@ export function createAchievementsPanel(
       view.signature = signature;
       paintCard(view, card);
     }
+    paintNotes();
   }
 
   const unsubscribe = deps.subscribe(refresh);

@@ -33,6 +33,9 @@ export const RECOVERED_TEXT = {
 
 export const FIRST_CLICK_MESSAGE = 'Manual operation detected.';
 
+// WP28 Splice wake lines share this prefix (the Coin Return is the second line on the payphone and says so).
+const LINE = 'Line spliced. ';
+
 // One install line per technology, shown as the toast body on unlock or milestone.
 // Lines matching a technology flavor text are identical to it.
 export const INSTALL_LINES: Record<TechId, string> = {
@@ -91,6 +94,22 @@ export const INSTALL_LINES: Record<TechId, string> = {
   leakWhistle: 'Leaks now announce themselves. Most of them.',
   dampingFork: 'The second fork hums before anything slips.',
   overrunClutch: 'Clutch engaged ahead of the load. Load not found.',
+  spliceBicycle: LINE + 'Wheel turning. Direction disputed.',
+  spliceOrgan: LINE + 'Organ playing. Last bars missing.',
+  spliceClock: LINE + 'Clock face lit. Time unchanged.',
+  spliceRadio: LINE + 'Carrier found. Program not found.',
+  splicePayphone: LINE + 'Line open. Caller not found.',
+  spliceSign: LINE + 'Bulbs lit: half. Message: none.',
+  splicePump: LINE + 'Pump primed. Output: cough.',
+  spliceWhistle: LINE + 'Shift whistle sounding. Shift not found.',
+  spliceHydrant: LINE + 'Pressure at the cap. Water declined.',
+  spliceBell: LINE + 'Bell swinging. Peak not reached.',
+  spliceGramophone: LINE + 'Disc turning. Groove skipping.',
+  spliceChimes: LINE + 'Chimes ringing. Wind: none.',
+  spliceVane: LINE + 'Vane turning. Heading: down.',
+  spliceKite: LINE + 'Kite rising. Wind: none.',
+  spliceCairn: LINE + 'Stones lifting. Weight unknown.',
+  spliceCoinReturn: 'Second line spliced. Coin return active. Coins: none.',
 };
 
 // Achievement toast (WP12 D5) and RECORDS panel texts.

@@ -33,9 +33,10 @@ export const REDUCED_MOTION = { maxDegPerSec: 180, cameraTweenMs: 0, assemblyDro
 // Crank keys and their rate cap (presses per second, every press beyond it is ignored).
 export const CRANK_KEYS = { keys: [' ', 'Enter'], maxPerSecond: 15 } as const;
 
-// Keyboard shortcuts for non-crank actions (`t` and `f` matched case-insensitively).
+// Keyboard shortcuts for non-crank actions (`t`, `f` and `g` matched case-insensitively).
 // `fault` clears a machine fault (WP27): the fault marker listens to the clearFault command.
-export const HOTKEYS = { techTree: 't', fault: 'f', menu: 'Escape' } as const;
+// `find` picks up the live Find (WP28): the Find marker listens to the collectFind command.
+export const HOTKEYS = { techTree: 't', fault: 'f', find: 'g', menu: 'Escape' } as const;
 
 export const SETTINGS_LABELS = {
   sectionAudio: 'AUDIO',
@@ -63,9 +64,11 @@ export const SETTINGS_LABELS = {
   keyCrank: 'SPACE / ENTER',
   keyTechTree: 'T',
   keyFault: 'F',
+  keyFind: 'G',
   keyMenu: 'ESC',
   hotkeyCrank: 'CRANK',
   hotkeyTechTree: 'TECH INDEX',
   hotkeyFault: 'CLEAR FAULT',
+  hotkeyFind: 'PICK UP FIND',
   hotkeyMenu: 'MENU',
 } as const;

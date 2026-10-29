@@ -109,6 +109,7 @@ describe('parseImport', () => {
       seenEver: ['INS-01', 'CRW-01', 'beat.tapeFreeze'],
       eraMoments: [2, 0, 0, 0, 0],
       youEras: 1,
+      relics: 0,
     };
     const exported = serialize(createInitialState(NOW), DEFAULT_SETTINGS, NOW, {
       stats: emptyStats(NOW),

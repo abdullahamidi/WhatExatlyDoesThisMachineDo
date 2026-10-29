@@ -186,14 +186,14 @@ describe('worldEras: tech rules', () => {
     expect(WORLD_SENSOR).toEqual({ pulseEra: 4 });
   });
 
-  it('reads the era V shadow rule for the horizon field window stage and the girl step (minLevel 5, INS-12 level)', () => {
+  it('reads the era V shadow rule for the horizon field window stage and the girl step (minLevel 9, INS-12 level)', () => {
     expect(WORLD_SHADOWS.offEra).toBe(5);
     expect(WORLD_SHADOWS.offRule.techId).toBe('horizonField');
     const windowStage = WORLD_WINDOWS.stages.find((s) => s.rule.techId === 'horizonField');
     const girlStep = WORLD_GIRL.steps.find((s) => s.techId === 'horizonField');
     expect(windowStage?.rule.minLevel).toBe(WORLD_SHADOWS.offRule.minLevel);
     expect(girlStep?.minLevel).toBe(WORLD_SHADOWS.offRule.minLevel);
-    expect(WORLD_SHADOWS.offRule.minLevel).toBe(5);
+    expect(WORLD_SHADOWS.offRule.minLevel).toBe(9);
   });
 
   it('keeps crowHigh as the only era loop (the others were pruned in WP26)', () => {

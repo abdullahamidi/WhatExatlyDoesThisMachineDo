@@ -38,3 +38,18 @@ export const HUD_BUMP = { scale: 1.08, durationMs: 120 } as const;
 export const OUTPUT_TICK = { periodMs: 3000, fadeMs: 2400, holdMs: 1000, riseWorldPx: 36, alpha: 0.9, fontScale: 1, poolSize: 3,
   anchor: { 1: 'wornMotor', 2: 'generator', 3: 'boiler', 4: 'spireTower', 5: 'nullChamber' } satisfies Record<EraNumber, MachineComponentId>,
   offset: { 1: { x: 0, y: -32 }, 2: { x: 0, y: -90 }, 3: { x: 190, y: -216 }, 4: { x: 190, y: -160 }, 5: { x: 240, y: -116 } } satisfies Record<EraNumber, { x: number; y: number }> } as const;
+// WP28 TECH INDEX: the SPLICES tab (label, row states, the affordable count suffix) and the BUY MAX control.
+export const SPLICE_TAB = { label: 'SPLICES', dark: 'DARK', inReach: 'IN REACH', spliced: 'SPLICED', fullGame: 'FULL GAME', affordableSuffix: 'affordable' } as const;
+export const BUY_MAX = { label: 'BUY MAX' } as const;
+// WP28 NEXT BUY: the HUD line under the goal, `prefix` + tech name + `sep` + `etaPrefix` + the rounded ETA (formatDuration).
+export const NEXT_BUY = { prefix: 'NEXT BUY: ', sep: ' · ', etaPrefix: '~' } as const;
+// The machine's words (plain, US spelling, no '!' and no '...'). Placeholders: {n}, {res}, {have}, {need}, {name}.
+export const SPLICE_TEXT = {
+  title: 'SPLICE · ',
+  click: 'CLICK TO SPLICE',
+  need: 'NEED {n} MORE {res}',
+  locked: 'LINE NOT IN REACH · {have} / {need} LIFETIME {res}',
+  needsTech: 'LINE NOT IN REACH · {name} FIRST',
+  fullGame: 'FULL GAME',
+  spliced: 'SPLICED',
+} as const;

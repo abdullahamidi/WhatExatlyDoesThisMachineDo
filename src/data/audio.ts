@@ -10,6 +10,14 @@ export type PurchaseCue = 'purchase' | 'relay' | 'hiss' | 'forkPing' | 'swell';
 // Machine Fault spawn cue shape by era (AUDIO.faultSpawn.flavourByEra, WP27).
 export type FaultFlavour = 'crackle' | 'hiss' | 'ping' | 'static';
 
+// Poke sound ids (WP28): one per poke reaction family, two variants each (AUDIO.poke).
+export type PokeSoundId = 'tick' | 'pencil' | 'woof' | 'caw' | 'beep' | 'ring' | 'tink' | 'note' | 'organ' | 'bell' | 'crackle' | 'buzz';
+// A cue part (WP28): [source, hz, atMs, ms, gain, fromHz?]. A tone wave (sine, square, triangle, sawtooth) glides from fromHz to hz over
+// the first half of ms when fromHz is given; a noise burst runs through a bandpass / highpass at hz (Q AUDIO.cueQ). Times from the cue start.
+export type CueSource = 'sine' | 'square' | 'triangle' | 'sawtooth' | 'bandpass' | 'highpass';
+export type CuePart = readonly [CueSource, number, number, number, number, number?];
+export type CueParts = readonly CuePart[];
+
 export const AUDIO = {
   // Master bus: target level, fade time when toggled, and how often the ambient loop updates.
   masterGain: 0.3,
@@ -156,6 +164,46 @@ export const AUDIO = {
     ratchet: { count: 2, gapMs: 40, pulseMs: 35, type: 'bandpass', hz: 900, q: 3, gain: 0.3 },
     bright: { hz: 2600, atMs: 100, ms: 30, gain: 0.25 },
     overdrive: { fromHz: 1800, toHz: 3600, atMs: 150, ms: 60, gain: 0.2 },
+  },
+
+  // Cue sounds (WP28): parts are [source, hz, atMs, ms, gain, fromHz?] (CuePart); the synth plays each part at its atMs.
+  // cueQ is the Q of every noise part. Gains stay at 0.3 or less; the per-cue end and gain limits are tested in audioMath.test.ts.
+  cueQ: 1.5,
+  // Find spawn chime: two soft sines, the second 110 ms after the first. Ends inside 300 ms; gain 0.2 cap.
+  findSpawn: [['sine', 1319, 0, 180, 0.16], ['sine', 1760, 110, 180, 0.16]],
+  // Find pickup clink: a sine and a quieter partial (2.76 x). Ends inside 200 ms; gain 0.3 cap.
+  findCollect: [['sine', 2100, 0, 160, 0.25], ['sine', 5796, 0, 160, 0.1]],
+  // Relic pickup: a paper rustle, one filtered noise burst. Ends inside 300 ms; gain 0.25 cap.
+  relicCollect: [['highpass', 3000, 0, 260, 0.2]],
+  // Splice wake by era (index era - 1): I ratchet and bell, II hum swell and click, III valve hiss, IV soft ring, V low swell.
+  // The swells have no attack in this format: a glide up from fromHz stands in for the rise. Each ends inside 600 ms; gain 0.3 cap.
+  spliceWake: [
+    [['bandpass', 1100, 0, 25, 0.25], ['bandpass', 1100, 60, 25, 0.25], ['bandpass', 1100, 120, 25, 0.25], ['sine', 1560, 180, 380, 0.2]],
+    [['sine', 110, 0, 500, 0.2, 90], ['sine', 220, 0, 500, 0.2, 200], ['square', 1800, 480, 15, 0.2]],
+    [['highpass', 2600, 0, 420, 0.2]],
+    [['sine', 660, 0, 540, 0.2], ['sine', 990, 0, 540, 0.2]],
+    [['sawtooth', 55, 0, 560, 0.25, 40], ['sine', 82.5, 0, 560, 0.2, 60]],
+  ],
+
+  // Poke cues (WP28): two variants per id, one cue part each (atMs 0). gameAudio picks a variant (not one of the last avoidRecent picks
+  // while another is free) and a pitch of 1 +- pitchSpread. Every variant ends inside 400 ms at gain 0.3 or less.
+  poke: {
+    pitchSpread: 0.05,
+    avoidRecent: 2,
+    variants: {
+      tick: [['bandpass', 2200, 0, 25, 0.2], ['square', 1800, 0, 15, 0.12]],
+      pencil: [['highpass', 3000, 0, 60, 0.15], ['bandpass', 4000, 0, 40, 0.15]],
+      woof: [['square', 110, 0, 180, 0.25, 150], ['triangle', 90, 0, 220, 0.25, 120]],
+      caw: [['sawtooth', 520, 0, 260, 0.2, 420], ['sawtooth', 300, 0, 300, 0.2, 380]],
+      beep: [['square', 880, 0, 120, 0.15], ['sine', 1040, 0, 90, 0.2]],
+      ring: [['sine', 480, 0, 350, 0.2], ['sine', 520, 0, 300, 0.2]],
+      tink: [['sine', 2600, 0, 150, 0.2], ['sine', 3100, 0, 120, 0.2]],
+      note: [['triangle', 523, 0, 300, 0.25], ['triangle', 659, 0, 280, 0.25]],
+      organ: [['sine', 330, 0, 380, 0.2], ['sine', 262, 0, 380, 0.2]],
+      bell: [['sine', 740, 0, 380, 0.25], ['sine', 880, 0, 340, 0.25]],
+      crackle: [['highpass', 1800, 0, 200, 0.2], ['bandpass', 900, 0, 150, 0.2]],
+      buzz: [['sawtooth', 90, 0, 180, 0.2], ['square', 110, 0, 140, 0.15]],
+    } satisfies Record<PokeSoundId, readonly [CuePart, CuePart]>,
   },
 
   // Ambient bed trims per era I..V (WP15 D8): older beds recede as later eras arrive. 1 = no change (before the bed exists it is 1).

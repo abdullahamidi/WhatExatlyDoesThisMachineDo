@@ -35,7 +35,9 @@ export interface Activity {
   holdMs: readonly [number, number];
   weight: number;
   cooldownMs: number;
-  travel?: 'spot' | 'sensor' | 'scrap' | 'home' | 'stake' | 'notStake';
+  // 'outer' walks to the outer spot: the spot farthest from the machine anchor on the actor's own side, other than the current spot, when it is
+  // farther from the anchor than the actor (none: the activity starts in place). The poke leaves (WP28a T15a, A13 [R1]).
+  travel?: 'spot' | 'sensor' | 'scrap' | 'home' | 'stake' | 'notStake' | 'outer';
   reversed?: true;
   when?: readonly BehaviourCond[];
   reaction?: readonly CueId[];
@@ -50,6 +52,8 @@ export interface Activity {
   // A brief glitch: never in crank playback, never the first pick of a fresh runner.
   glitch?: true;
   follow?: Partial<Record<string, number>>;
+  // A poke-only activity (WP28a T15a): weight 0, no reaction cue, never picked; BehaviourRunner.interrupt starts it (a level-3 poke).
+  poke?: true;
 }
 
 // A unison clip (era IV): perBeat advances one frame per downbeat, accent is the frame on each downbeat of a still action, walkFirst walks
@@ -68,9 +72,11 @@ export const WORLD_STARE_SAFE: Readonly<Record<BehaviourActor, readonly string[]
   inspector: ['front', 'talk'], dog: ['head', 'talk'], crow: ['head', 'talk'], girl: ['stand0', 'stand1', 'talk', 'lanternUp', 'tilt'],
 };
 
-// Payoff frames of the finale (D7): no pre-finale activity or unison clip of the actor may show them.
+// Payoff frames of the finale (D7): no pre-finale activity or unison clip of the actor may show them. The crow's fly frames are not banned
+// before the finale since WP28a (C3): only the poke-only hop (one wing, a short perch-to-perch flight) draws them; the finale flight keeps its
+// own staging.
 export const WORLD_PREFINALE_BANNED: Readonly<Record<BehaviourActor, readonly string[]>> = {
-  inspector: ['pat0', 'pat1', 'wave', 'shield'], dog: ['flat', 'lie', 'chase0', 'chase1'], crow: ['fly0', 'fly1', 'fly2'],
+  inspector: ['pat0', 'pat1', 'wave', 'shield'], dog: ['flat', 'lie', 'chase0', 'chase1'], crow: [],
   girl: ['shield', 'run0', 'run1', 'run2', 'run3', 'lanternDrop'],
 };
 
@@ -228,6 +234,23 @@ const CROW_V: readonly Activity[] = [
   { id: 'caw', clip: c(['talk', 'head'], 1), holdMs: [2000, 3000], weight: 1, cooldownMs: 30000, interruptible: true },
 ];
 
+// Poke-only activities (WP28a T15a): weight 0, never picked, never cued; BehaviourRunner.interrupt starts them as a reaction after a level-3
+// poke. The Inspector and the dog walk to the outer spot (the leave) and stay there, facing away. Era V has no walking leave: its level 3 plays
+// in place (the poke tables leave null), so no era V leave row exists. The crow hops to another perch: the three fly frames, one wing, the arc
+// drawn by LivingWorld (C3). Era IV has none (the conductor plays the cast).
+const POKE_LEAVE_INS: Activity = {
+  id: 'leaveWrite', clip: c(['write0', 'write1'], 2), holdMs: [6000, 9000], weight: 0, cooldownMs: 0, travel: 'outer', poke: true,
+  interruptible: false,
+};
+const POKE_LEAVE_DOG: Activity = {
+  id: 'leaveSit', clip: one('sit0'), holdMs: [8000, 12000], weight: 0, cooldownMs: 0, travel: 'outer', poke: true, interruptible: false,
+};
+const POKE_HOP: Activity = {
+  id: 'hop', clip: c(['fly0', 'fly1', 'fly2'], 12), holdMs: [600, 600], weight: 0, cooldownMs: 0, poke: true, interruptible: false,
+};
+// The era V hop plays its frames in reverse (WP28 Pokes: era V reverses the hop).
+const POKE_HOP_V: Activity = { ...POKE_HOP, reversed: true };
+
 // The girl on the ground (eras I-III from cycle 3, the era IV conductor and era V). She never travels and never moves on screen.
 const GIRL_GROUND: readonly Activity[] = [
   { id: 'stand', clip: one('stand0'), holdMs: [6000, 16000], weight: 3, cooldownMs: 0, repeatable: true, when: ['girlGround'], interruptible: true },
@@ -254,9 +277,15 @@ const GIRL_MINI_PALM: Activity = {
 
 // Activities per actor and era. Era IV has no entry: the conductor (WORLD_UNISON) runs the cast.
 export const WORLD_REPERTOIRE: Record<BehaviourActor, Partial<Record<1 | 2 | 3 | 4 | 5, readonly Activity[]>>> = {
-  inspector: { 1: INS_ROUNDS, 2: INS_ROUNDS, 3: [...INS_ROUNDS, ...INS_UMBRELLA], 5: INS_V },
-  dog: { 1: DOG_ROUNDS, 2: [...DOG_ROUNDS, DOG_DIG, DOG_WAG], 3: [...DOG_ROUNDS, DOG_WAG, DOG_SHAKE], 5: DOG_V },
-  crow: { 1: CROW_I, 2: CROW_II, 3: CROW_III, 5: CROW_V },
+  inspector: {
+    1: [...INS_ROUNDS, POKE_LEAVE_INS], 2: [...INS_ROUNDS, POKE_LEAVE_INS], 3: [...INS_ROUNDS, ...INS_UMBRELLA, POKE_LEAVE_INS],
+    5: [...INS_V],
+  },
+  dog: {
+    1: [...DOG_ROUNDS, POKE_LEAVE_DOG], 2: [...DOG_ROUNDS, DOG_DIG, DOG_WAG, POKE_LEAVE_DOG], 3: [...DOG_ROUNDS, DOG_WAG, DOG_SHAKE, POKE_LEAVE_DOG],
+    5: [...DOG_V],
+  },
+  crow: { 1: [...CROW_I, POKE_HOP], 2: [...CROW_II, POKE_HOP], 3: [...CROW_III, POKE_HOP], 5: [...CROW_V, POKE_HOP_V] },
   girl: { 1: [...GIRL_MINI, ...GIRL_GROUND], 2: [...GIRL_MINI, ...GIRL_GROUND], 3: [...GIRL_MINI, GIRL_MINI_PALM, ...GIRL_GROUND, GIRL_PALM], 5: GIRL_GROUND },
 };
 

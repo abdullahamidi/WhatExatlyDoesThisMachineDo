@@ -45,8 +45,8 @@ await page.screenshot({ path: out + '/w3-03-machine.png' });
 await page.evaluate(() => { const s = window.__wedtmd.session; if (s && s.debugGrant) s.debugGrant(1e6); });
 // era tabs: era II still signal-locked at this point
 await page.click('#hud-tech'); await page.waitForTimeout(200);
-ok('9_tabs', await page.$$eval('.tech-tab', bs => bs.map(b => ({ text: b.textContent.trim(), selected: b.getAttribute('aria-selected') === 'true', disabled: b.disabled }))));
-ok('9_tabCount', await page.$$eval('.tech-tab', bs => bs.length));
+ok('9_tabs', await page.$$eval('.tech-tab:not(#tech-tab-splices)',bs => bs.map(b => ({ text: b.textContent.trim(), selected: b.getAttribute('aria-selected') === 'true', disabled: b.disabled }))));
+ok('9_tabCount', await page.$$eval('.tech-tab:not(#tech-tab-splices)',bs => bs.length));
 ok('9_header', await txt('#tech-me'));
 await page.focus('#tech-tab-1'); await page.keyboard.press('ArrowRight');
 ok('9_arrow', await page.evaluate(() => document.activeElement && document.activeElement.id));
@@ -63,13 +63,13 @@ res['9_buys'] = await page.evaluate((buys) => {
   return o.concat(['generatorBlueprint:' + s.state.techLevels.generatorBlueprint]);
 }, ['wornMotor', 'gearRatio', 'gearRatio', 'gearRatio', 'reinforcedCrank', 'motorTuning', 'motorTuning', 'motorTuning', 'motorTuning', 'motorTuning', 'flywheel', 'pistonArray', 'improvedPistons']);
 await page.click('#hud-tech'); await page.waitForTimeout(200);
-ok('10_tabs', { tabs: await page.$$eval('.tech-tab', bs => bs.map(b => ({ text: b.textContent.trim(), selected: b.getAttribute('aria-selected') === 'true', disabled: b.disabled }))), me: await txt('#tech-me') });
-ok('10_tabCount', await page.$$eval('.tech-tab', bs => bs.length));
+ok('10_tabs', { tabs: await page.$$eval('.tech-tab:not(#tech-tab-splices)',bs => bs.map(b => ({ text: b.textContent.trim(), selected: b.getAttribute('aria-selected') === 'true', disabled: b.disabled }))), me: await txt('#tech-me') });
+ok('10_tabCount', await page.$$eval('.tech-tab:not(#tech-tab-splices)',bs => bs.length));
 ok('10_nodes', await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length));
 await page.focus('#tech-tab-2'); await page.keyboard.press('ArrowLeft'); await page.keyboard.press('Enter'); await page.waitForTimeout(150);
-ok('10_back', { tabs: await page.$$eval('.tech-tab', bs => bs.map(b => b.getAttribute('aria-selected'))), nodes: await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length), me: await txt('#tech-me') });
+ok('10_back', { tabs: await page.$$eval('.tech-tab:not(#tech-tab-splices)',bs => bs.map(b => b.getAttribute('aria-selected'))), nodes: await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length), me: await txt('#tech-me') });
 // era III fast-forward (stages.mjs s11 recipe: s9 list + '@substationBlueprint'), one page.evaluate
-const S9 = ['wornMotor', 'gearRatio', 'gearRatio', 'gearRatio', 'reinforcedCrank', 'motorTuning', 'motorTuning', 'motorTuning', 'motorTuning', 'motorTuning', 'flywheel', 'pistonArray', 'improvedPistons', '@blueprint', 'generator', ...Array(5).fill('motorRetrofit'), ...Array(20).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(3).fill('transformer'), 'powerLines'];
+const S9 = ['wornMotor', 'gearRatio', 'gearRatio', 'gearRatio', 'reinforcedCrank', 'motorTuning', 'motorTuning', 'motorTuning', 'motorTuning', 'motorTuning', 'flywheel', 'pistonArray', 'improvedPistons', '@blueprint', 'generator', ...Array(10).fill('motorRetrofit'), ...Array(40).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(6).fill('transformer'), 'powerLines'];
 await page.keyboard.press('Escape'); await page.waitForTimeout(250);
 await page.evaluate((buys) => {
   const s = window.__wedtmd.session;
@@ -88,8 +88,8 @@ await page.evaluate((buys) => {
   }
 }, [...S9, '@substationBlueprint']);
 await page.click('#hud-tech'); await page.waitForTimeout(200);
-ok('11_tabs', { tabs: await page.$$eval('.tech-tab', bs => bs.map(b => ({ text: b.textContent.trim(), selected: b.getAttribute('aria-selected') === 'true', disabled: b.disabled }))), me: await txt('#tech-me') });
-ok('11_tabCount', await page.$$eval('.tech-tab', bs => bs.length)); // expect 5 (era V tab exists)
+ok('11_tabs', { tabs: await page.$$eval('.tech-tab:not(#tech-tab-splices)',bs => bs.map(b => ({ text: b.textContent.trim(), selected: b.getAttribute('aria-selected') === 'true', disabled: b.disabled }))), me: await txt('#tech-me') });
+ok('11_tabCount', await page.$$eval('.tech-tab:not(#tech-tab-splices)',bs => bs.length)); // expect 5 (era V tab exists)
 await page.click('#tech-tab-3'); await page.waitForTimeout(200);
 ok('11_header', await txt('#tech-me'));
 ok('11_nodes', await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length)); // expect 10 (era III tab)
@@ -111,11 +111,11 @@ await page.evaluate((buys) => {
     let r = s.purchase(id);
     for (let k = 0; k < 6 && !r.ok; k++) { jump(); r = s.purchase(id); }
   }
-}, [...S9, '@substationBlueprint', 'boiler', ...Array(3).fill('inductionHeater'), ...Array(20).fill('firebox'), 'steamHammer', 'superheater', ...Array(5).fill('condenser'), 'turbine', 'reliefValves', '@pressureVesselBlueprint']);
+}, [...S9, '@substationBlueprint', 'boiler', ...Array(9).fill('inductionHeater'), ...Array(40).fill('firebox'), 'steamHammer', 'superheater', ...Array(15).fill('condenser'), 'turbine', 'reliefValves', '@pressureVesselBlueprint']);
 await page.click('#hud-tech'); await page.waitForTimeout(200);
-ok('12_tabs', { tabs: await page.$$eval('.tech-tab', bs => bs.map(b => ({ text: b.textContent.trim(), selected: b.getAttribute('aria-selected') === 'true', disabled: b.disabled }))), me: await txt('#tech-me') });
-ok('12_tabCount', await page.$$eval('.tech-tab', bs => bs.length)); // expect 5 (era V tab exists)
-ok('12_tab5', await page.$$eval('.tech-tab', bs => (bs[4] ? bs[4].textContent.trim() : ''))); // expect 'SIGNAL ?'
+ok('12_tabs', { tabs: await page.$$eval('.tech-tab:not(#tech-tab-splices)',bs => bs.map(b => ({ text: b.textContent.trim(), selected: b.getAttribute('aria-selected') === 'true', disabled: b.disabled }))), me: await txt('#tech-me') });
+ok('12_tabCount', await page.$$eval('.tech-tab:not(#tech-tab-splices)',bs => bs.length)); // expect 5 (era V tab exists)
+ok('12_tab5', await page.$$eval('.tech-tab:not(#tech-tab-splices)',bs => (bs[4] ? bs[4].textContent.trim() : ''))); // expect 'SIGNAL ?'
 await page.click('#tech-tab-4'); await page.waitForTimeout(200);
 ok('12_header', await txt('#tech-me'));
 ok('12_nodes', await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length)); // expect 10 (era IV tab)
@@ -137,10 +137,10 @@ await page.evaluate((buys) => {
     let r = s.purchase(id);
     for (let k = 0; k < 6 && !r.ok; k++) { jump(); r = s.purchase(id); }
   }
-}, [...S9, '@substationBlueprint', 'boiler', ...Array(3).fill('inductionHeater'), ...Array(20).fill('firebox'), 'steamHammer', 'superheater', ...Array(5).fill('condenser'), 'turbine', 'reliefValves', '@pressureVesselBlueprint', 'resonatorSpire', ...Array(3).fill('crankServo'), ...Array(25).fill('harmonicCoil'), ...Array(3).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(3).fill('standingWave'), 'crystalLattice', '@harmonicConvergence']);
+}, [...S9, '@substationBlueprint', 'boiler', ...Array(9).fill('inductionHeater'), ...Array(40).fill('firebox'), 'steamHammer', 'superheater', ...Array(15).fill('condenser'), 'turbine', 'reliefValves', '@pressureVesselBlueprint', 'resonatorSpire', ...Array(3).fill('crankServo'), ...Array(50).fill('harmonicCoil'), ...Array(6).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(6).fill('standingWave'), 'crystalLattice', '@harmonicConvergence']);
 await page.click('#hud-tech'); await page.waitForTimeout(200);
-ok('13_tabs', { tabs: await page.$$eval('.tech-tab', bs => bs.map(b => ({ text: b.textContent.trim(), selected: b.getAttribute('aria-selected') === 'true', disabled: b.disabled }))), me: await txt('#tech-me') });
-ok('13_tabCount', await page.$$eval('.tech-tab', bs => bs.length)); // expect 5
+ok('13_tabs', { tabs: await page.$$eval('.tech-tab:not(#tech-tab-splices)',bs => bs.map(b => ({ text: b.textContent.trim(), selected: b.getAttribute('aria-selected') === 'true', disabled: b.disabled }))), me: await txt('#tech-me') });
+ok('13_tabCount', await page.$$eval('.tech-tab:not(#tech-tab-splices)',bs => bs.length)); // expect 5
 await page.click('#tech-tab-5'); await page.waitForTimeout(200);
 ok('13_header', await txt('#tech-me')); // expect ends '???'
 ok('13_nodes', await page.$$eval('.tech-node', ns => ns.filter(n => !n.hidden).length)); // expect 12 (era V tab)

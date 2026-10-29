@@ -216,6 +216,7 @@ describe('startSession', () => {
       seenEver: ['INS-01', 'CRW-01', 'beat.tapeFreeze'],
       eraMoments: [2, 0, 0, 0, 0] as [number, number, number, number, number],
       youEras: 1,
+      relics: 0,
     };
     const prestige = { cycle: 1, echoesEarned: 0, perks: [] };
     storage.setItem(SAVE_KEY, serialize(state, { ...DEFAULT_SETTINGS, muted: false }, t0, { stats: emptyStats(t0), achievements: { unlocked: {} }, prestige, world }));
@@ -348,6 +349,7 @@ describe('startSession edition era cap (WP21)', () => {
       seenEver: ['INS-01'],
       eraMoments: [1, 0, 0, 0, 0] as [number, number, number, number, number],
       youEras: 0,
+      relics: 0,
     };
     storage.setItem(SAVE_KEY, JSON.stringify({ ...v2Primary, world }));
 

@@ -220,12 +220,12 @@ describe('stats and achievements in the envelope (WP12)', () => {
 
   it('serialize without meta keeps the pre-WP12 key set', () => {
     const parsed = JSON.parse(serialize(state, DEFAULT_SETTINGS, 2000)) as Record<string, unknown>;
-    expect(Object.keys(parsed)).toEqual(['version', 'savedAt', 'state', 'settings']);
+    expect(Object.keys(parsed)).toEqual(['version', 'econ', 'savedAt', 'state', 'settings']);
   });
 
   it('serialize with meta appends stats and achievements after settings', () => {
     const parsed = JSON.parse(serialize(state, DEFAULT_SETTINGS, 2000, { stats, achievements, prestige: DEFAULT_PRESTIGE_LITERAL })) as Record<string, unknown>;
-    expect(Object.keys(parsed)).toEqual(['version', 'savedAt', 'state', 'settings', 'stats', 'achievements', 'prestige']);
+    expect(Object.keys(parsed)).toEqual(['version', 'econ', 'savedAt', 'state', 'settings', 'stats', 'achievements', 'prestige']);
   });
 
   it('a v2 save without stats derives them from the state and has no achievements', () => {
@@ -576,7 +576,8 @@ describe('era III save compatibility (WP9)', () => {
 });
 
 describe('era IV save compatibility (WP10)', () => {
-  const ERA_FOUR_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 4);
+  // WP28: Splices (branch 'splice') are excluded from the era lists; they are bought outside the era tree.
+  const ERA_FOUR_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 4 && TECHNOLOGIES[id].branch !== 'splice');
 
   it('a v2 save without any era IV keys loads as loaded with every era IV level at 0', () => {
     const base = withLevels({ gearRatio: 2 });
@@ -619,7 +620,7 @@ describe('era IV save compatibility (WP10)', () => {
 });
 
 describe('era V save compatibility (WP11)', () => {
-  const ERA_FIVE_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 5);
+  const ERA_FIVE_IDS = TECH_IDS.filter((id) => TECHNOLOGIES[id].era === 5 && TECHNOLOGIES[id].branch !== 'splice');
 
   it('a v2 save without any era V keys loads as loaded with every era V level at 0', () => {
     const base = withLevels({ gearRatio: 2, harmonicConvergence: 1 });
@@ -935,6 +936,7 @@ describe('living world block (WP23a)', () => {
     seenEver: ['INS-01', 'DOG-01'],
     eraMoments: [1, 2, 3, 0, 0],
     youEras: 3,
+    relics: 0,
     ...over,
   });
   const metaWith = (world?: WorldSaveState) => ({
@@ -960,6 +962,13 @@ describe('living world block (WP23a)', () => {
     const r = deserialize(serialize(createInitialState(NOW), DEFAULT_SETTINGS, NOW, metaWith(block())), NOW);
     expect(r.status).toBe('loaded');
     expect(r.world).toEqual(block());
+  });
+
+  it('round trips the relic count (WP28); a block without it loads with 0', () => {
+    const r = deserialize(serialize(createInitialState(NOW), DEFAULT_SETTINGS, NOW, metaWith(block({ relics: 4 }))), NOW);
+    expect(r.world.relics).toBe(4);
+    const old = deserialize(raw(createInitialState(NOW), { world: { seen: [], seenEver: [], eraMoments: [0, 0, 0, 0, 0], youEras: 0 } }), NOW);
+    expect(old.world.relics).toBe(0);
   });
 
   it('a save without the block, and a missing save, load with the default block', () => {

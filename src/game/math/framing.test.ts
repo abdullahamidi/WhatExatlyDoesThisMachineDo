@@ -5,27 +5,33 @@ import { visibleMachineBounds, boundsToWorld } from './machineBounds';
 import { VIEW, WORLD, CAMERA, MACHINE_ANCHOR, PIXEL_SCALE, GROUND_Y } from '../../data/world';
 import { TECH_IDS } from '../../data/types';
 import type { TechId } from '../../data/types';
+import { SPLIT_PARTS } from '../../data/pacing';
 
 // Auto-framing of the machine, before (2560 x 1440 world, anchor 1280 / 1120, focus 1280 / 960, minZoom 0.5)
 // and after the WP11 world growth (3840 x 2160, MACHINE_ANCHOR, CAMERA.focus, effectiveMinZoom).
 // Stage buys are copied from scripts/smoke/stages.mjs (era I-IV only); '@x' markers mean tech x = 1.
+// The counts are the v0.11.0 level counts; a split track (SPLIT_PARTS, WP28a REC) takes SPLIT_PARTS[id] tech levels per old level,
+// so each split count below is multiplied by its parts and the sets frame the same machine as the named stage.
 const OLD_WORLD = { width: 2560, height: 1440 } as const;
 const OLD_ANCHOR = { x: 1280, y: 1120 } as const;
 const OLD_FOCUS = { x: 1280, y: 960 } as const;
 const OLD_MIN_ZOOM = 0.5;
 
+/** `n` old levels of a split track: n x SPLIT_PARTS[id] buys of it. */
+const parts = (id: keyof typeof SPLIT_PARTS, n: number): string[] => Array<string>(n * SPLIT_PARTS[id]).fill(id);
+
 const S7: readonly string[] = ['wornMotor', 'gearRatio', 'gearRatio', 'gearRatio', 'reinforcedCrank',
   ...Array<string>(5).fill('motorTuning'), 'flywheel', 'pistonArray', 'improvedPistons'];
-const S9: readonly string[] = [...S7, '@blueprint', 'generator', ...Array<string>(5).fill('motorRetrofit'),
-  ...Array<string>(20).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap',
-  ...Array<string>(3).fill('transformer'), 'powerLines'];
+const S9: readonly string[] = [...S7, '@blueprint', 'generator', ...parts('motorRetrofit', 5),
+  ...parts('copperWinding', 20), 'dynamoCrank', 'capacitorBank', 'sparkGap',
+  ...parts('transformer', 3), 'powerLines'];
 const S10: readonly string[] = [...S9, '@substationBlueprint', 'boiler'];
-const S11: readonly string[] = [...S10, ...Array<string>(3).fill('inductionHeater'),
-  ...Array<string>(20).fill('firebox'), 'steamHammer', 'superheater', ...Array<string>(5).fill('condenser'),
+const S11: readonly string[] = [...S10, ...parts('inductionHeater', 3),
+  ...parts('firebox', 20), 'steamHammer', 'superheater', ...parts('condenser', 5),
   'turbine', 'reliefValves', '@pressureVesselBlueprint'];
 const S12: readonly string[] = [...S11, 'resonatorSpire'];
-const S13: readonly string[] = [...S12, ...Array<string>(3).fill('crankServo'), ...Array<string>(25).fill('harmonicCoil'),
-  ...Array<string>(3).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array<string>(3).fill('standingWave'),
+const S13: readonly string[] = [...S12, ...Array<string>(3).fill('crankServo'), ...parts('harmonicCoil', 25),
+  ...parts('pressureResonator', 3), 'echoCrank', 'phaseLock', ...parts('standingWave', 3),
   'crystalLattice', '@harmonicConvergence'];
 
 const MARKER_TECH: Readonly<Record<string, string>> = {

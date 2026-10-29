@@ -52,7 +52,7 @@ export class CameraController {
   // pointer handlers are arrow properties so `this` is bound and the same references can be removed in destroy()
   private readonly pointerdown = (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]): void => {
     if (this.overridden) return;
-    if (currentlyOver.length > 0) return;
+    if (currentlyOver.some((o) => o.name !== CAMERA.dragPassName)) return; // poke zones pass a drag; the crank, fault and Find zones block it
     if (!pointer.leftButtonDown() && !pointer.middleButtonDown()) return;
     this.drag = { startCenter: { ...this.center }, startX: pointer.x, startY: pointer.y, active: false };
     this.autoFrameSkipped = false;

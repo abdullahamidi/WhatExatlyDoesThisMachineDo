@@ -38,6 +38,9 @@
   color: var(--amber);
 }
 
+/* NEXT BUY (WP28): third goal line, the passive-rate ETA of the next purchase. */
+.hud-goal-buy { margin-top: 2px; color: var(--amber-dim); }
+
 /* Callout above the button row. .hud-buttons is position: fixed, so this anchors to it. */
 .hud-buttons .hud-hint {
   position: absolute;

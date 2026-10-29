@@ -547,14 +547,14 @@ async function caseG(page) {
 // H_dog_line: DOG-04 (improvedPistons tier 3) is queued at level 10 and not at 9; the buy's tier event or the TECH INDEX close
 // re-check queues it (an over-cap swap emits no event). H_first_top: the first MK V (motorTuning 25) queues INS-13 the same way.
 // H_heartbeat: worldState().tierHeartbeat (the Sensor 7 LED beat) is off before the first top tier and on after it.
-// H_hole: worldState().holeStage at motorRetrofit 8 / 13 / 18 once lifetime EE reached the load-beneath level (WORLD_HOLE).
+// H_hole: worldState().holeStage at motorRetrofit 16 / 26 / 36 once lifetime EE reached the load-beneath level (WORLD_HOLE).
 // caseHOver (also case H): H_overcap_pre and H_overcap (a fresh era II save, then one TECH INDEX release that changes five tracks;
 // the fifth change is past the four-beat cap, so it swaps with no partEvolved event, and INS-13 must come from the close re-check),
 // and H_boot_seed (the same save reloaded: the heartbeat is on before any TECH INDEX close).
 // Every H check carries tierProbe() in its detail: era, heartbeat, hole stage, lifetime EE, cameraState(), the Inspector and the Dog.
 const HOLE_EE = 100000; // WORLD_HOLE.loadBeneathEe
-const HOLE_STAGE = { 8: 2, 13: 3, 18: 4 }; // motorRetrofit tiers 3 / 4 / 5, less WORLD_HOLE.tierOffset (1)
-const OVERCAP_BUYS = ['@gearRatio:6', '@flywheel:4', '@motorTuning:10', '@improvedPistons:5', '@motorRetrofit:18'];
+const HOLE_STAGE = { 16: 2, 26: 3, 36: 4 }; // motorRetrofit tiers 3 / 4 / 5, less WORLD_HOLE.tierOffset (1)
+const OVERCAP_BUYS = ['@gearRatio:6', '@flywheel:4', '@motorTuning:10', '@improvedPistons:5', '@motorRetrofit:36'];
 const OVERCAP_TIERS = { gearRatio: 2, flywheel: 2, motorTuning: 3, improvedPistons: 2, motorRetrofit: 5 };
 
 // Tier probe for the H checks: the heartbeat and hole stage, the era, lifetime EE, the camera, and where the Inspector and the Dog
@@ -639,13 +639,13 @@ async function caseH(page) {
   });
 
   // Era II: the rest of the S9 list (the generator opens the era card). Lifetime EE first reaches the load-beneath level, then
-  // motorRetrofit to levels 8, 13 and 18 (tiers 3, 4, 5) each read the hole stage.
+  // motorRetrofit to levels 16, 26 and 36 (tiers 3, 4, 5) each read the hole stage.
   const buyEra2 = await buyInTree(page, S9.slice(S7.length));
   await dismissEraCard(page);
   await sleep(300);
   const ee = await topUpLifetimeEe(page, HOLE_EE);
   const holeRows = [];
-  for (const level of [8, 13, 18]) {
+  for (const level of [16, 26, 36]) {
     // Demo edition: the EE top-up reaches the plate cap, so the END OF DEMO card opens and holds the world; keep tinkering first.
     const demoCard = await closeDemoCard(page);
     const failed = await buyInTree(page, ['@motorRetrofit:' + level]);
@@ -666,7 +666,7 @@ async function caseH(page) {
 }
 
 // H_overcap (WP23 A10): a fresh era II save, then ONE TECH INDEX release that changes five tracks. The release plays at most four
-// tier-up beats (PART_TIER_FX.maxBeatsPerRelease); the fifth change (motorRetrofit 5 -> 18, tier 5 = top) swaps instantly with no
+// tier-up beats (PART_TIER_FX.maxBeatsPerRelease); the fifth change (motorRetrofit 10 -> 36, tier 5 = top) swaps instantly with no
 // partEvolved event, so INS-13 must come from the close re-check. H_boot_seed: the same save reloaded, and the heartbeat is on
 // before any TECH INDEX close.
 async function caseHOver(page) {
@@ -1051,7 +1051,7 @@ async function caseI(page) {
   const rings = (await variantSeen(page, 'chladni', 'rings-3', 3000)) || (await variantSeen(page, 'chladni', 'rings-5', 500));
   await check(page, 'I_chladni', f13.length === 0 && chladniState !== null && chladniState >= 1 && rings, { buyFail: f13, chladni: chladniState, rings }, true);
 
-  // Era V starts with nullChamber: the girl's first step. Then the steps in list order (lensArray, five horizonField, the rest).
+  // Era V starts with nullChamber: the girl's first step. Then the steps in list order (lensArray, ten horizonField, the rest).
   // I_girl_step_clamp: a 50 ms sampler of the girl's dy (nulls skipped), installed before the first era V buy; read and cleared after g5.
   await page.evaluate(() => {
     window.__dySamples = [];
@@ -1070,9 +1070,9 @@ async function caseI(page) {
   const iSky = S15.indexOf('skyAperture');
   const fA = await buyInTree(page, S15.slice(S14.length, iLens + 1));
   const g2 = await girlStepsAt(page, 2);
-  const fB = await buyInTree(page, S15.slice(iHor, iHor + 5));
+  const fB = await buyInTree(page, S15.slice(iHor, iHor + 10));
   const g3 = await girlStepsAt(page, 3);
-  const fC = await buyInTree(page, S15.slice(iHor + 5, iSky + 1));
+  const fC = await buyInTree(page, S15.slice(iHor + 10, iSky + 1));
   const g4 = await girlStepsAt(page, [4, 5]);
   const fD = await buyInTree(page, S15.slice(iSky + 1));
   await dismissEraCard(page);

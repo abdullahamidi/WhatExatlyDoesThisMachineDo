@@ -41,6 +41,13 @@ FRAMES = {
     'sprout': ('stage1', 'stage2', 'stage3', 'stage4', 'bloom'),
     'page': ('flat', 'tilt'),
     'virga': ('fall', 'frozen'),
+    # WP28a AD1: the era I-II Splice objects in ONE uniform-cell sheet (cell 32x24, objects bottom-centered) and the Finds
+    # sheet (8x8 cells: items 0-6, relic note 7, glint 8-10). Frame names are the hand-off names (cell index = column).
+    'splicesA': ('bicycleDead', 'bicycleSpin0', 'bicycleSpin1', 'bicycleSpin2', 'bicycleWhole',
+                 'organDead', 'organCrank0', 'organCrank1', 'organCrank2', 'organCrank3', 'organWhole',
+                 'radioDark', 'radioLitA', 'radioLitB', 'radioWhole',
+                 'signDark', 'signHalfA', 'signHalfB', 'signWhole', 'clockLit'),
+    'finds': ('bolt', 'tag', 'gear', 'tin', 'key', 'photo', 'token', 'note', 'glint0', 'glint1', 'glint2'),
 }
 
 # key -> asset id, file under public/assets/, cell (w, h) art px, era rows?, pivot, per-sheet recolour pins,
@@ -114,6 +121,17 @@ SHEETS = {
     'virga': dict(id='bg.virga', file='bg/virga.png', cell=(512, 64), era_rows=False, pivot='plane', ring=False,
                   pins={}, master='virga', parts=True, only=('p', 'q', 'r', 'x'),
                   vertical=True),    # frames stacked top to bottom: 512x128 = 2 frames of 512x64 (manifest frame grid)
+    # WP28a AD1 (single row, street furniture like the lamp and clock). splicesA: full ink ring except the bicycle cells
+    # (`no_ring`: 1 px tubes, spokes and stand), whose silhouette counts 8-connected (`conn8`: diagonal 1 px tubes);
+    # clockLit is a stacked overlay on world.clock (bottom-centered anyway). finds: the glint cells are a one-color
+    # sparkle centered in the cell (no outline, not on the ground): `no_ring` + `overlays`.
+    'splicesA': dict(id='world.splicesA', file='world/splices-a.png', cell=(32, 24), era_rows=False, pivot='feet',
+                     ring=True, pins={}, master='splicesA', overlays=('clockLit',),
+                     no_ring=('bicycleDead', 'bicycleSpin0', 'bicycleSpin1', 'bicycleSpin2', 'bicycleWhole'),
+                     conn8=('bicycleDead', 'bicycleSpin0', 'bicycleSpin1', 'bicycleSpin2', 'bicycleWhole')),
+    'finds': dict(id='world.finds', file='world/finds.png', cell=(8, 8), era_rows=False, pivot='feet', ring=True,
+                  pins={}, master='finds', overlays=('glint0', 'glint1', 'glint2'),
+                  no_ring=('glint0', 'glint1', 'glint2')),
 }
 
 # Era-row sheets may use VIOLET_LIGHT in row V (the rim). Nothing else off the 25 is allowed anywhere.

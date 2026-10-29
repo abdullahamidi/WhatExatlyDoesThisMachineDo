@@ -2,6 +2,7 @@
 // Tuning numbers come from AUDIO (src/data/audio.ts); the constants below are structural only.
 
 import { AUDIO } from '../data/audio';
+import type { CueParts, PokeSoundId } from '../data/audio';
 import { MUSIC } from '../data/music';
 import type { MusicNoteEvent, MusicTheme, MusicThemeId, MusicVoice } from '../data/music';
 import type { EraNumber } from '../data/eras';
@@ -81,6 +82,11 @@ export interface Synth {
   playStamp(): void; // AUDIO.stamp low thump, lowpassed rattle and metallic click, under 300 ms (new cycle)
   playFaultSpawn(era: EraNumber): void; // AUDIO.faultSpawn one short cue shaped by the era (crackle, hiss, ping or static), under 400 ms
   playFaultClear(overdrive: boolean): void; // AUDIO.faultClear ratchet clunk and bright tick, under 300 ms; overdrive adds a rising second tick
+  playFindSpawn(): void; // AUDIO.findSpawn two soft sines, a chime under 300 ms (a Find appears)
+  playFindCollect(): void; // AUDIO.findCollect a clink with a quiet partial, under 200 ms (a Find is picked up)
+  playRelicCollect(): void; // AUDIO.relicCollect a paper rustle: one filtered noise burst, under 300 ms (a relic is picked up)
+  playSpliceWake(era: number): void; // AUDIO.spliceWake the wake of a Splice by era (I-V; others clamp), under 600 ms
+  playPoke(id: PokeSoundId, variant: number, pitchScale: number): void; // AUDIO.poke variant 0 or 1 of id, pitch x pitchScale, under 400 ms
   playBlip(voice: WorldBlipVoice, count: number, reversed: boolean): void; // AUDIO.world.blip: count (1..8) blips gapMs apart; reversed = ramp up then cut
   playRing(): void; // AUDIO.world.ring payphone ring: bursts of two sines, gapMs apart
   setDialTone(on: boolean): void; // AUDIO.world.dialTone two sines faded in and out; stops by itself after maxMs, never loops; on while sounding is a no-op
@@ -1103,6 +1109,26 @@ export function createSynth(context: AudioContext): Synth {
     }
   }
 
+  /** Plays a cue on `out` (WP28): each part at its atMs; tones through voice(), noise bursts through playNoise(); pitch x scale. */
+  function playCue(out: GainNode, parts: CueParts, scale: number): void {
+    const t0 = context.currentTime;
+    for (const [source, hz, atMs, ms, gain, fromHz] of parts) {
+      const startAt = t0 + atMs / 1000;
+      if (source === 'bandpass' || source === 'highpass') {
+        playNoise(context, out, getNoise(), startAt, ms / 1000, gain, { type: source, hz: hz * scale, q: AUDIO.cueQ }, oneShots);
+      } else {
+        voice(out, {
+          wave: source,
+          hz: hz * scale,
+          dropFromHz: fromHz === undefined ? undefined : fromHz * scale,
+          startAt,
+          decay: ms / 1000,
+          peak: gain,
+        });
+      }
+    }
+  }
+
   /**
    * Wind bed on `out`: gain ramped to amp, and the gust LFO depth on (amp x gustDepth) or off. The LFO stops with the
    * wind, or it would push the gain below zero while "off".
@@ -1601,6 +1627,32 @@ export function createSynth(context: AudioContext): Synth {
           const o = c.overdrive;
           voice(out, { wave: 'sine', hz: o.toHz, dropFromHz: o.fromHz, startAt: t0 + o.atMs / 1000, decay: o.ms / 1000, peak: o.gain });
         }
+      });
+    },
+
+    playFindSpawn(): void {
+      run('playFindSpawn', 'sfx', (out) => playCue(out, AUDIO.findSpawn, 1));
+    },
+
+    playFindCollect(): void {
+      run('playFindCollect', 'sfx', (out) => playCue(out, AUDIO.findCollect, 1));
+    },
+
+    playRelicCollect(): void {
+      run('playRelicCollect', 'sfx', (out) => playCue(out, AUDIO.relicCollect, 1));
+    },
+
+    playSpliceWake(era: number): void {
+      run('playSpliceWake', 'sfx', (out) => {
+        const i = Number.isFinite(era) ? Math.min(AUDIO.spliceWake.length, Math.max(1, Math.floor(era))) - 1 : 0;
+        playCue(out, AUDIO.spliceWake[i] ?? [], 1);
+      });
+    },
+
+    playPoke(id: PokeSoundId, variant: number, pitchScale: number): void {
+      run('playPoke', 'sfx', (out) => {
+        const scale = Number.isFinite(pitchScale) && pitchScale > 0 ? pitchScale : 1;
+        playCue(out, [AUDIO.poke.variants[id][variant >= 1 ? 1 : 0]], scale);
       });
     },
 

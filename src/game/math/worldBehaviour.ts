@@ -43,6 +43,9 @@ export interface BehaviourLogEntry { activity: string; atMs: number; durMs: numb
 export interface BehaviourRunner {
   step(dtMs: number, ctx: BehaviourCtx): BehaviourFrame; rehome(homeX: number): void;
   reset(seed: number, k0: number, homeX: number): void; next(activity: string): boolean;
+  // WP28a T15a: after delayMs of runner time a walk in progress first arrives, then the current segment ends and `activity` starts as a
+  // reaction. False when the id is not eligible for the actor in this era, or the runner is joined to the unison conductor (era IV).
+  interrupt(activity: string, delayMs: number): boolean;
   snapshot(): { activity: string; sinceMs: number; k: number; x: number; walking: boolean; look: string; clockMs: number };
 }
 export interface UnisonConductor {
@@ -222,6 +225,26 @@ function awayFrom(mem: Memory, env: PickEnv, fromX: number): number[] {
   return out;
 }
 
+// The outer spot of a poke leave (WP28a T15a, A13 [R1]): among the spots other than the current one, on the actor's own side of the machine
+// anchor (left when the actor stands left of MACHINE_ANCHOR.x), the one farthest from the anchor (the first one on a tie). It is listed only
+// when it is farther from the anchor than the actor's current x, so a walk never goes toward the machine; empty otherwise (the leave then
+// starts in place).
+function outerFrom(mem: Memory, env: PickEnv, fromX: number): number[] {
+  const anchor = MACHINE_ANCHOR.x;
+  const left = fromX < anchor;
+  let best = -1;
+  let bestDist = Math.abs(fromX - anchor);
+  env.spots.forEach((s, i) => {
+    if (i === mem.spot || (s.x < anchor) !== left) return;
+    const d = Math.abs(s.x - anchor);
+    if (d > bestDist) {
+      best = i;
+      bestDist = d;
+    }
+  });
+  return best < 0 ? [] : [best];
+}
+
 // The spot indices a travel can end on from the current spot (empty: unreachable). A travel to the spot it stands on is listed (no walk).
 function targetsOf(mem: Memory, travel: NonNullable<Activity['travel']>, env: PickEnv): number[] {
   const spots = env.spots;
@@ -234,6 +257,7 @@ function targetsOf(mem: Memory, travel: NonNullable<Activity['travel']>, env: Pi
   switch (travel) {
     case 'spot': return awayFrom(mem, env, here.x);
     case 'notStake': return awayFrom(mem, env, here.x).filter((i) => spots[i]?.id !== 'stake');
+    case 'outer': return outerFrom(mem, env, here.x);
     case 'stake': return here.id === 'stake' ? [] : byId('stake');
     case 'sensor':
     case 'scrap':
@@ -597,8 +621,9 @@ function wrapIndex(i: number, n: number): number {
   return ((i % n) + n) % n;
 }
 
-// A due event of the runner: a reaction (kind react, the activity to start) or a wake (kind end: the current activity ends at the cue).
-interface Pending { kind: 'react' | 'end'; cue: CueId; index: number; due: number; def: Activity | null }
+// A due event of the runner: a reaction (kind react, the activity to start) or a wake (kind end: the current activity ends at the cue). A poke
+// (kind poke, WP28a T15a) starts its activity like a reaction, with no cue and index -1 (cue indices are never below 0).
+interface Pending { kind: 'react' | 'end' | 'poke'; cue: CueId | null; index: number; due: number; def: Activity | null }
 // The conductor's current action as the runner reads it.
 type UnisonAct = ReturnType<UnisonConductor['current']>;
 
@@ -929,14 +954,15 @@ export function createBehaviourRunner(
   const applyPending = (p: Pending, at: number, ctx: BehaviourCtx): void => {
     pending = pending.filter((q) => q !== p);
     if (p.kind === 'end') {
-      if (cur === null || cur.def.wakeOn?.includes(p.cue) !== true) return;
+      if (cur === null || p.cue === null || cur.def.wakeOn?.includes(p.cue) !== true) return;
       cur = cutSeg(cur, at);
       advanceOnce(ctx);
       return;
     }
     const def = p.def;
     if (def === null || !whenHolds(def, ctx)) return;
-    if (cur !== null && (cur.react || cur.id === def.id || cur.def.interruptible === false)) return;
+    // A cue reaction yields to a reaction, to the same activity and to a non-interruptible one; a poke (the player's act) always starts.
+    if (p.kind === 'react' && cur !== null && (cur.react || cur.id === def.id || cur.def.interruptible === false)) return;
     if (cur !== null) close(cutSeg(cur, at));
     cur = null;
     const k = mem.k;
@@ -1361,6 +1387,16 @@ export function createBehaviourRunner(
     next(activity: string): boolean {
       if (lastCtx === null || !eligible(actor, lastCtx.era, lastCtx).some((a) => a.id === activity)) return false;
       pin = activity;
+      return true;
+    },
+    // WP28a T15a: a poke's leave. Refused in era IV, while joined to the conductor, and for an id outside the era's repertoire. The event is due
+    // after delayMs of runner time; runEvents then waits out a walk in progress and starts the activity as a reaction.
+    interrupt(activity: string, delayMs: number): boolean {
+      if (lastCtx === null || lastCtx.era === ERA_IV || joined) return false;
+      const def = eligible(actor, lastCtx.era, lastCtx).find((a) => a.id === activity);
+      if (def === undefined) return false;
+      const wait = Number.isFinite(delayMs) ? Math.max(0, delayMs) : 0;
+      pending.push({ kind: 'poke', cue: null, index: -1, due: tMs + wait, def });
       return true;
     },
     snapshot() {

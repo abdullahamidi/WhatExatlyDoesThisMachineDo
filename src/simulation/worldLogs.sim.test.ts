@@ -6,6 +6,7 @@ import type { SystemLogEntry, SystemLogTrigger } from '../data/systemLogs';
 import type { GameState, ResourceId, ResourceMap, TechId } from '../data/types';
 import { TECHNOLOGIES } from '../data/technologies';
 import { runGreedy } from './sim/greedy';
+import type { GreedyFinds } from './sim/greedy';
 
 // WP23b optional machine logs schedule guard (bible §5.4): a vitest port of the logsim replay.
 // Greedy samples (5 s chunks in profile A, 30 s in B and C) come from runGreedy in the full edition and in the demo (era cap
@@ -41,12 +42,15 @@ interface Profile {
   readonly buyIntervalSeconds: number;
   readonly chunkSeconds: number;
   readonly maxSeconds: number;
+  // WP28: Finds catch model (absent = no Finds). The chunked runs below restart the Find clock per chunk; a Find needs 120 s of
+  // clock time, so no Find spawns in a chunk of 30 s or less and the samples are the same as without the option.
+  readonly finds?: GreedyFinds;
 }
 
 const PROFILES: readonly Profile[] = [
-  { name: 'A', clicksPerSecond: 4, buyIntervalSeconds: 1, chunkSeconds: 5, maxSeconds: 17400 },
-  { name: 'B', clicksPerSecond: 4, buyIntervalSeconds: 30, chunkSeconds: 30, maxSeconds: 18000 },
-  { name: 'C', clicksPerSecond: 1, buyIntervalSeconds: 30, chunkSeconds: 30, maxSeconds: 28800 },
+  { name: 'A', clicksPerSecond: 4, buyIntervalSeconds: 1, chunkSeconds: 5, maxSeconds: 17400, finds: { catchProb: 0.85, reactionSeconds: 4 } },
+  { name: 'B', clicksPerSecond: 4, buyIntervalSeconds: 30, chunkSeconds: 30, maxSeconds: 18000, finds: { catchProb: 0.85, reactionSeconds: 5 } },
+  { name: 'C', clicksPerSecond: 1, buyIntervalSeconds: 30, chunkSeconds: 30, maxSeconds: 28800, finds: { catchProb: 0.4, reactionSeconds: 6 } },
 ];
 
 // Demo cap and era come from the edition, never retyped here. Null would mean the edition is not the demo.
@@ -83,6 +87,7 @@ function simulate(p: Profile, mode: Mode): Run {
       buyIntervalSeconds: p.buyIntervalSeconds,
       initial: state,
       maxEra,
+      ...(p.finds !== undefined ? { finds: p.finds } : {}),
     });
     state = r.final;
     t += p.chunkSeconds;

@@ -19,17 +19,17 @@ const rep = (id: string, n: number): string[] => Array.from({ length: n }, () =>
 const S7 = ['wornMotor', 'gearRatio', 'gearRatio', 'gearRatio', 'reinforcedCrank', 'motorTuning', 'motorTuning', 'motorTuning',
   'motorTuning', 'motorTuning', 'flywheel', 'pistonArray', 'improvedPistons'];
 const S8 = [...S7, '@blueprint', 'generator'];
-const S9 = [...S7, '@blueprint', 'generator', ...rep('motorRetrofit', 5), ...rep('copperWinding', 20), 'dynamoCrank',
-  'capacitorBank', 'sparkGap', ...rep('transformer', 3), 'powerLines'];
+const S9 = [...S7, '@blueprint', 'generator', ...rep('motorRetrofit', 10), ...rep('copperWinding', 40), 'dynamoCrank',
+  'capacitorBank', 'sparkGap', ...rep('transformer', 6), 'powerLines'];
 const S10 = [...S9, '@substationBlueprint', 'boiler'];
-const S11 = [...S10, ...rep('inductionHeater', 3), ...rep('firebox', 20), 'steamHammer', 'superheater', ...rep('condenser', 5),
-  'turbine', 'reliefValves', ...rep('bellowsDrive', 3), '@pressureVesselBlueprint'];
+const S11 = [...S10, ...rep('inductionHeater', 9), ...rep('firebox', 40), 'steamHammer', 'superheater', ...rep('condenser', 15),
+  'turbine', 'reliefValves', ...rep('bellowsDrive', 9), '@pressureVesselBlueprint'];
 const S12 = [...S11, 'resonatorSpire'];
-const S13 = [...S12, ...rep('crankServo', 3), ...rep('harmonicCoil', 25), ...rep('pressureResonator', 3), 'echoCrank', 'phaseLock',
-  ...rep('standingWave', 3), 'crystalLattice', ...rep('gridExciter', 5), '@harmonicConvergence'];
+const S13 = [...S12, ...rep('crankServo', 3), ...rep('harmonicCoil', 50), ...rep('pressureResonator', 6), 'echoCrank', 'phaseLock',
+  ...rep('standingWave', 6), 'crystalLattice', ...rep('gridExciter', 15), '@harmonicConvergence'];
 const S14 = [...S13, 'nullChamber'];
-const S15 = [...S14, ...rep('containmentRing', 25), '@resonantSiphon:20', '@graviticAnchor:10', 'inversionCrank', 'lensArray',
-  ...rep('horizonField', 20), 'skyAperture', ...rep('mainsBackfeed', 5), ...rep('steamLance', 5), '@finalAlignment'];
+const S15 = [...S14, ...rep('containmentRing', 50), '@resonantSiphon:60', '@graviticAnchor:20', 'inversionCrank', 'lensArray',
+  ...rep('horizonField', 40), 'skyAperture', ...rep('mainsBackfeed', 15), ...rep('steamLance', 15), '@finalAlignment'];
 
 // Tech levels of a buy list: plain id += 1; '@blueprint' = generatorBlueprint 1; '@tech' = 1; '@tech:n' = n.
 function levelsOf(buys: readonly string[]): Record<TechId, number> {
@@ -168,7 +168,8 @@ describe('the crow is perched in eras I-II (WP27 D5)', () => {
 
   it('every era I-II crow activity but tipTry draws only the perched frames, never a spread-wing or head or talk frame', () => {
     for (const { era, act } of EARLY_CROW) {
-      if (act.id === 'tipTry') continue;
+      // The poke-only hop is the one flight (C3, the hop rule below).
+      if (act.id === 'tipTry' || act.poke === true) continue;
       for (const f of shownFrames(act.clip)) {
         expect(PERCH_FRAMES, `era ${era} crow ${act.id} ${f}`).toContain(f);
         expect(SPREAD_FRAMES, `era ${era} crow ${act.id} ${f}`).not.toContain(f);
@@ -205,6 +206,55 @@ describe('the crow is perched in eras I-II (WP27 D5)', () => {
   });
 });
 
+// The crow's hop (WP28a T15a, C3): the fly frames left the pre-finale ban; only the poke-only hop draws them, in eras I-III and V (not IV).
+// The Inspector and the dog leave through the poke-only walks to the outer spot (eras I-III); era V has no walking leave (its level 3 plays in
+// place, data/pokes.ts leave null); every other poke-only activity is absent.
+describe('the poke-only activities (WP28a T15a, C3)', () => {
+  const FLY = ['fly0', 'fly1', 'fly2'];
+  const POKE_ROWS = ROWS.filter((r) => r.act.poke === true);
+
+  it('the fly frames are not banned before the finale, and only poke-only activities draw them', () => {
+    expect(WORLD_PREFINALE_BANNED.crow).toEqual([]);
+    for (const { actor, era, act } of ROWS) {
+      if (!shownFrames(act.clip).some((f) => FLY.includes(f))) continue;
+      expect(actor, `era ${era} ${act.id}`).toBe('crow');
+      expect(act.poke, `era ${era} ${act.id}`).toBe(true);
+    }
+  });
+
+  it('the crow hop is one poke-only activity in eras I-III and V (not IV), weight 0, no reaction, no travel, its own fly frames', () => {
+    const hops = POKE_ROWS.filter((r) => r.actor === 'crow');
+    expect(hops.map((r) => r.era)).toEqual([1, 2, 3, 5]);
+    for (const { act } of hops) {
+      expect(act.id).toBe('hop');
+      expect(act.weight).toBe(0);
+      expect(act.reaction).toBeUndefined();
+      expect(act.travel).toBeUndefined();
+      expect(act.clip.frames).toEqual(FLY);
+    }
+    expect(WORLD_REPERTOIRE.crow[4]).toBeUndefined();
+  });
+
+  it('the era V hop plays its frames in reverse; the other eras play them forward', () => {
+    for (const { era, act } of POKE_ROWS.filter((r) => r.actor === 'crow')) {
+      expect(act.reversed === true, `crow era ${era}`).toBe(era === 5);
+    }
+  });
+
+  it('the poke-only leaves are the Inspector (write) and the dog (sit), eras I-III, walking to the outer spot', () => {
+    const leaves = POKE_ROWS.filter((r) => r.actor !== 'crow').map((r) => `${r.actor} ${r.era} ${r.act.id}`);
+    expect(leaves).toEqual([
+      'inspector 1 leaveWrite', 'inspector 2 leaveWrite', 'inspector 3 leaveWrite',
+      'dog 1 leaveSit', 'dog 2 leaveSit', 'dog 3 leaveSit',
+    ]);
+    for (const { act } of POKE_ROWS.filter((r) => r.actor !== 'crow')) expect(act.travel, act.id).toBe('outer');
+  });
+
+  it('era V has no poke-only walk: the Inspector and the dog play their level 3 in place, so only the crow hop is poke-only there', () => {
+    expect(POKE_ROWS.filter((r) => r.era === 5).map((r) => r.actor)).toEqual(['crow']);
+  });
+});
+
 describe('stare-safe rules (D2, Q7)', () => {
   it('the first stare-safe entry is the actor front: front, head, head, stand0', () => {
     expect(WORLD_STARE_SAFE.inspector[0]).toBe('front');
@@ -215,7 +265,8 @@ describe('stare-safe rules (D2, Q7)', () => {
 
   it('every rest frame of the era V lists and of the post-observer unison is stare-safe', () => {
     for (const r of ROWS) {
-      if (r.era !== 5 || r.act.travel !== undefined) continue;
+      // The hop's fly frames are the one facing exemption (C3), so the hop is not a stare-safe rest frame.
+      if (r.era !== 5 || r.act.travel !== undefined || r.act.id === 'hop') continue;
       for (const f of shownFrames(r.act.clip)) expect(WORLD_STARE_SAFE[r.actor], `era 5 ${r.actor} ${r.act.id} ${f}`).toContain(f);
     }
     for (const u of UNISON_ROWS) {
@@ -240,7 +291,9 @@ describe('repertoires', () => {
         const ids = list.map((a) => a.id);
         expect(new Set(ids).size, `${actor} era ${era} ids`).toBe(ids.length);
         for (const a of list) {
-          expect(a.holdMs[0], `${actor} ${a.id} hold`).toBeLessThan(a.holdMs[1]);
+          // A poke-only activity holds one fixed time (the hop: 600 ms); every other hold is a range.
+          if (a.poke === true) expect(a.holdMs[0], `${actor} ${a.id} hold`).toBeLessThanOrEqual(a.holdMs[1]);
+          else expect(a.holdMs[0], `${actor} ${a.id} hold`).toBeLessThan(a.holdMs[1]);
           expect(a.weight, `${actor} ${a.id} weight`).toBeGreaterThanOrEqual(0);
         }
       }
@@ -249,6 +302,13 @@ describe('repertoires', () => {
 
   it('a weight-0 activity is reaction-only (it names a reaction, never free); free activities are interruptible', () => {
     for (const { actor, act } of ROWS) {
+      // A poke-only activity (WP28a T15a) is weight 0 with no reaction: BehaviourRunner.interrupt starts it, a cue never does.
+      if (act.poke === true) {
+        expect(act.weight, `${actor} ${act.id} weight`).toBe(0);
+        expect(act.reaction, `${actor} ${act.id} reaction`).toBeUndefined();
+        expect(act.interruptible, `${actor} ${act.id} interruptible`).toBe(false);
+        continue;
+      }
       if (act.weight === 0) {
         expect(act.reaction?.length ?? 0, `${actor} ${act.id} reaction`).toBeGreaterThanOrEqual(1);
         expect(act.interruptible, `${actor} ${act.id} interruptible`).toBe(false);

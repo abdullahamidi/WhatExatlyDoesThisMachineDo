@@ -742,6 +742,64 @@ Folder: `C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-s
 
 ---
 
+## 11. Splice objects and Finds (WP28a, AD1, 2026-10-28)
+
+Splices wire the machine to dead objects of the old world (WP28 plan, "Splices"); Finds are small items that glint in the
+yard for about 25 s ("Finds"). Stage numbers (placements per framing, lines, Find spots, crow perches, colors, tooltip) are
+in the AD1 hand-off (`<O>/plan/ad1-handoff.md`, `<O>` = the session scratchpad `WP28/`) and become data in
+`src/data/spliceWorld.ts`, `src/data/findWorld.ts` and `src/data/pokes.ts`.
+
+### 11.1 Sheets
+
+| sheet | id | file | cell | cells | rows |
+|---|---|---|---|---|---|
+| splicesA | `world.splicesA` | `world/splices-a.png` 640 x 24 | 32 x 24, objects bottom-centered, pivot (0.5, 1) = the feet | 20 | 1 |
+| finds | `world.finds` | `world/finds.png` 88 x 8 | 8 x 8, items on the bottom row; glint centered on cell pixel (4, 4) | 11 | 1 |
+
+- **No era rows.** The objects are street furniture of the old world, like the lamp and the clock (§2.5): single row, the
+  machine's iron plus weathered wood. Era I cohesion comes from a muted ramp: dark varnish (`#4e2a1a` / `#6e3a22`), gilt
+  faded to sand (`#a8957a` / `#c9b28a`), dark rust paint. The six rows would cost 6 x 60 KiB decoded for objects that stand
+  from their own era on.
+- **Palette.** The 25 colors only. No green or blue. No letters or readable marks. Before the finale, a lit part uses
+  `#d9822b` on rust (the lamp's lit rule, §2.5). Only the `*Whole` cells (postgame, restored world) use `#f0a848` and
+  `#ffd27a`.
+- **Outline.** Full 1 px ink ring on every cell except the bicycle and the glint. The bicycle has 1 px tubes, spokes and a
+  stand. The glint is a light sparkle. `scripts/art/world/sheets.py` lists them as `no_ring`. The bicycle's silhouette counts
+  8-connected (`conn8`).
+- **Hand-pixelled** (D9). PixelLab `create_image_pro` concepts (bicycle, organ: 2 calls, 20 generations, flywheel style
+  anchor, palette lock) were proportion reference only.
+
+### 11.2 Objects (art px; frame order = cell index)
+
+| object | size | cells | look |
+|---|---|---|---|
+| bicycle | 26 x 15 | 0 dead, 1-3 spin, 4 whole | Child's roadster on a rear stand. The rear wheel is 1 px off the ground, so it can spin. Woken, it turns BACKWARDS (counter-clockwise): 4 half-spokes step 30 deg per frame, and the pedals follow at 60 deg (the 2:1 chain ratio, so the 3-frame loop is seamless). Dead: the chain is off and hangs. Bell = a 2 px dome on the bar. |
+| barrel organ | 27 x 24 | 5 dead, 6-9 crank, 10 whole | A barrow organ. Five tin pipes, the tallest in the middle, in an arched wood front, with a crest and a faded gilt cornice. The handles point out (left wing). The crank on the right end turns clockwise: up, right, down, left. Dead: one pipe missing, crank down. Whole: bright gilt. |
+| valve radio | 16 x 20 | 11 dark, 12-13 lit A / B, 14 whole | A cathedral cabinet with a fretted grille, on a pine crate. Lit: the dial glows `#d9822b` / `#c98552`, the needle drifts left / right, and the grille cloth catches the light. |
+| bulb arrow sign | 28 x 22 | 15 dark, 16-17 half A / B, 18 whole | A sheet-metal arrow on two iron legs, bent down at the left, its head pointing at the ground. 17 bulb sockets; half A and half B light alternate halves (a chase). No letters (C10). |
+| clock lit face | 12 x 12 | 19 | Overlay on `world.clock`: the face lit from inside (dial `#c98552`, rim `#ad6236`, ticks `#8c4a2a`, the crack kept). NO hands. Pivot = clock foot - 60 world px. Draw it above the clock sprite and below the 1 px hands. |
+| payphone | existing | `world.payphone`, `world.receiver` | No new art in WP28a. The Coin Return flap is AD3's. |
+
+### 11.3 Finds (8 x 8 cells, iron / rust / sand only, no text)
+
+0 a hex nut on a bolt end, 1 a blank brass tag with a punched hole, 2 a small cog, 3 a dented tin with a rust patch, 4 a
+skeleton key, 5 a photo (white border, a sepia smudge, no face), 6 a payphone token, 7 the relic: a folded note (crease,
+faded ink dashes, no letters). 8-10 glint: a one-color 5 x 5 cross sparkle (`#ddc9a3`), played 8 9 10 9.
+Color per era: eras III-IV `setTintFill(0xffd27a)`; the other eras draw the art as is. The era accent goes to the ground
+ring: I `#ddc9a3`, II `#c98552`, III-IV `#f0a848`, V `#9a6ad0` (C8).
+
+### 11.4 Hover and tooltip
+
+- **Hover brackets.** 4 corner brackets: 3 art px arms, 1 art px stroke, 2 art px outside the opaque bbox. `#ddc9a3` at
+  alpha 0.9 (violetLight `#9a6ad0` in era V).
+- **Tooltip.** The machine's voice, a dark slab: `#1d1f21`, 2 px `#8c4a2a` border, 2 px ink ring, 12 px / 16 px uppercase
+  monospace, 4 lines. It sits above the object, or below when that would cover the crank keep-out circle. It never covers
+  the crank hub (hand-off h).
+- **Lines.** Era I is a signal wire on pulley stakes; era II is an insulated cable, or the payphone drop wire from the
+  cable mast (world.md §6.2).
+
+---
+
 ## Appendix A. `eraRecolor` (offline; proof implementation in `tools/build.py`)
 
 - **Sepia map** (row I, every material):
