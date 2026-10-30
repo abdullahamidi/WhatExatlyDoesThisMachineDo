@@ -2,6 +2,48 @@
 
 Notable changes per release, newest first. Work packages are named WPn; plans are in `docs/plan/`.
 
+## 0.12.0 — Warm world — 2026-10-29
+
+### Added
+- **WP28a** Splices: 16 one-time purchases that wire the machine to a dead object of the old world. A spliced line wakes the object, partly wrong: the bicycle's back wheel turns backwards, the barrel organ plays three notes short, the payphone rings with nobody on the line. Buy an object by clicking it in the world (hover shows its name, cost and effect) or from the new SPLICES tab of the TECH INDEX. A woken object keeps a small live animation, and a line runs from the machine to it with pulses that grow with output. Eras I-II: bicycle, barrel organ, street clock, radio, payphone, bulb sign. Eras III-V: hand pump, factory whistle, hydrant, bell, gramophone, wind chimes, weathervane, kite, cairn, coin return.
+- **WP28a** Splice lines are cut by Prestige. The objects go dark again, with one SYS LOG line: "Lines cut: n. Objects dark again."
+- **WP28a** Finds: now and then a glinting item lies on the ground near a denizen or in the wind. Pick it up with G (PICK UP FIND, listed in SETTINGS > KEYS) within about 25 s for 4, 6 or 8 s of all output. Every fifth find is a field note from the prior world: 15 notes, listed under FIELD NOTES in the RECORDS tab. Finds start after Worn Motor. They never happen offline or behind a menu. The demo has them too.
+- **WP28a** NEXT BUY line under the HUD goal: the next purchase that is not yet affordable, with a rough time at the passive rate (`NEXT BUY: COPPER WINDING · ~40s`).
+- **WP28a** BUY MAX on repeatable techs (Shift-click, Shift+Enter, or the BUY MAX button in the detail panel). One press buys as many levels as the energy pays for.
+- **WP28a** Pokes: click a denizen, the payphone, the lamp, the clock, Sensor 7 or a woken object and it answers with a short reaction. Repeated pokes escalate, then the target goes quiet for 20 s. Pokes change nothing in the economy and stop in the finale and the postgame.
+- **WP28b** Roaming: the cast walks across the wing and the empty yard, in lanes. Walks between spots are visible; a relocation waits for an unseen moment. The Inspector, the dog and the crow start an action (a new activity, a walk, a reaction, a poke answer or a hop) at least every 12 s.
+- **WP28b** Reactions to the machine's effects, never to the machine itself. A fault makes the Inspector startle, the dog bark and the crow ruffle. A big purchase sends a ground wave across the scene, and each walker reacts when the wave reaches it. An era change walks the Inspector to his inner spot, front on. A Find makes the crow glance down, the Inspector point at it (outer side) or look up (inner side), and the dog sniff toward it (outer side). A woken object draws a visit from the Inspector (left-wing objects) or the dog (right-wing objects), in eras I-III and V. Reactions start within about 1 s of their cause, except the Inspector's Find reaction (2 to 4 s) and the visit (3 to 8 s after the wake). The ground wave reaches each walker when the wave does, at 300 px/s from the machine's edge.
+- **WP28b** Two poke bubbles: the Inspector's level-2 answer (the third poke within 8 s) may show "Noted." in eras I-III and V, and the girl's level-2 answer may show a wordless "…" bubble. Each has a 50 % chance (RARE: 25 %), at most one per actor per 120 s and four per hour, never over a line bubble, and none with WORLD VOICES off.
+- **WP28b** Free crow hops: the crow may hop between perches on the right wing (at most 160 px, never over the machine, none in era IV). A fault sends it to the highest perch, and a big purchase hops it 30 % of the time. The finale flight is unchanged.
+- **WP28b** The machine's reach: a crank click sends a small pulse along the ground. Output drives pulses along the pylon line, a little dust at the base and a lamp that wobbles. Each era has one signature effect: pebbles hop at the machine's feet (I), arcs on the wires and lights (II), steam drifting across the yard (III), loose objects that hum and puddles that ripple (IV), small debris that lifts (V). A big purchase sends a ground wave through the scene. Flashes stay at or below 3 a second. Reduced motion turns all of it off; the debris specks hang still.
+- **WP28b** Splice objects and lines for eras III-V (a pipe, a standing-wave wire, lifted specks), and new denizen frames: a startle, a point at a find and two barks.
+- **WP28b** Find producers: the crow's item drops from its perch, the dog digs at it (within 24 px), a gust flips a scrap, and a woken organ, radio, payphone or pump twitches as its item rises. Eras III-V add a puddle ring and a vent puff (III), Chladni rings that walk the item to a node (IV), and an item that lifts and bobs (V).
+
+### Changed
+- **WP28a** Pacing (playtest 2026-10-28: waits got boring when the player tired of clicking). The 17 split techs are cut into two or three smaller steps each, at the same power and the same total time. Requirements and unlock prices changed to match, and the unlock prices are about 0.65 of their 0.11.0 values. Purchases come about twice as often. Sims: A p90 gap 1:24 → 0:42 and max 4:24 → 1:40; B p90 gap 1:56 → 1:02 and max 6:08 → 2:33 before the final alignment.
+- **WP28a** TECH INDEX: a SPLICES tab, with its own affordable count. The era tab counts and the tree graph leave Splices out. The badge counts them.
+- **WP28a** Keys: G = PICK UP FIND, listed after F = CLEAR FAULT under SETTINGS > KEYS.
+- **WP28b** Build target is ES2022 (Director ruling, 2026-10-29). Bundle caps for this release: app 525 KB, Director chunk 280, WorldReach 50, shared lazy 6, lazy world total 330, CSS 45; the limits in `scripts/smoke/perf-budget.json` follow the measured sizes within these caps.
+- Saves: no version change (version 2). The save format is additive: the optional `world.relics` count (a missing count is 0). The Find clock is not saved.
+
+### Notes for existing saves
+- Split-track levels are doubled or tripled on load, at the same power. A save written before this version (the `econ` marker below 28) is remapped once. Its machine, visible tiers and output stay the same: within 1 % in eras I-II and within 3 % in eras III-V.
+- Requirements and prices of the split and unlock techs changed (see Changed).
+- Splices start dark. Every Splice object stands dead until it is bought.
+
+### Deviations from the plan (WP28b)
+- The 9.5 s micro rule (plan D5) was not built. The 12 s action gap holds through the hold caps instead: 10 s for a hold, 8 s for an early static run (10 s in era V). A micro activity starts only when no other activity may start.
+- Era IV's POST stare is capped at 4 beats (9.6 s), so the 12 s gap holds. The stare itself is 2 to 4 beats.
+- Era IV's unison hold is not counted in the 12 s action gap (the canon hold of the plan, B1; `ACTION_EXEMPT` in `world.mjs`).
+- Era IV takes no machine-event reaction (C11, AD4 N15; Director ruling 2026-10-30 R3).
+- The B1 walk-share floors are per state (Director ruling 2026-10-30 R1; `B1_WALK_FLOOR` in `worldBehaviourMetrics.test.ts`). The 12-20 % rule is the unit gate's.
+- The dog's front-row spots (lane 32) may lie under the UI 150 HUD buttons (Director ruling 2026-10-30 R2; AD4 N14).
+- Machine-event reactions start within 1 s of their cause, except the Inspector's Find reaction (2 to 4 s), the ground wave (when the wave reaches the walker) and the visit (3 to 8 s after the wake).
+- A machine-event reaction on a walker that is mid-walk at 2 fps (era I, before the piston array) cuts the walk at the next drawn tick (500 ms). The dog's reaction can then start up to 1.1 s after its cause (the 600 ms stagger plus one tick). At 4 fps and above it stays within 1.0 s.
+- The T2 coverage floor is per state (Director ruling 2026-10-30 R4; `T2_COVER_FLOOR` in `worldBehaviourMetrics.test.ts`). The S7 Inspector (era I walks at 2-4 fps) is pinned at 61.5 %, its lowest 90 s window over seeds 1-5; every other row keeps 70 %.
+- The crow lands on the bicycle seat (e1, s9, s11, s15) and the sign top (s9, s11) where those objects stand, each within 160 px of another perch. The other framings have none: s8 and s8w have no bicycle or sign on stage, e1 and s15 no sign, and s10 no crow.
+- Director rulings 2026-10-30 R1-R3 are recorded in docs/plan/WP28.md.
+
 ## 0.11.0 — Click curve and Faults — 2026-10-28
 
 ### Added

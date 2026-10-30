@@ -14,7 +14,8 @@
 //   D key           D_key (press g: caught +1)
 //   E expire        E_gone (marker hidden, missed +1), E_input (marker.interactive false), E_quiet (no 'miss' text in the DOM)
 //   F single        F_single (spawned +1 only)
-//   G gates         G_photo, G_tree (no marker for 3 s; a spawn within 1.5 s after the gate closes)
+//   G gates         G_photo, G_clear (the Find G_photo spawned is taken before G_tree: see clearLive), G_tree (no marker for 3 s; a spawn
+//                   within 1.5 s after the gate closes)
 //   H reduced       H_steady (marker.glintFrame constant over 6 samples in 2 s)
 //   I relic         I_toast (FIELD NOTE 1/15, 1/6 on the demo), I_records (FIELD NOTES n/N and note 1), I_save (world.relics 1 after a reload)
 //   J coexist       J_both (both markers visible, f clears the fault, g takes the Find)
@@ -159,10 +160,23 @@ const collectByKey = async page => {
   await page.keyboard.press('g');
   return poll(page, n => window.__wedtmd.findStats?.()?.caught === n + 1, before, 1500);
 };
-// Clears a live Find (if any) with the G key; used between checks.
+// Clears a live Find (if any) with the G key; used between checks. A Find is taken only once its marker shows: the producer's lead (WP28b,
+// up to 0.5 s after the spawn) holds the marker back, and G pressed before then does nothing (the marker's collect gate). So each try
+// waits for the marker, presses G and polls for caught +1; up to CLEAR_TRIES tries, CLEAR_GAP_MS apart. Returns { ok, visibleAtPress }:
+// ok when no Find is alive at the end, and whether the marker showed at each press.
+const CLEAR_TRIES = 5;
+const CLEAR_GAP_MS = 500;
 const clearLive = async page => {
-  const s = await findStats(page);
-  if (s?.alive) await collectByKey(page);
+  const visibleAtPress = [];
+  for (let i = 0; i < CLEAR_TRIES; i++) {
+    if (!(await findStats(page))?.alive) return { ok: true, visibleAtPress };
+    await waitMarker(page);
+    visibleAtPress.push((await findStats(page))?.marker.visible === true);
+    await collectByKey(page);
+    if (!(await findStats(page))?.alive) return { ok: true, visibleAtPress };
+    await page.waitForTimeout(CLEAR_GAP_MS);
+  }
+  return { ok: !(await findStats(page))?.alive, visibleAtPress };
 };
 
 // Samples the Find marker and the clock every 250 ms for ms: true when no sample shows a marker or a live Find.
@@ -400,7 +414,8 @@ const caseG = async ctx => {
     await page.evaluate(() => window.__wedtmd.photoMode?.(false));
     const spawnedAfterPhoto = await poll(page, (n) => (window.__wedtmd.findStats?.()?.spawned ?? -1) > n, startPhoto, 1500);
     report.check('G_photo', quietPhoto && spawnedAfterPhoto === true, { quietPhoto, spawnedAfterPhoto });
-    await clearLive(page);
+    const cleared = await clearLive(page);
+    report.check('G_clear', cleared.ok, { visibleAtPress: cleared.visibleAtPress });
     const opened = await openTree(page);
     await forceFind(page);
     const quietTree = await staysHidden(page, 3000);

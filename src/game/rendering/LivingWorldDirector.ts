@@ -8,16 +8,19 @@
 import type Phaser from 'phaser';
 import type { Edition } from '../../data/edition';
 import type { EndingPhase, OfflineReport, ProductionRates, TechId, WorldVoices } from '../../data/types';
+import { TECH_IDS } from '../../data/types';
 import type { Vec2 } from '../../data/machineComponents';
 import { SYSTEM_LOG_CONFIG } from '../../data/systemLogs';
-import { CAMERA, GROUND_Y, VIEW } from '../../data/world';
+import { CAMERA, GROUND_Y, MACHINE_ANCHOR, VIEW } from '../../data/world';
 import { FAULT_MARKER } from '../../data/faultMarker';
-import { CROW_MACHINE_X, CROW_PERCHES, POKES, POKE_OBJECT_KEY, POKE_RENDER, POKE_TABLES } from '../../data/pokes';
+import { CROW_MACHINE_X, CROW_PERCHES, POKES, POKE_BUBBLE, POKE_OBJECT_KEY, POKE_RENDER, POKE_TABLES } from '../../data/pokes';
 import type { CrowPerch, PokeClip, PokeSoundId } from '../../data/pokes';
 import type { EraNumber } from '../../data/eras';
-import { SPLICE_CLOCK, SPLICE_FX, SPLICE_PAYPHONE, SPLICE_WORLD } from '../../data/spliceWorld';
+import { FIND_PRODUCER_ACT } from '../../data/findProducer';
+import type { FindProducer } from '../../data/findWorld';
+import { SPLICE_CLOCK, SPLICE_FX, SPLICE_PAYPHONE, SPLICE_VISIT, SPLICE_WORLD } from '../../data/spliceWorld';
 import type { SpliceObjectId } from '../../data/spliceWorld';
-import { REACH_LEVEL } from '../../data/worldReach';
+import { GROUND_WAVE_SHARED, REACH_LEVEL } from '../../data/worldShared';
 import { TECHNOLOGIES } from '../../data/technologies';
 import {
   LIVING_WORLD, WORLD_A11Y_PREFIX, WORLD_CHAIN_STARTS, WORLD_GLANCE_SEED, WORLD_LAYOUT, WORLD_LINES, WORLD_PLAYBACK, WORLD_ROWS,
@@ -28,9 +31,9 @@ import type {
 } from '../../data/livingWorld';
 import { WORLD_DOUBLE_EXPOSURE, WORLD_GIRL } from '../../data/worldEras';
 import { WORLD_ENDING, WORLD_POSTGAME_LOOP } from '../../data/worldEnding';
-import { WORLD_BEHAVIOUR, WORLD_SPOTS } from '../../data/worldBehaviour';
+import { WORLD_BEHAVIOUR, WORLD_REACT, WORLD_SPOTS } from '../../data/worldBehaviour';
 import { WORLD_AMBIENT } from '../../data/worldDay';
-import type { BehaviourActor, CueId, SpotId, UnisonId } from '../../data/worldBehaviour';
+import type { BehaviourActor, CueId, SpotId, UnisonId, WorldSpot } from '../../data/worldBehaviour';
 import { TIER_HEARTBEAT } from '../../data/machineTiers';
 import { expandWorldText } from '../../data/worldText';
 import type { GameSession } from '../../simulation';
@@ -47,11 +50,13 @@ import type { WorldVoiceView } from '../../ui/worldVoice';
 import type { GameFeedback, PartEvolvedEvent, PartTorquedEvent } from '../context';
 import type { CameraPose } from '../math/finale';
 import {
-  behaviourK0, behaviourSeed, createBehaviourRunner, createUnisonConductor, cycleSeedOf, hash01,
+  behaviourK0, behaviourSeed, createBehaviourRunner, createStartGate, createUnisonConductor, createWalkGate, cycleSeedOf, findOuterOf, hash01,
+  noteWalkFrame, visitFor, walkBlockedFor,
 } from '../math/worldBehaviour';
 import type {
-  BehaviourCtx, BehaviourFrame, BehaviourLogEntry, BehaviourRunner, UnisonConductor,
+  BehaviourCtx, BehaviourFrame, BehaviourLogEntry, BehaviourRunner, StartGate, UnisonConductor, WalkGate,
 } from '../math/worldBehaviour';
+import { waveArrivalMs } from '../math/reachWave';
 import { createWorldClocks } from '../math/worldClocks';
 import type { ClocksInput, ClocksOut, WorldClocks } from '../math/worldClocks';
 import { bubbleDurationMs } from '../math/worldBubble';
@@ -59,8 +64,8 @@ import { GLANCE_TARGETS, doubleExposureSchedule, glanceSchedule } from '../math/
 import { framingKeyOfPose, framingPose, isOnScreen, placeCast, unseenChangeOk, viewRectOf } from '../math/worldPlacement';
 import { boundsToWorld, visibleMachineBounds } from '../math/machineBounds';
 import { reachLevel } from '../math/reachLevel';
-import { createPokeLadder, isUnavailable, pokeOn, reducedClip, resetLadder } from '../math/pokes';
-import type { PokeLadder, PokeResult } from '../math/pokes';
+import { createPokeBubbleState, createPokeLadder, isUnavailable, notePokeBubble, pokeBubbleDue, pokeOn, reducedClip, resetLadder } from '../math/pokes';
+import type { PokeBubbleActor, PokeBubbleState, PokeLadder, PokeResult } from '../math/pokes';
 import { clockTick, linePath, lineRouteAt, placementFeetY, spliceState, spliceTooltip } from '../math/spliceWorld';
 import type { Rect, SpeakerAnchor } from '../math/worldPlacement';
 import { worldFinaleFrame } from '../math/worldFinale';
@@ -81,7 +86,7 @@ import type { WorldScheduler } from '../math/worldVoice';
 import { lineSettledId } from '../math/worldVoiceRules';
 import type { WorldCue, WorldSchedulerCtx } from '../math/worldVoiceRules';
 import type { WorldTween } from '../math/worldTransitions';
-import { LivingWorld } from './LivingWorld';
+import { LivingWorld, TimingRing } from './LivingWorld';
 import type { LivingId } from './LivingWorld';
 import { SpliceLines } from './SpliceLines';
 import type { SpliceRoute } from './SpliceLines';
@@ -245,16 +250,20 @@ export interface WorldDebugApi {
   setPointer(worldX: number | null, movedAtMs: number): void;
   pokeStats(): { last: Readonly<Record<string, { reaction: string; level: 1 | 2 | 3; atMs: number; delayMs: number }>>; unavailable: readonly string[] };
   pokeReset(): void;
+  setFindAt(worldX: number | null): void;
+  // WP28b: the producer's action for a Find about to show on spot (x, lane); returns the lead (ms) the item waits for (0: none).
+  findProducer(producer: FindProducer, x: number, lane: number): number;
 }
 
 // The cast walkers that speak to camera: the girl only while she stands on the ground (anchorOf and the plane sprites handle the rest).
 type WalkingSpeaker = Exclude<SpeakerId, 'payphone'>;
 type GlanceId = Exclude<DenizenId, 'sensor7' | 'girl'>;
 type Placements = Readonly<Record<GroundId, WorldPlacement | null>>;
-// WP24 cast side: a cue of a step (its id and its running index: a runner answers each index once); a resolved spot (world x); a row of
-// the runner log ring (the actor and the runner's entry).
-type BehaviourCue = { id: CueId; index: number };
-type SpotSlot = { id: SpotId; x: number };
+// WP24 cast side: a cue of a step (its id and its running index: a runner answers each index once; delayMs, WP28b, the cue's reaction delay per
+// actor when the producer knows the cause's timing, e.g. the ground wave's arrival); a resolved spot (world x and its feet
+// lane, WP28b); a row of the runner log ring (the actor and the runner's entry).
+type BehaviourCue = { id: CueId; index: number; delayMs?: Partial<Record<BehaviourActor, number>> };
+type SpotSlot = { id: SpotId; x: number; lane: number };
 interface BehaviourLogRow extends BehaviourLogEntry { id: BehaviourActor }
 
 // What the renderers show. placeKey (visible flag, placements and framing) is the part a relocation or a visibility change gates;
@@ -318,25 +327,6 @@ const CADENCE_MS = WORLD_VOICE_CONFIG.ladderRecheckMs;
 const TIMING_WINDOW = 120;
 // Render cache, not balance (WP24 r3 F3): the wall-clock hour behind the scheduler's localHour is read at most once per this interval.
 const HOUR_CACHE_MS = 1000;
-// A ring of the last TIMING_WINDOW durations (ms); mean() reads it as refreshTimingMean does (WP24 r2: the clocks and runners parts).
-class TimingRing {
-  private readonly values = new Float64Array(TIMING_WINDOW);
-  private count = 0;
-  private next = 0;
-
-  record(ms: number): void {
-    this.values[this.next] = ms;
-    this.next = (this.next + 1) % TIMING_WINDOW;
-    if (this.count < TIMING_WINDOW) this.count += 1;
-  }
-
-  mean(): number {
-    if (this.count === 0) return 0;
-    let sum = 0;
-    for (let i = 0; i < this.count; i++) sum += this.values[i] ?? 0;
-    return sum / this.count;
-  }
-}
 // Glance seed per cycle: a hash salt (not a balance number), so each cycle glances differently.
 const CYCLE_SEED_SALT = 7919;
 const GAME_VIEW: Rect = { x: 0, y: 0, w: VIEW.width, h: VIEW.height };
@@ -355,21 +345,32 @@ const CHAIN_BY_LOG: ReadonlyMap<string, ChainId> = new Map(
 const OPENER_IDS: readonly string[] = WORLD_LINES.filter((line) => line.trigger.kind === 'opener').map((line) => line.id);
 // The cast members that run a behaviour runner (WP24 C2), in the order the runners step.
 const BEHAVIOUR_ACTORS: readonly BehaviourActor[] = ['inspector', 'dog', 'crow', 'girl'];
-const NO_SPOTS: readonly { id: SpotId; dx: number }[] = [];
+const NO_SPOTS: readonly WorldSpot[] = [];
 // The Splice objects of the world (SPLICE_WORLD keys) and the eras whose energies the pulses read (WP28a T13b2).
 const SPLICE_OBJECT_IDS = Object.keys(SPLICE_WORLD) as SpliceObjectId[];
 const SPLICE_ERAS: readonly EraNumber[] = [1, 2, 3, 4, 5];
+// WP28b: the walkers the ground wave reaches (its arrival at each one's x delays that one's big-buy reaction; the girl has no reaction).
+const WAVE_ACTORS: readonly BehaviourActor[] = ['inspector', 'dog', 'crow'];
 // The beats applySplices passes when none is queued (boot, loads, a new cycle) or under reduced motion: no wake hold is taken.
 const NO_SPLICE_BEATS: readonly TechId[] = [];
-// WP28a T15b2: the cast members that take pokes (the target list order), the ladder's seed salt (a hash salt, not a balance number), the empty
-// perch list, and the two clips the director plays itself: the dog's wake look (its era I look up) and the crow's ruffle (a dead lamp's tink).
+// WP28a T15b2: the cast members that take pokes (the target list order), the ladder's seed salt (a hash salt, not a balance number), and the two
+// clips the director plays itself: the dog's wake look (its era I look up) and the crow's ruffle (a dead lamp's tink).
 const POKE_CAST_IDS: readonly ('inspector' | 'dog' | 'crow' | 'sensor7')[] = ['inspector', 'dog', 'crow', 'sensor7'];
 const POKE_SEED_SALT = 6571;
-const NO_PERCHES: readonly CrowPerch[] = [];
+// WP28b: hash salts of the visit delay (per object) and the big-buy hop (per big buy), apart from the pokes' and the ring's draws; the visit
+// activities are the names of the splice route (WORLD_REACT.routes.splice: 'inspector.visitWrite', 'dog.visitSniff').
+const VISIT_SEED_SALT = 7103;
+const BIG_BUY_SEED_SALT = 8191;
+const SPLICE_VISIT_IDS: readonly string[] = WORLD_REACT.routes.splice.map((r) => r.slice(r.indexOf('.') + 1));
+const VISIT_ACTORS: readonly ('inspector' | 'dog')[] = ['inspector', 'dog'];
 // The prop targets a woken Splice zone can stand in for (the clock and the payphone are Splice objects too; see wokenVisible).
 const PROP_TARGET_IDS: readonly ('lamp' | 'clock')[] = ['lamp', 'clock'];
 const DOG_WAKE: PokeClip | undefined = POKE_TABLES.dog[0]?.l1.find((c) => c.id === 'dogLookUp');
 const CROW_RUFFLE: PokeClip | undefined = POKE_TABLES.crow[0]?.l1.find((c) => c.id === 'crowRuffle');
+// WP28b: whether a tech id is one of the Splice objects that have a SPLICE_WORLD entry (the perch rule reads TechIds).
+function isSpliceObjectId(id: TechId): id is SpliceObjectId {
+  return (SPLICE_OBJECT_IDS as readonly string[]).includes(id);
+}
 // The playback mode of a presented fps (the tween's drawFps): 0 is the crank, else the mode whose fps is nearest (the midpoints of the
 // WORLD_PLAYBACK.fps table, structural).
 function modeOfFps(fps: number): PlaybackMode {
@@ -390,21 +391,22 @@ function homeXOf(actor: BehaviourActor, placements: Placements): number | null {
   if (p !== null) return p.x;
   return actor === 'girl' ? 0 : null;
 }
-// The framing's spot list of an actor (WORLD_SPOTS): the Inspector and the dog have one, the crow and the girl none.
-function framingSpots(actor: BehaviourActor, framing: FramingKey): readonly { id: SpotId; dx: number }[] {
+// The framing's spot list of an actor (WORLD_SPOTS, absolute x and lane): the Inspector and the dog have one, the crow and the girl none.
+function framingSpots(actor: BehaviourActor, framing: FramingKey): readonly WorldSpot[] {
   if (actor === 'crow' || actor === 'girl') return NO_SPOTS;
   return WORLD_SPOTS[framing]?.[actor] ?? NO_SPOTS;
 }
-// Writes the spots of an actor at its home x into its reused list (the slots are rewritten, so a frame allocates nothing).
-// Returns the list.
-function fillSpots(out: SpotSlot[], src: readonly { id: SpotId; dx: number }[], homeX: number): SpotSlot[] {
+// Writes a framing's spots into the reused list (the slots are rewritten, so a refill allocates nothing after the first). Returns the list.
+// WP28b: the spots are absolute, so the list depends on the framing alone.
+function fillSpots(out: SpotSlot[], src: readonly WorldSpot[]): SpotSlot[] {
   let n = 0;
   for (const s of src) {
     const slot = out[n];
-    if (slot === undefined) out.push({ id: s.id, x: homeX + s.dx });
+    if (slot === undefined) out.push({ id: s.id, x: s.x, lane: s.lane });
     else {
       slot.id = s.id;
-      slot.x = homeX + s.dx;
+      slot.x = s.x;
+      slot.lane = s.lane;
     }
     n += 1;
   }
@@ -416,6 +418,7 @@ function newCtx(beat: { downbeat: boolean; index: number }): BehaviourCtx {
   return {
     era: 1, mode: 'fps2', crankSteps: 0, reduced: false, stare: false, reverse: false, vents: false, holeDig: false, sensor: false,
     scraps: false, demoHold: false, paused: false, settle: false, homeX: 0, girlStage: 'window', spots: [], cues: [], beat,
+    walkBlocked: false, hopOk: false, findOuter: false, findInner: false, findX: null, visitSpot: null,
   };
 }
 
@@ -503,9 +506,9 @@ export class LivingWorldDirector implements WorldFinalePort {
   private readonly ctx: WorldSchedulerCtx;
   private readonly cam: CameraPose = { centerX: 0, centerY: 0, zoom: 1 };
   // WP24 r2: the clocks step and the runners step, timed per step (worldStats parts; a light frame records 0, WP24 r6-F1).
-  private readonly clockTimings = new TimingRing();
-  private readonly runnerTimings = new TimingRing();
-  private readonly frameTimings = new TimingRing();
+  private readonly clockTimings = new TimingRing(TIMING_WINDOW);
+  private readonly runnerTimings = new TimingRing(TIMING_WINDOW);
+  private readonly frameTimings = new TimingRing(TIMING_WINDOW);
   private readonly api: WorldDebugApi;
   private subs: (() => void)[] = [];
   private logsSeen: Set<string>;
@@ -615,11 +618,13 @@ export class LivingWorldDirector implements WorldFinalePort {
   private readonly runners: Record<BehaviourActor, BehaviourRunner>;
   private readonly ctxs: Record<BehaviourActor, BehaviourCtx>;
   private readonly spotPools: Record<BehaviourActor, SpotSlot[]> = { inspector: [], dog: [], crow: [], girl: [] };
-  // The framing and home x each spot pool was last filled at (WP24 r4-F1): a pool is refilled only when one of them moved.
-  private readonly spotKeys: Record<BehaviourActor, { framing: FramingKey | null; homeX: number }> = {
-    inspector: { framing: null, homeX: NaN }, dog: { framing: null, homeX: NaN }, crow: { framing: null, homeX: NaN },
-    girl: { framing: null, homeX: NaN },
-  };
+  // The framing each spot pool was last filled at (WP24 r4-F1; WP28b: the spots are absolute, so the home x is no longer a key): a pool is
+  // refilled only when the framing moved.
+  private readonly spotKeys: Record<BehaviourActor, FramingKey | null> = { inspector: null, dog: null, crow: null, girl: null };
+  // WP28b: the walk gate of the walkers (no two start a walk in the same second); reset with the runners.
+  private walkGate: WalkGate = createWalkGate();
+  // WP28b (r2-FX4G, V5): the start gate of the runners (no boundary pick within startGuardMs of another denizen's start); reset with the runners.
+  private startGate: StartGate = createStartGate();
   private readonly beat: { downbeat: boolean; index: number } = { downbeat: false, index: 0 };
   private beatAcc = 0;
   private cueNow: BehaviourCue[] = [];
@@ -630,6 +635,24 @@ export class LivingWorldDirector implements WorldFinalePort {
   // The last crankClick cue: the crow's tip cue is spaced by WORLD_AMBIENT.crowTipMinGapMs (-Infinity: the first click always cues).
   private lastCrankCueMs = Number.NEGATIVE_INFINITY;
   private digBouts = 0;
+  // WP28b (C1, C3, C11): the live Find's world x (setFindAt; null: none), the last big-buy cue's time (the ground wave's gap), whether the crow's
+  // hopFree activity was drawn last step (its rising edge starts the free hop), and the crow's perch list of the applied framing (rebuilt by
+  // applySplices, so a frame never builds it).
+  private findX: number | null = null;
+  private bigBuyAtMs = Number.NEGATIVE_INFINITY;
+  private crowHopEdge = false;
+  private perchList: CrowPerch[] = [];
+  // WP28b F25 (session only): each walker's visit to a woken Splice (ctx.visitSpot): the stand's spot (null: none), the end of its window, and
+  // whether its visit activity has run since it was set. WP28b F33: the framing the perch list was built for, and whether the crow's perch was
+  // taken over under it (it leaves by a hop, or at the next unseen moment). bigBuyK counts the big buys (the crow's hop draw).
+  private readonly visitSpot: Record<BehaviourActor, SpotId | null> = { inspector: null, dog: null, crow: null, girl: null };
+  private readonly visitUntilMs: Record<BehaviourActor, number> = {
+    inspector: Number.NEGATIVE_INFINITY, dog: Number.NEGATIVE_INFINITY, crow: Number.NEGATIVE_INFINITY, girl: Number.NEGATIVE_INFINITY,
+  };
+  private readonly visitRan: Record<BehaviourActor, boolean> = { inspector: false, dog: false, crow: false, girl: false };
+  private perchListFraming: FramingKey | null = null;
+  private crowLeaving = false;
+  private bigBuyK = 0;
   private readonly castFrames: Record<'inspector' | 'dog' | 'crow' | 'girl', BehaviourFrame | null> = {
     inspector: null, dog: null, crow: null, girl: null,
   };
@@ -681,6 +704,9 @@ export class LivingWorldDirector implements WorldFinalePort {
   // WP28a Da-5: the payphone ring (scheduler clock: the due time, null while no gap runs; the counter that seeds each gap's hash).
   private ringDueAt: number | null = null;
   private ringK = 0;
+  // WP28b (P12): the poke bubbles' state (fresh per cycle) and the draw counter that seeds each due test (pokeBubble).
+  private pokeBubbleState: PokeBubbleState = createPokeBubbleState();
+  private pokeBubbleK = 0;
   // WP28a Da-8: the rates object the reach levels were read from (the session replaces it when the tech levels change).
   private reachRates: Readonly<ProductionRates> | null = null;
   // WP28a Da-7: reused poke scratch (the speaker anchor, the Splice box corners, the lamp and clock feet): pokeTargets allocates nothing.
@@ -792,6 +818,7 @@ export class LivingWorldDirector implements WorldFinalePort {
     if (this.eraWasUp && !eraUp) {
       this.toastGate.onEraCardClosed(now);
       this.eraCardClosedAtMs = now;
+      this.onEraCardClosed();
     }
     // The era card coming up is an unseen moment (WP28a T15b2): the girl's pending pose and the crow's return happen behind it.
     if (eraUp && !this.eraWasUp) this.unseenMoment();
@@ -827,6 +854,7 @@ export class LivingWorldDirector implements WorldFinalePort {
     }
     this.stepGlances(now, cadence);
     this.stepDoubleExposures(now, cadence);
+    this.stepFaultLed();
 
     this.stepLines(now);
     this.stepBubbles(now);
@@ -956,6 +984,7 @@ export class LivingWorldDirector implements WorldFinalePort {
       s.on('purchase', (e) => this.onPurchase(e.id)),
       s.on('unlock', () => this.onUnlock()),
       s.on('milestone', (e) => this.onMilestone(e.id)),
+      s.on('fault', (e) => this.onFault(e.kind)),
       s.on('offline', (report) => this.onOfflineReport(report)),
       s.on('reset', () => this.onNewGame()),
       s.on('cycle', () => this.onNewGame()),
@@ -973,6 +1002,9 @@ export class LivingWorldDirector implements WorldFinalePort {
     this.lastInputMs = this.nowMs;
     this.crankSteps += 1;
     this.clickTimes.push(this.nowMs);
+    // The crank's ground pulse reaches each woken Splice line's foot and starts one extra pulse there (WP28b D6 a; SpliceLines.crankPulse).
+    const machine = boundsToWorld(visibleMachineBounds(this.session.state.techLevels));
+    this.spliceLines.crankPulse(this.visualNow(), machine.left, machine.right);
     // A run of clicks cues the crow's tip once per crowTipMinGapMs (the crank steps and the rapid cue are unaffected).
     if (this.nowMs - this.lastCrankCueMs >= WORLD_AMBIENT.crowTipMinGapMs) {
       this.lastCrankCueMs = this.nowMs;
@@ -987,14 +1019,21 @@ export class LivingWorldDirector implements WorldFinalePort {
     this.offer({ kind: 'buy', techId: id });
     if (id === 'generator') this.offer({ kind: 'chain', chainId: 'crossedLines', step: 1 });
     if (id === 'wornMotor') this.offer({ kind: 'beat', beat: 'beat.failedSync' });
-    // A Splice bought wakes its object: the wake beat runs on the next frame, once its route exists (stepSplices).
-    if (isSplice(TECHNOLOGIES[id])) this.spliceBeats.push(id);
+    // A Splice bought wakes its object: the wake beat runs on the next frame, once its route exists (stepSplices). The wake is the one
+    // event a visit is scheduled for (WP28b F25); a boot into a woken state schedules nothing.
+    if (isSplice(TECHNOLOGIES[id])) {
+      this.spliceBeats.push(id);
+      this.onBigBuy();
+      this.scheduleVisit(id);
+    }
     this.armOpener();
   }
 
+  // An unlock (milestones included) is a big buy: the ground wave runs and the walkers react (WP28b, onBigBuy).
   private onUnlock(): void {
     this.toastGate.onUnlock(this.nowMs);
     this.dirty = true;
+    this.onBigBuy();
   }
 
   private onMilestone(id: TechId): void {
@@ -1086,6 +1125,11 @@ export class LivingWorldDirector implements WorldFinalePort {
     this.snapCrow();
     this.ringDueAt = null;
     this.ringK = 0;
+    // WP28b: the visits and the big-buy draws restart with the cycle (a pending visit is cut by the epoch).
+    this.endVisits();
+    this.bigBuyK = 0;
+    this.pokeBubbleState = createPokeBubbleState();
+    this.pokeBubbleK = 0;
     this.resetRunners();
     this.pendingSnap = true;
     this.dirty = true;
@@ -1102,6 +1146,8 @@ export class LivingWorldDirector implements WorldFinalePort {
     const fx = this.tracker.onEvolved(e, this.nowMs);
     this.dirty = true;
     this.applyTierEffects(fx);
+    // A tier-up is a big buy too (WP28b): the same ground wave and reactions.
+    this.onBigBuy();
   }
 
   private onTorqued(e: PartTorquedEvent): void {
@@ -1430,13 +1476,15 @@ export class LivingWorldDirector implements WorldFinalePort {
 
   // ---- Splice objects and lines (WP28a T13b2) ----
 
-  // Every frame: the reach level of each era energy (when the rates change), the Splice state when the applied plan, the levels object, the
-  // ending phase or reduced motion changed (applySplices), the wake beats queued by a purchase, the pulses and loops, and the woken clock's
-  // tick hand. Allocates nothing except a route rebuild.
+  // Every frame: the KEEP beat's side and alpha (first, so the placements this frame read it), the reach level of each era energy (when the rates
+  // change) and the hum it drives (WP28b), the Splice state when the applied plan, the levels object, the ending phase or reduced motion changed
+  // (applySplices), the wake beats queued by a purchase, the pulses and loops, and the woken clock's tick hand. Allocates nothing except a route
+  // rebuild.
   private stepSplices(): void {
     const s = this.session.state;
     const reduced = this.frameReduced;
     const applied = this.applied;
+    this.splices.setKeepClock(this.keepClockS(this.scene.time.now));
     if (applied !== this.spliceApplied || s.techLevels !== this.spliceLevels || s.ending.phase !== this.splicePhase
       || reduced !== this.spliceReduced) {
       this.spliceApplied = applied;
@@ -1457,6 +1505,10 @@ export class LivingWorldDirector implements WorldFinalePort {
         this.reachByEra[era] = reachLevel(rates.perSecond[res], REACH_LEVEL.lo[res], REACH_LEVEL.hi[res]);
       }
     }
+    // The reach of the applied era's energy drives the machine's world (WorldProps: lamp, pebbles, puddles) and, in era IV, the objects' hum.
+    const appliedEra = applied === null ? 0 : applied.state.era;
+    this.props.setReach(this.reachByEra[appliedEra] ?? 0);
+    this.splices.setHum(appliedEra === 4 ? this.props.humPx() : 0);
     this.stepPayphoneRing();
     const photo = this.framePhoto;
     this.splices.update(now, photo);
@@ -1495,10 +1547,13 @@ export class LivingWorldDirector implements WorldFinalePort {
         const route = lineRouteAt(entry.line, framing);
         const foot = { x: route.from === 'left' ? machine.left : machine.right, y: GROUND_Y };
         const path = linePath(route, foot, { x: placement.x, y: placementFeetY(placement) });
-        routes.push({ id, path, era: def.era === 2 ? 2 : 1 });
+        // TechDef.era is typed number: the line's era is the Splice's era as one of the five (WP28b: eras III-V have their own line material).
+        routes.push({ id, path, era: SPLICE_ERAS.find((e) => e === def.era) ?? 1, from: route.from });
       }
     }
     this.spliceLines.setRoutes(routes, this.spliceReduced);
+    // The crow's perches follow the same state (WP28b C3): the woken tops and the vane and kite replacements.
+    this.refreshPerches(framing, era);
   }
 
   // The wake beat of each Splice bought since the last frame: its line runs one pulse, and 600 ms later the object wakes (its hold ends and its loop
@@ -1619,6 +1674,96 @@ export class LivingWorldDirector implements WorldFinalePort {
     if (!this.destroyed) this.cast.setPointer(worldX, movedAtMs);
   }
 
+  /** The live Find's world x (C11, WP28b): FindMarker reports a spawn (its x) and the end of the Find (null). A Find that appears queues the find cue
+   * (the walkers point or sniff at it on their outer side); a move keeps the cue quiet. */
+  setFindAt(worldX: number | null): void {
+    if (this.destroyed) return;
+    const next = worldX !== null && Number.isFinite(worldX) ? worldX : null;
+    if (next !== null && this.findX === null) this.pushCue('find');
+    this.findX = next;
+  }
+
+  /**
+   * WP28b (C11, Find producers): the producer's action for a Find that is about to show on the spot (x, lane). Runs the action and returns its
+   * lead (ms): the item waits that long, FindMarker clamps it. The dog digs (an overlay, only while its feet x is within digReachPx of the spot's x),
+   * the crow caws from its perch (an overlay and the caw), a woken Splice twitches its own art (the coin return: the payphone's sway until its own
+   * Splice is bought), a puddle rings and a vent puffs (a cue). Nothing
+   * runs in era IV, in an ending, under reduced motion or while destroyed (0). No cast member moves: each action is an overlay, a twitch, a ring or a cue.
+   */
+  findProducer(producer: FindProducer, x: number, lane: number): number {
+    if (this.destroyed || this.applied === null || this.session.state.ending.phase !== 'none' || this.session.settings.reducedMotion) return 0;
+    const s = this.session.state;
+    if (currentEra(s.techLevels) === 4) return 0;
+    const lead = FIND_PRODUCER_ACT.leadMs[producer];
+    switch (producer) {
+      case 'dog': {
+        const pose = this.cast.poseOf('dog');
+        if (pose === null || this.runners.dog.snapshot().activity === 'sleep') return 0;
+        // WP28b F32: the dig reaches the spot's x only (24 px); a dog farther along the ground does not dig.
+        if (Math.abs(pose.x - x) > FIND_PRODUCER_ACT.digReachPx) return 0;
+        this.cast.overlay('dog', FIND_PRODUCER_ACT.dig, this.visualNow());
+        return lead;
+      }
+      case 'crow':
+        this.cast.overlay('crow', FIND_PRODUCER_ACT.caw, this.visualNow());
+        this.feedback.worldSound.emit({ kind: 'poke', id: 'caw' });
+        return lead;
+      case 'organ':
+      case 'radio':
+      case 'pump': {
+        const id = FIND_PRODUCER_ACT.splice[producer];
+        if (id === undefined || s.techLevels[id] < 1 || !this.spliceVisible(id)) return 0;
+        this.splices.twitch(id);
+        return lead;
+      }
+      case 'coinReturn': {
+        // WP28b (r2-FX3): the spot shows with the payphone woken (FIND_SPOTS), so the payphone's sway stands in until its own Splice is bought.
+        const own = FIND_PRODUCER_ACT.splice.coinReturn;
+        if (own !== undefined && s.techLevels[own] >= 1 && this.spliceVisible(own)) {
+          this.splices.twitch(own);
+          return lead;
+        }
+        const stand = FIND_PRODUCER_ACT.standIn.coinReturn;
+        if (stand === undefined || s.techLevels[stand] < 1 || !this.spliceVisible(stand)) return 0;
+        this.props.payphoneAnswer('sway');
+        return lead;
+      }
+      case 'puddle':
+        this.props.puddleRing();
+        return lead;
+      case 'vent':
+        this.pushCue('ventPuff');
+        return lead;
+      default:
+        return 0;
+    }
+  }
+
+  // WP28b (P12): a level-2 answer may show a poke bubble. Not a line: nothing is persisted or counted, no cast turn or blip follows, and the
+  // Inspector's word is announced (the girl's ellipsis is not). pokeBubbleDue keeps it off while a line bubble is up, under a silence and with
+  // WORLD VOICES off; it takes a free slot for POKE_BUBBLE.showMs and then comes down (hidePokeBubble).
+  private pokeBubble(actor: PokeBubbleActor): void {
+    const now = this.nowMs;
+    const u01 = hash01(cycleSeedOf(this.session.prestige.cycle), this.pokeBubbleK);
+    this.pokeBubbleK += 1;
+    const slot = this.freeSlot();
+    if (slot === null || !this.pokeEnabled()) return;
+    const voices = this.session.settings.worldVoices;
+    if (!pokeBubbleDue(this.pokeBubbleState, actor, now, u01, { voices, lineBubbleUp: this.bubbles.visible() })) return;
+    const text = POKE_BUBBLE[actor].text;
+    if (this.bubbles.show({ slot, text, speaker: actor, anchor: () => this.anchorOf(actor, this.cam) }, now) !== 'shown') return;
+    notePokeBubble(this.pokeBubbleState, actor, now);
+    if (actor === 'inspector') this.view.announce(WORLD_A11Y_PREFIX.inspector, text);
+    this.later(now + POKE_BUBBLE.showMs, () => this.hidePokeBubble(slot), true);
+  }
+
+  // The poke bubble comes down once it has been up for showMs. A slot that holds a line now started after the poke (less time up), so it stays.
+  private hidePokeBubble(slot: 0 | 1): void {
+    if (!this.bubbles.visible(slot) || this.bubbles.visibleMs(slot, this.nowMs) < POKE_BUBBLE.showMs) return;
+    this.bubbles.hide(slot);
+    this.bubbleEdgeMs = this.nowMs;
+  }
+
   /** The poke ladder's readings (C11): the last answer per target id, and the ids still in their unavailable window at the last poke. */
   pokeStats(): { last: Readonly<Record<string, { reaction: string; level: 1 | 2 | 3; atMs: number; delayMs: number }>>; unavailable: readonly string[] } {
     const last: Record<string, { reaction: string; level: 1 | 2 | 3; atMs: number; delayMs: number }> = {};
@@ -1737,6 +1882,11 @@ export class LivingWorldDirector implements WorldFinalePort {
       // The glance's turn ends with it (WP28a r3): the answer is the frame drawn. The payphone has no cast turn.
       if (glance.id !== 'payphone') this.cast.cutTurn(glance.id);
     }
+    // WP28b (P12): a level-2 answer of the Inspector ('Noted.') or the girl (a wordless ellipsis) may show its poke bubble; pokeBubble decides.
+    if (res.level === 2) {
+      if (id === 'girl') this.pokeBubble('girl');
+      else if (id === 'inspector' && (clip.id === 'insNoted' || clip.id === 'insVNoted')) this.pokeBubble('inspector');
+    }
     switch (id) {
       case 'inspector':
       case 'dog':
@@ -1806,6 +1956,8 @@ export class LivingWorldDirector implements WorldFinalePort {
   // its look up, then the leave.
   private walkerAnswer(id: 'inspector' | 'dog', clip: PokeClip, leave: string | null, now: number): void {
     const runner = this.runners[id];
+    // WP28b (C11 [R1]): a walk with more than a second left ends at its current x, so the answer never waits for a long walk.
+    runner.halt();
     if (id === 'dog' && leave !== null && DOG_WAKE !== undefined && runner.snapshot().activity === 'sleep') {
       this.cast.overlay('dog', DOG_WAKE, now);
       runner.interrupt(leave, DOG_WAKE.durMs);
@@ -1816,15 +1968,72 @@ export class LivingWorldDirector implements WorldFinalePort {
     if (leave !== null) runner.interrupt(leave, clip.durMs);
   }
 
-  // The crow's perches of the applied framing (C3, CROW_PERCHES): the drop wire joins only while the Payphone line is woken on a framing whose
-  // cable mast stands (the Splice's dropOn list).
+  // The crow's perches of the applied framing (C3), as applySplices last built them (refreshPerches): read as it stands, no allocation.
   private perchesNow(): readonly CrowPerch[] {
-    const framing = this.applied?.framing;
-    const all = framing === undefined ? undefined : CROW_PERCHES[framing];
-    if (framing === undefined || all === undefined) return NO_PERCHES;
+    return this.perchList;
+  }
+
+  // Rebuilds the perch list of the framing (null: none) at the era (WP28b). The CROW_PERCHES base, with the drop wire only while the Payphone line
+  // is woken on a framing whose cable mast stands (the Splice's dropOn list), and the woken Splice tops (spliceTop) while their objects stand. The
+  // vane and the kite take the booth roof and the lamp top while they stand and are woken: the object's feet plus its perchTop (SPLICE_WORLD).
+  // The list keeps its order (the crow's index is stable per framing). Runs only when the Splice state changes.
+  private refreshPerches(framing: FramingKey | null, era: number): void {
+    const out = this.perchList;
+    // WP28b F33: the perch the crow sits on, by id, before the list changes (its entry, or the framing's lamp top while it rests on its placement).
+    const restId = framing === null ? undefined : CROW_PERCHES[framing]?.[0]?.id;
+    const sitId = this.cast.crowPos() === null ? restId : out[this.crowPerch]?.id;
+    const sameFraming = framing !== null && this.perchListFraming === framing;
+    out.length = 0;
+    this.perchListFraming = framing;
+    const all = framing === null ? undefined : CROW_PERCHES[framing];
+    if (framing === null || all === undefined) return;
     const mast: readonly FramingKey[] = SPLICE_WORLD.splicePayphone?.line.dropOn ?? [];
     const wired = this.session.state.techLevels.splicePayphone >= 1 && mast.includes(framing);
-    return wired ? all : all.filter((p) => p.droppedWire !== true);
+    for (const p of all) {
+      if (p.droppedWire === true && !wired) continue;
+      if (p.spliceTop !== undefined && !this.spliceLive(p.spliceTop, framing, era)) continue;
+      out.push(p);
+    }
+    // A perch top takes its perch while the object stands, dead or woken (WP28b F33).
+    for (const id of SPLICE_OBJECT_IDS) {
+      const entry = SPLICE_WORLD[id];
+      const target = entry?.perchTop?.replaces;
+      const placement = entry?.placements[framing];
+      if (entry === undefined || entry.perchTop === undefined || target === undefined || placement === null || placement === undefined) continue;
+      if (!this.spliceStands(id, framing, era)) continue;
+      const at = out.findIndex((p) => p.id === target);
+      if (at >= 0) out[at] = { id, x: placement.x + entry.perchTop.dx, y: placementFeetY(placement) + entry.perchTop.dy };
+    }
+    // The crow keeps its perch when the list shifts; a perch that is gone (taken over) makes it leave by a hop. A new framing re-places the crow
+    // unseen (its snap), so the home settles there at once.
+    if (sitId !== undefined) {
+      const at = out.findIndex((p) => p.id === sitId);
+      if (at >= 0) this.crowPerch = at;
+      else if (sameFraming) this.crowLeaving = true;
+    }
+    if (!sameFraming) this.settleCrowHome();
+  }
+
+  // WP28b F33: the crow's home (perch 0) is a Splice top while the lamp top stands taken over: the crow settles on it with no flight. Only the
+  // list of the applied framing counts (a framing change settles after its list is built); a lamp top that stands is left to the placement.
+  private settleCrowHome(): void {
+    const framing = this.applied?.framing ?? null;
+    const home = this.perchList[0];
+    const base = framing === null ? undefined : CROW_PERCHES[framing]?.[0];
+    if (framing === null || this.perchListFraming !== framing || home === undefined || base === undefined || home.id === base.id) return;
+    this.cast.crowSettleAt(home.x, home.y);
+  }
+
+  // A Splice object that stands in the framing in its era (its era gate and its placement), dead or woken: the perch takeover's test (F33).
+  private spliceStands(id: TechId, framing: FramingKey, era: number): boolean {
+    if (!isSpliceObjectId(id)) return false;
+    const entry = SPLICE_WORLD[id];
+    return entry !== undefined && era >= TECHNOLOGIES[id].era && (entry.placements[framing] ?? null) !== null;
+  }
+
+  // A Splice object that stands in the framing and is woken in the era: the woken perch tops' test (spliceTop).
+  private spliceLive(id: TechId, framing: FramingKey, era: number): boolean {
+    return this.session.state.techLevels[id] >= 1 && this.spliceStands(id, framing, era);
   }
 
   // The crow hops to perch index `index` of the applied framing's list (C3). The hop starts where the crow is (a hop in flight counts) and
@@ -1836,7 +2045,8 @@ export class LivingWorldDirector implements WorldFinalePort {
     const to = perches[index];
     const machine = CROW_MACHINE_X[applied.framing];
     if (to === undefined || machine === undefined) return false;
-    const from = this.cast.crowPos() ?? perches[Math.min(this.crowPerch, perches.length - 1)] ?? to;
+    // A crow that rests on its placement starts from the framing's lamp top (the base perch 0; WP28b F33: the list's entry 0 may be a Splice top).
+    const from = this.cast.crowPos() ?? CROW_PERCHES[applied.framing]?.[0] ?? to;
     const started = this.cast.crowHop(from, to, this.visualNow(), currentEra(this.session.state.techLevels) === 5, machine);
     if (started) this.crowPerch = index;
     return started;
@@ -1865,9 +2075,12 @@ export class LivingWorldDirector implements WorldFinalePort {
   }
 
   // The crow goes back to its lamp perch at once, no hop (WP28a Da-6): its placement and the perch index 0.
+  // WP28b F33: the home is the list's perch 0 when a Splice top took the lamp top (settleCrowHome); the leave flag is spent.
   private snapCrow(): void {
     this.cast.crowSnapHome();
     this.crowPerch = 0;
+    this.crowLeaving = false;
+    this.settleCrowHome();
   }
 
   // ---- time side (WP24 T10a1): the visual clock, the clocks input, the world sub-step and the scenery values ----
@@ -2016,6 +2229,8 @@ export class LivingWorldDirector implements WorldFinalePort {
     const k0 = behaviourK0(this.session.stats.activeSeconds);
     this.conductor.reset(cycleSeedOf(cycle));
     for (const actor of BEHAVIOUR_ACTORS) this.runners[actor].reset(behaviourSeed(cycle, actor), k0, this.homeX[actor]);
+    this.walkGate = createWalkGate();
+    this.startGate = createStartGate();
     this.cueNow.length = 0;
     this.cueNext.length = 0;
     this.ventSeen = 0;
@@ -2046,6 +2261,202 @@ export class LivingWorldDirector implements WorldFinalePort {
     return count;
   }
 
+  // WP28b: a cue whose reaction delay per actor the producer knows (the ground wave's arrival at each walker's x); the map is the cue's own.
+  private pushCueDelayed(id: CueId, delayMs: Partial<Record<BehaviourActor, number>>): void {
+    this.cueNext.push({ id, index: this.cueSeq, delayMs });
+    this.cueSeq += 1;
+  }
+
+  // WP28b: a Machine Fault appears (spawn), clears or expires. Spawn: the fault cue (the Inspector startles, the dog barks, the crow ruffles), the
+  // ground girl's lantern dims, and the crow hops to the highest perch once its stagger has run. Clear: the faultClear cue and a Sensor 7 blink.
+  // Clear and expiry: the amber LED goes out (stepFaultLed holds it while the fault lives).
+  private onFault(kind: 'spawn' | 'expire' | 'clear'): void {
+    if (kind === 'spawn') {
+      this.pushCue('fault');
+      this.dimGirl();
+      this.later(this.nowMs + WORLD_REACT.staggerMs.crow[1], () => this.crowHopHighest(), true);
+      return;
+    }
+    this.cast.syncNow(this.visualNow());
+    this.cast.sensorLedClear();
+    if (kind === 'clear') {
+      this.pushCue('faultClear');
+      this.cast.notice('sensorBlink');
+      // WP28b: the crow goes back to its lamp perch by a hop once its stagger has run (the spawn's hop went up).
+      this.later(this.nowMs + WORLD_REACT.staggerMs.crow[1], () => {
+        if (this.crowPerch !== 0 && this.hopAllowed()) this.crowHopTo(0);
+      }, true);
+    }
+  }
+
+  // WP28b: Sensor 7's amber LED while a fault lives. The glint lamp is held on every frame of the fault (its span is the poke's solid length, so it
+  // never lapses between frames); the clear and the expiry cut it (onFault).
+  private stepFaultLed(): void {
+    if (this.applied === null || this.session.faultAlive === null) return;
+    this.cast.sensorLed('glint', POKE_RENDER.ledSolidMs);
+  }
+
+  // WP28b: the ground girl's lantern dims on a fault: the mini's dim frame, or the ground lantern's ring (the window has no light to dim). The
+  // clip of the girl's level-2 answer stands in for the fault's dim (its alpha); the dim lasts faultDimMs (WP28b: 1 s, the poke clip runs 2 s).
+  private dimGirl(): void {
+    const applied = this.applied;
+    if (applied === null || applied.state.era === 4 || this.session.state.ending.phase !== 'none') return;
+    const stage = girlStageOf(applied.state.girl.stageName);
+    if (stage === 'window') return;
+    const table = stage === 'mini' ? POKE_TABLES.girlMini : POKE_TABLES.girlGround;
+    const clip = table[applied.state.era - 1]?.l2;
+    if (clip === undefined) return;
+    this.cast.syncNow(this.visualNow());
+    if (stage === 'mini') this.props.girlMiniLantern(clip.alpha ?? 1, WORLD_REACT.faultDimMs);
+    else this.cast.lanternRing(WORLD_REACT.faultDimMs);
+  }
+
+  // WP28b: a big buy (an unlock, a milestone, a tier-up or a Splice bought) runs the ground wave outward from the machine's base edges, so each
+  // walker's reaction waits until the wave reaches its x (waveArrivalMs). Throttled to the wave's own gap; Sensor 7 blinks.
+  private onBigBuy(): void {
+    if (this.nowMs - this.bigBuyAtMs < GROUND_WAVE_SHARED.minGapMs) return;
+    this.bigBuyAtMs = this.nowMs;
+    const machine = boundsToWorld(visibleMachineBounds(this.session.state.techLevels));
+    const delayMs: Partial<Record<BehaviourActor, number>> = {};
+    for (const actor of WAVE_ACTORS) {
+      const x = this.castFrames[actor]?.x ?? this.homeX[actor];
+      delayMs[actor] = waveArrivalMs(x < MACHINE_ANCHOR.x ? machine.left - x : x - machine.right);
+    }
+    this.pushCueDelayed('bigBuy', delayMs);
+    // WP28b: the crow hops on this big buy with the bigBuy chance (a seeded draw per big buy), after its stagger, as its free hop.
+    const k = this.bigBuyK;
+    this.bigBuyK += 1;
+    if (hash01(cycleSeedOf(this.session.prestige.cycle), BIG_BUY_SEED_SALT + k) < (WORLD_REACT.hopChanceByCue.bigBuy ?? 0)) {
+      this.later(this.nowMs + WORLD_REACT.staggerMs.crow[1], () => {
+        if (this.hopAllowed()) this.crowHopNext();
+      }, true);
+    }
+    this.cast.syncNow(this.visualNow());
+    this.cast.notice('sensorBlink');
+  }
+
+  // WP28b: the era card closed (the era cue): the walkers react through the cue, Sensor 7 turns its head to the camera, and the crow goes back to
+  // the lamp perch (index 0) by a hop when it is off it and a hop is allowed.
+  private onEraCardClosed(): void {
+    this.pushCue('era');
+    this.cast.syncNow(this.visualNow());
+    this.cast.turnToCamera('sensor7', 'glance');
+    if (this.crowPerch !== 0 && this.hopAllowed()) this.crowHopTo(0);
+  }
+
+  // WP28b (C3): the free hop. The next perch of the list, in list order from the current one (wrapping), that a hop can reach; the first one
+  // that starts wins, so an unreachable perch (over the machine or past the hop limit) is skipped.
+  private crowHopNext(): void {
+    const n = this.perchList.length;
+    for (let k = 1; k < n; k++) {
+      if (this.crowHopTo((this.crowPerch + k) % n)) return;
+    }
+  }
+
+  // WP28b (C3): the fault's hop. The highest perch of the list (the smallest feet y) when the crow is not on it and a hop is allowed.
+  private crowHopHighest(): void {
+    if (!this.hopAllowed()) return;
+    let best = -1;
+    let bestY = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < this.perchList.length; i++) {
+      const p = this.perchList[i];
+      if (p !== undefined && p.y < bestY) {
+        best = i;
+        bestY = p.y;
+      }
+    }
+    if (best >= 0 && best !== this.crowPerch) this.crowHopTo(best);
+  }
+
+  // Whether the crow may hop now (WP28b, hopOk): not under reduced motion, not in era IV, not during an ending, with two perches or more, no hop in
+  // flight and no poke answer on the crow.
+  private hopAllowed(): boolean {
+    const applied = this.applied;
+    if (applied === null || this.frameReduced || applied.state.era === 4 || this.session.state.ending.phase !== 'none') return false;
+    if (this.perchList.length < 2) return false;
+    return !this.cast.hopBusy(this.visualNow()) && !this.cast.overlayActive('crow');
+  }
+
+  // WP28b F25: a woken Splice (onPurchase) schedules its visit once: spliceDelayMs after the wake, a seeded draw per object (no Math.random).
+  // The window runs visitHoldMs from that first try; tryVisit retries until it closes.
+  private scheduleVisit(id: TechId): void {
+    const [lo, hi] = WORLD_REACT.spliceDelayMs;
+    const dueMs = this.nowMs + lo + hash01(cycleSeedOf(this.session.prestige.cycle), VISIT_SEED_SALT + TECH_IDS.indexOf(id)) * (hi - lo);
+    this.later(dueMs, () => {
+      this.crowLandOn(id);
+      this.tryVisit(id, dueMs + WORLD_REACT.visitHoldMs);
+    }, true);
+  }
+
+  // WP28b (r2-FX3, Gathering at woken objects): the crow lands on a woken Splice's perch top when that top is in its list (spliceTop, or the vane
+  // or kite top that took the booth roof or the lamp top). Once per wake, with or without a visit stand. Not when it sits there already, and only
+  // when a hop is allowed (hopAllowed) and the arc reaches the perch (crowHopTo).
+  private crowLandOn(id: TechId): void {
+    if (!this.hopAllowed()) return;
+    for (let i = 0; i < this.perchList.length; i++) {
+      const p = this.perchList[i];
+      if (p === undefined || i === this.crowPerch || (p.spliceTop !== id && p.id !== id)) continue;
+      this.crowHopTo(i);
+      return;
+    }
+  }
+
+  // WP28b F25: the visit starts when the walker stands on a spot the stand is clean from (visitFor): ctx.visitSpot takes the stand's spot for
+  // visitHoldMs and the splice cue goes out (the runner's visit reactions). Otherwise the next try comes in retryMs, until untilMs. Nothing runs
+  // while the world is not live (no applied state, a film, an ending) or the walker is on another visit.
+  private tryVisit(id: TechId, untilMs: number): void {
+    const applied = this.applied;
+    if (this.destroyed || applied === null || !applied.state.visible || this.film !== null || this.session.state.ending.phase !== 'none') return;
+    if (this.nowMs >= untilMs) return;
+    const era = currentEra(this.session.state.techLevels);
+    for (const actor of VISIT_ACTORS) {
+      if (this.visitSpot[actor] !== null) continue;
+      // visitFor reads the stand of the object in the framing; a stand that belongs to the other walker is not this walker's visit.
+      const stand = visitFor(applied.framing, id, era, this.spotNow(actor));
+      if (stand === null || stand.actor !== actor) continue;
+      this.visitSpot[actor] = stand.spot;
+      this.visitUntilMs[actor] = this.nowMs + WORLD_REACT.visitHoldMs;
+      this.visitRan[actor] = false;
+      this.pushCue('splice');
+      return;
+    }
+    this.later(this.nowMs + SPLICE_VISIT.retryMs, () => this.tryVisit(id, untilMs), true);
+  }
+
+  // The spot a walker stands on (WP28b F25): the nearest spot of its framing to its drawn point (x and lane); null while it walks or is not drawn.
+  private spotNow(actor: 'inspector' | 'dog'): SpotId | null {
+    const framing = this.applied?.framing ?? null;
+    const f = this.castFrames[actor];
+    if (framing === null || f === null || f.walking) return null;
+    let best: SpotId | null = null;
+    let bestD = Number.POSITIVE_INFINITY;
+    for (const s of this.spotsAt(actor, framing)) {
+      const d = Math.abs(s.x - f.x) + Math.abs(s.lane - f.lane);
+      if (d < bestD) {
+        bestD = d;
+        best = s.id;
+      }
+    }
+    return best;
+  }
+
+  // A visit ends once its activity has run and another one starts, or when its window closes (ctx.visitSpot is null again).
+  private noteVisit(actor: BehaviourActor, activity: string): void {
+    if (this.visitSpot[actor] === null) return;
+    if (SPLICE_VISIT_IDS.includes(activity)) this.visitRan[actor] = true;
+    else if (this.visitRan[actor] || this.nowMs >= this.visitUntilMs[actor]) this.endVisit(actor);
+  }
+
+  private endVisit(actor: BehaviourActor): void {
+    this.visitSpot[actor] = null;
+    this.visitUntilMs[actor] = Number.NEGATIVE_INFINITY;
+    this.visitRan[actor] = false;
+  }
+
+  private endVisits(): void {
+    for (const actor of BEHAVIOUR_ACTORS) this.endVisit(actor);
+  }
+
   // One finished activity of a runner into the log ring (WORLD_BEHAVIOUR.logSize, oldest overwritten first).
   private logBehaviour(id: BehaviourActor, e: BehaviourLogEntry): void {
     // A runner's clock stops while it is parked or paused, so e.atMs is moved onto the world clock (playMs), the one clock all runners share.
@@ -2074,15 +2485,13 @@ export class LivingWorldDirector implements WorldFinalePort {
     this.miniFrame = null;
   }
 
-  // An actor's spot list at its home (WP24 r4-F1): the list depends only on the framing and the home x, so the pool is refilled when one of
-  // them moved since its last fill and reused as it stands otherwise.
-  private spotsAt(actor: BehaviourActor, framing: FramingKey, homeX: number): SpotSlot[] {
+  // An actor's spot list of the framing (WP24 r4-F1, WP28b): the list depends only on the framing (absolute x and lane), so the pool is
+  // refilled when the framing moved since its last fill and reused as it stands otherwise.
+  private spotsAt(actor: BehaviourActor, framing: FramingKey): SpotSlot[] {
     const pool = this.spotPools[actor];
-    const key = this.spotKeys[actor];
-    if (key.framing !== framing || key.homeX !== homeX) {
-      fillSpots(pool, framingSpots(actor, framing), homeX);
-      key.framing = framing;
-      key.homeX = homeX;
+    if (this.spotKeys[actor] !== framing) {
+      fillSpots(pool, framingSpots(actor, framing));
+      this.spotKeys[actor] = framing;
     }
     return pool;
   }
@@ -2116,6 +2525,10 @@ export class LivingWorldDirector implements WorldFinalePort {
     // The fields every actor shares are computed once here (WP24 r4-F1) and written into each actor's context below.
     const sensor = placements.sensor7 !== null;
     const scraps = state.props.scraps > 0 && placements.scraps !== null;
+    // WP28b: the crow's hop allowance (hopOk) and the live Find's x are shared by the actors of this step.
+    const hopOk = this.hopAllowed();
+    const findX = this.findX;
+    const anchor = MACHINE_ANCHOR.x;
     for (const actor of BEHAVIOUR_ACTORS) {
       const home = homeXOf(actor, placements);
       let f: BehaviourFrame | null = null;
@@ -2141,10 +2554,39 @@ export class LivingWorldDirector implements WorldFinalePort {
         ctx.homeX = home;
         ctx.girlStage = girlStage;
         ctx.cues = this.cueNow;
-        ctx.spots = this.spotsAt(actor, applied.framing, home);
+        ctx.spots = this.spotsAt(actor, applied.framing);
+        // WP28b: the walk gate holds a walk back while another walker started one in the last second; the frame's walk feeds the gate.
+        ctx.walkBlocked = walkBlockedFor(this.walkGate, actor, this.playMs);
+        // WP28b (r2-FX4G): the runner reads the start gate and writes its own segment starts into it.
+        ctx.startGate = this.startGate;
+        // WP28b (r2-FX4G, V5 fix): the gate reads the shared clock (playMs, already advanced by this frame). The offset maps the runner's clock
+        // onto it at the end of the step. The runner advances by dtMs, or by one crankHoldMsPerClick per click in crank mode (advanceClock).
+        // A paused or parked runner writes nothing this step, so its offset is unused then.
+        const advance = mode === 'crank' ? crank * WORLD_BEHAVIOUR.crankHoldMsPerClick : dtMs;
+        ctx.clockOffsetMs = this.playMs - (this.runners[actor].clockMs() + advance);
+        // WP28b (C1): a live Find on this actor's outer side is farther from the machine than the actor on its own side; on the inner side it is
+        // nearer. The actor's x is its last drawn x (its home before the first frame). Both are false without a Find.
+        ctx.hopOk = hopOk;
+        ctx.findX = findX;
+        // WP28b F29: a Find on the far wing is inner too (findOuterOf: outer only on the actor's own side and farther from the machine). Inner is
+        // the other side of a live Find; no object is built per actor per frame (r2-FX3).
+        ctx.findOuter = findX !== null && findOuterOf(this.castFrames[actor]?.x ?? home, findX, anchor);
+        ctx.findInner = findX !== null && !ctx.findOuter;
+        // WP28b F25: the visit stand of this walker while its window runs (null otherwise; the crow and the girl never visit).
+        ctx.visitSpot = this.visitSpot[actor];
         f = this.runners[actor].step(dtMs, ctx);
+        noteWalkFrame(this.walkGate, actor, f.walking, this.playMs);
+        this.noteVisit(actor, f.activity);
         this.stepOf[actor] = f.step;
         if (f.emitted !== null) this.onEmitted(f.emitted);
+        // WP28b (C3): the free hop starts on the rising edge of the crow's hopFree activity (the runner picks it only while hopOk holds).
+        if (actor === 'crow') {
+          // WP28b F33: a crow whose perch was taken over leaves it by a hop to the perch it now holds.
+          if (this.crowLeaving && hopOk && this.crowHopTo(this.crowPerch)) this.crowLeaving = false;
+          const hopping = f.activity === 'hopFree';
+          if (hopping && !this.crowHopEdge && hopOk) this.crowHopNext();
+          this.crowHopEdge = hopping;
+        }
       }
       if (actor === 'girl') {
         this.castFrames.girl = girlStage === 'ground' ? f : null;
@@ -2267,8 +2709,11 @@ export class LivingWorldDirector implements WorldFinalePort {
   // waits for the relocation gate.
   private onEnding(phase: EndingPhase): void {
     if (phase === 'postgame') { this.keepAtMs = this.scene.time.now; this.keepNowMs = this.nowMs; }
-    // The ending takes the cast: the poke answers in flight are dropped (WP28a T15b2).
-    if (phase !== 'none') this.cast.dropOverlays();
+    // The ending takes the cast: the poke answers in flight are dropped (WP28a T15b2), and so are the visits (WP28b F25).
+    if (phase !== 'none') {
+      this.cast.dropOverlays();
+      this.endVisits();
+    }
     this.dirty = true;
     this.forceApply = true;
   }
@@ -2848,6 +3293,8 @@ export class LivingWorldDirector implements WorldFinalePort {
       pokeTargets: (out) => this.pokeTargets(out),
       poke: (id, nowMs) => this.poke(id, nowMs),
       setPointer: (worldX, movedAtMs) => this.setPointer(worldX, movedAtMs),
+      setFindAt: (worldX) => this.setFindAt(worldX),
+      findProducer: (producer, x, lane) => this.findProducer(producer, x, lane),
       pokeStats: () => this.pokeStats(),
       pokeReset: () => this.pokeReset(),
       forceGlance: (id) => this.debugForceGlance(id),

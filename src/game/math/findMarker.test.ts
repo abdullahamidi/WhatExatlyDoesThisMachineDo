@@ -1,15 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  clientToGamePx, countInView, dropFraction, dustPuffing, findEligible, flipScaleX, flipShown, glintFrame, glintSlowed, hopOffsetPx,
-  itemCell, pickSpot, riseOffsetPx, ringAlpha, spotInView, zoneSideWorld,
+  chladniOffsetPx, chladniTargetX, clientToGamePx, countInView, dropFraction, dustPuffing, findEligible, flipScaleX, flipShown, glintFrame,
+  glintSlowed, hopOffsetPx, itemCell, leadWaitMs, liftBobPx, liftHeightPx, pickSpot, riseOffsetPx, ringAlpha, spotInView,
+  spotUsable, zoneSideWorld,
 } from './findMarker';
 import type { SpotLike, ViewRect } from './findMarker';
 import type { FaultGates } from './faultMarker';
-import { FIND_ART, FIND_COLORS, FIND_LAYOUT, FIND_SPOTS, FIND_WORLD_TEXT } from '../../data/findWorld';
-import { DEPTH, GROUND_Y } from '../../data/world';
+import { FIND_ART, FIND_COLORS, FIND_LAYOUT, FIND_PRODUCER, FIND_PRODUCERS, FIND_SPOTS, FIND_WORLD_TEXT } from '../../data/findWorld';
+import type { FindProducer, FindSpot } from '../../data/findWorld';
+import { FIND_PRODUCER_ACT } from '../../data/findProducer';
+import { DEPTH, GROUND_Y, MACHINE_ANCHOR, PIXEL_SCALE } from '../../data/world';
+import { WORLD_LAYOUT } from '../../data/livingWorld';
 import { FINDS } from '../../data/finds';
 import type { Vec2 } from '../../data/machineComponents';
+import type { FramingKey } from '../../data/livingWorld';
 
 // WP28 Finds: the marker maths (C5 renderer rules). Pure: the spot pick, the item and glint frames, the ring alpha, the
 // intro, hop and fade curves, the zone size and the eligibility. The numbers come from src/data/findWorld.ts.
@@ -300,7 +305,7 @@ describe('the Find data', () => {
   });
 
   it('has spots with a known producer, numeric lanes and feet inside the yard limits', () => {
-    const producers = new Set(['dog', 'crow', 'gust', 'ground']);
+    const producers = new Set<string>(FIND_PRODUCERS);
     for (const list of Object.values(FIND_SPOTS)) {
       for (const s of list ?? []) {
         expect(producers.has(s.producer)).toBe(true);
@@ -330,8 +335,177 @@ describe('the Find data', () => {
     for (const name of Object.values(FIND_WORLD_TEXT.producers)) {
       const line = FIND_WORLD_TEXT.announceSpawn.replace('{producer}', name);
       expect(line).not.toMatch(/\b(\w+) \1\b/i);
-      expect(line).toMatch(/^Something glints near the (dog|crow|scraps|yard)\. /);
+      expect(line).toMatch(/^Something glints near the [a-z]+\. /);
     }
+  });
+
+  it('the bare yard producer reads as the dust (plain words; the dark read as a place, WP28b r2-FX3)', () => {
+    expect(FIND_WORLD_TEXT.producers.lift).toBe('the dust');
+    expect(FIND_WORLD_TEXT.announceSpawn.replace('{producer}', FIND_WORLD_TEXT.producers.lift)).toBe('Something glints near the dust. Click it or press G.');
+  });
+});
+
+describe('the Find producers (WP28b, AD3 hand-off O-e)', () => {
+  const SPLICE_PRODUCERS: readonly FindProducer[] = ['organ', 'radio', 'coinReturn', 'pump'];
+
+  it('lists every producer once, and each has a lead of 0-500 ms', () => {
+    expect(new Set(FIND_PRODUCERS).size).toBe(FIND_PRODUCERS.length);
+    expect(Object.keys(FIND_PRODUCER_ACT.leadMs).sort()).toEqual([...FIND_PRODUCERS].sort());
+    for (const p of FIND_PRODUCERS) {
+      expect(FIND_PRODUCER_ACT.leadMs[p]).toBeGreaterThanOrEqual(0);
+      expect(FIND_PRODUCER_ACT.leadMs[p]).toBeLessThanOrEqual(500);
+    }
+  });
+
+  it('gives the leads of the hand-off (dog 400, crow 500, the Splice twitches 300, puddle 300, vent 500, the rest 0)', () => {
+    expect(FIND_PRODUCER_ACT.leadMs).toEqual({
+      dog: 400, crow: 500, gust: 0, ground: 0, organ: 300, radio: 300, coinReturn: 300, puddle: 300, vent: 500, pump: 300, chladni: 0, lift: 0,
+    });
+    expect(FIND_PRODUCER.chladniWalkMs).toBe(1500);
+    expect(FIND_PRODUCER.liftPx).toEqual([12, 16]);
+    expect(FIND_PRODUCER.liftMs).toBe(600);
+    expect(FIND_PRODUCER.liftBobPx).toBe(1);
+    expect(FIND_PRODUCER.liftBobHz).toBe(0.5);
+  });
+
+  it('the marker waits the returned lead, clamped to 0-500 ms; a bad value waits 0', () => {
+    expect(leadWaitMs(300)).toBe(300);
+    expect(leadWaitMs(900)).toBe(500);
+    expect(leadWaitMs(-4)).toBe(0);
+    expect(leadWaitMs(Number.NaN)).toBe(0);
+  });
+
+  it('a spot with requires shows only while that Splice is woken', () => {
+    const organ: FindSpot = { x: 1504, lane: 60, producer: 'organ', requires: 'spliceOrgan' };
+    expect(spotUsable(organ, {}, 2)).toBe(false);
+    expect(spotUsable(organ, { spliceOrgan: 0 }, 2)).toBe(false);
+    expect(spotUsable(organ, { spliceOrgan: 1 }, 2)).toBe(true);
+    expect(spotUsable(organ, { spliceRadio: 1 }, 2)).toBe(false);
+  });
+
+  it('the coin return spot needs the payphone, the coin return stand-in (r2-FX3): the spot shows only with the payphone woken', () => {
+    const coin: FindSpot = { x: 3012, lane: 24, producer: 'coinReturn', requires: 'splicePayphone' };
+    expect(FIND_PRODUCER_ACT.standIn.coinReturn).toBe(coin.requires);
+    expect(spotUsable(coin, {}, 2)).toBe(false);
+    expect(spotUsable(coin, { splicePayphone: 1 }, 2)).toBe(true);
+  });
+
+  it('the era III producers show only in era III, the Chladni rings in era IV and the lift in era V', () => {
+    const vent: FindSpot = { x: 1250, lane: 88, producer: 'vent' };
+    const chladni: FindSpot = { x: 780, lane: 110, producer: 'chladni' };
+    const lift: FindSpot = { x: 720, lane: 160, producer: 'lift' };
+    expect([1, 2, 3, 4, 5].map((e) => spotUsable(vent, {}, e))).toEqual([false, false, true, false, false]);
+    expect([1, 2, 3, 4, 5].map((e) => spotUsable(chladni, {}, e))).toEqual([false, false, false, true, false]);
+    expect([1, 2, 3, 4, 5].map((e) => spotUsable(lift, {}, e))).toEqual([false, false, false, false, true]);
+  });
+
+  it('the plain producers (dog, crow, gust, ground) are usable in every era', () => {
+    const dog: FindSpot = { x: 2420, lane: 56, producer: 'dog' };
+    expect([1, 2, 3, 4, 5].every((e) => spotUsable(dog, {}, e))).toBe(true);
+  });
+
+  it('the Chladni item walks to the nearest node of the grid, at most half a spacing away', () => {
+    const n = FIND_PRODUCER.chladniNodePx;
+    expect(chladniTargetX(MACHINE_ANCHOR.x)).toBe(MACHINE_ANCHOR.x);
+    expect(chladniTargetX(MACHINE_ANCHOR.x + n * 3 + 10)).toBe(MACHINE_ANCHOR.x + n * 3);
+    for (const x of [780, 3040, 2930, 1000, 2500]) {
+      const node = chladniTargetX(x);
+      expect(Math.abs(node - x)).toBeLessThanOrEqual(n / 2);
+      expect(Math.abs(node - MACHINE_ANCHOR.x) % n).toBe(0);
+    }
+  });
+
+  it('the Chladni walk is a smoothstep over chladniWalkMs from the spot to its node', () => {
+    const spot = 780;
+    const node = chladniTargetX(spot);
+    expect(chladniOffsetPx(spot, 0)).toBe(0);
+    expect(chladniOffsetPx(spot, FIND_PRODUCER.chladniWalkMs / 2)).toBeCloseTo((node - spot) / 2, 9);
+    expect(chladniOffsetPx(spot, FIND_PRODUCER.chladniWalkMs)).toBeCloseTo(node - spot, 9);
+    expect(chladniOffsetPx(spot, FIND_PRODUCER.chladniWalkMs * 3)).toBeCloseTo(node - spot, 9);
+    let prev = 0;
+    for (let t = 0; t <= FIND_PRODUCER.chladniWalkMs; t += 50) {
+      const v = chladniOffsetPx(spot, t);
+      expect(Math.abs(v)).toBeGreaterThanOrEqual(Math.abs(prev) - 1e-9);
+      expect(Math.abs(v)).toBeLessThanOrEqual(Math.abs(node - spot) + 1e-9);
+      prev = v;
+    }
+  });
+
+  it('the lift rises to its serial height over liftMs, then holds, and never falls', () => {
+    const [lo, hi] = FIND_PRODUCER.liftPx;
+    const heights = new Set<number>();
+    for (let serial = 0; serial < 10; serial += 1) {
+      const top = liftHeightPx(FIND_PRODUCER.liftMs, serial);
+      expect(top).toBeGreaterThanOrEqual(lo);
+      expect(top).toBeLessThanOrEqual(hi);
+      expect(liftHeightPx(FIND_PRODUCER.liftMs * 4, serial)).toBe(top);
+      heights.add(top);
+    }
+    expect([...heights].sort((a, b) => a - b)).toEqual([12, 13, 14, 15, 16]);
+    expect(liftHeightPx(0, 3)).toBe(0);
+    for (let t = 0; t < 1200; t += 40) expect(liftHeightPx(t + 40, 2)).toBeGreaterThanOrEqual(liftHeightPx(t, 2));
+  });
+
+  it('the lift bob stays within liftBobPx and is still before the lift starts', () => {
+    expect(liftBobPx(0)).toBe(0);
+    for (let t = 0; t < 8000; t += 37) expect(Math.abs(liftBobPx(t))).toBeLessThanOrEqual(FIND_PRODUCER.liftBobPx + 1e-9);
+  });
+});
+
+describe('the FIND_SPOTS guard (WP28b, AD3 hand-off O-e)', () => {
+  const lists = (): (readonly [string, readonly FindSpot[]])[] => {
+    const out: (readonly [string, readonly FindSpot[]])[] = [];
+    for (const [key, list] of Object.entries(FIND_SPOTS)) if (list !== undefined) out.push([key, list]);
+    return out;
+  };
+  const SPLICE_PRODUCERS: readonly FindProducer[] = ['organ', 'radio', 'coinReturn', 'pump'];
+
+  it('every spot names a producer of the enum and a Splice (requires) only for the Splice producers', () => {
+    for (const [, list] of lists()) {
+      for (const s of list) {
+        expect(FIND_PRODUCERS).toContain(s.producer);
+        if (s.requires !== undefined) {
+          expect(SPLICE_PRODUCERS).toContain(s.producer);
+          expect(s.requires.startsWith('splice')).toBe(true);
+        }
+        if (SPLICE_PRODUCERS.includes(s.producer)) expect(s.requires, `${s.producer} at ${s.x}`).toBeDefined();
+      }
+    }
+  });
+
+  // The O-e hand-off puts s9's coin return at 3012,24, 16.1 px from the WP28a crow spot at 2996,26 (the 24 px rule is for cast feet, pickSpot).
+  // Only one Find is alive at once, so the spots of a framing never share a box: they stay at least one item box (16 px) apart.
+  it('spots of one framing are at least one item box (16 px) apart', () => {
+    const box = FIND_ART.cellArtPx * PIXEL_SCALE;
+    for (const [key, list] of lists()) {
+      for (let i = 0; i < list.length; i += 1) {
+        for (let j = i + 1; j < list.length; j += 1) {
+          const a = list[i];
+          const b = list[j];
+          if (a === undefined || b === undefined) continue;
+          const d = Math.hypot(a.x - b.x, a.lane - b.lane);
+          expect(d, `${key} ${a.x},${a.lane} vs ${b.x},${b.lane}`).toBeGreaterThanOrEqual(box);
+        }
+      }
+    }
+  });
+
+  it('no item sits within 96 px of the crank hub', () => {
+    const hub = WORLD_LAYOUT.crankHub;
+    const itemHalf = (FIND_ART.cellArtPx * PIXEL_SCALE) / 2;
+    for (const [key, list] of lists()) {
+      for (const s of list) {
+        const d = Math.hypot(s.x - hub.x, GROUND_Y + s.lane - itemHalf - hub.y);
+        expect(d, `${key} ${s.x},${s.lane}`).toBeGreaterThanOrEqual(96);
+      }
+    }
+  });
+
+  it('the era III-V producers sit in their framings (s10, s11 for III-IV; s11 and s15 for V)', () => {
+    const producersOf = (key: FramingKey): string[] => (FIND_SPOTS[key] ?? []).map((s) => s.producer);
+    expect(producersOf('s10')).toEqual(['vent', 'ground']);
+    expect(producersOf('s15').every((p) => p === 'lift')).toBe(true);
+    expect(producersOf('s11')).toContain('chladni');
   });
 });
 

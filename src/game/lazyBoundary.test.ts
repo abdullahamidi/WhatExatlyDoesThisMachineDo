@@ -12,6 +12,8 @@ const SRC_DIR = fileURLToPath(new URL('../', import.meta.url));
 const REACH_SPECIFIERS = [
   'reachLevel', 'data/worldReach', 'data/spliceWorld', 'data/pokes', 'data/findWorld', 'math/spliceWorld', 'math/pokes',
   'math/findMarker', 'math/worldReach', 'math/pokeRender',
+  // WP28b r1-FX1: the shared and Director-only reach data and maths (the lazy chunks split on them), and PokeLayer's pick maths.
+  'data/worldShared', 'data/findProducer', 'data/worldFx', 'math/worldFx', 'math/reachWave', 'math/pokePick',
 ];
 // The lazy renderers and wiring of the World chunk: the only non-module files that may import a reach module (by file name).
 const LAZY_IMPORTERS = [

@@ -13,7 +13,7 @@ import type { Vec2 } from '../../data/machineComponents';
 import { PALETTE } from '../../data/palette';
 import { POKE_RENDER, POKES } from '../../data/pokes';
 import { SPLICE_CLOCK, SPLICE_FX } from '../../data/spliceWorld';
-import { PIXEL_SCALE, VIEW } from '../../data/world';
+import { GROUND_Y, MACHINE_ANCHOR, PIXEL_SCALE, VIEW } from '../../data/world';
 import { WORLD_AMBIENT } from '../../data/worldDay';
 import type { MicroFlags } from '../../data/worldDay';
 import {
@@ -22,12 +22,14 @@ import {
 } from '../../data/livingWorld';
 import type { FramingKey, GroundId, WorldPlacement, WorldSheetId } from '../../data/livingWorld';
 import { WORLD_ERA_ENV, WORLD_PUDDLE } from '../../data/worldEras';
+import { WORLD_FX } from '../../data/worldFx';
 import { WORLD_TRANSITIONS } from '../../data/worldTransitions';
 import type { CameraPose } from '../math/finale';
 import { hash01 } from '../math/worldBehaviour';
 import type { BehaviourFrame } from '../math/worldBehaviour';
 import { moteOrbit } from '../math/worldDay';
 import type { Ambient } from '../math/worldDay';
+import { humOffsetPx, lampWobbleAt, pebbleCount, puddleRingGapMs } from '../math/worldFx';
 import { screenOfWorld } from '../math/worldPlacement';
 import type { SpeakerAnchor } from '../math/worldPlacement';
 import { createTapeClock, isDownbeat, loopFrameAt, sheetFrameIndex, tallyRects, windowFlicker } from '../math/worldPlayback';
@@ -37,6 +39,7 @@ import type { WorldVisualState } from '../math/worldState';
 import type { PropScript, WorldScriptFrame } from '../math/worldScript';
 import { sortWorldRows } from './worldRows';
 import type { WorldRows } from './worldRows';
+import { TimingRing, clamp01, crossInto } from './LivingWorld';
 
 type Visible = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Visible;
 // A shown object with alpha: the setAlphaIf writes compare against it.
@@ -73,6 +76,9 @@ const TWO_PI = 2 * Math.PI;
 const UNSET_TINT = -1;
 // Index of the receiver's 'level' frame in WORLD_FRAMES.receiver (hang, swing0-2, level, onHook): the era V rise climbs from hang to it.
 const RECEIVER_LEVEL = WORLD_FRAMES.receiver.indexOf('level');
+// WP28b: the extra pebbles of era I, one slot per feet position (WORLD_FX.pebbles.feetArtPx); ms per second for the hop clock.
+const PEBBLE_SLOTS = WORLD_FX.pebbles.feetArtPx.length;
+const MS_PER_S = 1000;
 // The payphone's answers (WP28a T15b1, C4): a receiver step (silent in era I), one ring burst with a swing, or the hood blinks.
 export type PayphoneAnswer = 'sway' | 'ring' | 'hoodBlink';
 // Length of the hood blink answer: each blink is lit, then dark, for hoodBlinkMs.
@@ -97,10 +103,6 @@ function cssOf(n: number): string {
   return '#' + n.toString(16).padStart(6, '0');
 }
 
-function clamp01(v: number): number {
-  return Math.min(1, Math.max(0, v));
-}
-
 // Frame name of a blend index: rounded and clamped into the list (a non-finite index reads the first name).
 function nameAt(names: readonly string[], i: number): string {
   const at = Number.isFinite(i) ? Math.min(names.length - 1, Math.max(0, Math.round(i))) : 0;
@@ -109,19 +111,7 @@ function nameAt(names: readonly string[], i: number): string {
 
 // Reads a Blend into the caller's scratch: the three cases of the crossfade (settled, from, running).
 function crossOf(b: Blend, out: Cross): Cross {
-  if (b.from === b.to || b.k >= 1) {
-    out.main = b.to;
-    out.twin = b.to;
-    out.k = 0;
-  } else if (b.k <= 0) {
-    out.main = b.from;
-    out.twin = b.from;
-    out.k = 0;
-  } else {
-    out.main = b.from;
-    out.twin = b.to;
-    out.k = b.k;
-  }
+  crossInto(out, b);
   return out;
 }
 
@@ -261,6 +251,16 @@ function girlSpanOf(ms: number, reduced: boolean): number {
   return reduced ? Math.min(span, POKES.reducedHoldMs) : span;
 }
 
+// Hop lift (art px, whole) of a machine pebble at tMs: a half sine at hz, so it lifts on every other half cycle; amp at its top (WP28b).
+function pebbleLiftArt(tMs: number, hz: number, amp: number, phase01: number): number {
+  return Math.round(amp * Math.max(0, Math.sin(TWO_PI * ((hz * tMs) / MS_PER_S + phase01))));
+}
+
+// Sets a sprite's x only when it changes: the era IV hum writes every paint, and most paints move nothing.
+function setXIf(s: { x: number }, x: number): void {
+  if (s.x !== x) s.x = x;
+}
+
 // Screen px of a world point: the screenOfWorld maths (worldPlacement.ts), written into out so the anchors allocate nothing.
 function screenInto(out: Vec2, x: number, y: number, sf: number, cam: CameraPose): void {
   out.x = (x - sf * (cam.centerX - VIEW.width / 2) - VIEW.width / 2) * cam.zoom + VIEW.width / 2;
@@ -306,6 +306,8 @@ export class WorldProps {
   private readonly scrapAt: (Vec2 | null)[] = [];
   private readonly scrapTint: number[] = [];
   private readonly pebbles: Phaser.GameObjects.Graphics;
+  // WP28b: the extra era I pebbles on the machine's feet (their own Graphics, so the booth pebbles keep their redraw rule).
+  private readonly machinePebbles: Phaser.GameObjects.Graphics;
   private readonly propGlow: PropRow = { id: 'lampGlow', frame: '', alpha: 0, x: 0, y: 0 };
   private readonly propHood: PropRow = { id: 'boothHood', frame: '', alpha: 0, x: 0, y: 0 };
   private readonly propWindows: PropRow[] = [];
@@ -315,8 +317,7 @@ export class WorldProps {
   private readonly propClock: PropRow = { id: 'clockMinute', frame: 'rest', alpha: 0, x: 0, y: 0 };
   private readonly propRows: PropRow[] = [];
   private readonly tape: TapeClock = createTapeClock();
-  private readonly samples: number[] = [];
-  private sampleAt = 0;
+  private readonly timings = new TimingRing(STAT_SAMPLES);
 
   // Row checks (WP24 r3): the values each row wrote last (NaN = none yet), so unchanged values skip their writes. stale: the sprites may not
   // hold the last paint (a hide, a repaint of a new state, placement, script or reduced flag); the next paint writes every row and clears it.
@@ -362,6 +363,19 @@ export class WorldProps {
   private pebbleHop = false;
   private pebblesX: number | null = null;
   private pebblesLift = 0;
+  // WP28b (D6): the era energy's reach level (setReach) and what it drives. lampWobble is the glow offset, resampled at wobbleAtMs (NaN = never)
+  // every WORLD_FX.lampWobble.stepMs. The machine pebbles drew machineShown extras (-1 = none) at the lifts in machineLift (art px, NaN = none).
+  // humBooth is the booth family's hum offset (world px) of this paint; clockOrigin is where the hands draw (the clock moved by its hum).
+  // puddleNextMs is the next era IV puddle ring (NaN = off), puddleRingK its count.
+  private reachLevel = 0;
+  private lampWobble = 0;
+  private wobbleAtMs = Number.NaN;
+  private machineShown = -1;
+  private readonly machineLift: number[] = unsetList(PEBBLE_SLOTS);
+  private humBooth = 0;
+  private readonly clockOrigin: Vec2 = { x: 0, y: 0 };
+  private puddleNextMs = Number.NaN;
+  private puddleRingK = 0;
   // Ticks the scripted receiver loop has gained from the era I ripples (the tape loop; the state and script keep it).
   private extraTicks = 0;
   // The receiver swing: the cycle position 0..1, the cycle counter and its period, and the ripple steps not yet swung.
@@ -504,6 +518,7 @@ export class WorldProps {
     this.clock = this.spriteIn(back, 'clock', 0.5, 1, WORLD_DEPTH_OFFSETS.clock);
     this.hands = this.graphicsIn(back, WORLD_DEPTH_OFFSETS.clock + CLOCK_HANDS_DEPTH);
     this.pebbles = this.graphicsIn(back, WORLD_DEPTH_OFFSETS.scraps);
+    this.machinePebbles = this.graphicsIn(back, WORLD_DEPTH_OFFSETS.scraps);
     for (let i = 0; i < WORLD_FRAMES.scraps.length; i++) {
       this.scraps.push(this.spriteIn(back, 'scraps', 0.5, 1, WORLD_DEPTH_OFFSETS.scraps));
       this.scrapAt.push(null);
@@ -563,6 +578,8 @@ export class WorldProps {
       if (!hold) this.stepFlicker(dt, state.mode, crankSteps, tween.girlWindow.slowK);
       this.stepSwing(dt, state.mode, crankSteps, swingAmpOf(ambient.wind));
       this.stepRing(dt);
+      this.stepWobble();
+      this.stepRings();
       this.glowBumpMs = Math.max(0, this.glowBumpMs - dt);
       this.breatheMs = Math.max(0, this.breatheMs - dt);
       this.pulseMs = Math.max(0, this.pulseMs - dt);
@@ -586,6 +603,17 @@ export class WorldProps {
       this.pebbleHop = false;
     }
     this.sample(performance.now() - started);
+  }
+
+  /** WP28b (D6): the era energy's reach level L (0..1; a non-finite value reads 0). It drives the lamp wobble, the era I machine pebbles, the era IV
+   * hum and puddle rings; the Director feeds it every frame. */
+  setReach(level01: number): void {
+    this.reachLevel = Number.isFinite(level01) ? clamp01(level01) : 0;
+  }
+
+  /** WP28b (D6 c IV): the era IV hum offset in x (world px) that the Splice objects follow; 0 outside era IV, under reduced motion and while hidden. */
+  humPx(): number {
+    return this.humAt(0);
   }
 
   /** World ripple for a tier-up era: era I = pebbles hop and one extra receiver swing; era II = lamp one step brighter; era III (the
@@ -832,15 +860,14 @@ export class WorldProps {
     this.breatheMs = 0;
     this.pulseMs = 0;
     this.puddleRingMs = 0;
+    this.puddleNextMs = Number.NaN;
     this.pebbleHop = false;
     for (const o of this.owned) o.setVisible(false);
   }
 
   /** Object count of this renderer and the mean update time in ms over the last 120 updates. */
   stats(): { objects: number; meanMs: number } {
-    const n = this.samples.length;
-    const sum = this.samples.reduce((a, b) => a + b, 0);
-    return { objects: this.owned.length, meanMs: n === 0 ? 0 : sum / n };
+    return { objects: this.owned.length, meanMs: this.timings.mean() };
   }
 
   /** Destroys every object and the marks canvas texture; safe to call twice. */
@@ -1014,6 +1041,7 @@ export class WorldProps {
     const micro = script === null ? ambient.micro : null;
     const phase = this.ringMs >= 0 && this.ringHeld ? 0 : ringPhaseAt(this.ringMs);
 
+    this.paintHum();
     this.paintGirlWindow(state, tween, micro);
     this.paintWindows(state, tween);
     this.paintLamp(state, tween, ambient, micro);
@@ -1029,7 +1057,7 @@ export class WorldProps {
     const pokeTwitch = script === null && !this.clockWoken && this.clockTwitchMs > 0;
     const twitch = (micro !== null && micro.clockTwitch && !this.reduced && !this.clockWoken) || pokeTwitch;
     const second = script === null ? this.tickHandDeg() : script.secondHandDeg;
-    if (this.clockAt !== null) this.paintHands(this.clockAt, second, twitch);
+    if (this.clockAt !== null) this.paintHands(this.clockOrigin, second, twitch);
 
     // Pebbles at the booth foot: two 1 art px rects, lifted hopPx for the one frame after a ripple.
     const boothAt = this.boothAt;
@@ -1041,6 +1069,7 @@ export class WorldProps {
         this.drawPebbles(boothAt, lift);
       }
     }
+    this.paintMachinePebbles(state, script);
     this.stale = false;
   }
 
@@ -1109,7 +1138,9 @@ export class WorldProps {
       const lamp = crossOf(tween.lamp, CROSS_LAMP);
       on = tween.glowAlpha > 0;
       warm = tween.glowWarm;
-      glow = clamp01(clamp01((WORLD_ENV.lampGlow.alpha + bump) * this.mainsMul) * tween.glowAlpha * ambient.lampGain * dipOf(micro, 'lampDip'));
+      // The reach wobble (WP28b) rides on the mains flicker and fades with the glow (it is 0 under reduced motion).
+      glow = clamp01(clamp01((WORLD_ENV.lampGlow.alpha + bump + this.lampWobble) * this.mainsMul) * tween.glowAlpha * ambient.lampGain *
+        dipOf(micro, 'lampDip'));
       // Unchanged blend and glow since the last paint: the lamp frames, the twin and the glow already show.
       if (!this.stale && lamp.main === this.lastLampMain && lamp.twin === this.lastLampTwin && lamp.k === this.lastLampK &&
         on === this.lastLampOn && warm === this.lastLampWarm && glow === this.lastLampGlow) return;
@@ -1235,7 +1266,7 @@ export class WorldProps {
     if (boothAt !== null) {
       const jerk = (this.reduced || phase === -1 || hook) ? 0 : (phase === 0 ? -1 : 1) * WORLD_ENV.ring.jerkPx;
       const off = hook ? WORLD_ENV.receiverOnHookArt : WORLD_ENV.receiverArt;
-      const x = boothAt.x + off.x * PIXEL_SCALE + jerk;
+      const x = boothAt.x + off.x * PIXEL_SCALE + jerk + this.humBooth;
       const y = boothAt.y + off.y * PIXEL_SCALE;
       setPositionIf(this.receiver, x, y);
       setPositionIf(this.receiverTwin, x, y);
@@ -1615,11 +1646,106 @@ export class WorldProps {
     }
   }
 
+  // Lamp wobble (WP28b, D6 b): the glow offset is resampled every WORLD_FX.lampWobble.stepMs and held between samples (a render cadence, so the
+  // glow's per-frame cost stays flat). Zero under reduced motion.
+  private stepWobble(): void {
+    if (this.reduced) {
+      this.lampWobble = 0;
+      return;
+    }
+    const gap = this.nowMs - this.wobbleAtMs;
+    if (gap >= 0 && gap < WORLD_FX.lampWobble.stepMs) return;
+    this.wobbleAtMs = this.nowMs;
+    this.lampWobble = lampWobbleAt(this.nowMs, this.reachLevel);
+  }
+
+  // Era IV puddle rings (WP28b, D6 c IV): while the era's reach level is at least minLevel, a ring every puddleRingGapMs (4-8 s). Off under reduced
+  // motion and outside era IV; the next ring is timed afresh when the rings turn on again.
+  private stepRings(): void {
+    const { era, minLevel, seed } = WORLD_FX.puddleRing;
+    const on = this.state !== null && this.state.era === era && !this.reduced && this.reachLevel >= minLevel;
+    if (!on) {
+      this.puddleNextMs = Number.NaN;
+      return;
+    }
+    if (Number.isNaN(this.puddleNextMs)) {
+      this.puddleNextMs = this.nowMs + puddleRingGapMs(this.puddleRingK, seed);
+      return;
+    }
+    if (this.nowMs < this.puddleNextMs) return;
+    this.puddleRingK += 1;
+    this.puddleRing();
+    this.puddleNextMs = this.nowMs + puddleRingGapMs(this.puddleRingK, seed);
+  }
+
   // Downbeat accents: era IV window breathe and lamp pulse, and the puddle ring (WORLD_PUDDLE.ringEra only; ripple(ringEra) also rings).
   private onDownbeat(state: WorldVisualState): void {
     if (state.props.windowsBreathe) this.breatheMs = WORLD_ERA_ENV.accentMs;
     if (state.props.lampPulse) this.pulseMs = WORLD_ERA_ENV.accentMs;
     if (state.era === WORLD_PUDDLE.ringEra) this.puddleRingMs = WORLD_ENV.rippleMs;
+  }
+
+  // Era IV hum (WP28b, D6 c IV): the offset in x (world px) of one loose object at its phase; 0 while the hum is off (outside era IV, reduced motion,
+  // hidden). The lamp and the clock take phase 0 and 2/3, the booth family 1/3, so the objects do not move in step.
+  private humAt(phase01: number): number {
+    const on = this.live && this.state !== null && this.state.era === WORLD_FX.hum.era && !this.reduced;
+    return on ? humOffsetPx(this.reachLevel, this.nowMs, phase01) * PIXEL_SCALE : 0;
+  }
+
+  // Places the hummed objects at their placement plus their offset (every paint; setXIf writes only a moved x). The booth family (booth, twin, fog,
+  // tally marks) and the receiver (paintReceiver adds humBooth) move together; the clock hands draw at clockOrigin.
+  private paintHum(): void {
+    const lamp = this.lampHead;
+    if (lamp !== null) {
+      const x = lamp.x + this.humAt(0);
+      setXIf(this.lamp, x);
+      setXIf(this.lampTwin, x);
+      setXIf(this.lampGlow, x);
+    }
+    this.humBooth = this.humAt(1 / 3);
+    const boothAt = this.boothAt;
+    if (boothAt !== null) {
+      const x = boothAt.x + this.humBooth;
+      setXIf(this.booth, x);
+      setXIf(this.boothTwin, x);
+      setXIf(this.boothFogLayer, x);
+      // The tally marks sit in the booth's pane (the same offset placeStatic gives them).
+      setXIf(this.marks, boothAt.x - this.booth.displayWidth / 2 + WORLD_MARKS.pane.x * PIXEL_SCALE + this.humBooth);
+    }
+    const clockAt = this.clockAt;
+    if (clockAt !== null) {
+      this.clockOrigin.x = clockAt.x + this.humAt(2 / 3);
+      this.clockOrigin.y = clockAt.y;
+      setXIf(this.clock, this.clockOrigin.x);
+    }
+  }
+
+  // Machine pebbles (WP28b, D6 c I): era I only, pebbleCount(L) pebbles in all, so the extras past the booth's two stand on the machine's feet.
+  // Each extra hops 1-2 art px at hopHz (a half sine, phased per slot); reduced motion holds them still. Redrawn only when the count or a lift moved.
+  private paintMachinePebbles(state: WorldVisualState, script: PropScript | null): void {
+    const { era, hopPx, hopHz, feetArtPx } = WORLD_FX.pebbles;
+    const count = state.era === era && script === null ? Math.min(PEBBLE_SLOTS, pebbleCount(this.reachLevel) - WORLD_ENV.pebbles.count) : 0;
+    setVisibleIf(this.machinePebbles, count > 0);
+    if (count <= 0) return;
+    let moved = count !== this.machineShown;
+    for (let i = 0; i < count; i++) {
+      const amp = i % 2 === 0 ? hopPx[0] : hopPx[1];
+      const lift = this.reduced ? 0 : pebbleLiftArt(this.nowMs, hopHz, amp, i / PEBBLE_SLOTS);
+      if (lift !== this.machineLift[i]) {
+        this.machineLift[i] = lift;
+        moved = true;
+      }
+    }
+    if (!moved) return;
+    this.machineShown = count;
+    const g = this.machinePebbles;
+    g.clear();
+    g.fillStyle(PALETTE.industrialGray, 1);
+    for (let i = 0; i < count; i++) {
+      const art = feetArtPx[i] ?? 0;
+      const lift = this.machineLift[i] ?? 0;
+      g.fillRect(MACHINE_ANCHOR.x + art * PIXEL_SCALE, GROUND_Y - PIXEL_SCALE - lift * PIXEL_SCALE, PIXEL_SCALE, PIXEL_SCALE);
+    }
   }
 
   // Clock hands: redrawn only when the clock moves, the minute twitch flips or the second hand turns HAND_REDRAW_DEG (state mode draws them once).
@@ -1666,11 +1792,6 @@ export class WorldProps {
   }
 
   private sample(ms: number): void {
-    if (this.samples.length < STAT_SAMPLES) {
-      this.samples.push(ms);
-      return;
-    }
-    this.samples[this.sampleAt] = ms;
-    this.sampleAt = (this.sampleAt + 1) % STAT_SAMPLES;
+    this.timings.record(ms);
   }
 }

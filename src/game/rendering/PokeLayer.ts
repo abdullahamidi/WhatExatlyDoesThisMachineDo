@@ -18,6 +18,8 @@ import type { PokeTarget, PokeTargetId, WorldDebugApi } from './LivingWorldDirec
 import { faultEligible } from '../math/faultMarker';
 import type { FaultGates } from '../math/faultMarker';
 import { TimingWindow } from '../math/findMarker';
+import { pickZone } from '../math/pokePick';
+import type { PokeZoneBox } from '../math/pokePick';
 
 // WP28 poke layer (C12, the WorldReach chunk): the pooled zones over the poke targets (one container, screen space), the shared hover
 // brackets and the Splice tooltip slab in #ui-root. Input follows P12: a poke or a dead-Splice buy fires on pointer up, only when the
@@ -26,6 +28,8 @@ import { TimingWindow } from '../math/findMarker';
 // director (C11); the purchase path is the session's. Every number is in data/findWorld.ts (POKE_LAYOUT) or data/pokes.ts.
 // Zones and brackets are scroll factor 0: a zone's container position is (screen - half view) / zoom + half view (the camera's zoom
 // about the view center), so the hit test (world point minus scroll) and the drawing agree at every zoom.
+// The zone a pointer holds is the pick at the pointer (WP28b F28, pokePick.ts): the zone whose target centre is nearest wins where zones overlap.
+// Phaser delivers a press to the top zone only, so the zone handlers resolve the zone from the pointer as well, and press and release share the pick.
 
 /** The director port the poke layer reads (C11 subset): the targets, the answers, the pointer and the tooltip lines. */
 export type PokeDirectorPort = Pick<WorldDebugApi, 'pokeTargets' | 'poke' | 'setPointer' | 'spliceTip'>;
@@ -104,6 +108,10 @@ export class PokeLayer {
   private readonly timings = new TimingWindow(TIMING_SAMPLES);
   /** Index of the hovered zone, -1 for none. */
   private hoverSlot = -1;
+  /** The pick list (WP28b F28), rebuilt each frame: the boxes of the zones that are on (pickCount live) and the slot each one belongs to. */
+  private readonly pickBoxes: PokeZoneBox[] = Array.from({ length: POKE_LAYOUT.zones }, () => ({ cx: 0, cy: 0, w: 0, h: 0 }));
+  private readonly pickSlot: number[] = Array.from({ length: POKE_LAYOUT.zones }, () => -1);
+  private pickCount = 0;
   /** The Splice the tooltip shows (null: hidden), when it was last refreshed, and its last box position. */
   private tipOwner: TechId | null = null;
   private tipShown = false;
@@ -148,10 +156,9 @@ export class PokeLayer {
       if (zone.input) zone.input.enabled = false;
       this.container.add(zone);
       this.slots.push({ zone, rect, on: false, id: null, kind: null, sx: 0, sy: 0, sw: side, sh: side, lx: 0, ly: 0, lw: side, lh: side });
-      zone.on('pointerdown', (pointer: Phaser.Input.Pointer) => this.onDown(i, pointer));
-      zone.on('pointerup', (pointer: Phaser.Input.Pointer) => this.onUp(i, pointer));
-      zone.on('pointerover', () => { this.hoverSlot = i; });
-      zone.on('pointerout', () => { if (this.hoverSlot === i) this.hoverSlot = -1; });
+      // The handlers resolve the zone from the pointer (WP28b F28): Phaser delivers a press to the top zone only.
+      zone.on('pointerdown', (pointer: Phaser.Input.Pointer) => this.onDown(pointer));
+      zone.on('pointerup', (pointer: Phaser.Input.Pointer) => this.onUp(pointer));
     }
     // The tooltip slab: one DOM element in #ui-root with four line elements, filled and placed by updateTip.
     this.tipEl = document.createElement('div');
@@ -224,15 +231,18 @@ export class PokeLayer {
       }
       const sw = Math.max(POKE_LAYOUT.hitMinScreenPx, t.w);
       const sh = Math.max(POKE_LAYOUT.hitMinScreenPx, t.h);
+      // The zone is centred on its target (WP28b F28), so the zone's centre is the target's centre: the centre the pick measures from.
+      const sx = t.x + (t.w - sw) / 2;
+      const sy = t.y + (t.h - sh) / 2;
       slot.id = t.id;
       slot.kind = t.kind;
-      slot.sx = t.x;
-      slot.sy = t.y;
+      slot.sx = sx;
+      slot.sy = sy;
       slot.sw = sw;
       slot.sh = sh;
       // The zone's container box: the inverse of the camera map (the zone has scroll factor 0, so only the zoom and the view center apply).
-      const lx = (t.x - halfW) / zoom + halfW;
-      const ly = (t.y - halfH) / zoom + halfH;
+      const lx = (sx - halfW) / zoom + halfW;
+      const ly = (sy - halfH) / zoom + halfH;
       const lw = sw / zoom;
       const lh = sh / zoom;
       if (lx !== slot.lx || ly !== slot.ly || lw !== slot.lw || lh !== slot.lh) {
@@ -245,10 +255,11 @@ export class PokeLayer {
         slot.zone.setSize(lw, lh);
       }
       // A zone never meets the crank hit circle plus its clearance: such a target is not pokeable this frame.
-      const clear = rectHitsCircle(t.x, t.y, sw, sh, this.hubX, this.hubY, this.clearPx);
+      const clear = rectHitsCircle(sx, sy, sw, sh, this.hubX, this.hubY, this.clearPx);
       this.setOn(i, t.enabled && !clear);
     }
-    this.checkHover();
+    this.buildPick();
+    this.pickHover();
     this.drawBrackets();
     this.updateTip(now);
   }
@@ -262,14 +273,33 @@ export class PokeLayer {
     if (!on && this.hoverSlot === i) this.hoverSlot = -1;
   }
 
-  /** Drops the hover when the pointer has left the hovered zone's box (a moving target can leave a still pointer behind). */
-  private checkHover(): void {
-    if (this.hoverSlot < 0) return;
-    const slot = this.slots[this.hoverSlot];
-    const p = this.scene.input.activePointer;
-    if (slot === undefined || !slot.on || p.x < slot.sx || p.x > slot.sx + slot.sw || p.y < slot.sy || p.y > slot.sy + slot.sh) {
-      this.hoverSlot = -1;
+  /** The pick list (WP28b F28): the boxes of the zones that are on (centre and size, game px) in slot order, filled in place. Allocates nothing. */
+  private buildPick(): void {
+    let k = 0;
+    for (let i = 0; i < this.slots.length; i += 1) {
+      const slot = this.slots[i];
+      const box = this.pickBoxes[k];
+      if (slot === undefined || !slot.on || box === undefined) continue;
+      box.cx = slot.sx + slot.sw / 2;
+      box.cy = slot.sy + slot.sh / 2;
+      box.w = slot.sw;
+      box.h = slot.sh;
+      this.pickSlot[k] = i;
+      k += 1;
     }
+    this.pickCount = k;
+  }
+
+  /** The hover (WP28b F28): the zone the pointer holds by pickZone, so the nearest target centre wins where zones overlap. None off the canvas. */
+  private pickHover(): void {
+    const p = this.scene.input.activePointer;
+    this.hoverSlot = this.scene.game.input.isOver ? this.slotAt(p.x, p.y) : -1;
+  }
+
+  /** The slot of the zone that holds (x, y) in this frame's pick list (pickZone), or -1. */
+  private slotAt(x: number, y: number): number {
+    const k = pickZone(this.pickBoxes, this.pickCount, x, y);
+    return k < 0 ? -1 : (this.pickSlot[k] ?? -1);
   }
 
   /** The corner brackets around the hovered target. One shared Graphics, redrawn only when its box or color changes. */
@@ -411,9 +441,10 @@ export class PokeLayer {
     g.vh = r.height / z;
   }
 
-  /** Pointer down on a zone: the press is remembered (a left press only); the zone's own target is what the press covers. */
-  private onDown(i: number, pointer: Phaser.Input.Pointer): void {
-    const slot = this.slots[i];
+  /** Pointer down on a zone: the press is remembered (a left press only); the zone the pointer holds (slotAt) is what the press covers. */
+  private onDown(pointer: Phaser.Input.Pointer): void {
+    const i = this.slotAt(pointer.x, pointer.y);
+    const slot = i >= 0 ? this.slots[i] : undefined;
     if (slot === undefined || slot.id === null || !pointer.leftButtonDown()) {
       this.pressSlot = -1;
       return;
@@ -428,8 +459,9 @@ export class PokeLayer {
    * Pointer up on a zone: fires only for the zone the press began on, the same target, and a pointer that moved at most
    * CAMERA.dragThresholdPx. A dead Splice buys (or is refused); anything else is a poke.
    */
-  private onUp(i: number, pointer: Phaser.Input.Pointer): void {
-    const slot = this.slots[i];
+  private onUp(pointer: Phaser.Input.Pointer): void {
+    const i = this.slotAt(pointer.x, pointer.y);
+    const slot = i >= 0 ? this.slots[i] : undefined;
     const pressed = slot !== undefined && this.pressSlot === i && slot.id !== null && this.pressId === slot.id;
     this.pressSlot = -1;
     if (slot === undefined || slot.id === null || !pressed || !slot.on) return;

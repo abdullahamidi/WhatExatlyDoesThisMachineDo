@@ -13,6 +13,8 @@
 #   - frames listed in the sheet's `grow` (e.g. hole stages) only ever add pixels: no un-happening (DENIZEN_ART 8.2)
 #   - WP28a AD1: per-frame opt-outs `no_ring` (no full ink ring: 1 px members, a glint) and `conn8` (silhouette counted
 #     8-connected: diagonal 1 px tubes); both are frame-name tuples in sheets.py
+#   - WP28b AD3-OBJ: per-frame `parts_frames` (no one-component rule: drops, wisps, lifted stones float free) and
+#     `violet_frames` (VIOLET_LIGHT allowed in that frame of a single-row sheet: the era V rim)
 #   - prints per-row colour stats
 # usage: python -I scripts/art/world/check_sheet.py <sheet> [--png <file>] [--manifest <manifest.ts>]
 import os
@@ -23,7 +25,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from PIL import Image  # noqa: E402
-from pal import ALL, INV, PALETTE_RGB, RESTORED, rgb  # noqa: E402
+from pal import ALL, INV, PALETTE_RGB, RESTORED, VIOLET_CODE, rgb  # noqa: E402
 from sheets import SHEETS, FRAMES, ERA_ROWS, EXTRA_COLOURS, cell_origin  # noqa: E402
 from erarecolor import SEPIA_ROW_CODES  # noqa: E402
 
@@ -131,6 +133,8 @@ def check(sheet, png=None, manifest=None):
         base_allowed = allowed
         for c, fn in enumerate(FRAMES[sheet]):
             allowed = (base_allowed | only_frames[fn]) & set(PALETTE_RGB) if fn in only_frames else base_allowed
+            if fn in spec.get('violet_frames', ()):          # WP28b AD3-OBJ: the era V rim on a single-row sheet
+                allowed = allowed | {rgb(ALL[VIOLET_CODE])}
             if fn in restored_frames:
                 allowed = allowed | restored_frames[fn]
             ox, oy = cell_origin(spec, c, r)
@@ -163,7 +167,8 @@ def check(sheet, png=None, manifest=None):
             if n == 0:
                 errors.append('%s %s: empty cell' % (ERA_ROWS[r] if spec['era_rows'] else '-', fn))
                 continue
-            if n != 1 and not spec.get('parts'):                     # every cell, props too (WP23b); opt out: parts=True
+            # every cell, props too (WP23b); opt out: parts=True, or per frame `parts_frames` (WP28b: pieces float free)
+            if n != 1 and not spec.get('parts') and fn not in spec.get('parts_frames', ()):
                 errors.append('%s %s: %d silhouette components (want 1)' % (ERA_ROWS[r] if spec['era_rows'] else '-', fn, n))
             # WP28a AD1: per-frame ring opt-out (`no_ring`: 1 px members such as bicycle tubes, or a glint sparkle)
             if spec['ring'] and edge_bad and fn not in spec.get('no_ring', ()):

@@ -8,12 +8,30 @@
 import { WORLD_PLACEMENTS } from './livingWorld';
 import type { FramingKey, WorldSheetId } from './livingWorld';
 import { GROUND_Y } from './world';
+import type { TechId } from './types';
 
 export type PokeSoundId = 'tick' | 'pencil' | 'woof' | 'caw' | 'beep' | 'ring' | 'tink' | 'note' | 'organ' | 'bell' | 'crackle' | 'buzz';
 // What else an answer lights or moves: the lantern ring, the mini's lantern, the window, the LED, the lens, the hood, the receiver, the lamp,
 // the clock, a woken object's twitch.
 export type PokeLightId = 'lanternRing' | 'miniDim' | 'windowDark' | 'windowFlicker' | 'ledBlink' | 'ledSolid' | 'lensGlint' | 'hoodBlink'
   | 'ringBurst' | 'receiverSway' | 'lampBump' | 'clockTwitch' | 'clockTick' | 'objectTwitch';
+
+// Ids that several clips and perches share (WP28b): each string is named once, so a clip reads its light or sound by name.
+const BOOTH_ROOF = 'boothRoof';
+const CLOCK_TOP = 'clockTop';
+const LAMP_TOP = 'lampTop';
+const CRACKLE: PokeSoundId = 'crackle';
+const PENCIL: PokeSoundId = 'pencil';
+const HOOD_BLINK: PokeLightId = 'hoodBlink';
+const LAMP_BUMP: PokeLightId = 'lampBump';
+const LANTERN_RING: PokeLightId = 'lanternRing';
+const MINI_DIM_LIGHT: PokeLightId = 'miniDim';
+const RECEIVER_SWAY: PokeLightId = 'receiverSway';
+// The bicycle seat and the sign top (WP28b FIX-C): the perch ids and the Splice tops they name, each string once (the rows share them).
+const BICYCLE_SEAT = 'bicycleSeat';
+const SIGN_TOP = 'signTop';
+const SPLICE_BICYCLE: TechId = 'spliceBicycle';
+const SPLICE_SIGN: TechId = 'spliceSign';
 
 // One answer. frames are frame names of the target's sheet (none for a light or sound answer); frameMs holds each frame; durMs is the whole
 // answer. sound null is a silent answer (the era I payphone). light and alpha tag the lit or dimmed part (the lantern, the LED, the hood).
@@ -82,9 +100,9 @@ const ACCENT_LOOK = framed('dogAccentLook', 'lookUp', 600);
 // the bubble). Level 3 walks to the outer spot and writes there (leaveWrite; the glance is its opening beat).
 const INS_FRONT = framed('insFront', 'front', 1000);
 const INS_I: PokeTable = table(
-  [framed('insGlance', 'glance', 1200), framed('insWrite', 'write0 write1 write0 write1', 260, 'pencil'),
+  [framed('insGlance', 'glance', 1200), framed('insWrite', 'write0 write1 write0 write1', 260, PENCIL),
     framed('insLookUp', 'lookUp', 1000), framed('insWatch', 'watch', 1500), INS_FRONT],
-  framed('insNoted', 'glance write0 write1 write0 write1 write0 write1', [600, 220, 220, 220, 220, 220, 220], 'pencil'),
+  framed('insNoted', 'glance write0 write1 write0 write1 write0 write1', [600, 220, 220, 220, 220, 220, 220], PENCIL),
   framed('insLeave', 'glance', 800),
   'leaveWrite',
   [framed('insIdleGlance', 'glance', 700), DOG_IDLE_LOOK],
@@ -92,14 +110,14 @@ const INS_I: PokeTable = table(
 // The Inspector in era IV: one off-beat accent frame (C11; the still accent write0, the mouth accent talk).
 const INS_ACCENT_TALK = framed('insAccentTalk', 'talk', 600);
 const INS_IV: PokeTable = table(
-  [framed('insAccentWrite', 'write0', 600, 'pencil'), INS_ACCENT_TALK], ACCENT_LOOK, ACCENT_LOOK, null,
+  [framed('insAccentWrite', 'write0', 600, PENCIL), INS_ACCENT_TALK], ACCENT_LOOK, ACCENT_LOOK, null,
   [framed('insIvWrite', 'write0', 600), INS_ACCENT_TALK],
 );
 // The Inspector in era V (the stare): front and talk frames only.
 const INS_V: PokeTable = table(
-  [framed('insVGlance', 'front', 1200), framed('insVWrite', 'talk front talk front', 250, 'pencil'), INS_FRONT,
+  [framed('insVGlance', 'front', 1200), framed('insVWrite', 'talk front talk front', 250, PENCIL), INS_FRONT,
     framed('insVWatch', 'front', 1500)],
-  framed('insVNoted', 'front talk front talk front talk front', [600, 220, 220, 220, 220, 220, 220], 'pencil'),
+  framed('insVNoted', 'front talk front talk front talk front', [600, 220, 220, 220, 220, 220, 220], PENCIL),
   framed('insVLeave', 'front', 800),
   null,
   [framed('insVIdleFront', 'front', 700), STARE_IDLE_TALK],
@@ -172,37 +190,37 @@ const GIRL_WINDOW: PokeTable = table(
   [lit('winIdleDark', 'windowDark', 600), lit('winIdleFlicker', 'windowFlicker', 500)],
 );
 // The girl as a mini (eras II-III): the lantern dims to alpha 0.55 for 2 s (level 2 cut from 10 s to the 2 s cap).
-const MINI_DIM = lit('miniDim', 'miniDim', 2000, 'tick', 0.55);
+const MINI_DIM = lit(MINI_DIM_LIGHT, MINI_DIM_LIGHT, 2000, 'tick', 0.55);
 const GIRL_MINI: PokeTable = table(
-  [MINI_DIM, lit('miniLow', 'miniDim', 1000, 'tick', 0.7)], MINI_DIM, MINI_DIM, null,
-  [lit('miniIdle07', 'miniDim', 500, 'tick', 0.7), lit('miniIdle04', 'miniDim', 500, 'tick', 0.4)],
+  [MINI_DIM, lit('miniLow', MINI_DIM_LIGHT, 1000, 'tick', 0.7)], MINI_DIM, MINI_DIM, null,
+  [lit('miniIdle07', MINI_DIM_LIGHT, 500, 'tick', 0.7), lit('miniIdle04', MINI_DIM_LIGHT, 500, 'tick', 0.4)],
 );
 // The girl on the ground (cycle 3 on, eras IV-V): one music-box note and a 1 px lantern ring pulse. Level 3: her pose changes (tilt) at
 // the next unseen moment; the director times the leave (C12: she never moves on screen).
-const GROUND_NOTE_L2 = lit('groundNoteL2', 'lanternRing', 1200, 'note');
-const GROUND_NOTE = lit('groundNote', 'lanternRing', 300, 'note');
+const GROUND_NOTE_L2 = lit('groundNoteL2', LANTERN_RING, 1200, 'note');
+const GROUND_NOTE = lit('groundNote', LANTERN_RING, 300, 'note');
 const GIRL_GROUND: PokeTable = table(
-  [GROUND_NOTE, lit('groundNoteLong', 'lanternRing', 600, 'note')], GROUND_NOTE_L2, GROUND_NOTE_L2, 'tilt',
-  [GROUND_NOTE, lit('groundNoteB', 'lanternRing', 300, 'note')],
+  [GROUND_NOTE, lit('groundNoteLong', LANTERN_RING, 600, 'note')], GROUND_NOTE_L2, GROUND_NOTE_L2, 'tilt',
+  [GROUND_NOTE, lit('groundNoteB', LANTERN_RING, 300, 'note')],
 );
 
 // The payphone: era I is a silent receiver sway (C4); from era II a ring burst and a receiver swing, and the hood light blinks three times.
-const PAY_HOOD_I = lit('payHoodI', 'hoodBlink', 900, null);
+const PAY_HOOD_I = lit('payHoodI', HOOD_BLINK, 900, null);
 const PAYPHONE_I: PokeTable = table(
-  [lit('payReceiverSway', 'receiverSway', 500, null), lit('payReceiverSwayLong', 'receiverSway', 900, null)], PAY_HOOD_I, PAY_HOOD_I, null,
-  [lit('payIdleHoodI', 'hoodBlink', 600, null), lit('payIdleSwayI', 'receiverSway', 600, null)],
+  [lit('payReceiverSway', RECEIVER_SWAY, 500, null), lit('payReceiverSwayLong', RECEIVER_SWAY, 900, null)], PAY_HOOD_I, PAY_HOOD_I, null,
+  [lit('payIdleHoodI', HOOD_BLINK, 600, null), lit('payIdleSwayI', RECEIVER_SWAY, 600, null)],
 );
-const PAY_SWING = lit('payReceiverSwing', 'receiverSway', 600);
-const PAY_HOOD = lit('payHood', 'hoodBlink', 900);
+const PAY_SWING = lit('payReceiverSwing', RECEIVER_SWAY, 600);
+const PAY_HOOD = lit('payHood', HOOD_BLINK, 900);
 const PAYPHONE_II: PokeTable = table(
-  [lit('payRing', 'ringBurst', 400, 'ring'), PAY_SWING], PAY_HOOD, PAY_HOOD, null, [lit('payIdleHood', 'hoodBlink', 600), PAY_SWING],
+  [lit('payRing', 'ringBurst', 400, 'ring'), PAY_SWING], PAY_HOOD, PAY_HOOD, null, [lit('payIdleHood', HOOD_BLINK, 600), PAY_SWING],
 );
 
 // The lamp (every era): a glow bump; a dead lamp answers with a metal tink (the director's state).
-const LAMP_TINK = lit('lampTink', 'lampBump', 400, 'tink');
-const LAMP_L2 = lit('lampBumpL2', 'lampBump', 900);
+const LAMP_TINK = lit('lampTink', LAMP_BUMP, 400, 'tink');
+const LAMP_L2 = lit('lampBumpL2', LAMP_BUMP, 900);
 const LAMP: PokeTable = table(
-  [lit('lampBump', 'lampBump', 600), LAMP_TINK], LAMP_L2, LAMP_L2, null, [lit('lampIdleA', 'lampBump', 400), LAMP_TINK],
+  [lit(LAMP_BUMP, LAMP_BUMP, 600), LAMP_TINK], LAMP_L2, LAMP_L2, null, [lit('lampIdleA', LAMP_BUMP, 400), LAMP_TINK],
 );
 
 // The clock (every era): the minute twitch of a dead clock, and the one tick that snaps back to 4:41 once it is woken (C6).
@@ -215,7 +233,7 @@ const CLOCK: PokeTable = table([CLOCK_TWITCH, CLOCK_TICK], CLOCK_TWITCH, CLOCK_T
 const OBJ_TWITCH = twitch('objTwitchL2', 600);
 const OBJ_ORGAN = twitch('objOrgan', 1200, 'organ');
 const OBJ_BICYCLE = twitch('objBicycle', 800, 'bell');
-const OBJ_RADIO = twitch('objRadio', 1200, 'crackle');
+const OBJ_RADIO = twitch('objRadio', 1200, CRACKLE);
 const OBJ_SIGN = twitch('objSign', 900, 'buzz');
 const IDLE_ORGAN = twitch('objIdleOrgan', 300, 'organ');
 const IDLE_TINK = twitch('objIdleTink', 300, 'tink');
@@ -227,9 +245,9 @@ const objectTable = (l1: readonly PokeClip[], unavailable: readonly [PokeClip, P
   table(l1, OBJ_TWITCH, OBJ_TWITCH, null, unavailable);
 // The other woken Splice objects, per era (the ten without an own table; WP28b adds their signature actions).
 const OBJECT_I: PokeTable = objectTable([OBJ_ORGAN, OBJ_BICYCLE], [IDLE_ORGAN, twitch('objIdleBell', 300, 'bell')]);
-const OBJECT_II: PokeTable = objectTable([OBJ_RADIO, OBJ_SIGN], [twitch('objIdleCrackle', 300, 'crackle'), twitch('objIdleBuzz', 300, 'buzz')]);
+const OBJECT_II: PokeTable = objectTable([OBJ_RADIO, OBJ_SIGN], [twitch('objIdleCrackle', 300, CRACKLE), twitch('objIdleBuzz', 300, 'buzz')]);
 const OBJECT_III: PokeTable = objectTable(
-  [twitch('objPump', 800, 'tink'), twitch('objWhistle', 1200, 'beep'), twitch('objHydrant', 900, 'crackle')],
+  [twitch('objPump', 800, 'tink'), twitch('objWhistle', 1200, 'beep'), twitch('objHydrant', 900, CRACKLE)],
   [IDLE_TINK, twitch('objIdleBeep', 300, 'beep')],
 );
 const OBJECT_IV: PokeTable = objectTable(
@@ -245,7 +263,7 @@ const OBJECT_V: PokeTable = objectTable(
 export const POKE_OBJECT_TABLES: Readonly<Record<string, readonly PokeTable[]>> = {
   spliceBicycle: five(objectTable([OBJ_BICYCLE, twitch('objBicycleSpin', 600)], [twitch('objIdleBicycle', 300, 'bell'), IDLE_TICK])),
   spliceOrgan: five(objectTable([OBJ_ORGAN, twitch('objOrganPuff', 600)], [IDLE_ORGAN, IDLE_TICK])),
-  spliceRadio: five(objectTable([OBJ_RADIO, twitch('objRadioDial', 600)], [twitch('objIdleRadio', 300, 'crackle'), IDLE_TICK])),
+  spliceRadio: five(objectTable([OBJ_RADIO, twitch('objRadioDial', 600)], [twitch('objIdleRadio', 300, CRACKLE), IDLE_TICK])),
   spliceSign: five(objectTable([OBJ_SIGN, twitch('objSignFlicker', 600)], [twitch('objIdleSign', 300, 'buzz'), IDLE_TICK])),
 };
 
@@ -266,32 +284,45 @@ export const POKE_TABLES: Readonly<Record<PokeTargetKey, readonly PokeTable[]>> 
 
 // The crow's perches per framing (right wing only; never on the machine, the far planes or Sensor 7). x is the world x of the perch, y the
 // feet (GROUND_Y minus the height of the perch). The drop wire (era II+, while the Payphone line is woken) is added by the director.
-// s8, s8w and s10 come from the AD1 hand-off (section f). s10 has none: the crow is off-stage there (a documented exemption).
-export interface CrowPerch { id: string; x: number; y: number; droppedWire?: boolean }
+// s8, s8w and s10 come from the AD1 hand-off (section f). s10 has none: the crow is off-stage there (a documented exemption). The Splice tops
+// (WP28b, AD3 hand-off O-f) carry spliceTop: the director includes one only while that Splice is woken and its object stands (as the drop wire).
+export interface CrowPerch { id: string; x: number; y: number; droppedWire?: boolean; spliceTop?: TechId }
 // The dog's x on e1 (its placement; the e1 ground perch is 36 px right of it; the pokes test pins 2400).
 const E1_DOG_X = WORLD_PLACEMENTS.e1.dog?.x ?? 0;
 // lampTop and boothRoof stand on the lamp's and the booth's top opaque row (AD2 F8). groundDog is the ground by the dog: 36 px right of the dog
-// on e1, 2924 on s9 and s11 (AD1: the dog x + 36 stood the crow in the hole). Its feet sit below the ground line, the one exemption from
-// 'above the ground' (pokes.test.ts). s15 has no clockTop: a hop to x 2890 is always refused there (the machine spans 848-2992).
+// on e1, 2924 on s9 and s11 (AD1: the dog x + 36 stood the crow in the hole). Its feet sit below the ground line, an exemption from
+// 'above the ground' (pokes.test.ts; the bell frame is the other, on yard lane 120). s15 has no clockTop: a hop to x 2890 is always refused there (the machine spans 848-2992).
 // A perch whose feet stand rise px above the ground line.
 const perch = (id: string, x: number, rise: number): CrowPerch => ({ id, x, y: GROUND_Y - rise });
 export const CROW_PERCHES: Partial<Record<FramingKey, readonly CrowPerch[]>> = {
   e1: [
-    perch('lampTop', 2476, 112), perch('boothRoof', 2420, 102), perch('clockTop', 2516, 88), { id: 'groundDog', x: E1_DOG_X + 36, y: GROUND_Y + 32 },
+    perch(LAMP_TOP, 2476, 112), perch(BOOTH_ROOF, 2420, 102), perch(CLOCK_TOP, 2516, 88), { id: 'groundDog', x: E1_DOG_X + 36, y: GROUND_Y + 32 },
+    // The bicycle seat (WP28b FIX-C, AD3 O-f): a yard perch, reached from the ground perch (the lamp top is 182 px up, out of a hop).
+    { id: BICYCLE_SEAT, x: 2483, y: GROUND_Y + 70, spliceTop: SPLICE_BICYCLE },
   ],
-  s8: [perch('lampTop', 2656, 112), perch('boothRoof', 2604, 102), perch('clockTop', 2680, 88)],
-  s8w: [perch('lampTop', 2720, 112), perch('boothRoof', 2678, 102)],
+  s8: [perch(LAMP_TOP, 2656, 112), perch(BOOTH_ROOF, 2604, 102), perch(CLOCK_TOP, 2680, 88)],
+  s8w: [perch(LAMP_TOP, 2720, 112), perch(BOOTH_ROOF, 2678, 102)],
   s9: [
-    perch('lampTop', 2996, 112), perch('boothRoof', 2944, 102), perch('clockTop', 2900, 88),
+    perch(LAMP_TOP, 2996, 112), perch(BOOTH_ROOF, 2944, 102), perch(CLOCK_TOP, 2900, 88),
     // The drop wire is the payphone's cable (era II+): the director includes it only while the Payphone line is woken and the cable mast stands.
     { id: 'dropWire', x: 2864, y: GROUND_Y - 149, droppedWire: true },
     { id: 'groundDog', x: 2924, y: GROUND_Y + 32 },
+    // The bicycle seat and the sign top (WP28b FIX-C, AD3 O-f): the sign top is in reach of the lamp top, the bicycle seat of the ground perch.
+    { id: BICYCLE_SEAT, x: 2919, y: GROUND_Y + 104, spliceTop: SPLICE_BICYCLE }, { id: SIGN_TOP, x: 2972, y: GROUND_Y - 22, spliceTop: SPLICE_SIGN },
   ],
   s10: [], // none: the crow is off-stage at s10 (AD1 section f)
   s11: [
-    perch('lampTop', 3104, 112), perch('boothRoof', 3050, 102), perch('clockTop', 2890, 88), { id: 'groundDog', x: 2924, y: GROUND_Y + 32 },
+    perch(LAMP_TOP, 3104, 112), perch(BOOTH_ROOF, 3050, 102), perch(CLOCK_TOP, 2890, 88), { id: 'groundDog', x: 2924, y: GROUND_Y + 32 },
+    // The Splice tops (O-f): the whistle's bell nut, and the bell's gallows beam (the bell stands on yard lane 120, so the beam is below the ground line).
+    { id: 'whistleTop', x: 2970, y: GROUND_Y - 88, spliceTop: 'spliceWhistle' }, { id: 'bellFrame', x: 3150, y: GROUND_Y + 64, spliceTop: 'spliceBell' },
+    // The bicycle seat and the sign top (WP28b FIX-C): the sign top is in reach of the lamp top, the booth roof and the bell frame.
+    { id: BICYCLE_SEAT, x: 2955, y: GROUND_Y + 104, spliceTop: SPLICE_BICYCLE }, { id: SIGN_TOP, x: 3078, y: GROUND_Y + 32, spliceTop: SPLICE_SIGN },
   ],
-  s15: [perch('lampTop', 3104, 112), perch('boothRoof', 3050, 102)],
+  s15: [
+    perch(LAMP_TOP, 3104, 112), perch(BOOTH_ROOF, 3050, 102),
+    // The bicycle seat (WP28b FIX-C): the lamp top is 95 px away.
+    { id: BICYCLE_SEAT, x: 3145, y: GROUND_Y - 26, spliceTop: SPLICE_BICYCLE },
+  ],
 };
 
 // The crow's hop between perches (C3): one wing, at most maxDistPx long, the apex at most apexMaxPx above the higher end (apexPerDist of the
@@ -318,4 +349,12 @@ export const CROW_MACHINE_X: Partial<Record<FramingKey, { readonly left: number;
 export const POKE_RENDER = {
   clockTwitchMs: 300, hoodBlinks: 3, hoodBlinkMs: 150, pointerFreshMs: 3000, pointerChangeGapMs: 250, ledSolidMs: 3000, lensGlintMs: 150,
   lantern: { dx: -11, dy: -14, color: 0xffd27a, width: 2, r0: 5, r1: 9, alpha: 0.7, reducedR: 7, reducedAlpha: 0.5, reducedMs: 1200, depthStep: 0.001 },
+} as const;
+
+// The poke bubbles (WP28b, P12): the Inspector's 'Noted.' and the girl's wordless ellipsis, shown on their level-2 answers as non-line bubbles of
+// the world-voice controller. They never overlap a line bubble, never count against the era voice caps and follow WORLD VOICES OFF (none) and RARE
+// (chanceRare). perActorGapMs and perHourMax (across both actors) cap them; hourMs is the window of perHourMax. The rule is src/game/math/pokes.ts.
+export const POKE_BUBBLE = {
+  inspector: { text: 'Noted.' }, girl: { text: '…' },
+  perActorGapMs: 120000, perHourMax: 4, chance: 0.5, chanceRare: 0.25, showMs: 1600, hourMs: 3600000,
 } as const;

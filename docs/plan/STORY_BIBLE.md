@@ -105,13 +105,19 @@ These questions stay open forever:
    viewer the operator or the crank-turner. They say "somebody", "whoever", or ask "Is this the operator?".
 4. **The plaque leads and denizens follow.** No denizen uses more letters of the word than the plaque shows at that
    moment. No denizen ever says the word.
-5. **Moves happen unseen.** A denizen relocates only while the TECH INDEX is open or while it is off-screen.
+5. **Walks are seen; relocations are not (WP28, D5, C9).** A denizen walks between spots across the wing and the yard
+   lanes, and each walk between spots is visible. A relocation of its placement (a new framing pose, an era move) still
+   waits for a moment nobody can see: the TECH INDEX is open, or both the old and the new place are off-screen.
 6. **The machine stays the focus.** Denizens stand on the wings, clear of:
    - every part;
    - the crank hit circle (72 world px radius) plus 24 px;
    - the crank prompt;
    - the gain-text spawn.
 7. **Nothing un-happens before the finale** (§2.4). Motion may run backwards; state never does.
+8. **Denizens react to effects, never to the machine (C1, WP28).** A fault, a Find, a big purchase, an era change or a
+   woken Splice can make a denizen startle, bark, glance, point or visit. The machine is never the cause: nobody turns to
+   it, points at it or walks into it. A Find is pointed at, or sniffed toward, only when it lies on the denizen's outer
+   side, away from the machine.
 
 ---
 
@@ -185,7 +191,8 @@ Also banned before the finale:
 - blue sky or green ground;
 - green or blue pixels in denizen or prop art. The exceptions are the crow's blue-black gloss and Sensor 7's green
   LED, which appear only in whole (finale/postgame) frames.
-- flying birds: the crow never travels before the finale;
+- flying birds: the crow never leaves the stage before the finale. Its short hops between perches (WP28, §3.3) are the one
+  exception, and the finale flight stays the payoff;
 - the intact skyline, or warm-yellow windows. Lit windows stay rust-amber (`#ad6236` / `#c98552`).
 - any text in the art, except Sensor 7's stenciled `7` and its two readout glyphs.
 
@@ -346,7 +353,7 @@ off-stage for that stage and its lines wait.
 - **What:** a large ragged crow, **perched on the street lamp with its wings folded**. It mimics: machine lines, other
   denizens, numbers.
 - **Why near:** it was flying over the site at the instant of the intake and is stuck in that instant. Its one spread-wing glitch is that instant replaying.
-- **Rule:** it never travels before the finale. It stays perched and small-moving, stutters in place or hovers in place, ragged and
+- **Rule:** it never leaves the stage before the finale (C3, see the WP28 hops below). It stays perched and small-moving, stutters in place or hovers in place, ragged and
   desaturated. Its first real flight leads the first flock at 38 s.
 - **Silhouette:** wedge body, two wing fans (folded when perched), hooked beak. **20×14 art px.** Folded-wing perched frames (perch, look, peck, ruffle) in eras I-II.
 - **Secret:** it has heard the postgame before. CRW-08 `Thank you for holding.` arrives before the payphone ever says
@@ -369,6 +376,18 @@ off-stage for that stage and its lines wait.
 - **Era III.** The ruffle (new): the crow puffs up for 1.5–2.5 s, and that movement makes the dog look up. One drop falls from its wet point and clears the lamp. It is one drop per ruffle, and it is off under reduced motion. Eras I-II ruffle too, with no drop.
 - **Era V.** A caw: the beak opens (talk, then head) for 2–3 s, with no text. The 4 px stutter in place stays.
 - **Cycle 2+.** In eras I-II the rare tip try draws the last postgame flight pose (wings up, higher) for at most 1.8 s, then it is perched again. Eras III-V show no trace.
+
+**WP28 (2026-10-29): hops (C3).** The crow may now hop between perches. The rule is strict:
+- **Where.** The right wing only: the lamp top, the booth roof, the clock top, the ground by the dog, and the Splice perches
+  while their objects stand (the whistle's bell nut, the bell's frame, and the weathervane's top, which takes the booth roof's
+  place). While the kite stands, the lamp top moves to the free end of the lamp arm. The payphone's drop wire is a perch while
+  the payphone is woken and its cable mast stands. A hop is at most 160 px, its apex at most 48 px above the higher end. It
+  never crosses the machine's x-range and never leaves the stage.
+- **When.** A free hop (weight 1.2, a 20 s cooldown) in eras I-III and V. A fault sends it to the highest perch. A big purchase
+  makes it hop 30 % of the time. A level-3 poke (the fourth poke within 8 s) hops it to another perch; in era V that hop plays
+  its frames in reverse. Era IV has no hops: it rises a pixel and calls.
+- **Look.** The hop frames face the way it travels (the one facing exemption, C3). The landing frames never flip.
+- **Payoff.** The finale flight, leaving the stage at 37 s, is still the first real flight. The hops do not replace it.
 
 ### 3.4 The Girl with the Lantern (person) `girl`
 
@@ -459,6 +478,98 @@ off-stage for that stage and its lines wait.
 
 From the first AS BUILT part of a cycle (WP23), Sensor 7's LED blinks on the shared `TIER_HEARTBEAT` clock (2.4 s), so
 the world keeps time with the machine.
+
+### 3.7 Splice objects (WP28, dead objects of the old world)
+
+- **What:** sixteen dead objects of the prior world. A Splice is bought once: its line runs from the machine to the object,
+  and the object wakes, partly wrong. The wrongness always points one way: the object works in the wrong direction, at the
+  wrong hour, or with no cause. Each object is a stand-alone street object; none is part of the machine.
+- **Dead first.** Every object stands dead from the start of its era, because a dead object invites the click. A woken object
+  keeps a small live loop. Prestige darkens every object again.
+- **Rules.**
+  - No lamp Splice. The lamp stays a poke target. Its wrong colors before the finale are rust, amber and, in era V, violet (C5).
+  - The bulb sign has no letters. It is an arrow with half its bulbs buzzing (C10).
+  - The street clock keeps 4:41. Woken, its face lights from inside. Every 6 to 10 s one hand ticks a single step and snaps
+    back to 4:41. It never sweeps (C6).
+  - The payphone is an era II object. In era I it is a receiver that sways, silently (C4). The Coin Return is its second line,
+    and it needs the Payphone Splice first.
+  - Objects and lines stay clear of the machine, the crank circle and the HUD buttons. A line never crosses the machine's
+    silhouette.
+  - Nothing blue or green before the finale.
+
+| era | object | woken, partly wrong |
+|---|---|---|
+| I | Bicycle | the back wheel turns backwards; the bell tings; it never leaves its stand |
+| I | Barrel organ | each crank click plays the next note; the phrase stops three notes short |
+| I | Street clock | the face lights; the hand ticks once and snaps back to 4:41 |
+| II | Valve radio | the dial glows and the needle drifts; a station nobody is on |
+| II | Payphone | rings once every 60 to 120 s with nobody on the line; the receiver jumps |
+| II | Bulb sign | half its bulbs buzz in a chase; the arrow points at the ground; no letters |
+| III | Hand pump | the handle pumps by itself and coughs drops onto the puddle rim |
+| III | Factory whistle | blows at the wrong hour; steam leaves the slot between the bell and the bowl |
+| III | Hydrant | the cap rattles; a mist rises and is gone before it lands |
+| IV | Bell | swings a little, never all the way; the clapper lags |
+| IV | Gramophone | the disc turns; the needle skips the same groove |
+| IV | Wind chimes | the tubes sway with no wind |
+| V | Weathervane | turns slowly and always stops pointing down |
+| V | Kite | rises on its string with no wind, then hangs |
+| V | Cairn | the stones lift one by one and hang 4 to 16 art px; they never fall back |
+| V | Coin return | the payphone's second line: the flap rattles; nothing comes out |
+
+**Wake lines** (machine voice, the purchase toast; no "you"; `INSTALL_LINES`, `src/data/notifications.ts`):
+
+| object | wake line |
+|---|---|
+| Bicycle | Line spliced. Wheel turning. Direction disputed. |
+| Barrel organ | Line spliced. Organ playing. Last bars missing. |
+| Street clock | Line spliced. Clock face lit. Time unchanged. |
+| Valve radio | Line spliced. Carrier found. Program not found. |
+| Payphone | Line spliced. Line open. Caller not found. |
+| Bulb sign | Line spliced. Bulbs lit: half. Message: none. |
+| Hand pump | Line spliced. Pump primed. Output: cough. |
+| Factory whistle | Line spliced. Shift whistle sounding. Shift not found. |
+| Hydrant | Line spliced. Pressure at the cap. Water declined. |
+| Bell | Line spliced. Bell swinging. Peak not reached. |
+| Gramophone | Line spliced. Disc turning. Groove skipping. |
+| Wind chimes | Line spliced. Chimes ringing. Wind: none. |
+| Weathervane | Line spliced. Vane turning. Heading: down. |
+| Kite | Line spliced. Kite rising. Wind: none. |
+| Cairn | Line spliced. Stones lifting. Weight unknown. |
+| Coin return | Second line spliced. Coin return active. Coins: none. |
+
+Prestige writes one SYS LOG line when at least one Splice was woken: "Lines cut: n. Objects dark again."
+
+**Visits (WP28b).** A woken object draws a visit three to eight seconds after the wake. The Inspector visits the left-wing
+objects and the dog the right-wing ones, once the walker stands on a spot the visit can be reached from. The Inspector writes
+and the dog sniffs at the object; the visit lasts up to 20 s. Eras I-III and V only. The crow has no visit stand and no visit activity. Once per wake, when a hop is allowed and that perch is within a hop (160 px) of where the crow sits, it lands on the woken object's perch top where one exists: the bicycle seat, the sign top, the whistle top and the bell frame, and the vane top and the kite top, which take the booth roof and the lamp top. Never in era IV or under reduced motion.
+
+### 3.8 Poke reactions (WP28)
+
+A click on a denizen, the payphone, the lamp, the clock, Sensor 7 or a woken object gets a short, varied answer. A repeat
+escalates. Pokes change nothing in the economy, and they stop in the finale and the postgame. Counted within 8 s on one
+target: the first and second pokes give level 1, the third gives level 2, and the fourth or later gives level 3. After a
+level-3 answer the target is politely unavailable for 20 s: it alternates two wordless answers (the Inspector glance and
+look up, the dog head and look up, the crow head and turn).
+
+| target | level 1 | level 2 | level 3 |
+|---|---|---|---|
+| Inspector | reads, writes, looks up, watches or turns to the front | glance, then writes, with the "Noted." bubble | walks to his farthest spot and writes there, facing away from the machine |
+| Dog | looks up, turns its head, wags, scratches, sniffs, woofs | woofs twice and lowers its head | woofs twice, trots to its farthest spot and sits, facing away |
+| Crow | ruffles, turns on its perch, cries, pecks, turns its head | caws twice and ruffles | hops to another perch, back turned |
+| Girl, window (era I) | the window goes dark for 2 s and flickers back | the window holds dark | at the next unseen moment the window shows the other flicker |
+| Girl, mini or ground | the lantern dims; or one music-box note and a small ring | the same, longer | at the next unseen moment her pose changes; she never moves on screen (C12) |
+| Sensor 7 | LED double blink, head turns to the camera, a beep | LED solid and a lens glint | as level 2; never the readout `1` before observer one, never the head up (C7) |
+| Payphone | era I: the receiver sways, silently (C4); from era II a ring burst and a receiver swing | the hood light blinks three times | as level 2 |
+| Lamp | the glow bumps; a dead lamp gives a metal tink | | |
+| Clock | the minute twitch; woken, one tick that snaps back to 4:41 | | |
+| woken object | its signature action once: organ notes, bicycle bell and half a wheel turn, radio crackle, sign buzz, payphone ring | | |
+
+**The two poke bubbles (WP28b).** A level-2 answer may show one, with a 50 % chance.
+- **"Noted."** The Inspector's level-2 answer in eras I-III and V (era IV has none). A paper bubble in the world's voice.
+- **"…"** The girl's level-2 answer. A wordless bubble with the single ellipsis character.
+- Neither ever shows over a line bubble. Each actor gets at most one per 120 s, and both together at most four per hour.
+  WORLD VOICES OFF shows none; RARE halves the chance (to 25 %). They do not count against the era caps, and both pass the
+  §2.4 lint.
 
 ---
 
@@ -696,6 +807,31 @@ Fault codes by era (`FAULT_TEXT.codes`, `src/data/faultMarker.ts`; shown on the 
 - Before ONE OBSERVER: **still** (a held pose, accented on the downbeat by the write, wag or talk frame), **sway** (a frame per beat), **look** (the Inspector and the dog look up, the crow turns its head, the girl lifts her lantern), **mouth** (the mouth opens on the downbeat, no text), **hold**, and **rise** (the body lifts one art px).
 - After ONE OBSERVER: **stare** (unchanged: every denizen at rest faces the camera), **beat** (one pulse on the downbeat), **mouth**, **hold** and **rise**.
 - Reduced motion keeps the downbeat accents and the stare. The rise is zero.
+
+### 5.6 Relic notes (WP28, FIELD NOTES)
+
+Every fifth Find is a relic. It shows the next unfound note whose era is at or below the current era, and it pays nothing. When
+no note is left it shows a blank page ("A page. Blank on both sides."). The notes come from the prior world. None names the
+machine or its purpose, none says "you", and each is at most 52 characters. The RECORDS tab lists the found notes in order as
+FIELD NOTES n / N.
+
+| # | era | note |
+|---|---|---|
+| 1 | I | Bread, lamp oil, string. Ask about the dog. |
+| 2 | I | Clock on the corner stopped at 4:41 again. |
+| 3 | I | Wind from the west. Nothing else to report. |
+| 4 | II | Line four dead since noon. It still rings. |
+| 5 | II | Do not stand under the wires when they hum. |
+| 6 | II | Bulbs: six. Fuses: none. Ask at the shop. |
+| 7 | III | Boil all water. Notice to every household. |
+| 8 | III | Fog on the coats again. Leave them by the door. |
+| 9 | III | The pump coughs at the same hour every day. |
+| 10 | IV | We all hummed one note at supper. Nobody began it. |
+| 11 | IV | Glasses rang on the shelf all night. None broke. |
+| 12 | IV | Choir practice, Tuesday. Same hymn as last week. |
+| 13 | V | The stones on the path were higher this morning. |
+| 14 | V | Dropped the keys. They did not land. |
+| 15 | V | If found, leave it by the payphone. |
 
 ---
 

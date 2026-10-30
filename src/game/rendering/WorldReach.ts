@@ -15,14 +15,18 @@ import { FindMarker } from './FindMarker';
 import type { FindDebugStats, FindMarkerStats } from './FindMarker';
 import { PokeLayer } from './PokeLayer';
 import type { PokeLayerStats } from './PokeLayer';
+import { FX_OBJECTS, ReachFx } from './ReachFx';
+import type { ReachFxStats } from './ReachFx';
+import type { Vec2 } from '../../data/machineComponents';
 
-// WP28 the machine's reach (C12): the lazy chunk that holds the Find marker and the poke layer. WorldScene builds it after its FaultMarker
+// WP28 the machine's reach (C12): the lazy chunk that holds the Find marker, the poke layer and (WP28b) the reach FX. WorldScene builds it after its FaultMarker
 // block (import(), the same torn-down guard); bootstrap warms the chunk. Only the director port it reads is typed here (the C11 subset,
 // type-only imports), so the chunk pulls no director code. The Find marker is built first, so its zone is inserted before the poke
-// zones (Phaser's input picks the earliest zone of equal rank), and a Find pick-up stays on top of a poke target.
+// zones (Phaser's input picks the earliest zone of equal rank), and a Find pick-up stays on top of a poke target. The reach FX is built
+// after the poke layer and updated last.
 
 /** The director API the reach reads (C11): the framing and the crow's perch for Finds, the poke API for the poke layer. */
-export type WorldReachDirectorPort = Pick<WorldDebugApi, 'framingKey' | 'crowPerchPos' | 'pokeTargets' | 'poke' | 'setPointer' | 'spliceTip' | 'spliceStats' | 'pokeStats' | 'pokeReset'>;
+export type WorldReachDirectorPort = Pick<WorldDebugApi, 'framingKey' | 'crowPerchPos' | 'pokeTargets' | 'poke' | 'setPointer' | 'spliceTip' | 'spliceStats' | 'pokeStats' | 'pokeReset' | 'findProducer' | 'setFindAt'>;
 
 export interface WorldReachDeps {
   session: GameSession;
@@ -37,7 +41,11 @@ export interface WorldReachDeps {
   reducedMotion: () => boolean;
   /** #ui-root: the Splice tooltip slab lives here (the poke layer). */
   tooltipRoot: HTMLElement;
-  feedback: Pick<GameFeedback, 'purchaseDenied' | 'worldSound'>;
+  feedback: Pick<GameFeedback, 'purchaseDenied' | 'worldSound' | 'partEvolved'>;
+  /** WP28b [R1]: PylonLine's lit cable points of feed (0 or 1) into out, world px (B-T4 wires it; none = no pylon dots or arcs). */
+  pylonPoints?: (feed: number, out: Vec2[]) => number;
+  /** WP28b [R1]: DustField.setFrequencyMs (B-T4 wires it). */
+  setDustFrequency?: (ms: number | null) => void;
 }
 
 /** One poke target in client px (C14): the director's game-px box mapped through the camera and the canvas. */
@@ -66,10 +74,10 @@ export interface ReachDebugProbe {
   reachStats(): ReachDebugStats;
 }
 
-/** Top-level display objects of the reach: the Find container, the poke zones container and the poke brackets. */
-const REACH_OBJECTS = 3;
+/** Top-level display objects of the reach: the Find container, the poke zones container and the poke brackets, then the reach FX's six. */
+const REACH_OBJECTS = 3 + FX_OBJECTS;
 
-/** The machine's reach in one World scene: the Find marker and the poke layer, and the Splice wake line. */
+/** The machine's reach in one World scene: the Find marker, the poke layer, the Splice wake line and the reach FX (WP28b). */
 export class WorldReach {
   private readonly scene: Phaser.Scene;
   private readonly session: GameSession;
@@ -77,6 +85,7 @@ export class WorldReach {
   private readonly ui: WorldReachDeps['ui'];
   private readonly find: FindMarker;
   private readonly pokes: PokeLayer;
+  private readonly fx: ReachFx;
   private readonly unsubscribePurchase: () => void;
 
   constructor(scene: Phaser.Scene, deps: WorldReachDeps) {
@@ -103,27 +112,40 @@ export class WorldReach {
       feedback: deps.feedback,
       tooltipRoot: deps.tooltipRoot,
     });
+    // WP28b: built after the poke layer, so its objects sit above the poke zones and brackets in the display list.
+    this.fx = new ReachFx(scene, {
+      session: deps.session,
+      feedback: deps.feedback,
+      director: deps.director,
+      photo: () => deps.photo()?.isActive() === true,
+      reducedMotion: deps.reducedMotion,
+      pylonPoints: deps.pylonPoints,
+      setDustFrequency: deps.setDustFrequency,
+    });
     this.unsubscribePurchase = deps.session.on('purchase', (e) => this.onPurchase(e));
   }
 
-  /** Per frame, right after the fault marker: the Find marker, then the poke layer. */
+  /** Per frame, right after the fault marker: the Find marker, then the poke layer, then the reach FX (last). */
   update(deltaMs: number): void {
     this.find.update(deltaMs);
     this.pokes.update();
+    this.fx.update(deltaMs);
   }
 
-  /** Unsubscribes and destroys the reach's display objects (the containers of the marker and the layer, the brackets). */
+  /** Unsubscribes and destroys the reach's display objects (the containers of the marker and the layer, the brackets, the FX). */
   destroy(): void {
     this.unsubscribePurchase();
     this.pokes.destroy();
     this.find.destroy();
+    this.fx.destroy();
   }
 
-  /** Marker and layer stats; meanMs is the sum of their update times (debug probe windows). */
-  stats(): { find: FindMarkerStats; pokes: PokeLayerStats; objects: number; meanMs: number } {
+  /** Marker, layer and FX stats; meanMs is the sum of their update times (debug probe windows). */
+  stats(): { find: FindMarkerStats; pokes: PokeLayerStats; fx: ReachFxStats; objects: number; meanMs: number } {
     const find = this.find.stats();
     const pokes = this.pokes.stats();
-    return { find, pokes, objects: REACH_OBJECTS, meanMs: find.meanMs + pokes.meanMs };
+    const fx = this.fx.stats();
+    return { find, pokes, fx, objects: REACH_OBJECTS, meanMs: find.meanMs + pokes.meanMs + fx.meanMs };
   }
 
   /**
@@ -142,7 +164,7 @@ export class WorldReach {
       pokeReset: () => this.director()?.pokeReset(),
       reachStats: () => {
         const s = this.stats();
-        return { objects: s.objects, meanMs: s.meanMs, parts: {} };
+        return { objects: s.objects, meanMs: s.meanMs, parts: s.fx.parts };
       },
     };
   }

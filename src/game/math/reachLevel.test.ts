@@ -2,7 +2,7 @@
 // REACH_LEVEL bounds. Pure maths, no Phaser.
 import { describe, it, expect } from 'vitest';
 import { reachLevel } from './reachLevel';
-import { REACH_LEVEL } from '../../data/worldReach';
+import { REACH_LEVEL } from '../../data/worldShared';
 import { RESOURCE_IDS } from '../../data/types';
 
 describe('reachLevel', () => {
@@ -44,9 +44,9 @@ describe('reachLevel', () => {
     expect(reachLevel(1e9, 1e6, 1)).toBe(0);
   });
 
-  it('reads the shipped REACH_LEVEL bounds: lo 1 (ME 10) and hi per energy, every energy in RESOURCE_IDS', () => {
+  it('reads the shipped REACH_LEVEL bounds: lo 1 (ME 10, PR 10, RS 100; AD4 F35 / F36) and hi per energy, every energy in RESOURCE_IDS', () => {
     for (const id of RESOURCE_IDS) {
-      expect(REACH_LEVEL.lo[id]).toBe(id === 'me' ? 10 : 1);
+      expect(REACH_LEVEL.lo[id]).toBe({ me: 10, ee: 1, pr: 10, rs: 100, xf: 1 }[id]);
       expect(REACH_LEVEL.hi[id]).toBeGreaterThan(REACH_LEVEL.lo[id]);
       expect(reachLevel(REACH_LEVEL.hi[id], REACH_LEVEL.lo[id], REACH_LEVEL.hi[id])).toBe(1);
     }

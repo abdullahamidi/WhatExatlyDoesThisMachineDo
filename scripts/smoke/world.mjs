@@ -7,6 +7,12 @@
 // WP24 (T9b): ND (defer), NE (era), NY (day), NS (settle), and the existing-check rules (A_crank_step, I_chladni, I_virga_frozen, I_puddle_sprout, I_stare_dog, I_accent_still).
 // WP24 r3: NH (demo hold guard): DOG-12 suspends only the dog runner; the Inspector and the crow keep stepping (demo only).
 // WP27 T14: crowTalk_e1 and crowTalk_s8 (the era I-II crow speaks with folded wings: perchHead / perchTalk only). Each is a fresh run at UI 150.
+// WP28b B-T7b: the roamers (the Inspector, the dog, the crow) get the action gap (12 s in every stage, worstActionGap); the girl and the prop
+// rows keep the V4 gap (worstGap). The walk and flight frames of the move bound (N_no_teleport) and the stare rest check (N_<s>_rendered).
+// WP28b r1 (FX6): the move bound is time-aware (moveLimitPx: a flight's speed over the frame gap); N_<s>_walk_share has a floor for the
+// Inspector and the dog (WALK_SHARE_MIN); the era IV exemption is the hold only (ACTION_EXEMPT).
+// WP28b r2 (FX7, Director ruling 2026-10-30 R1): the walk-share floor is a dead-roamer catcher at 1.5 % (WALK_SHARE_MIN), not in era IV
+// (s13a, s13b) and only for an actor present in the window; the 12-20 % rule is the unit gate's (worldBehaviourMetrics.test.ts).
 // Usage: PW_PATH=<playwright> node scripts/smoke/world.mjs "<url with ?debug=1>" <outdir>
 // Prints ONE JSON object { results, fail, errors }; exit code 1 when fail or errors is non-empty. Runs on :4174 and :4177.
 // ONLY=H,I,M (env, optional): a comma list of case keys to run alone (A B C D E F G H I M J JR K L NV NC NT NU NK ND NE NY NS NH F23 crowTalk_e1 crowTalk_s8); unset runs every case.
@@ -1548,7 +1554,15 @@ const WALKERS = ['inspector', 'dog', 'crow', 'girl'];
 // The walkers one crank click steps: visible in livingWorld() and not parked (the girl parks in the window stage and keeps step 0).
 const steppable = (visible, behaviour) => WALKERS.filter((id) => visible.includes(id)
   && (behaviour.find((e) => e.id === id)?.activity ?? null) !== 'parked');
-const WALK_RE = /^walk/;
+// A move variant: a walk, or a flight (the crow's free hop, fly0-2; WP28b). The stare rest check and the N_no_teleport bound read these frames.
+const MOVE_RE = /^(walk|fly)/;
+// WP28b B1: the roamers' action gap (WORLD_BEHAVIOUR.actionGapMs 12 s; actionMinTravelPx 8 world px of travel from the last action) and the
+// era IV canon hold that stops its clock (worldBehaviourMetrics.ts ACTION_EXEMPT, era 4: the unison hold). WP28b r1: the stare is no
+// exemption (the POST stare is capped by the metrics task). No other stage exempts an id, the era V stare included.
+const ROAMERS = ['inspector', 'dog', 'crow'];
+const ACTION_LIMIT_S = 12;    // WORLD_BEHAVIOUR.actionGapMs / 1000, every stage
+const ACTION_PX = 8;          // WORLD_BEHAVIOUR.actionMinTravelPx
+const ACTION_EXEMPT = { s13a: ['hold'] };
 const STEP_MS = 250;          // one sample = one worldAdvance step
 const VARIETY_STEPS = 2400;   // 10 min of scheduler time
 const CHANGE_STEPS = 720;     // 3 min of scheduler time
@@ -1556,10 +1570,20 @@ const LOCK_MS = 125;          // V5: a start this close to another runner's star
 const ALPHA_MOVE = 0.02;      // V4: alpha moves by this much (or x / y by PX_MOVE, or the variant differs) counts as a change
 const PX_MOVE = 1;
 const LIT_ALPHA = 0.02;       // a prop row is shown above this alpha
-const WALK_PX = 8;            // V6: the largest step on a walk variant
-const REST_PX = 4;            // V6: the largest step off a walk variant (the crow stutter hop, WORLD_ENV.crowStutterPx)
+const WALK_PX = 8;            // V6: the floor of a move step (a walk, or a flight), the bound at 60 fps (moveLimitPx)
+const REST_PX = 4;            // V6: the largest step off a move variant (the crow stutter hop, WORLD_ENV.crowStutterPx)
+// WP28b r1 (FX6): a move variant's speed in px per s, mirrored from the data (this smoke is plain JS). A walk moves WORLD_WALK.pxPerFrame
+// (8) per drawn tick at the fastest timed fps (WORLD_PLAYBACK.fps.fps8): 64 px/s. A flight is CROW_HOP.pxPerS (src/data/pokes.ts): 160 px/s.
+const WALK_PX_PER_S = 8 * 8;
+const FLY_PX_PER_S = 160;
 const REPEAT_MAX = 2;         // V2b: an exact 4-activity run recurs at most this often in one window
 const WALK_SHARE_MAX = 0.3;   // V8
+// WP28b r2 (FX7): the floor of the roamers' walk share (the Inspector and the dog) over the 10 min run. Director ruling 2026-10-30 R1: the
+// unit gate worldBehaviourMetrics.test.ts owns the 12-20 % rule with per-state floors; this row only catches a dead roamer. It is not
+// applied in era IV (WALK_SHARE_SKIP: the conductor runs the cast there) and an actor absent from the window is skipped, not failed.
+const WALK_SHARE_MIN = 0.015;
+const WALK_SHARE_FLOOR = ['inspector', 'dog'];
+const WALK_SHARE_SKIP = ['s13a', 's13b'];
 const LOCK_REST_MAX = 0.12;   // V5 outside era IV
 const LOCK_IV_MIN = 0.9;      // V5 in era IV (the conductor's downbeat)
 // Rest frames a denizen may draw under the stare (WORLD_STARE_SAFE, src/data/worldBehaviour.ts; mirrored, this smoke is plain JS).
@@ -1636,14 +1660,16 @@ async function windowRunInPage(spec) {
   return { k0, walking, present, log: entries, cut, steps: spec.steps, stare: w.worldState()?.stare === true, samples };
 }
 
-// Runs in the page. The living entries of the walkers, once per animation frame, for ms of wall time: [id, visible, variant, x] tuples.
+// Runs in the page. The living entries of the walkers, once per animation frame, for ms of wall time: [id, visible, variant, x, t] tuples
+// (t: the frame's performance.now(), WP28b r1: the bound of a step is per frame gap).
 function teleportInPage(spec) {
   return new Promise((resolve) => {
     const out = [];
     const t0 = performance.now();
     const tick = () => {
-      out.push((window.__wedtmd.livingWorld() ?? []).filter((e) => spec.ids.includes(e.id)).map((e) => [e.id, e.visible === true, e.variant, e.x]));
-      if (performance.now() - t0 >= spec.ms) resolve(out);
+      const now = performance.now();
+      out.push((window.__wedtmd.livingWorld() ?? []).filter((e) => spec.ids.includes(e.id)).map((e) => [e.id, e.visible === true, e.variant, e.x, now]));
+      if (now - t0 >= spec.ms) resolve(out);
       else requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -1737,10 +1763,13 @@ function varietyRows(stage, win, extra) {
   const lock = lockstepOf(win.log);
   const base = { k0: win.k0, buyFail: extra.buyFail ?? [], stare: win.stare, cut: win.cut };
   const era4 = stage === 's13b' || stage === 's13a';
+  // WP28b r2 (FX7): the floor skips era IV and an actor not present in the window (no entry in shares).
+  const floored = WALK_SHARE_SKIP.includes(stage) ? [] : WALK_SHARE_FLOOR.filter((id) => shares[id] !== undefined);
   return [
     [`N_${stage}_distinct`, Object.entries(min).every(([id, m]) => distinct[id] >= m) && (extra.ok ?? true), { ...base, distinct, min }],
     [`N_${stage}_no_repeat`, rep.adjacent === 0 && rep.maxGram <= REPEAT_MAX, { ...base, adjacent: rep.adjacent, maxGram: rep.maxGram }],
-    [`N_${stage}_walk_share`, Object.values(shares).every((v) => v <= WALK_SHARE_MAX), { ...base, shares }],
+    [`N_${stage}_walk_share`, Object.values(shares).every((v) => v <= WALK_SHARE_MAX)
+      && floored.every((id) => shares[id] >= WALK_SHARE_MIN), { ...base, shares, floor: WALK_SHARE_MIN }],
     [`N_${stage}_lockstep`, lock.starts > 0 && (era4 ? lock.share >= LOCK_IV_MIN : lock.share <= LOCK_REST_MAX),
       { ...base, starts: lock.starts, near: lock.near, share: lock.share }],
   ];
@@ -1760,20 +1789,24 @@ const CHANGE_REQUIRED = {
   s13a: ['lampGlow', 'boothHood', 'sensorLed', 'clockMinute'],
   s15: ['boothHood', 'sensorLed', 'ring0', 'ring1', 'ring2', 'clockMinute'],
 };
-// The V4 rules of one stage: the element (a living entry or a prop row), its gap limit in seconds, whether the era IV hold action pauses its
-// clock (runners only) and whether the row is required (CHANGE_REQUIRED). Denizens 20 s (era V 30 s); receiver 10 s and motes 1 s (eras II-III);
-// lamp glow, booth hood and Sensor 7 LED 30 s while lit; scraps 60 s and sprout 30 s (era III); Chladni rings 20 s (era V); clock 120 s (from era II).
+// The rules of one stage: the element (a living entry or a prop row), its gap limit in seconds, its clock and whether the row is required
+// (CHANGE_REQUIRED). WP28b B1: the roamers (the Inspector, the dog, the crow) take the action gap (action true): 12 s in every stage, the era
+// IV canon holds of ACTION_EXEMPT stop the clock. The girl keeps the V4 gap (hold true: she never moves): 20 s, era V 30 s. The prop rows
+// carry hold true as well (a prop has no activity, so the hold never pauses it). Receiver 10 s and motes 1 s (eras II-III); lamp glow, booth
+// hood and Sensor 7 LED 30 s while lit; scraps 60 s and sprout 30 s (era III); Chladni rings 20 s (era V); clock 120 s (from era II).
 function changeRules(stage) {
   const early = stage === 's9' || stage === 's11';
   const need = (key) => (CHANGE_REQUIRED[stage] ?? []).includes(key);
-  const rules = WALKERS.map((id) => ({ key: id, src: 'living', limitS: stage === 's15' ? 30 : 20, hold: true }));
+  const prop = (key, limitS, required = need(key)) => ({ key, src: 'prop', limitS, hold: true, required });
+  const rules = ROAMERS.map((id) => ({ key: id, src: 'living', limitS: ACTION_LIMIT_S, action: true, exempt: ACTION_EXEMPT[stage] ?? [] }));
+  rules.push({ key: 'girl', src: 'living', limitS: stage === 's15' ? 30 : 20, hold: true });
   if (early) rules.push({ key: 'receiver', src: 'living', limitS: 10, required: need('receiver') });
-  if (early) for (let i = 0; i < 5; i++) rules.push({ key: `mote${i}`, src: 'prop', limitS: 1, required: need(`mote${i}`) });
-  for (const key of ['lampGlow', 'boothHood', 'sensorLed']) rules.push({ key, src: 'prop', limitS: 30, required: need(key) });
-  if (early) for (let i = 0; i < 3; i++) rules.push({ key: `scrap${i}`, src: 'prop', limitS: 60, required: need(`scrap${i}`) });
-  if (stage === 's11') rules.push({ key: 'sprout', src: 'prop', limitS: 30, required: need('sprout') });
-  if (stage === 's15') for (let i = 0; i < 5; i++) rules.push({ key: `ring${i}`, src: 'prop', limitS: 20, required: need(`ring${i}`) });
-  rules.push({ key: 'clockMinute', src: 'prop', limitS: 120, required: need('clockMinute') });
+  if (early) for (let i = 0; i < 5; i++) rules.push(prop(`mote${i}`, 1));
+  for (const key of ['lampGlow', 'boothHood', 'sensorLed']) rules.push(prop(key, 30));
+  if (early) for (let i = 0; i < 3; i++) rules.push(prop(`scrap${i}`, 60));
+  if (stage === 's11') rules.push(prop('sprout', 30));
+  if (stage === 's15') for (let i = 0; i < 5; i++) rules.push(prop(`ring${i}`, 20));
+  rules.push(prop('clockMinute', 120));
   return rules;
 }
 
@@ -1825,7 +1858,55 @@ function worstGap(indexed, rule) {
   }
   return measured ? Math.max(worst, indexed.length - 1 - last) * STEP_MS : null;
 }
-// Per walker: the shown samples, the distinct (variant, round x, round y) states, and the non-walk variants outside the stare set.
+// WP28b B1, the action gap of a roamer (the rule of worldBehaviourMetrics.ts): the longest run of shown samples with no action. An action is
+// an id change of the activity (s.act), a step of a move variant (a walk counts continuously while x changes) or ACTION_PX of travel from
+// where the last action left the sprite. A same-clip loop is no action. The rule.exempt ids stop the clock. A hidden sample ends the run; the
+// next shown one starts a new run. null when the element is never shown. The era IV conductor's switches are id changes (the same rule).
+function worstActionGap(indexed, rule) {
+  let measured = false;
+  let open = false;
+  let since = 0;
+  let worst = 0;
+  let prevAct = null;
+  let prevX = 0;
+  let actX = 0;
+  for (const s of indexed) {
+    const cur = s.living.get(rule.key) ?? null;
+    if (cur === null || !cur.visible) {
+      if (open) worst = Math.max(worst, since);
+      open = false;
+      continue;
+    }
+    const act = s.act.get(rule.key) ?? null;
+    if (!open) {
+      measured = true;
+      open = true;
+      since = 0;
+      actX = cur.x;
+      prevAct = act;
+      prevX = cur.x;
+      continue;
+    }
+    if (rule.exempt.includes(act)) {
+      prevAct = act;
+      prevX = cur.x;
+      continue;
+    }
+    since += 1;
+    const step = MOVE_RE.test(cur.variant) && cur.x !== prevX;
+    if (act !== prevAct || step || Math.abs(cur.x - actX) >= ACTION_PX) {
+      worst = Math.max(worst, since);
+      since = 0;
+      actX = cur.x;
+    }
+    prevAct = act;
+    prevX = cur.x;
+  }
+  if (!measured) return null;
+  if (open) worst = Math.max(worst, since);
+  return worst * STEP_MS;
+}
+// Per walker: the shown samples, the distinct (variant, round x, round y) states, and the non-move variants outside the stare set.
 function renderedOf(indexed) {
   const out = {};
   for (const id of WALKERS) {
@@ -1837,7 +1918,7 @@ function renderedOf(indexed) {
       if (!e || !e.visible) continue;
       visible += 1;
       states.add(`${e.variant}|${Math.round(e.x)}|${Math.round(e.y)}`);
-      if (!WALK_RE.test(e.variant)) variants.add(e.variant);
+      if (!MOVE_RE.test(e.variant)) variants.add(e.variant);
     }
     out[id] = { visible, distinct: states.size, variants: [...variants].sort(), stray: [...variants].filter((v) => !STARE_SAFE[id].includes(v)) };
   }
@@ -1846,14 +1927,14 @@ function renderedOf(indexed) {
 
 // One stage of N changes (C8 V4): 720 samples of worldAdvance(250) and one rAF each (180 s of scheduler time). The denizens must all be
 // shown, every required row too (a missing one lands in over as missing:<key>), and every element within its limit. The stare stages
-// (s13a, s15) also check N_<s>_rendered.
+// (s13a, s15) also check N_<s>_rendered. WP28b: the roamers are measured by the action gap (changeRules).
 async function changesStage(page, stage, extra = {}) {
   const win = await page.evaluate(windowRunInPage, { steps: CHANGE_STEPS, stepMs: STEP_MS, frames: true });
   const indexed = indexSamples(win.samples);
   const worst = {};
   const over = [];
   for (const rule of changeRules(stage)) {
-    const ms = worstGap(indexed, rule);
+    const ms = rule.action === true ? worstActionGap(indexed, rule) : worstGap(indexed, rule);
     if (ms === null) {
       if (rule.required) over.push(`missing:${rule.key}`);
       continue;
@@ -1909,8 +1990,19 @@ async function caseNC(page) {
   await changesStage(page, 's15', { buyFail: buy15 });
 }
 
+// The largest step (px) of one frame gap of dtS seconds: REST_PX when neither side is a move variant. Otherwise the faster move side's
+// speed over the gap, plus 1 px, and never under WALK_PX. WP28b r1: a flight moves 160 px/s, so a 50 ms rAF gap moves it 8 px; at 60 fps
+// the bound is WALK_PX (a walk moves 2.7 px a frame at 64 px/s), so the walk steps stay strict.
+function moveLimitPx(prevVariant, curVariant, dtS) {
+  if (!MOVE_RE.test(prevVariant) && !MOVE_RE.test(curVariant)) return REST_PX;
+  let limit = WALK_PX;
+  for (const v of [prevVariant, curVariant]) {
+    if (MOVE_RE.test(v)) limit = Math.max(limit, (v.startsWith('fly') ? FLY_PX_PER_S : WALK_PX_PER_S) * dtS + 1);
+  }
+  return limit;
+}
 // N_no_teleport (S9): a rAF sampler for 15 s; a line (INS-02) is forced at 2 s with quiet off, so a talk pause falls inside the window.
-// Per step: |dx| <= WALK_PX when either side of the step is a walk variant, REST_PX otherwise (the crow stutter hop).
+// Per step: |dx| <= moveLimitPx(...) for the frame gap (a walk or a flight on either side), REST_PX otherwise (the crow stutter hop).
 function teleportOf(frames) {
   let steps = 0;
   let walkSteps = 0;
@@ -1926,11 +2018,13 @@ function teleportOf(frames) {
       }
       if (prev !== null) {
         const dx = Math.abs(cur[3] - prev[3]);
-        const walk = WALK_RE.test(cur[2]) || WALK_RE.test(prev[2]);
+        const dtMs = cur[4] - prev[4];
+        const limit = moveLimitPx(prev[2], cur[2], dtMs / 1000);
+        const walk = MOVE_RE.test(cur[2]) || MOVE_RE.test(prev[2]);
         steps += 1;
         if (walk) walkSteps += 1;
         if (dx > 0) moving += 1;
-        if (dx > (walk ? WALK_PX : REST_PX)) violations.push({ id, dx: Math.round(dx), from: prev[2], to: cur[2] });
+        if (dx > limit) violations.push({ id, dx: Math.round(dx), limit: Math.round(limit * 10) / 10, dtMs: Math.round(dtMs), from: prev[2], to: cur[2] });
       }
       prev = cur;
     }

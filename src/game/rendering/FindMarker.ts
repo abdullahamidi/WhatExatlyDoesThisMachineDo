@@ -23,8 +23,9 @@ import { gainFontPx } from '../math/gainBlock';
 import { fadeAlpha, faultEligible } from '../math/faultMarker';
 import type { FaultGates } from '../math/faultMarker';
 import {
-  clientToGamePx, countInView, dropFraction, dustPuffing, findEligible, flipScaleX, flipShown, glintFrame, glintSlowed, hopOffsetPx,
-  itemCell, pickSpot, riseOffsetPx, ringAlpha, spotInView, TimingWindow, zoneSideWorld,
+  chladniOffsetPx, clientToGamePx, countInView, dropFraction, dustPuffing, findEligible, flipScaleX, flipShown, glintFrame, glintSlowed,
+  hopOffsetPx, itemCell, leadWaitMs, liftBobPx, liftHeightPx, pickSpot, riseOffsetPx, ringAlpha, spotInView, spotUsable,
+  TimingWindow, zoneSideWorld,
 } from '../math/findMarker';
 
 // WP28 Finds, the marker (C12 renderer). One container: the item sprite, its glint, a ground ring and a click zone. Built once
@@ -34,8 +35,11 @@ import {
 // The clock is the session's (stepFinds, once per frame, eligible or not); the marker keeps a copy of the live Find that
 // follows the session's events and ages with the same clamped step, so reading it each frame allocates nothing.
 
-/** The director reads the marker needs (C11 subset): the framing, the crow's perch and the cast's feet (poke targets). */
-export type FindDirectorPort = Pick<WorldDebugApi, 'framingKey' | 'crowPerchPos' | 'pokeTargets'>;
+/**
+ * The director reads the marker needs (C11 subset): the framing, the crow's perch and the cast's feet (poke targets), and (WP28b) the
+ * producer's action (findProducer, its lead ms) and the live Find's world x (setFindAt).
+ */
+export type FindDirectorPort = Pick<WorldDebugApi, 'framingKey' | 'crowPerchPos' | 'pokeTargets' | 'findProducer' | 'setFindAt'>;
 
 /**
  * The marker reads these lazily on every update (the WorldScene port pattern): nothing is captured at construction.
@@ -171,6 +175,12 @@ export class FindMarker {
   /** The era cache: the tech levels object it was read from (a buy replaces that object), and the era read from it. */
   private eraLevels: Readonly<Record<TechId, number>> | null = null;
   private eraCache: EraNumber = 1;
+  /** The phase-clock ms at which the item shows: the producer's lead after the spawn (0 for none). The marker stays hidden before it. */
+  private showAtMs = 0;
+  /** Whether the Director holds the live Find's x (setFindAt): from the item's first show until its collect, expiry or hide. */
+  private reported = false;
+  /** The tech levels the spot count was read with (a buy replaces the object: the count is read again). */
+  private countLevels: Readonly<Record<TechId, number>> | null = null;
   /** Last glint frame set on the sprite, so setFrame runs only when the frame changes. */
   private glintFrameCache = -1;
   /** Last zone side in world px, so the zone is resized only when the zoom changes it. */
@@ -201,9 +211,11 @@ export class FindMarker {
   private ringColor = -1;
   private ringStep = -1;
   private ringNextMs = 0;
+  /** The spot's Splice and era test (spotUsable, WP28b): a spot whose Splice sleeps, or whose producer is in another era, is not a spot. */
+  private readonly isUsable = (s: FindSpot): boolean => spotUsable(s, this.ports.session.state.techLevels, this.eraNow());
   /** The spot test for pickSpot: one reused callback, so a pick allocates nothing. */
   private readonly isOnScreen = (s: FindSpot): boolean =>
-    spotInView(s, this.view(), FIND_LAYOUT.viewInsetWorldPx, this.hudOn ? this.hudWorld : null);
+    spotInView(s, this.view(), FIND_LAYOUT.viewInsetWorldPx, this.hudOn ? this.hudWorld : null) && this.isUsable(s);
 
   constructor(scene: Phaser.Scene, ports: FindMarkerPorts) {
     this.scene = scene;
@@ -329,7 +341,9 @@ export class FindMarker {
   private spotsOnScreen(framing: FramingKey | null): number {
     const v = this.view();
     const c = this.countView;
-    if (framing === this.countFraming && this.hudVersion === this.countHud && v.x === c.x && v.y === c.y && v.right === c.right && v.bottom === c.bottom) {
+    const levels = this.ports.session.state.techLevels;
+    if (framing === this.countFraming && this.hudVersion === this.countHud && levels === this.countLevels
+      && v.x === c.x && v.y === c.y && v.right === c.right && v.bottom === c.bottom) {
       return this.countN;
     }
     c.x = v.x;
@@ -338,8 +352,9 @@ export class FindMarker {
     c.bottom = v.bottom;
     this.countFraming = framing;
     this.countHud = this.hudVersion;
+    this.countLevels = levels;
     const spots = framing === null ? undefined : FIND_SPOTS[framing];
-    this.countN = spots === undefined ? 0 : countInView(spots, v, FIND_LAYOUT.viewInsetWorldPx, this.hudOn ? this.hudWorld : null);
+    this.countN = spots === undefined ? 0 : countInView(spots, v, FIND_LAYOUT.viewInsetWorldPx, this.hudOn ? this.hudWorld : null, this.isUsable);
     return this.countN;
   }
 
@@ -451,11 +466,42 @@ export class FindMarker {
         this.hasPerch = true;
       }
     }
+    this.askProducer();
     this.paint();
     this.ports.ui.worldView.announce(
       FIND_WORLD_TEXT.a11yPrefix,
       FIND_WORLD_TEXT.announceSpawn.replace('{producer}', FIND_WORLD_TEXT.producers[this.producer ?? 'ground']),
     );
+  }
+
+  /**
+   * The producer's action (WP28b): the Director runs it and returns its lead, and the item shows that long after now (at most
+   * maxLeadMs). Reduced motion asks nothing and waits for nothing; a producer with no action (gust, ground, chladni, lift) returns 0 from the Director.
+   */
+  private askProducer(): void {
+    const spot = this.spot;
+    const d = this.ports.director();
+    let lead = 0;
+    if (spot !== null && d !== null && !this.ports.reducedMotion()) {
+      lead = d.findProducer(spot.producer, spot.x, spot.lane);
+    }
+    this.showAtMs = this.phaseMs + leadWaitMs(lead);
+  }
+
+  /**
+   * Reports the live Find's world x to the Director (setFindAt, WP28b): once, when the item first shows, and null when the Find goes (a collect,
+   * an expiry or a hide). The Director queues its find cue on the first x only.
+   */
+  private reportFind(worldX: number | null): void {
+    if (worldX === null) {
+      if (!this.reported) return;
+      this.reported = false;
+      this.ports.director()?.setFindAt(null);
+      return;
+    }
+    if (this.reported) return;
+    this.reported = true;
+    this.ports.director()?.setFindAt(worldX);
   }
 
   /** Paints the live Find's item cell, its ring (in the era's colour) and the glint's tint. Called at a spawn and when a live Find is taken over. */
@@ -472,6 +518,7 @@ export class FindMarker {
   private onExpire(): void {
     this.expired += 1;
     this.live = null;
+    this.reportFind(null);
     if (this.ports.reducedMotion()) {
       this.phase = 'idle';
       this.hideMarker();
@@ -489,6 +536,7 @@ export class FindMarker {
   private onCollect(e: SessionEvents['find']): void {
     this.collected += 1;
     this.live = null;
+    this.reportFind(null);
     const voice = this.ports.ui.worldView;
     if (e.relic) {
       const note = e.noteIndex === null ? undefined : RELIC_NOTES[e.noteIndex];
@@ -595,6 +643,8 @@ export class FindMarker {
     if (framing !== this.spotFraming) {
       this.choose(framing);
       this.hasPerch = false;
+      // A spot change before the item shows is a spot the producer did not act for: the producer is asked again (the wait restarts).
+      if (this.phaseMs < this.showAtMs) this.askProducer();
     }
     const spot = this.spot;
     const live = this.live;
@@ -602,8 +652,14 @@ export class FindMarker {
       this.hideMarker();
       return;
     }
+    // The item waits for the producer's lead (WP28b): hidden until it shows, and the intro clock starts at the show.
+    const t = this.phaseMs - this.showAtMs;
+    if (t < 0) {
+      this.hideMarker();
+      return;
+    }
+    this.reportFind(spot.x);
     const feetY = GROUND_Y + spot.lane;
-    const t = this.phaseMs;
     // The intro offsets (local to the container, world px) and the item's own visibility and scale.
     let dx = 0;
     let dy = 0;
@@ -633,7 +689,21 @@ export class FindMarker {
           else itemShown = false;
           break;
         case 'ground':
+        case 'organ':
+        case 'radio':
+        case 'coinReturn':
+        case 'puddle':
+        case 'vent':
+        case 'pump':
           riseY = riseOffsetPx(t);
+          break;
+        case 'chladni':
+          // The item walks along the ring to its node (WP28b); its ring goes with it (moveTo below).
+          dx = chladniOffsetPx(spot.x, t);
+          break;
+        case 'lift':
+          // The item lifts 12-16 px and hangs, bobbing (WP28b); the ring stays on the ground under it.
+          riseY = -liftHeightPx(t, live.serial) + liftBobPx(t);
           break;
         default:
           break;
@@ -653,6 +723,7 @@ export class FindMarker {
     alphaIf(this.glint, 1);
     showIf(this.glint, true);
     this.updateRing(live, reduced, dropping, puffing);
+    moveTo(this.ring, dx, 0);
     moveTo(this.zone, dx, itemY - ITEM_PX / 2);
     this.setZoneSize();
     this.setZoneInput(true);
@@ -689,6 +760,7 @@ export class FindMarker {
   private hideMarker(): void {
     showIf(this.container, false);
     this.setZoneInput(false);
+    this.reportFind(null);
   }
 
   /** The zone takes pointer input only while the marker shows a live Find, so a hidden marker never swallows a crank click. */

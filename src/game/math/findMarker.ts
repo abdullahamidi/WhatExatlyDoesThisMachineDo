@@ -1,5 +1,7 @@
-import { FIND_ART, FIND_LAYOUT } from '../../data/findWorld';
-import { GROUND_Y, PIXEL_SCALE } from '../../data/world';
+import { FIND_ART, FIND_LAYOUT, FIND_PRODUCER } from '../../data/findWorld';
+import type { FindSpot } from '../../data/findWorld';
+import { GROUND_Y, MACHINE_ANCHOR, PIXEL_SCALE } from '../../data/world';
+import type { TechId } from '../../data/types';
 import type { Vec2 } from '../../data/machineComponents';
 import { faultEligible, hitSizeWorld } from './faultMarker';
 import type { FaultGates } from './faultMarker';
@@ -45,12 +47,16 @@ export function spotInView(spot: SpotLike, view: ViewRect, insetPx: number, hud:
   return inView && (hud === null || !itemBoxMeets(spot, y, hud));
 }
 
-/** How many of the spots are on screen (see spotInView for the HUD rect). Index loop, no iterator: the marker calls it per recount. */
-export function countInView(spots: readonly SpotLike[], view: ViewRect, insetPx: number, hud: ViewRect | null = null): number {
+/**
+ * How many of the spots are on screen (see spotInView for the HUD rect) and pass usable (WP28b: spotUsable; none = all pass). Index loop,
+ * no iterator: the marker calls it per recount.
+ */
+export function countInView<T extends SpotLike>(spots: readonly T[], view: ViewRect, insetPx: number, hud: ViewRect | null = null,
+  usable?: (spot: T) => boolean): number {
   let n = 0;
   for (let i = 0; i < spots.length; i += 1) {
     const s = spots[i];
-    if (s !== undefined && spotInView(s, view, insetPx, hud)) n += 1;
+    if (s !== undefined && spotInView(s, view, insetPx, hud) && (usable === undefined || usable(s))) n += 1;
   }
   return n;
 }
@@ -231,4 +237,54 @@ export function dustPuffing(elapsedMs: number): boolean {
 /** The click zone's side in world px: an item cell, or hitMinScreenPx on screen at this zoom, whichever is larger. */
 export function zoneSideWorld(zoom: number): number {
   return Math.max(FIND_ART.cellArtPx * PIXEL_SCALE, hitSizeWorld(FIND_LAYOUT.hitMinScreenPx, zoom));
+}
+
+/** A lead in ms, clamped to 0..maxLeadMs; a non-finite lead reads 0 (no wait). */
+function clampLead(ms: number): number {
+  return Number.isFinite(ms) ? Math.min(FIND_PRODUCER.maxLeadMs, Math.max(0, ms)) : 0;
+}
+
+/** The wait the marker takes for the lead the Director returned: the lead, clamped to 0..maxLeadMs (the item shows after it). */
+export function leadWaitMs(returnedMs: number): number {
+  return clampLead(returnedMs);
+}
+
+/**
+ * Whether a spot can hold a Find now: its Splice is woken (requires), and the producer's era (FIND_PRODUCER.era, when it has one) is the
+ * current era. Pure: reads the tech levels, never writes them.
+ */
+export function spotUsable(spot: FindSpot, levels: Readonly<Partial<Record<TechId, number>>>, era: number): boolean {
+  const need = FIND_PRODUCER.era[spot.producer];
+  if (need !== undefined && need !== era) return false;
+  return spot.requires === undefined || (levels[spot.requires] ?? 0) >= 1;
+}
+
+/** The nodal line a Chladni item walks to: the nearest node of the grid of chladniNodePx counted from the machine's x (within half a spacing). */
+export function chladniTargetX(x: number): number {
+  const n = FIND_PRODUCER.chladniNodePx;
+  return MACHINE_ANCHOR.x + Math.round((x - MACHINE_ANCHOR.x) / n) * n;
+}
+
+/** The Chladni item's x offset in world px after elapsedMs: a smoothstep over chladniWalkMs from the spot to its node (0 at the start). */
+export function chladniOffsetPx(spotX: number, elapsedMs: number): number {
+  const k = clamp01(elapsedMs / FIND_PRODUCER.chladniWalkMs);
+  return (chladniTargetX(spotX) - spotX) * k * k * (3 - 2 * k);
+}
+
+/**
+ * The lift's height in world px (positive is up) after ageMs: an ease-out to the serial's height over liftMs, then constant. The five
+ * heights step evenly across liftPx, chosen by serial (negative and non-finite serials wrap like the spot slot).
+ */
+export function liftHeightPx(ageMs: number, serial: number): number {
+  const [lo, hi] = FIND_PRODUCER.liftPx;
+  const target = lo + ((hi - lo) * slotOf(serial, 5)) / 4;
+  const k = clamp01(ageMs / FIND_PRODUCER.liftMs);
+  return target * k * (2 - k);
+}
+
+/** The lifted item's bob in world px after ageMs: liftBobPx at liftBobHz, ramped in over the lift (zero before the lift starts). */
+export function liftBobPx(ageMs: number): number {
+  const ms = Number.isFinite(ageMs) ? Math.max(0, ageMs) : 0;
+  const ramp = clamp01(ms / FIND_PRODUCER.liftMs);
+  return FIND_PRODUCER.liftBobPx * ramp * Math.sin((2 * Math.PI * FIND_PRODUCER.liftBobHz * ms) / 1000);
 }

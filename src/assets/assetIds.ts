@@ -30,6 +30,8 @@ export const ASSET_IDS = ['bg.sky','bg.mountains','bg.skyline','bg.pylons','terr
 // WP27 machine faults: id 145
   'fx.fault',
 // WP28a Splice objects (eras I-II) and Finds: ids 146..147
-  'world.splicesA','world.finds'
+  'world.splicesA','world.finds',
+// WP28b Splice objects (eras III-V), tall set and small set: ids 148..149
+  'world.splicesB','world.splicesC'
 ] as const;
 export type AssetId = typeof ASSET_IDS[number];

@@ -93,6 +93,10 @@ Each finished cycle grants 3 Echoes, plus one for each Restoration Flux threshol
 | Drag (left or middle button) | Pans the camera. A drag starts only after 4 px of movement; a press that starts on an interactive object (such as the crank) does not pan. |
 | REFOCUS button (HUD) | Animates the camera back to the default view on the machine. |
 | `T` | Opens the technology tree, or closes it when it is open. |
+| Click a dead Splice object in the world | Buys that Splice (hover shows its name, cost and effect). Pokes on denizens and woken objects never change the economy. |
+| `G` | Picks up the Find that glints on the ground (about 25 s; PICK UP FIND in SETTINGS > KEYS). A relic adds a field note instead of output. |
+| `F` | Clears the fault on the machine (CLEAR FAULT in SETTINGS > KEYS). |
+| Shift+click, or Shift+Enter, on a repeatable tech in the TECH INDEX | BUY MAX: buys as many levels as the energy pays for, in one purchase. The detail panel has the same button. |
 | TECH INDEX button (HUD) | Opens the technology tree. Clicking the dark backdrop closes it. |
 | SYSTEM button (HUD) | Opens the SYSTEM menu. RESET PROGRESS is two-step: press once to arm, press again within 5 s to erase; CANCEL disarms. |
 | Esc | Closes the top-most open dialog (for example the reset confirmation, tech tree, credits or photo mode). With no dialog open, opens the SYSTEM menu, except during the finale or a new cycle. Does nothing at the finale choice. |
@@ -448,6 +452,98 @@ Faults and wind-up totals by era (profile A buys every node on its way):
 **Prestige (WP27 values; bounds unchanged).** Planner harness: cycle 2 at 0.549-0.609 of cycle 1 (bound 0.50-0.65),
 cycle 3 at 0.354 (0.35-0.55), the strongest memory run at 0.190 (at least 0.12), casual cycle 2 at 0.644 (at most
 0.65).
+
+### WP28 (2026-10-29): smaller steps, Splices and Finds
+
+The 2026-10-28 playtest found dead waits. A player who stopped clicking waited 1:56 at the 90th percentile for the next
+purchase, and the longest wait was 6:08. WP28 answers that with smaller steps at the same total time, a second purchase track
+(Splices) and a reason to watch the stage (Finds). The plan is `docs/plan/WP28.md`. The changes below are deviations from
+`docs/GAME_SPEC.md` section 6. The spec text itself is not edited; the values live in `src/data/`.
+
+**Deviations from spec section 6 (explicit).**
+
+| Item | Spec / v0.11.0 | WP28 |
+|---|---|---|
+| Split techs | one step per level | 17 techs cut into 2 steps (10 techs) or 3 steps (7 techs) per level, at the same power and the same total time. `SPLIT_PARTS` in `src/data/pacing.ts` |
+| Requirements on split techs | `minLevel` of the whole tech | `minLevel` × parts (Dynamo Crank needs Copper Winding 6, was 3) |
+| Visual thresholds on split techs | the v0.11.0 tiers | `parts × (L − 1) + 1`; level 1 unchanged |
+| Unlock prices | v0.11.0 values | about 0.65 of the v0.11.0 value (Resonator Spire 0.6). Generator, Fault Lamp and Primary Function unchanged |
+| Buying | one level per energy per buy | BUY MAX on repeatable techs (Shift-click, Shift+Enter or the detail button). The sims repeat the cheapest pick per energy until nothing more is affordable |
+| Splices | not in the spec | 16 one-time purchases (`src/data/splices.ts`), each paid in an energy in play, bought from the world or the SPLICES tab |
+| Finds | not in the spec | one every 45 to 120 s of active play after Worn Motor. Payout 4, 6 or 8 s of all output (equal weight). Every fifth Find is a relic: a field note, no payout |
+| Save remap | — | a save below `econ` 28 gets its split-track levels × parts on load (same spend, same power). `SAVE_VERSION` stays 2 |
+
+**Pacing (sims as printed at WP28a; `src/simulation/pacing.sim.test.ts`).** Profile A clicks four times per second. Profile B
+clicks four times per second for five minutes, then 0.5 per second.
+
+| Measure | v0.11.0 | WP28 |
+|---|---:|---:|
+| A p90 / max gap | 1:24 / 4:24 | 0:42 / 1:40 (harness 1:41) |
+| B p90 gap | 1:56 | 1:02 |
+| B max gap before the final alignment | 6:08 | 2:33 |
+| A primary function | 250:09 | 246:40 (harness 246:30) |
+| B / A primary function | 1.448 | 1.497 |
+| Demo A substation | 60:50 | 59:18 |
+
+The longest stretch with no purchase, fault or Find on screen is 1:27 for A and 1:47 for B (harness). The gate times may
+drift by 1 % at most. A save from before this version keeps its output within 1 % in eras I-II and 3 % in eras III-V (Q4 ruling).
+
+### WP28b (2026-10-29): roaming, reactions and the machine's reach
+
+The roaming cast, its holds and its action gap are in `src/data/worldBehaviour.ts`. The B1 gate that checks them is
+`src/game/math/worldBehaviourMetrics.test.ts` (60 simulated minutes, seeds 1-5). The reach numbers are in `src/data/worldReach.ts`,
+`src/data/worldShared.ts` and `src/data/worldFx.ts`; the reactions and the poke bubbles in `src/data/worldBehaviour.ts` and
+`src/data/pokes.ts`.
+
+**Roaming (`WORLD_BEHAVIOUR`, `WORLD_WALK`).**
+
+| Item | Value |
+|---|---|
+| Action gap of the Inspector, the dog and the crow | at most 12 s (`actionGapMs`). An action is a new activity, a walk of 8 px or more, a reaction, a poke answer or a hop |
+| Walk share | 12-20 % of every 5-minute window (B1 test) |
+| Spot coverage | each walker covers at least 75 % of its spot range in every 5-minute window (B1 test) |
+| Hold caps | 10 s for a hold; 8 s for an early static run, 10 s in era V (`capMs`). Rest holds are 3-9 s (`restHoldMs`) |
+| Walk gate | no two walkers start a walk within 1 s (`walkStaggerMs`) |
+| Walk halt | a poke or a machine-event reaction cuts a walk that has more than 1 s left (`haltMinLeftMs`) |
+| Walk pace | 8 px per walk frame, at least 24 px per walk (`WORLD_WALK`) |
+
+Not built: the 9.5 s micro rule of the plan. The 12 s gap holds through the hold caps instead. Era IV's POST stare is capped at
+4 beats (9.6 s), so the gap holds there too.
+
+**Reactions and visits (`WORLD_REACT`, `findProducer.ts`).**
+
+| Item | Value |
+|---|---|
+| Reaction start after its cause | Inspector 0.2-0.4 s, dog 0.4-0.6 s, crow 0.6-0.9 s (`staggerMs`); a reaction that walks also waits for the walk gate (up to 1 s). Era IV has no reactions |
+| Inspector's Find reaction | 2-4 s after the Find spawns (`findDelayMs`) |
+| Ground wave | each walker reacts when the wave reaches its x |
+| Visit to a woken object | 3-8 s after the wake (`spliceDelayMs`); the visit lasts up to 20 s (`visitHoldMs`); weight 2, cooldown 40 s |
+| Repeat of a cue | at most once per 30 s per actor and cue (`pairCooldownMs`) |
+| Free crow hop | weight 1.2, cooldown 20 s (`hopFree`), eras I-III and V. A big purchase hops it 30 % of the time (`hopChanceByCue`) |
+| Dog's dig at a Find | only within 24 px of the spot (`digReachPx`) |
+| Girl's lantern dim on a fault | 1 s (`faultDimMs`) |
+
+**Poke bubbles (`POKE_BUBBLE`).** A level-2 answer may show "Noted." (the Inspector, eras I-III and V) or a wordless "…" (the
+girl). The chance is 50 % (RARE: 25 %). Each actor gets at most one per 120 s, and both together at most four per hour. Each
+bubble shows for 1.6 s. Never over a line bubble; none with WORLD VOICES off.
+
+**The machine's reach (`REACH_FX`, `REACH_LEVEL`, `GROUND_WAVE_SHARED`, `WORLD_FX`).**
+
+| Effect | Rule |
+|---|---|
+| Crank pulse on the ground | 480 px/s, 0.6 s life, at least 334 ms apart (3 a second, the flash cap) |
+| Big-purchase ground wave | 300 px/s, at least 3 s apart |
+| Pylon pulses | 1-4 dots at 120 px/s, by the era's energy reach level |
+| Base dust | 8 specks, hops of 1-3 art px, at most 2 hops a second. The dust field's mote interval is 250 ms / (1 + 0.25 log10(1 + output)), never under 120 ms, and is updated at most twice a second |
+| Lamp wobble | up to 0.12 of the glow at 1.3 Hz; none under reduced motion |
+| Era I pebbles | 2 to 6 on the machine's feet, each hopping 1-2 px at 2 Hz |
+| Era II arcs | 0.2 + 0.25 log10(1 + EE/s) a second, clamped to 0.2-1.5; each arc lives 90 ms |
+| Era III steam drift | 0.1 + 0.08 log10(1 + PR/s) a second, clamped to 0.1-0.4; at most 5 alive, 9-14 s each |
+| Era IV hum and rings | objects jitter 1 px above reach level 0.3 and 2 px above 0.85 (2-4 Hz); a puddle ring every 4-8 s while the level is at least 0.2 |
+| Era V debris | 6-10 specks rise 8-32 art px over 3-6 s, then hang |
+
+Reach level (`REACH_LEVEL`, log scale from low to high): ME 10 to 30,000 per second; EE 1 to 100,000; PR 10 to 20,000; RS 100 to
+30,000; XF 1 to 1,000,000. Reduced motion turns every effect off, except that the debris specks hang still.
 
 ### Sign-off numbers (WP16)
 

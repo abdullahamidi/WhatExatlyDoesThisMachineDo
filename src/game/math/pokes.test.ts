@@ -3,18 +3,21 @@
 // sheet, the girl and the props never move, Sensor 7 never shows glyphOne or headUp, no pre-finale ban, era IV one accent frame, era V
 // stare-safe frames, the answer caps, the reduced-motion form and the crow perches and hop. WP28a fix round 1: the own Splice object tables, the
 // level-2 cadence and the level-3 answer (never the same clip twice, every target and era), the Sensor 7 solid LED and the perch rows and ground
-// perch. Pure: fixed seeds, no clock, no Phaser.
+// perch. WP28b (B-T6a): the poke bubble rule (B7) and the Splice-top perches (AD3 O-f). Pure: fixed seeds, no clock, no Phaser.
 import { describe, it, expect } from 'vitest';
 import {
-  CROW_HOP, CROW_MACHINE_X, CROW_PERCHES, POKES, POKE_OBJECT_KEY, POKE_OBJECT_TABLES, POKE_RENDER, POKE_SHEET, POKE_TABLES,
+  CROW_HOP, CROW_MACHINE_X, CROW_PERCHES, POKES, POKE_BUBBLE, POKE_OBJECT_KEY, POKE_OBJECT_TABLES, POKE_RENDER, POKE_SHEET, POKE_TABLES,
 } from '../../data/pokes';
-import type { PokeClip, PokeSoundId, PokeTable, PokeTargetKey } from '../../data/pokes';
+import type { CrowPerch, PokeClip, PokeSoundId, PokeTable, PokeTargetKey } from '../../data/pokes';
 import { WORLD_FRAMES, WORLD_PLACEMENTS } from '../../data/livingWorld';
 import type { FramingKey } from '../../data/livingWorld';
 import { GROUND_Y, MACHINE_ANCHOR } from '../../data/world';
 import { WORLD_PREFINALE_BANNED, WORLD_STARE_SAFE } from '../../data/worldBehaviour';
-import { createPokeLadder, isUnavailable, pokeOn, reducedClip, resetLadder } from './pokes';
-import type { PokeResult } from './pokes';
+import { TECH_IDS } from '../../data/types';
+import {
+  createPokeBubbleState, createPokeLadder, isUnavailable, notePokeBubble, pokeBubbleDue, pokeOn, reducedClip, resetLadder,
+} from './pokes';
+import type { PokeBubbleActor, PokeResult } from './pokes';
 
 const KEYS: readonly PokeTargetKey[] = [
   'inspector', 'dog', 'crow', 'girlWindow', 'girlMini', 'girlGround', 'sensor7', 'payphone', 'lamp', 'clock', 'object',
@@ -416,9 +419,12 @@ describe('the crow perches and the hop (C3)', () => {
         const machine = CROW_MACHINE_X[framing];
         expect(machine, `${framing} machine x-range`).toBeDefined();
         if (machine !== undefined) expect(p.x, `${framing} ${p.id} outside the machine`).toBeGreaterThan(machine.right);
-        // The one documented exemption: the ground perch by the dog stands on the dog's ground row, below the ground line (B3).
+        // The documented exemptions: the ground perch by the dog stands on the dog's ground row, and the bell frame (a Splice top, WP28b) on the
+        // bell's front-row feet; both sit below the ground line (B3).
         if (p.id === 'groundDog') expect(p.y, `${framing} ${p.id} y`).toBe(GROUND_Y + 32);
-        else expect(p.y, `${framing} ${p.id} y`).toBeLessThan(GROUND_Y);
+        else if (p.id === 'bellFrame') expect(p.y, `${framing} ${p.id} y`).toBe(GROUND_Y + 64);
+        // The bicycle seat and the sign top (WP28b FIX-C) sit on yard lanes too, so their feet may stand below the ground line.
+        else if (p.id !== 'bicycleSeat' && p.id !== 'signTop') expect(p.y, `${framing} ${p.id} y`).toBeLessThan(GROUND_Y);
         expect(p.y, `${framing} ${p.id} y`).toBeGreaterThan(GROUND_Y - 200);
       }
     }
@@ -432,7 +438,7 @@ describe('the crow perches and the hop (C3)', () => {
         if (height !== undefined) expect(p.y, `${p.id} feet`).toBe(GROUND_Y - height);
       }
     }
-    expect(CROW_PERCHES.s15?.map((p) => p.id)).toEqual(['lampTop', 'boothRoof']);
+    expect(CROW_PERCHES.s15?.map((p) => p.id)).toEqual(['lampTop', 'boothRoof', 'bicycleSeat']);
   });
 
   it('the ground perch by the dog: e1 36 px right of the dog (2400), s9 and s11 at 2924, none at s8, s8w, s10 and s15', () => {
@@ -448,5 +454,189 @@ describe('the crow perches and the hop (C3)', () => {
     expect(CROW_HOP.maxDistPx).toBeLessThanOrEqual(160);
     expect(CROW_HOP.apexMaxPx).toBeLessThanOrEqual(48);
     expect(WORLD_FRAMES.crow).toEqual(expect.arrayContaining([...CROW_HOP.flyFrames, ...CROW_HOP.landFrames]));
+  });
+
+  it('the Splice tops (WP28b, AD3 O-f): s11 has whistleTop (G-88, spliceWhistle) and bellFrame (G+64, spliceBell); s10 has none', () => {
+    const s11 = CROW_PERCHES.s11 ?? [];
+    expect(s11.find((p) => p.id === 'whistleTop')).toEqual({ id: 'whistleTop', x: 2970, y: GROUND_Y - 88, spliceTop: 'spliceWhistle' });
+    expect(s11.find((p) => p.id === 'bellFrame')).toEqual({ id: 'bellFrame', x: 3150, y: GROUND_Y + 64, spliceTop: 'spliceBell' });
+    expect(CROW_PERCHES.s10).toEqual([]);
+    expect(CROW_PERCHES.s15?.map((p) => p.id)).toEqual(['lampTop', 'boothRoof', 'bicycleSeat']);
+    for (const perches of Object.values(CROW_PERCHES)) {
+      for (const p of perches ?? []) {
+        if (p.spliceTop !== undefined) expect(TECH_IDS, p.id).toContain(p.spliceTop);
+      }
+    }
+  });
+
+  it('every pair of perches a hop could join is at most 160 px apart, its apex at most 48 px, and its arc clears the machine x-range (C3)', () => {
+    const bad: string[] = [];
+    for (const [framing, perches] of Object.entries(CROW_PERCHES) as [FramingKey, readonly CrowPerch[]][]) {
+      const machine = CROW_MACHINE_X[framing];
+      if (machine === undefined) {
+        bad.push(`${framing}: no machine x-range`);
+        continue;
+      }
+      perches.forEach((a, i) => perches.slice(i + 1).forEach((b) => {
+        const d = Math.hypot(b.x - a.x, b.y - a.y);
+        if (d > CROW_HOP.maxDistPx) return;
+        const label = `${framing} ${a.id}-${b.id}`;
+        const apex = Math.min(CROW_HOP.apexMaxPx, CROW_HOP.apexPerDist * d + CROW_HOP.apexAddPx);
+        if (apex > 48) bad.push(`${label}: apex ${apex}`);
+        if (Math.max(a.x, b.x) >= machine.left && Math.min(a.x, b.x) <= machine.right) bad.push(`${label}: arc over the machine`);
+      }));
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('the Splice tops hop as the AD3 table says: whistleTop to clockTop 80 px, to groundDog 129 px; the bell frame is out of reach of the other s11 perches', () => {
+    const s11 = CROW_PERCHES.s11 ?? [];
+    const at = (id: string): CrowPerch => {
+      const p = s11.find((q) => q.id === id);
+      if (p === undefined) throw new Error(`no s11 perch ${id}`);
+      return p;
+    };
+    const dist = (a: string, b: string): number => Math.hypot(at(b).x - at(a).x, at(b).y - at(a).y);
+    expect(dist('whistleTop', 'clockTop')).toBe(80);
+    expect(dist('whistleTop', 'groundDog')).toBeCloseTo(128.5, 1);
+    // The bell frame is reached from the kite's arm end only (era V, the Director's replacement of lampTop), not from this list.
+    for (const id of ['clockTop', 'groundDog', 'boothRoof', 'lampTop', 'whistleTop']) {
+      expect(dist(id, 'bellFrame'), id).toBeGreaterThan(CROW_HOP.maxDistPx);
+    }
+  });
+
+  it('the bicycle seat and the sign top (WP28b FIX-C, AD3 O-f): appended after the lamp top, on the right wing, each within a hop of a perch', () => {
+    expect(CROW_PERCHES.e1?.map((p) => p.id)).toEqual(['lampTop', 'boothRoof', 'clockTop', 'groundDog', 'bicycleSeat']);
+    expect(CROW_PERCHES.s9?.map((p) => p.id)).toEqual(['lampTop', 'boothRoof', 'clockTop', 'dropWire', 'groundDog', 'bicycleSeat', 'signTop']);
+    expect(CROW_PERCHES.s11?.map((p) => p.id)).toEqual(['lampTop', 'boothRoof', 'clockTop', 'groundDog', 'whistleTop', 'bellFrame', 'bicycleSeat', 'signTop']);
+    expect(CROW_PERCHES.e1?.find((p) => p.id === 'bicycleSeat')).toEqual({ id: 'bicycleSeat', x: 2483, y: GROUND_Y + 70, spliceTop: 'spliceBicycle' });
+    expect(CROW_PERCHES.s9?.find((p) => p.id === 'bicycleSeat')).toEqual({ id: 'bicycleSeat', x: 2919, y: GROUND_Y + 104, spliceTop: 'spliceBicycle' });
+    expect(CROW_PERCHES.s9?.find((p) => p.id === 'signTop')).toEqual({ id: 'signTop', x: 2972, y: GROUND_Y - 22, spliceTop: 'spliceSign' });
+    expect(CROW_PERCHES.s11?.find((p) => p.id === 'bicycleSeat')).toEqual({ id: 'bicycleSeat', x: 2955, y: GROUND_Y + 104, spliceTop: 'spliceBicycle' });
+    expect(CROW_PERCHES.s11?.find((p) => p.id === 'signTop')).toEqual({ id: 'signTop', x: 3078, y: GROUND_Y + 32, spliceTop: 'spliceSign' });
+    expect(CROW_PERCHES.s15?.find((p) => p.id === 'bicycleSeat')).toEqual({ id: 'bicycleSeat', x: 3145, y: GROUND_Y - 26, spliceTop: 'spliceBicycle' });
+    // The bicycle and the sign tops only: each names a tech, sits outside the machine x-range and has another perch within a hop.
+    const bicycleOrSign: readonly string[] = ['spliceBicycle', 'spliceSign'];
+    let tops = 0;
+    for (const [framing, perches] of Object.entries(CROW_PERCHES) as [FramingKey, readonly CrowPerch[]][]) {
+      for (const p of perches) {
+        if (p.spliceTop === undefined || !bicycleOrSign.includes(p.spliceTop)) continue;
+        tops += 1;
+        expect(TECH_IDS, `${framing} ${p.id}`).toContain(p.spliceTop);
+        expect(p.x, `${framing} ${p.id} right wing`).toBeGreaterThan(CROW_MACHINE_X[framing]?.right ?? Number.POSITIVE_INFINITY);
+        const reach = Math.min(...perches.filter((q) => q !== p).map((q) => Math.hypot(q.x - p.x, q.y - p.y)));
+        expect(reach, `${framing} ${p.id} reach`).toBeLessThanOrEqual(CROW_HOP.maxDistPx);
+      }
+    }
+    expect(tops).toBe(6);
+  });
+});
+
+// The poke bubbles (WP28b, P12, B7): the caps, the RARE chance, the line-bubble block, the state, the strings through the text lint, determinism.
+// Neither bubble counts against the era voice caps, so nothing here reads the scheduler.
+describe('poke bubbles (WP28b, P12, B7)', () => {
+  const ON = { voices: 'on', lineBubbleUp: false } as const;
+  // The words the bible bans before the finale (STORY_BIBLE §2.4, the same list textSweep's living world lint reads).
+  const BANNED_BEFORE_FINALE = /restor|prior|rewind|undo|\bheal|repair|as it was|back the way|record|hold.{0,24}run|while it runs|running|keep it|\becho|memory|\bcycle\b|wishlist|\bsteam\b|full game|trailer|tutorial/i;
+  // The text lint of textSweep.test.ts (length, no !, no three dots, the ending, US spelling, no restor) and the bible's list, for one bubble text.
+  const lint = (text: string): string[] => {
+    const bad: string[] = [];
+    if (text.length > 52) bad.push('longer than 52');
+    if (/!|\.\.\./.test(text)) bad.push('exclamation or three dots');
+    if (!/[.?…]$/.test(text)) bad.push('ending');
+    if (/restor|recognis|centre|colour|behaviour|favour/i.test(text)) bad.push('restor or spelling');
+    if (/\byou\b/i.test(text)) bad.push('you');
+    if (BANNED_BEFORE_FINALE.test(text)) bad.push('banned before the finale');
+    return bad;
+  };
+
+  it('the numbers and the strings: Noted. for the Inspector, one wordless ellipsis (U+2026) for the girl; both pass the text lint', () => {
+    expect(POKE_BUBBLE).toMatchObject({ perActorGapMs: 120000, perHourMax: 4, chance: 0.5, chanceRare: 0.25 });
+    expect(POKE_BUBBLE.inspector.text).toBe('Noted.');
+    expect(POKE_BUBBLE.girl.text).toBe('…');
+    expect(POKE_BUBBLE.girl.text.length).toBe(1);
+    expect(lint(POKE_BUBBLE.inspector.text)).toEqual([]);
+    expect(lint(POKE_BUBBLE.girl.text)).toEqual([]);
+  });
+
+  it('WORLD VOICES OFF: no bubble, whatever the draw, the time or the history', () => {
+    const s = createPokeBubbleState();
+    for (const actor of ['inspector', 'girl'] as const) {
+      for (const t of [0, 120000, 3600000]) {
+        expect(pokeBubbleDue(s, actor, t, 0, { voices: 'off', lineBubbleUp: false }), `${actor} ${t}`).toBe(false);
+      }
+    }
+  });
+
+  it('RARE uses the lower chance: a draw between 0.25 and 0.5 is due on ON and not on RARE; a draw under 0.25 is due on both', () => {
+    const s = createPokeBubbleState();
+    const due = (voices: 'on' | 'rare', u: number): boolean => pokeBubbleDue(s, 'inspector', 0, u, { voices, lineBubbleUp: false });
+    const between = (POKE_BUBBLE.chanceRare + POKE_BUBBLE.chance) / 2;
+    expect(due('on', between)).toBe(true);
+    expect(due('rare', between)).toBe(false);
+    expect(due('rare', POKE_BUBBLE.chanceRare - 0.01)).toBe(true);
+    expect(due('on', POKE_BUBBLE.chance)).toBe(false);
+  });
+
+  it('one bubble per actor per 120 s: the gap holds to 119.999 s and ends at 120 s; the other actor is not held by it', () => {
+    const s = createPokeBubbleState();
+    expect(pokeBubbleDue(s, 'girl', 0, 0, ON)).toBe(true);
+    notePokeBubble(s, 'girl', 0);
+    expect(pokeBubbleDue(s, 'girl', 119999, 0, ON)).toBe(false);
+    expect(pokeBubbleDue(s, 'girl', 120000, 0, ON)).toBe(true);
+    expect(pokeBubbleDue(s, 'inspector', 1000, 0, ON)).toBe(true);
+  });
+
+  it('4 bubbles an hour across both actors: the fifth waits until the first stamp is an hour old (a stamp exactly an hour old is out)', () => {
+    const s = createPokeBubbleState();
+    const shown: [PokeBubbleActor, number][] = [['inspector', 0], ['girl', 120000], ['inspector', 240000], ['girl', 360000]];
+    for (const [actor, t] of shown) {
+      expect(pokeBubbleDue(s, actor, t, 0, ON), `${actor} ${t}`).toBe(true);
+      notePokeBubble(s, actor, t);
+    }
+    expect(pokeBubbleDue(s, 'inspector', 480000, 0, ON)).toBe(false);
+    expect(pokeBubbleDue(s, 'girl', 3599999, 0, ON)).toBe(false);
+    expect(pokeBubbleDue(s, 'girl', 3600000, 0, ON)).toBe(true);
+    expect(pokeBubbleDue(s, 'inspector', 3600000, 0, ON)).toBe(true);
+  });
+
+  it('never while a line bubble is up, whatever the draw and the gaps', () => {
+    const s = createPokeBubbleState();
+    expect(pokeBubbleDue(s, 'inspector', 0, 0, { voices: 'on', lineBubbleUp: true })).toBe(false);
+    expect(pokeBubbleDue(s, 'girl', 0, 0, { voices: 'rare', lineBubbleUp: true })).toBe(false);
+  });
+
+  it('notePokeBubble records the actor and the time and drops the stamps an hour old; the rule never writes the state', () => {
+    expect(createPokeBubbleState()).toEqual({ lastAtMs: { inspector: -Infinity, girl: -Infinity }, hourStamps: [] });
+    const s = createPokeBubbleState();
+    notePokeBubble(s, 'inspector', 1000);
+    notePokeBubble(s, 'girl', 5000);
+    const before = JSON.stringify(s);
+    pokeBubbleDue(s, 'inspector', 10000, 0.1, ON);
+    pokeBubbleDue(s, 'girl', 10000, 0.1, { voices: 'rare', lineBubbleUp: false });
+    expect(JSON.stringify(s)).toBe(before);
+    notePokeBubble(s, 'inspector', 3601000);
+    expect(s.hourStamps).toEqual([5000, 3601000]);
+    expect(s.lastAtMs).toEqual({ inspector: 3601000, girl: 5000 });
+  });
+
+  it('deterministic: the same history and draws give the same bubbles, never more than 4 in the hour', () => {
+    const run = (): boolean[] => {
+      const s = createPokeBubbleState();
+      const out: boolean[] = [];
+      for (let i = 0; i < 400; i++) {
+        const actor: PokeBubbleActor = i % 3 === 0 ? 'girl' : 'inspector';
+        const t = i * 9000;
+        const due = pokeBubbleDue(s, actor, t, frac(i + 1), { voices: 'on', lineBubbleUp: i % 7 === 0 });
+        out.push(due);
+        if (due) notePokeBubble(s, actor, t);
+      }
+      return out;
+    };
+    const got = run();
+    expect(JSON.stringify(got)).toBe(JSON.stringify(run()));
+    expect(got.filter(Boolean).length).toBeGreaterThan(0);
+    // The run spans 3591 s, so every shown bubble falls in one hour: at most perHourMax.
+    expect(got.filter(Boolean).length).toBeLessThanOrEqual(POKE_BUBBLE.perHourMax);
   });
 });

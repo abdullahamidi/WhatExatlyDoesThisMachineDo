@@ -4,16 +4,17 @@
 // cue schedules the director runs (ventPuffAt, gustAt, the ring gap). This module measures only; the targets live in the test.
 // Imported by tests only. Pure: no Phaser, no DOM. Numbers come from src/data; the literals here are structural (indices, 0, 1, 2, the
 // era numbers, the 4-gram) or unit conversions (ms per second and minute) or the plan's measurement definitions (named below).
-import type { FramingKey, WorldPlacement } from '../../data/livingWorld';
+import type { FramingKey } from '../../data/livingWorld';
 import { WORLD_HOLE } from '../../data/livingWorld';
 import type { TechId } from '../../data/types';
 import { TIER_HEARTBEAT } from '../../data/machineTiers';
 import { WORLD_BEHAVIOUR, WORLD_REPERTOIRE, WORLD_SPOTS, WORLD_STARE_SAFE, WORLD_UNISON } from '../../data/worldBehaviour';
 import type { Activity, BehaviourActor, CueId, SpotId, UnisonClip, UnisonId } from '../../data/worldBehaviour';
 import {
-  PICK_STATS, activityLook, behaviourSeed, createBehaviourRunner, createUnisonConductor, cycleSeedOf, eligible, hash01,
+  PICK_STATS, activityLook, behaviourSeed, createBehaviourRunner, createUnisonConductor, createWalkGate, cycleSeedOf, eligible, hash01,
+  createStartGate, noteWalkFrame, walkBlockedFor,
 } from './worldBehaviour';
-import type { BehaviourCtx, BehaviourFrame, BehaviourLogEntry, BehaviourRunner } from './worldBehaviour';
+import type { BehaviourCtx, BehaviourFrame, BehaviourLogEntry, BehaviourRunner, WalkGate } from './worldBehaviour';
 import { gustAt, ventPuffAt, weatherOf } from './worldDay';
 import { actorBand, framingKey, placeCast } from './worldPlacement';
 import { deriveWorldState } from './worldState';
@@ -42,8 +43,13 @@ const HOLD_FPS = 2;
 // The unison hold action (canon hold, V4 exempt in era IV) and the parked frame (the girl at the window, nothing drawn).
 const UNISON_HOLD = 'hold';
 const PARKED = 'parked';
+// The crow's hop (C3, WP28b): a flight drawn in its own frames, like a walk (the crow turns in them), so A3 does not count it as a rest frame.
+const FLIGHT_IDS: ReadonlySet<string> = new Set(['hop', 'hopFree']);
 // Downward alpha crossings kept for the toggle count.
 const TOGGLE_KEEP = 8;
+// B1 (WP28b, r2-FX4T): the presented x extent is kept per 30 s bin, so a 90 s coverage window is three bins (a per-minute bin cannot tell a
+// walker that crosses its range in 90 s from one that sits at one end for a minute).
+export const X_BIN_MS = 30 * MS_PER_SECOND;
 
 // The smoke stage buy lists, copied as literals: scripts/smoke/lib/common.mjs:9-16 (S7, S9, S11, S13, S15) and scripts/smoke/world.mjs:38-39
 // (S8, S10). A buy is a tech id (one level per entry) or '@tech' / '@tech:n' (n levels; '@blueprint' is generatorBlueprint).
@@ -80,9 +86,9 @@ export const ERA_SPECS: readonly EraSpec[] = [
   { id: 'S15', buys: S15, observerOne: true },
 ];
 
-// The placed cast of a state: where each runner stands (home x) and its spots (world x, from WORLD_SPOTS and the placement). A null entry
+// The placed cast of a state: where each runner stands (home x) and its spots (world x and lane, from WORLD_SPOTS). A null entry
 // is off-stage (no runner). The girl's home is her ground placement (0 on the mini stage, where she has none).
-export interface ActorPlace { homeX: number; spots: readonly { id: SpotId; x: number }[] }
+export interface ActorPlace { homeX: number; spots: readonly { id: SpotId; x: number; lane: number }[] }
 export interface EraState {
   id: string; era: WorldEra; framing: FramingKey; mode: PlaybackMode; levels: Record<string, number>; stare: boolean; reverse: boolean;
   vents: boolean; holeDig: boolean; sensor: boolean; scraps: boolean; girlStage: 'window' | 'mini' | 'ground'; gusts: boolean; cycle: number;
@@ -104,7 +110,7 @@ function levelsOf(buys: readonly string[]): Record<string, number> {
 }
 
 // The era state of a spec: deriveWorldState (tiers absent, the motor retrofit at the minimum hole tier), placeCast at the framing pose,
-// and the runners' spots from WORLD_SPOTS[framing] at the placement x. The director resolves these the same way (T10).
+// and the runners' spots from WORLD_SPOTS[framing] (WP28b: absolute x and lane). The director resolves these the same way (T10).
 export function eraStateOf(spec: EraSpec): EraState {
   const levels = levelsOf(spec.buys);
   const cycle = spec.cycle ?? 1;
@@ -114,8 +120,8 @@ export function eraStateOf(spec: EraSpec): EraState {
   });
   const framing = framingKey(levels as Record<TechId, number>);
   const place = placeCast(levels as Record<TechId, number>, framing, undefined, cycle);
-  const spotsOf = (actor: 'inspector' | 'dog', p: WorldPlacement): { id: SpotId; x: number }[] =>
-    (WORLD_SPOTS[framing]?.[actor] ?? []).map((s) => ({ id: s.id, x: p.x + s.dx }));
+  const spotsOf = (actor: 'inspector' | 'dog'): ActorPlace['spots'] =>
+    (WORLD_SPOTS[framing]?.[actor] ?? []).map((s) => ({ id: s.id, x: s.x, lane: s.lane }));
   const ins = place.inspector;
   const dog = place.dog;
   const crow = place.crow;
@@ -126,8 +132,8 @@ export function eraStateOf(spec: EraSpec): EraState {
     holeDig: world.props.holeStage > 0, sensor: place.sensor7 !== null, scraps: place.scraps !== null && world.props.scraps > 0,
     girlStage, gusts: weatherOf(world.era, 0, 'none', world.vents).gusts, cycle,
     cast: {
-      inspector: ins === null ? null : { homeX: ins.x, spots: spotsOf('inspector', ins) },
-      dog: dog === null ? null : { homeX: dog.x, spots: spotsOf('dog', dog) },
+      inspector: ins === null ? null : { homeX: ins.x, spots: spotsOf('inspector') },
+      dog: dog === null ? null : { homeX: dog.x, spots: spotsOf('dog') },
       crow: crow === null ? null : { homeX: crow.x, spots: [] },
       girl: { homeX: girl?.x ?? 0, spots: [] },
     },
@@ -163,12 +169,19 @@ export interface TrackStats {
   maxBurstMs: number;        // V7: the longest animated burst (the dig: from its first to its last animated change)
   maxDownToggles: number;    // V7: the most downward luminance crossings in any toggle window
   stareRest: number;         // A3: rest frames drawn outside WORLD_STARE_SAFE (counted under the stare only)
+  maxActGapMs: number;       // B1 (WP28b): the longest time between two actions (an id change or 8 px of travel; exempt ids stop the clock)
+  xLo: Float64Array;         // B1: the lowest presented x of each 30 s bin (X_BIN_MS; +Infinity: none); a window's x-extent is its min and max
+  xHi: Float64Array;         // B1: the highest presented x of each 30 s bin (-Infinity: none)
 }
 
 // One runner's run: its activity log (real lengths, empty durations removed), its pick counts, the free activities of its pool and the
 // online stats.
 export interface LaneRun { actor: BehaviourActor; log: BehaviourLogEntry[]; picks: number; forced: number; free: number; track: TrackStats }
-export interface SimRun { state: EraState; opts: SimOptions; lanes: LaneRun[] }
+// A walk start as drawn (B1, WP28b): the step time of a walker's first walking frame, on the step grid the gate reads.
+export interface WalkStart { at: number; actor: BehaviourActor }
+export interface SimRun { state: EraState; opts: SimOptions; lanes: LaneRun[]; walkStarts: WalkStart[] }
+// The ids the B1 action gap does not count, per era (the canon holds of the plan, listed by the test with their reasons). Empty: every id counts.
+export type ActionExempt = Partial<Record<WorldEra, readonly string[]>>;
 
 // Visual class of an activity: static (derived from its look, under the state's stare), action or hold, and for a burst clip its
 // gap (two frame periods: a longer rest ends the burst) and its rest frame (a change to it is not part of the burst).
@@ -245,9 +258,18 @@ class Track {
   private stareRest = 0;
   private readonly walkMs: Float64Array;
   private readonly toggleWindowMs: number;
+  // B1 (WP28b): the action clock (ms since the last action, not run on the exempt ids), the longest one, the position of the last action,
+  // and the presented x extent of each minute.
+  private readonly actExempt: ReadonlySet<string>;
+  private actClock = 0;
+  private maxActGap = 0;
+  private actX = 0;
+  private actLane = 0;
+  private readonly xLo: Float64Array;
+  private readonly xHi: Float64Array;
 
   constructor(actor: BehaviourActor, era: WorldEra, stare: boolean, dt: number, minutes: number, cls: Map<string, Cls>,
-    toggleWindowMs: number) {
+    toggleWindowMs: number, actExempt: ReadonlySet<string>) {
     this.actor = actor;
     this.era = era;
     this.stare = stare;
@@ -255,11 +277,16 @@ class Track {
     this.cls = cls;
     this.walkMs = new Float64Array(minutes);
     this.toggleWindowMs = toggleWindowMs;
+    this.actExempt = actExempt;
+    const xBins = Math.ceil((minutes * MS_PER_MINUTE) / X_BIN_MS);
+    this.xLo = new Float64Array(xBins).fill(Infinity);
+    this.xHi = new Float64Array(xBins).fill(-Infinity);
   }
 
   observe(now: number, f: BehaviourFrame): void {
     const dt = this.dt;
     this.steps += 1;
+    const prevAct = this.act;
     if (f.activity !== this.act) {
       this.act = f.activity;
       this.curCls = this.cls.get(f.activity) ?? NO_CLS;
@@ -291,6 +318,28 @@ class Track {
     } else {
       if (this.walkRun > this.maxWalkRun) this.maxWalkRun = this.walkRun;
       this.walkRun = 0;
+    }
+    // B1 (WP28b): the action gap. An action is an id change (a reaction, a hop and a poke answer are id changes too) or the sprite at least
+    // actionMinTravelPx away from where the last action left it (a stutter or a shift moves less). An exempt id stops the clock; a parked
+    // frame is no action, so a parked roamer's gap runs on.
+    if (this.steps === 1) {
+      this.actX = f.x;
+      this.actLane = f.lane;
+    } else {
+      if (!this.actExempt.has(f.activity)) this.actClock += dt;
+      const travelled = Math.hypot(f.x - this.actX, f.lane - this.actLane) >= WORLD_BEHAVIOUR.actionMinTravelPx;
+      if (!parked && (f.activity !== prevAct || travelled)) {
+        if (this.actClock > this.maxActGap) this.maxActGap = this.actClock;
+        this.actClock = 0;
+        this.actX = f.x;
+        this.actLane = f.lane;
+      }
+    }
+    // B1: the presented x extent of the 30 s bin (walks and holds alike; a parked frame has no sprite).
+    if (!parked) {
+      const bin = Math.min(this.xLo.length - 1, Math.floor(now / X_BIN_MS));
+      this.xLo[bin] = Math.min(this.xLo[bin] ?? Infinity, f.x);
+      this.xHi[bin] = Math.max(this.xHi[bin] ?? -Infinity, f.x);
     }
     // V4: the clock of the gap between visible changes; canon holds do not run it.
     if (!parked && !exempt) this.gapAcc += dt;
@@ -333,8 +382,9 @@ class Track {
       if (count > this.maxToggles) this.maxToggles = count;
     }
     this.lumaOn = lumaOn;
-    // A3: under the stare a rest frame must be a camera-facing one (the runner draws raw frames; the renderer applies stareFrame).
-    if (this.stare && !parked && !walking && !WORLD_STARE_SAFE[this.actor].includes(f.frame)) this.stareRest += 1;
+    // A3: under the stare a rest frame must be a camera-facing one (the runner draws raw frames; the renderer applies stareFrame). A walk and
+    // a flight (the crow's hop) are the frames of the move itself, not rest frames.
+    if (this.stare && !parked && !walking && !FLIGHT_IDS.has(f.activity) && !WORLD_STARE_SAFE[this.actor].includes(f.frame)) this.stareRest += 1;
     this.frame = f.frame;
     this.x = f.x;
     this.rise = f.risePx;
@@ -344,10 +394,12 @@ class Track {
   finish(): TrackStats {
     if (this.gapAcc > this.maxGap) this.maxGap = this.gapAcc;
     if (this.walkRun > this.maxWalkRun) this.maxWalkRun = this.walkRun;
+    // The action gap still open at the end of the run counts (no action came after it).
+    const actGap = Math.max(this.maxActGap, this.actClock);
     return {
       maxGapMs: this.maxGap, maxStaticMs: this.maxStatic, maxWalkRunMs: this.maxWalkRun, maxWalkDx: this.maxWalkDx,
       maxRestDx: this.maxRestDx, walkMs: this.walkMs, minHoldIvMs: this.minHoldIv, maxActRate: this.maxActRate, maxBurstMs: this.maxBurst,
-      maxDownToggles: this.maxToggles, stareRest: this.stareRest,
+      maxDownToggles: this.maxToggles, stareRest: this.stareRest, maxActGapMs: actGap, xLo: this.xLo, xHi: this.xHi,
     };
   }
 }
@@ -369,17 +421,25 @@ function ctxOf(state: EraState, actor: BehaviourActor, beat: BehaviourCtx['beat'
   return {
     era: state.era, mode: state.mode, crankSteps: 0, reduced: false, stare: state.stare, reverse: state.reverse, vents: state.vents,
     holeDig: state.holeDig, sensor: state.sensor, scraps: state.scraps, demoHold: false, paused: false, homeX: place.homeX,
-    girlStage: state.girlStage, spots: place.spots, cues, beat,
+    girlStage: state.girlStage, spots: place.spots, cues, beat, walkBlocked: false,
+    // WP28b: the harness is the era's own walk gate (set per step by simulate); no Find, no visit; the crow's free hop is open outside era IV.
+    hopOk: state.era !== ERA_IV, findOuter: false, findInner: false, findX: null, visitSpot: null,
   };
 }
 
 // Plays one state for opts.minutes of simulated time in steps of opts.dtMs: the real runners of the cast (one conductor), the cue
 // schedules (vent puffs in era III with the vents, the ring gap from era II, gust events while the era's weather gusts, and the emitted
 // cues of the runners), the 2.4 s beats. Every runner reads the same recent-cue list; the metrics are taken online.
-export function simulate(state: EraState, opts: SimOptions): SimRun {
+export function simulate(state: EraState, opts: SimOptions, exempt: ActionExempt = {}): SimRun {
   const steps = Math.round((opts.minutes * MS_PER_MINUTE) / opts.dtMs);
   const world = worldSeedOf(opts.cycle);
   const conductor = createUnisonConductor(world);
+  // The walk gate of the cast (B1): every runner's walk starts are noted, and each runner reads the gate before its step.
+  const gate: WalkGate = createWalkGate();
+  // WP28b (r2-FX4G, V5): the start gate of the cast, read by every runner's boundary picks (each runner writes its own segment starts into it).
+  const startGate = createStartGate();
+  const exemptIds = new Set<string>(exempt[state.era] ?? []);
+  const walkStarts: WalkStart[] = [];
   const beat = { downbeat: false, index: -1 };
   const cues: { id: CueId; index: number }[] = [];
   let cueCount = 0;
@@ -394,6 +454,7 @@ export function simulate(state: EraState, opts: SimOptions): SimRun {
     const ctx = ctxOf(state, actor, beat, cues);
     const place = state.cast[actor];
     if (ctx === null || place === null) continue;
+    ctx.startGate = startGate;
     const seed = behaviourSeed(opts.cycle, actor);
     const log: BehaviourLogEntry[] = [];
     const runner = createBehaviourRunner(actor, seed, conductor, (e) => { log.push(e); });
@@ -401,7 +462,7 @@ export function simulate(state: EraState, opts: SimOptions): SimRun {
     lanes.push({
       actor, runner, ctx, log, picks: 0, forced: 0, free: freeCount(actor, state.era, state.stare, ctx),
       track: new Track(actor, state.era, state.stare, opts.dtMs, opts.minutes, classMap(actor, state.era, state.stare),
-        MS_PER_SECOND),
+        MS_PER_SECOND, exemptIds),
     });
   }
   // Timed cue chains: vent puffs (era III with the vents), rings (from era II), gusts (while the weather gusts).
@@ -444,7 +505,12 @@ export function simulate(state: EraState, opts: SimOptions): SimRun {
     for (const lane of lanes) {
       const picks0 = PICK_STATS.picks;
       const forced0 = PICK_STATS.forced;
+      lane.ctx.walkBlocked = walkBlockedFor(gate, lane.actor, now);
       const frame = lane.runner.step(opts.dtMs, lane.ctx);
+      // The first step's walks are the shifted start (the phase of the run, not a start): they are noted but not counted.
+      const rising = frame.walking && !gate.walking[lane.actor];
+      noteWalkFrame(gate, lane.actor, frame.walking, now);
+      if (rising && i > 0) walkStarts.push({ at: now, actor: lane.actor });
       lane.picks += PICK_STATS.picks - picks0;
       lane.forced += PICK_STATS.forced - forced0;
       if (frame.emitted !== null) pushCue(frame.emitted);
@@ -452,7 +518,7 @@ export function simulate(state: EraState, opts: SimOptions): SimRun {
     }
   }
   return {
-    state, opts,
+    state, opts, walkStarts,
     lanes: lanes.map((l) => ({
       actor: l.actor, log: l.log.filter((e) => e.durMs > 0), picks: l.picks, forced: l.forced, free: l.free, track: l.track.finish(),
     })),
@@ -598,9 +664,82 @@ export function maxWalkShare(walkMs: Float64Array, windowBins: number, windowMs:
   return max;
 }
 
+// B1 (WP28b): the walk share of every window of windowBins minutes, stepped by one minute (the share of the window's time spent walking).
+export function walkShares(walkMs: Float64Array, windowBins: number, windowMs: number): number[] {
+  const out: number[] = [];
+  for (let w = 0; w + windowBins <= walkMs.length; w++) {
+    let sum = 0;
+    for (let k = 0; k < windowBins; k++) sum += walkMs[w + k] ?? 0;
+    out.push(sum / windowMs);
+  }
+  return out;
+}
+
+// B1 (WP28b): the spot range of an actor in a state: the lowest and highest feet x of its roaming spots (null: none). A visit stand (v<n>) is
+// the Director's stand for a woken Splice; plain travel never walks to it, so it is not in the range the walker covers (WP28b B-T1c1).
+export interface SpotRange { min: number; max: number }
+export function spotRangeOf(state: EraState, actor: BehaviourActor): SpotRange | null {
+  const spots = (state.cast[actor]?.spots ?? []).filter((s) => !s.id.startsWith('v'));
+  if (spots.length === 0) return null;
+  return { min: Math.min(...spots.map((s) => s.x)), max: Math.max(...spots.map((s) => s.x)) };
+}
+
+// B1 (WP28b): the share of the spot range covered by the x extent of each window of widthBins minutes, stepped by one minute, within the
+// first totalBins minutes: the extent is the lowest and highest presented x of the window's minutes, clipped to the range.
+export function extentCoverages(xLo: Float64Array, xHi: Float64Array, widthBins: number, totalBins: number, range: SpotRange): number[] {
+  const out: number[] = [];
+  for (let w = 0; w + widthBins <= totalBins; w++) {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let k = w; k < w + widthBins; k++) {
+      lo = Math.min(lo, xLo[k] ?? Infinity);
+      hi = Math.max(hi, xHi[k] ?? -Infinity);
+    }
+    const covered = hi >= lo ? Math.max(0, Math.min(hi, range.max) - Math.max(lo, range.min)) : 0;
+    out.push(range.max > range.min ? covered / (range.max - range.min) : 0);
+  }
+  return out;
+}
+
+// B1 (WP28b): the pairs of drawn walk starts (SimRun.walkStarts, ascending) of two different walkers within windowMs of each other. The walk gate
+// (WORLD_BEHAVIOUR.walkStaggerMs) must keep this at 0.
+export function walkStaggerPairs(starts: readonly WalkStart[], windowMs: number): number {
+  let pairs = 0;
+  for (let i = 0; i < starts.length; i++) {
+    const si = starts[i];
+    if (si === undefined) continue;
+    for (let j = i + 1; j < starts.length; j++) {
+      const sj = starts[j];
+      if (sj === undefined || sj.at - si.at >= windowMs) break;
+      if (sj.actor !== si.actor) pairs += 1;
+    }
+  }
+  return pairs;
+}
+
 // The starts of a log (ascending) that begin after time zero: reactions and actions alike.
 export function startsOf(log: readonly BehaviourLogEntry[]): number[] {
   return log.filter((e) => e.atMs > 0).map((e) => e.atMs);
+}
+
+// B1 (WP28b, r2-FX4T, T1): the longest time between two VISIBLE actions of one actor. A visible action is a log entry whose look differs from the
+// previous entry's look, that walked, or that is a reaction; consecutive entries with the same look and no walk are one run. So an id change that
+// draws the same frames and walks nowhere (a sit that turns into a pace) is no action. An exempt id stops the clock, as in the Track's action gap.
+// The log is ascending and contiguous (each entry starts where the one before it ends). The gap still open at the end counts.
+export function visibleGapMs(log: readonly BehaviourLogEntry[], exemptIds: ReadonlySet<string>): number {
+  let clock = 0;
+  let max = 0;
+  let prev: BehaviourLogEntry | undefined;
+  for (const e of log) {
+    const visible = prev === undefined || e.reaction || e.walked || e.look.endsWith('+walk') || e.look !== prev.look;
+    if (visible) {
+      if (clock > max) max = clock;
+      clock = 0;
+    }
+    if (!exemptIds.has(e.activity)) clock += e.durMs;
+    prev = e;
+  }
+  return Math.max(max, clock);
 }
 
 // The entries that ended on their own: not cut short by a reaction (the next entry is a reaction that starts at its end), and not an

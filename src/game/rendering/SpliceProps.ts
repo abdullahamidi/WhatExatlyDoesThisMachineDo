@@ -10,14 +10,18 @@
 //     woken frame when reduced; the whole frame in the postgame (the clock's lit face hides there). beats are the ids whose wake beat is queued this
 //     frame: a record that turns woken with its id in beats is held (wake hold) on its dead frame, its loop and the clock's face off, until wake(id)
 //     runs. A hold lasts at most SPLICE_FX.wakeBeatMs + wakeHoldSlackMs from the first update after it starts. Reduced motion, the postgame and a
-//     hidden object take no hold (and drop one). The postgame portrait places an object with a postgame placement (entry.postgame) at those feet;
-//     the portrait cell holds through the finale film (AD2 R2 F20).
+//     hidden object take no hold (and drop one). The postgame portrait moves an object with a postgame placement (entry.postgame) to those feet once
+//     setKeepClock flips the KEEP side (F24); until then its portrait cell holds (AD2 R2 F20).
 //   wake(id, nowMs): ends the wake hold of one object (its beat ran) and restarts its woken loop at nowMs. Ids that are not placed objects are ignored.
 //   isHeld(id): whether the object of id is on its wake hold (the director keeps the clock's tick until then).
 //   twitch(id): a one-frame twitch of a woken own-art object (the next loop frame, or a 1 px shift); no-op for other ids, dead or held objects,
 //     reduced motion and photo mode.
+//   setKeepClock(keepS): the KEEP beat (F24, seconds since the KEEP click; Infinity after a boot into the postgame): the postgame-moved objects
+//     leave their portrait cell and stand at their postgame feet when the side flips, and their alpha follows postgameMoveAlpha.
+//   setHum(offsetPx): the era IV hum (WP28b): every woken own-art object shifts by offsetPx in x; 0 restores. Reduced motion and photo mode hold 0.
 //   update(nowMs, frozen): releases holds past their deadline; advances the woken loops at each object's fps (never above SPLICE_FX.loopFpsCap);
-//     frozen holds every frame. Returns at once while no object is animated.
+//     a once object (the vane, the kite, the cairn) plays its frames through and holds the last; frozen holds every frame. Returns at once while no
+//     object is animated.
 //   boxes(out): number. Writes the visible objects into out (top-left x, y and w, h in world px, feet-anchored from bboxArt). Returns the count;
 //     entries past the count are stale.
 //   rows(out): number. One SpliceDebugRow per Splice id (16, TECH_IDS order); state, line and pulses come from setDebugSource (default: woken or
@@ -32,7 +36,8 @@ import type { SpliceFrames, SpliceObjectId, SplicePlacement, SpliceWorldEntry } 
 import { TECHNOLOGIES } from '../../data/technologies';
 import { TECH_IDS } from '../../data/types';
 import type { TechId } from '../../data/types';
-import { hasOwnArt, placementFeetY, spliceBoxWorld } from '../math/spliceWorld';
+import { YARD_DEPTH_STEP } from '../../data/worldShared';
+import { hasOwnArt, placementFeetY, postgameMoveAlpha, postgameMoveAt, spliceBoxWorld } from '../math/spliceWorld';
 import type { SpliceState } from '../math/spliceWorld';
 import { sortWorldRows } from './worldRows';
 import type { WorldRows } from './worldRows';
@@ -55,23 +60,29 @@ export interface SpliceDebugSource {
   pulseCount(id: TechId): number;
 }
 
-// The front row's child depth per yard lane px (AD1 hand-off: the yard depth is DEPTH.machine + 3 + 0.01 x lane, and the front row
-// carries DEPTH.machine + 3). The clock's lit face sits above the clock sprite and under its hands (the hands sit at 0.01).
-const YARD_DEPTH = 0.01;
+// The clock's lit face and the hosted objects (the chimes, the kite, the vane, the coin flap) sit over their host prop's sprite.
 const CLOCK_LIT_DEPTH = 0.005;
-// The Splice ids of TECH_IDS in table order (the debug rows).
-const SPLICE_IDS: readonly TechId[] = TECH_IDS.filter((id) => id.startsWith('splice'));
 // setStates' default: no beats queued.
 const NO_BEATS: readonly TechId[] = [];
+// The sprite offset of an object without one (no hosting, no clock face).
+const NO_OFFSET = { x: 0, y: 0 } as const;
+// The Splice ids of TECH_IDS in table order (the debug rows).
+const SPLICE_IDS: readonly TechId[] = TECH_IDS.filter((id) => id.startsWith('splice'));
 
 // One placed object. frames is null for the payphone and the clock's lit overlay (their look is an existing prop); the overlay is the record
-// with a sprite and no frames. box is the world box (top-left, size), feetX / feetY the placed feet.
+// with a sprite and no frames. box is the world box (top-left, size), feetX / feetY the placed feet. offset moves the sprite off its feet
+// (the clock's face, a hosted object's offsetWorld); lift is the depth above the row (the hosted and lit records draw over their host).
+// drawX / drawY and alpha are the last values written to the sprite.
 interface ObjectRecord {
   readonly id: TechId;
   readonly entry: SpliceWorldEntry;
   readonly frames: SpliceFrames | null;
   readonly sprite: Phaser.GameObjects.Sprite | null;
-  readonly offset: { x: number; y: number };
+  readonly offset: { readonly x: number; readonly y: number };
+  readonly lift: number;
+  drawX: number;
+  drawY: number;
+  alpha: number;
   placed: boolean;
   visible: boolean;
   woken: boolean;
@@ -109,6 +120,8 @@ export class SpliceProps {
   private era = 0;
   private reduced = false;
   private frozen = false;
+  private hum = 0; // the era IV hum offset in x (world px) of the woken own-art objects (setHum)
+  private keepSide: 'portrait' | 'postgame' = 'portrait'; // the KEEP beat's side of the postgame-moved objects (setKeepClock)
   private animated = 0; // the objects with a loop that is visible, woken and not held (update() returns at once while there are none)
   private held = 0; // the objects on a wake hold (update() scans the records for their deadlines only while this is above 0)
   private source: SpliceDebugSource | null = null;
@@ -123,10 +136,13 @@ export class SpliceProps {
       const lit = hasOwnArt(entry) ? undefined : entry.clockLit;
       const sheet = hasOwnArt(entry) ? entry.sheet : lit?.sheet;
       const cell = frames !== null ? frames.dead : (lit?.cell ?? -1);
+      // The clock's face and a hosted object (offsetWorld) are offset from their feet; the other sprites stand on them.
+      const offset = hasOwnArt(entry) ? entry.offsetWorld : lit?.offsetWorld;
       const sprite = sheet === undefined ? null : scene.add.sprite(0, 0, SPLICE_SHEETS[sheet].assetId, cell).setOrigin(0.5, 1).setScale(PIXEL_SCALE).setVisible(false);
       if (sprite !== null) rows.front.add(sprite);
       this.records.push({
-        id, entry, frames, sprite, offset: lit?.offsetWorld ?? { x: 0, y: 0 }, placed: false, visible: false, woken: false, feetX: 0, feetY: 0,
+        id, entry, frames, sprite, offset: offset ?? NO_OFFSET, lift: frames === null || offset !== undefined ? CLOCK_LIT_DEPTH : 0,
+        drawX: 0, drawY: 0, alpha: 1, placed: false, visible: false, woken: false, feetX: 0, feetY: 0,
         boxX: 0, boxY: 0, boxW: 0, boxH: 0, role: '', cell, loopStartMs: NaN, twitch: false, shift: 0,
         pending: false, holdUntilMs: NaN,
       });
@@ -189,6 +205,37 @@ export class SpliceProps {
     if (r !== undefined && r.frames !== null && r.role === 'woken' && !this.reduced && !this.frozen) r.twitch = true;
   }
 
+  /** The KEEP IT RUNNING beat (WP28b F24; see the header). The side and the alpha come from the pure rule (postgameMoveAt, postgameMoveAlpha);
+   * a flip re-places the postgame-moved records (a postgame placement only counts in the postgame portrait), and the alpha is written when it
+   * changes. Allocates nothing. */
+  setKeepClock(keepS: number): void {
+    const side = postgameMoveAt(keepS, this.reduced);
+    const alpha = postgameMoveAlpha(keepS, this.reduced);
+    const flipped = side !== this.keepSide;
+    this.keepSide = side;
+    for (const r of this.records) {
+      if (r.entry.postgame === undefined) continue;
+      if (flipped) this.place(r, this.placementOf(r), this.era);
+      if (r.alpha !== alpha) {
+        r.alpha = alpha;
+        r.sprite?.setAlpha(alpha);
+      }
+    }
+    if (flipped) {
+      sortWorldRows(this.worldRows);
+      this.recount();
+    }
+  }
+
+  /** The era IV hum (WP28b, D6 c IV): every woken own-art object shifts by offsetPx in x. 0 restores the feet; reduced motion and photo mode
+   * hold 0 (no hum is written). Writes only when the offset changes. */
+  setHum(offsetPx: number): void {
+    const want = this.reduced || this.frozen || !Number.isFinite(offsetPx) ? 0 : offsetPx;
+    if (want === this.hum) return;
+    this.hum = want;
+    for (const r of this.records) this.aim(r);
+  }
+
   /** Advances the woken loops. Frozen (photo mode), postgame and reduced motion hold the frames; with no animated object it returns at once.
    * Allocates nothing per frame. */
   update(nowMs: number, frozen: boolean): void {
@@ -206,12 +253,14 @@ export class SpliceProps {
       const n = f.woken.length;
       const twitch = r.twitch;
       r.twitch = false;
-      const cell = f.woken[(step + (twitch ? 1 : 0)) % n];
+      const tw = twitch ? 1 : 0;
+      // A once object plays its frames through and holds the last (the vane, the kite, the cairn); a loop wraps.
+      const cell = f.once === true ? f.woken[Math.min(step + tw, n - 1)] : f.woken[(step + tw) % n];
       if (cell !== undefined) setCell(r, s, cell);
       const shift = twitch && n === 1 ? PIXEL_SCALE : 0;
       if (shift !== r.shift) {
         r.shift = shift;
-        s.setPosition(r.feetX + r.offset.x + shift, r.feetY + r.offset.y);
+        this.aim(r);
       }
     }
   }
@@ -276,11 +325,25 @@ export class SpliceProps {
     return this.records.find((r) => r.id === id);
   }
 
-  // The placement of a record at the framing setFraming gave (null: none). The postgame portrait takes the object's postgame feet (AD2 R2 F20).
+  // The placement of a record at the framing setFraming gave (null: none). The postgame portrait takes the object's postgame feet once the KEEP
+  // beat has flipped its side (F24); before that the object stands on its portrait cell.
   private placementOf(r: ObjectRecord): SplicePlacement | null {
     if (this.framing === null) return null;
-    if (this.postgame && this.framing === 'portrait' && r.entry.postgame !== undefined) return r.entry.postgame;
+    if (this.postgame && this.framing === 'portrait' && this.keepSide === 'postgame' && r.entry.postgame !== undefined) return r.entry.postgame;
     return r.entry.placements[this.framing] ?? null;
+  }
+
+  // Sets the sprite's position: the feet, the offset, the twitch shift and, for a woken own-art object, the hum. Writes only a moved position.
+  private aim(r: ObjectRecord): void {
+    const s = r.sprite;
+    if (s === null) return;
+    const hum = r.frames !== null && r.woken && !r.pending && r.visible ? this.hum : 0;
+    const x = r.feetX + r.offset.x + r.shift + hum;
+    const y = r.feetY + r.offset.y;
+    if (x === r.drawX && y === r.drawY) return;
+    r.drawX = x;
+    r.drawY = y;
+    s.setPosition(x, y);
   }
 
   // Counts the animated objects (visible, woken, not held, with a loop): update() has nothing to do while there are none.
@@ -315,7 +378,7 @@ export class SpliceProps {
   }
 
   // Places one object at its placement (null hides it). The sprite moves to the row of its lane, at the lane's yard depth (0 in the
-  // back row); the clock's overlay adds CLOCK_LIT_DEPTH. Then the frame is painted.
+  // back row); the clock's overlay and the hosted objects add their lift (CLOCK_LIT_DEPTH). Then the frame is painted.
   private place(r: ObjectRecord, placement: SplicePlacement | null, era: number): void {
     r.placed = placement !== null;
     r.visible = placement !== null && era >= TECHNOLOGIES[r.id].era;
@@ -332,9 +395,10 @@ export class SpliceProps {
       const back = placement.lane === 'back';
       const row = back ? this.worldRows.back : this.worldRows.front;
       if (s.parentContainer !== row) row.add(s);
-      s.setPosition(r.feetX + r.offset.x, r.feetY + r.offset.y);
       r.shift = 0;
-      s.setDepth((back ? 0 : YARD_DEPTH * placement.lane) + (r.frames === null ? CLOCK_LIT_DEPTH : 0));
+      this.aim(r);
+      // The front row's child depth per yard lane px (AD1 hand-off: DEPTH.machine + 3 + YARD_DEPTH_STEP x lane; the front row carries DEPTH.machine + 3).
+      s.setDepth((back ? 0 : YARD_DEPTH_STEP * placement.lane) + r.lift);
     }
     this.paint(r);
   }
@@ -353,6 +417,7 @@ export class SpliceProps {
     }
     show(s, r.visible);
     if (!r.visible) return;
+    this.aim(r);
     if (r.role === 'whole') setCell(r, s, f.whole);
     else if (r.role === 'dead') setCell(r, s, f.dead);
     else if (this.reduced || prev !== 'woken') setCell(r, s, f.woken[0] ?? f.dead);

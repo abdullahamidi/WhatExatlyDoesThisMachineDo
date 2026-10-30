@@ -209,6 +209,9 @@ export class WorldScene extends Phaser.Scene {
             reducedMotion: () => this.ctx.session.settings.reducedMotion,
             tooltipRoot: worldRoot,
             feedback: this.ctx.feedback,
+            // WP28b (D6 b): the lit cable points for the pylon pulses and the dust frequency for the base dust (WorldReach's optional ports).
+            pylonPoints: (feed, out) => this.pylonLines[feed]?.cablePoints(out) ?? 0,
+            setDustFrequency: (ms) => this.dust?.setFrequencyMs(ms),
           });
         })
         .catch((err: unknown) => console.error('[finds] reach failed to load', err));

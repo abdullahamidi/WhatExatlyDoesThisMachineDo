@@ -1,15 +1,18 @@
 // Living world behaviour scheduler (WP24 T3a): the pick rule that decides what each denizen does next (WP24 C2, Revision 2 rules 1-5).
 // At every activity end pickNext filters the free activities (cooldown, no walk right after a walk, reachable travel, a static activity
 // needs room in its static run), weighs them (weight, the follow multiplier of the current id, the recency damp for the id two picks
-// back), chooses by hash (choice 2k+1, hold 2k+2), merges a repeatable or extends a hold clip past its cap, and falls back (extend,
-// least recently used, restart). Travel picks a spot by id and gives the walk its time: ceil(|dx| / 8) drawn frames.
+// back), chooses by hash (choice 2k+1, hold 2k+2), and falls back. The girl merges a repeatable id or extends a hold clip past its cap;
+// the roamers never start their current id again (WP28b) and fall back to a micro activity, the least recently used id, or a restart.
+// Travel picks a spot by id and gives the walk its time: ceil(d / 8) drawn frames, d the Euclidean walk length (WP28b: the lane counts).
+// The walker's position is a point (x, lane): a spot, or a point cut short by halt (mem.at, WP28b); plain travel never walks to a v spot.
 // Why: the cast looks alive without loops, and the same seed and inputs replay the same sequence (boundaries are analytic, so the
 // clock step does not change it). activityLook is the rendered view of the same clips, so the variety metrics read what is drawn.
 // Pure: no Phaser, no DOM. Every number lives in src/data/worldBehaviour.ts; the only literals here are structural.
 // The runner (T3b timed path, T3c cues, crank, era change, era IV) and the unison conductor (T3c) are at the end of this file.
 // Exports for the runner: Look, Seg, Memory, PickEnv, StartOpts, newMemory, eligible, condHolds, pickNext, startSeg, visibleChangeMs,
 //   capOf, holdClip, hash01, restFlip, cycleSeedOf, walkFrameOf, frameHoldIndex (the reference of the cached HoldWalk), newHoldWalk,
-//   frameHoldWalk.
+//   frameHoldWalk. WP28b: findSidesOf (the Find sides of an actor), findOuterOf (its outer test, no allocation) and visitFor (the stand of a
+//   woken Splice) for the Director.
 // startSeg(mem, def, env, nowMs, { react, holdMs, look }) starts any activity outside a pick (a reaction, a unison action with its own
 // clip look and a fixed hold, the debug pin) and consumes one draw index, exactly as a pick does. The caller passes the segment it
 // ends as `cur` to pickNext; startSeg closes the last started segment itself (cooldown and last use at nowMs).
@@ -19,25 +22,43 @@ import type { PlaybackMode } from './worldPlayback';
 import type { WorldEra } from './worldState';
 import { MACHINE_ANCHOR } from '../../data/world';
 import { WORLD_PLAYBACK } from '../../data/livingWorld';
+import type { FramingKey } from '../../data/livingWorld';
+import type { EraNumber } from '../../data/eras';
+import type { TechId } from '../../data/types';
 import { TIER_HEARTBEAT } from '../../data/machineTiers';
 import { WORLD_ERA_ENV } from '../../data/worldEras';
 import {
-  WORLD_BEHAVIOUR, WORLD_REACT, WORLD_REPERTOIRE, WORLD_STARE_SAFE, WORLD_UNISON, WORLD_WALK,
+  WORLD_BEHAVIOUR, WORLD_REACT, WORLD_REPERTOIRE, WORLD_STARE_SAFE, WORLD_UNISON, WORLD_VISITS, WORLD_WALK,
 } from '../../data/worldBehaviour';
 import type {
   Activity, BehaviourActor, BehaviourCond, Clip, CueId, SpotId, UnisonAction, UnisonClip, UnisonId,
 } from '../../data/worldBehaviour';
 
 // Contracts of the runner and the unison conductor (WP24 C2).
+// A spot as the scheduler reads it: its id, its feet x and its lane (feet y = GROUND_Y + lane; WP28b: lane is optional, 0 when absent).
+export interface SpotLike { id: SpotId; x: number; lane?: number }
 export interface BehaviourCtx {
   era: WorldEra; mode: PlaybackMode; crankSteps: number; reduced: boolean; stare: boolean; reverse: boolean;
   vents: boolean; holeDig: boolean; sensor: boolean; scraps: boolean; demoHold: boolean; paused: boolean; homeX: number;
-  girlStage: 'window' | 'mini' | 'ground'; spots: readonly { id: SpotId; x: number }[];
-  cues: readonly { id: CueId; index: number }[]; beat: { downbeat: boolean; index: number }; settle?: boolean;
+  girlStage: 'window' | 'mini' | 'ground'; spots: readonly SpotLike[];
+  // delayMs (WP28b) gives a cue's reaction delay per actor (else the cue's band draws it).
+  cues: readonly { id: CueId; index: number; delayMs?: Partial<Record<BehaviourActor, number>> }[];
+  beat: { downbeat: boolean; index: number }; settle?: boolean;
+  // WP28b: the walk gate says another walker started a walk within walkStaggerMs; travel activities are dropped while it is set.
+  walkBlocked: boolean;
+  // WP28b: hopOk lets the crow start its free hop (the Director, never in era IV). findOuter / findInner: a Find lies on this actor's outer or
+  // inner side of MACHINE_ANCHOR.x; findX is its world x (null: none). visitSpot is the id of the woken Splice this actor visits (null: none).
+  hopOk: boolean; findOuter: boolean; findInner: boolean; findX: number | null; visitSpot: SpotId | null;
+  // WP28b (r2-FX4G): the cast's start gate (createStartGate); absent: no pick is held for another denizen's start.
+  startGate?: StartGate;
+  // WP28b (r2-FX4G, V5 fix): added to this runner's own clock to give a time on the cast's shared clock (only the start gate reads it). Absent: 0.
+  clockOffsetMs?: number;
 }
 export interface BehaviourFrame {
   activity: string; step: number; frame: string; flip: boolean; x: number; walking: boolean;
   poseSet: 'base' | 'umbrella'; risePx: number; alpha: number; emitted: CueId | null;
+  // WP28b: the feet lane of the drawn frame (the spot's lane at rest; interpolated along a walk).
+  lane: number;
 }
 export interface BehaviourLogEntry { activity: string; atMs: number; durMs: number; walked: boolean; reaction: boolean; look: string }
 export interface BehaviourRunner {
@@ -46,7 +67,12 @@ export interface BehaviourRunner {
   // WP28a T15a: after delayMs of runner time a walk in progress first arrives, then the current segment ends and `activity` starts as a
   // reaction. False when the id is not eligible for the actor in this era, or the runner is joined to the unison conductor (era IV).
   interrupt(activity: string, delayMs: number): boolean;
+  // WP28b: cuts a walk in progress with more than haltMinLeftMs left at the point of its last drawn tick; the hold starts there. True when it
+  // cut. No effect in era IV or while joined to the conductor. Callers: the Director's poke answer.
+  halt(): boolean;
   snapshot(): { activity: string; sinceMs: number; k: number; x: number; walking: boolean; look: string; clockMs: number };
+  // WP28b (r2-FX4G, V5 fix): the runner's clock alone (snapshot builds an object; the Director reads this every step).
+  clockMs(): number;
 }
 export interface UnisonConductor {
   step(beat: { downbeat: boolean; index: number }, post: boolean): void;
@@ -56,21 +82,28 @@ export interface UnisonConductor {
 // What an activity draws after the stare map. key = the sorted shown frames plus the tags (+dx, +rise, +pulse, +a<alpha>, +fa);
 // first / last = the first and last frame of the clip; static = one shown frame and no tag (its static run counts from the last change).
 export interface Look { key: string; first: string; last: string; static: boolean }
-// One scheduled segment: an optional walk from fromX to toX (toSpot), then the hold. endMs = startMs + walkMs + holdMs.
+// One scheduled segment: an optional walk from (fromX, fromLane) to (toX, toLane) (toSpot), then the hold. endMs = startMs + walkMs + holdMs.
 // runStartMs = the start of the static run it belongs to (the hold start after a walk, or the earlier run it continues).
 export interface Seg {
   id: string; def: Activity; startMs: number; walkMs: number; holdMs: number; endMs: number; react: boolean; look: Look;
-  runStartMs: number; fromX: number; toX: number; toSpot: number;
+  runStartMs: number; fromX: number; toX: number; toSpot: number; fromLane: number; toLane: number;
 }
+// A point of the stage (feet x and lane). WP28b: the walker stands on a spot, or on a point a halt cut its walk at (Memory.at).
+export interface StagePoint { x: number; lane: number }
 // The scheduler memory of one runner: the seed, the next draw index k, the spot index and the one before it, the last end and last
-// use time of each id (cooldowns, least recently used), the last two started ids (the recency damp) and the static run of the last
-// started segment (run: null before the first start).
+// use time of each id (cooldowns, least recently used), the last two started ids (the recency damp), the static run of the last
+// started segment (run: null before the first start) and the point the walker stands on when that is not a spot (at: null = the spot).
 export interface Memory {
   seed: number; k: number; spot: number; prevSpot: number; lastEndMs: Map<string, number>; lastUseMs: Map<string, number>;
-  hist: string[]; run: { static: boolean; last: string; runStartMs: number } | null;
+  hist: string[]; run: { static: boolean; last: string; runStartMs: number } | null; at: StagePoint | null;
+  // WP28b (r2-FX4T): the time the walker last reached each spot id (absent: never). A travel picks the spot reached longest ago.
+  seen: Map<string, number>;
 }
-// What a pick needs from its runner: the actor (looks), the era (caps), the stare (looks), the spots (world x) and the fps of the walk.
-export interface PickEnv { actor: BehaviourActor; era: WorldEra; stare: boolean; spots: readonly { id: SpotId; x: number }[]; fps: number }
+// What a pick needs from its runner: the actor (looks), the era (caps), the stare (looks), the spots (world x, lane) and the fps of the walk.
+// WP28b: visitSpot and findX are the runner's ctx values (the visit and find travel kinds read them).
+export interface PickEnv {
+  actor: BehaviourActor; era: WorldEra; stare: boolean; spots: readonly SpotLike[]; fps: number; visitSpot: SpotId | null; findX: number | null;
+}
 // Optional fixed hold (a reaction or a unison action), a pre-built look (a unison clip), and whether the start is a reaction.
 export interface StartOpts { react?: boolean; holdMs?: number; look?: Look }
 
@@ -169,6 +202,10 @@ export function condHolds(cond: BehaviourCond, ctx: BehaviourCtx): boolean {
     case 'stareOff': return !ctx.stare;
     case 'notReduced': return !ctx.reduced;
     case 'notDemoHold': return !ctx.demoHold;
+    case 'hopOk': return ctx.hopOk;
+    case 'findOuter': return ctx.findOuter;
+    case 'findInner': return ctx.findInner;
+    case 'visits': return ctx.visitSpot !== null;
   }
 }
 
@@ -193,7 +230,9 @@ export function eligible(actor: BehaviourActor, era: WorldEra, ctx: BehaviourCtx
 
 // A fresh memory: draw index k0, the home spot index (the runner's spot before the first pick), no history.
 export function newMemory(seed: number, k0: number, homeSpot = 0): Memory {
-  return { seed, k: k0, spot: homeSpot, prevSpot: -1, lastEndMs: new Map(), lastUseMs: new Map(), hist: [], run: null };
+  return {
+    seed, k: k0, spot: homeSpot, prevSpot: -1, lastEndMs: new Map(), lastUseMs: new Map(), hist: [], run: null, at: null, seen: new Map(),
+  };
 }
 
 // A hold drawn inside [lo, hi] by the hash r in [0, 1).
@@ -216,11 +255,30 @@ function pickWeighted<T>(entries: readonly Weighted<T>[], u01: number): T | unde
   return undefined;
 }
 
-// The spot indices another spot at least minTravelPx away from fromX (not the current spot).
-function awayFrom(mem: Memory, env: PickEnv, fromX: number): number[] {
+// WP28b: a visit spot (v<n>) is for the Director's visits only: plain travel, the leave and the walk-first never walk to one.
+function isVisitSpot(id: SpotId): boolean {
+  return id.startsWith('v');
+}
+// The feet lane of a spot (0 when it has none).
+function laneOf(s: { lane?: number }): number {
+  return s.lane ?? 0;
+}
+// Euclidean length of a walk over (dx, dLane) world px; a level walk keeps its exact |dx|.
+function distOf(dx: number, dLane: number): number {
+  return dLane === 0 ? Math.abs(dx) : Math.hypot(dx, dLane);
+}
+// The point the walker stands on: the point a halt cut its walk at (mem.at), else its spot; undefined when the spot is missing.
+function posOf(mem: Memory, env: PickEnv): StagePoint | undefined {
+  if (mem.at !== null) return mem.at;
+  const s = env.spots[mem.spot];
+  return s === undefined ? undefined : { x: s.x, lane: laneOf(s) };
+}
+
+// The spot indices another spot at least minTravelPx away from `from` (Euclidean, lane included), not the current spot or a visit spot.
+function awayFrom(mem: Memory, env: PickEnv, from: StagePoint): number[] {
   const out: number[] = [];
   env.spots.forEach((s, i) => {
-    if (i !== mem.spot && Math.abs(s.x - fromX) >= WORLD_WALK.minTravelPx) out.push(i);
+    if (i !== mem.spot && !isVisitSpot(s.id) && distOf(s.x - from.x, laneOf(s) - from.lane) >= WORLD_WALK.minTravelPx) out.push(i);
   });
   return out;
 }
@@ -228,14 +286,14 @@ function awayFrom(mem: Memory, env: PickEnv, fromX: number): number[] {
 // The outer spot of a poke leave (WP28a T15a, A13 [R1]): among the spots other than the current one, on the actor's own side of the machine
 // anchor (left when the actor stands left of MACHINE_ANCHOR.x), the one farthest from the anchor (the first one on a tie). It is listed only
 // when it is farther from the anchor than the actor's current x, so a walk never goes toward the machine; empty otherwise (the leave then
-// starts in place).
-function outerFrom(mem: Memory, env: PickEnv, fromX: number): number[] {
+// starts in place). The distances stay in x (WP28b): the yard lanes never make a spot outer.
+function outerFrom(mem: Memory, env: PickEnv, from: StagePoint): number[] {
   const anchor = MACHINE_ANCHOR.x;
-  const left = fromX < anchor;
+  const left = from.x < anchor;
   let best = -1;
-  let bestDist = Math.abs(fromX - anchor);
+  let bestDist = Math.abs(from.x - anchor);
   env.spots.forEach((s, i) => {
-    if (i === mem.spot || (s.x < anchor) !== left) return;
+    if (i === mem.spot || isVisitSpot(s.id) || (s.x < anchor) !== left) return;
     const d = Math.abs(s.x - anchor);
     if (d > bestDist) {
       best = i;
@@ -245,20 +303,68 @@ function outerFrom(mem: Memory, env: PickEnv, fromX: number): number[] {
   return best < 0 ? [] : [best];
 }
 
-// The spot indices a travel can end on from the current spot (empty: unreachable). A travel to the spot it stands on is listed (no walk).
+// WP28b 'inner' (the era front and head): the spot on the walker's side nearest the anchor, other than the current spot and the visit spots;
+// listed only when it is nearer the anchor than the walker, so a walk never goes toward the machine past a spot. None: the reaction starts in place.
+function innerFrom(mem: Memory, env: PickEnv, from: StagePoint): number[] {
+  const anchor = MACHINE_ANCHOR.x;
+  const left = from.x < anchor;
+  let best = -1;
+  let bestDist = Infinity;
+  env.spots.forEach((s, i) => {
+    if (i === mem.spot || isVisitSpot(s.id) || (s.x < anchor) !== left) return;
+    const d = Math.abs(s.x - anchor);
+    if (d < bestDist) {
+      best = i;
+      bestDist = d;
+    }
+  });
+  return best >= 0 && bestDist < Math.abs(from.x - anchor) ? [best] : [];
+}
+// WP28b 'visit' (a woken Splice, C-c): the spot the Director named (ctx.visitSpot), unless it is absent or the walker stands on it.
+function visitFrom(mem: Memory, env: PickEnv): number[] {
+  if (env.visitSpot === null) return [];
+  const i = env.spots.findIndex((s) => s.id === env.visitSpot);
+  return i < 0 || i === mem.spot ? [] : [i];
+}
+// WP28b 'find' (a Find on the actor's outer side, C1): the spot on the walker's side farther from the anchor than the walker, nearest the Find's
+// x, whose walk fits WORLD_WALK.maxWalkMs at the mode's fps. None (no Find, no such spot): the reaction starts in place.
+function findFrom(mem: Memory, env: PickEnv, from: StagePoint): number[] {
+  const findX = env.findX;
+  if (findX === null) return [];
+  const anchor = MACHINE_ANCHOR.x;
+  const left = from.x < anchor;
+  const here = Math.abs(from.x - anchor);
+  let best = -1;
+  let bestDist = Infinity;
+  env.spots.forEach((s, i) => {
+    if (i === mem.spot || isVisitSpot(s.id) || (s.x < anchor) !== left || Math.abs(s.x - anchor) <= here) return;
+    if ((walkTicksOf(s.x - from.x, laneOf(s) - from.lane) * 1000) / env.fps > WORLD_WALK.maxWalkMs) return;
+    const d = Math.abs(s.x - findX);
+    if (d < bestDist) {
+      best = i;
+      bestDist = d;
+    }
+  });
+  return best < 0 ? [] : [best];
+}
+
+// The spot indices a travel can end on from the walker's point (empty: unreachable). A travel to the spot it stands on is listed (no walk).
 function targetsOf(mem: Memory, travel: NonNullable<Activity['travel']>, env: PickEnv): number[] {
   const spots = env.spots;
-  const here = spots[mem.spot];
+  const here = posOf(mem, env);
   if (here === undefined) return [];
   const byId = (id: SpotId): number[] => {
     const i = spots.findIndex((s) => s.id === id);
     return i < 0 ? [] : [i];
   };
   switch (travel) {
-    case 'spot': return awayFrom(mem, env, here.x);
-    case 'notStake': return awayFrom(mem, env, here.x).filter((i) => spots[i]?.id !== 'stake');
-    case 'outer': return outerFrom(mem, env, here.x);
-    case 'stake': return here.id === 'stake' ? [] : byId('stake');
+    case 'spot': return awayFrom(mem, env, here);
+    case 'notStake': return awayFrom(mem, env, here).filter((i) => spots[i]?.id !== 'stake');
+    case 'outer': return outerFrom(mem, env, here);
+    case 'inner': return innerFrom(mem, env, here);
+    case 'visit': return visitFrom(mem, env);
+    case 'find': return findFrom(mem, env, here);
+    case 'stake': return mem.at === null && spots[mem.spot]?.id === 'stake' ? [] : byId('stake');
     case 'sensor':
     case 'scrap':
     case 'home': return byId(travel);
@@ -330,14 +436,23 @@ function extendSeg(mem: Memory, seg: Seg, def: Activity, k: number, capMs: numbe
   return { ...seg, holdMs: seg.holdMs + ext, endMs: seg.endMs + ext };
 }
 
-// Rule 4: nothing is a candidate. Extend the current hold when it is a hold clip below its cap; else the least recently used free id
-// that passes rule 1; else the least recently used reachable free id; else restart the current activity (a pool that cannot extend).
-function fallback(mem: Memory, cur: Seg | null, free: readonly Activity[], env: PickEnv, nowMs: number, k: number): Seg {
-  if (cur !== null && !cur.react && holdClip(cur.def, cur.look)) {
+// Rule 4: nothing is a candidate. The girl extends the current hold when it is a hold clip below its cap. A roamer (WP28b) starts a micro
+// activity of the pool that passes rule 1 (the hash draws one), so a rest pose never runs on. Then the least recently used free id that
+// passes rule 1; else the least recently used reachable free id; else restart the current activity (a pool that cannot extend).
+function fallback(mem: Memory, cur: Seg | null, free: readonly Activity[], micro: readonly Activity[], env: PickEnv, nowMs: number,
+  k: number): Seg {
+  if (env.actor === 'girl' && cur !== null && !cur.react && holdClip(cur.def, cur.look)) {
     const capMs = capOf(cur.def, cur.look, env.era) - runOffsetOf(cur);
     if (cur.holdMs + cur.def.holdMs[0] <= capMs) return extendSeg(mem, cur, cur.def, k, capMs);
   }
   const others = free.filter((a) => cur === null || a.id !== cur.id);
+  if (env.actor !== 'girl') {
+    const micros = micro.filter((a) => (cur === null || a.id !== cur.id) && offCooldown(mem, a, nowMs) && passes(mem, a, cur, env, true));
+    if (micros.length > 0) {
+      const pick = micros[Math.floor(hash01(mem.seed + WORLD_BEHAVIOUR.salts.merge + 1, k) * micros.length)];
+      if (pick !== undefined) return startWith(mem, pick, env, nowMs, k, {});
+    }
+  }
   const next = leastRecentlyUsed(mem, others.filter((a) => passes(mem, a, cur, env, true)))
     ?? leastRecentlyUsed(mem, others.filter((a) => passes(mem, a, cur, env, false)));
   if (next !== undefined) return startWith(mem, next, env, nowMs, k, {});
@@ -345,9 +460,20 @@ function fallback(mem: Memory, cur: Seg | null, free: readonly Activity[], env: 
   return startWith(mem, cur.def, env, nowMs, k, {});
 }
 
+// WP28b (r2-FX4T, B1 coverage): among the candidate spots of a travel, the one reached longest ago (a spot never reached first). The previous
+// spot damping and the hash break the ties, so a walker that stands at one end of its range crosses it within a few walks (a 90 s window covers it).
+function leastSeenPick(mem: Memory, env: PickEnv, moving: readonly number[], k: number): number | undefined {
+  const seenAt = (i: number): number => mem.seen.get(env.spots[i]?.id ?? '') ?? -Infinity;
+  let oldest = Infinity;
+  for (const i of moving) oldest = Math.min(oldest, seenAt(i));
+  const tied = moving.filter((i) => seenAt(i) === oldest);
+  return pickWeighted(tied.map((i) => ({ item: i, w: i === mem.prevSpot ? WORLD_WALK.prevSpotWeight : 1 })),
+    hash01(mem.seed + WORLD_BEHAVIOUR.salts.spot, k));
+}
+
 // Starts def at nowMs with draw index k. Closes the last started segment (its cooldown and last use end at nowMs), picks a travel spot
-// (rule 5: the previous spot damped, by hash), draws the hold (rule 3) with a static continuation clipped to the run's room, and
-// records the static run in the memory.
+// (leastSeenPick, WP28b: the spot reached longest ago; the previous spot damped and the hash break ties), draws the hold (rule 3) with a static
+// continuation clipped to the run's room, and records the static run in the memory.
 function startWith(mem: Memory, def: Activity, env: PickEnv, nowMs: number, k: number, opts: StartOpts): Seg {
   const prevId = mem.hist[mem.hist.length - 1];
   if (prevId !== undefined) {
@@ -355,22 +481,29 @@ function startWith(mem: Memory, def: Activity, env: PickEnv, nowMs: number, k: n
     mem.lastUseMs.set(prevId, nowMs);
   }
   const look = opts.look ?? activityLook(env.actor, def.clip, env.stare);
-  const fromX = env.spots[mem.spot]?.x ?? 0;
+  const from = posOf(mem, env);
+  const fromX = from?.x ?? 0;
+  const fromLane = from?.lane ?? 0;
   let toX = fromX;
+  let toLane = fromLane;
   let toSpot = mem.spot;
   let walkMs = 0;
   if (def.travel !== undefined && env.spots.length > 1) {
+    // The spot the walker stands on counts as reached now when it was never reached (the home at the first travel).
+    const here = env.spots[mem.spot];
+    if (here !== undefined && !mem.seen.has(here.id)) mem.seen.set(here.id, nowMs);
     const moving = targetsOf(mem, def.travel, env).filter((i) => i !== mem.spot);
-    const to = moving.length > 0
-      ? pickWeighted(moving.map((i) => ({ item: i, w: i === mem.prevSpot ? WORLD_WALK.prevSpotWeight : 1 })),
-        hash01(mem.seed + WORLD_BEHAVIOUR.salts.spot, k))
-      : undefined;
+    const to = moving.length > 0 ? leastSeenPick(mem, env, moving, k) : undefined;
     if (to !== undefined) {
+      const sp = env.spots[to];
       toSpot = to;
-      toX = env.spots[to]?.x ?? fromX;
-      walkMs = (Math.ceil(Math.abs(toX - fromX) / WORLD_WALK.pxPerFrame) * 1000) / env.fps;
+      toX = sp?.x ?? fromX;
+      toLane = sp === undefined ? fromLane : laneOf(sp);
+      walkMs = (walkTicksOf(toX - fromX, toLane - fromLane) * 1000) / env.fps;
       mem.prevSpot = mem.spot;
       mem.spot = to;
+      mem.at = null;
+      if (sp !== undefined) mem.seen.set(sp.id, nowMs + walkMs);
     }
   }
   const cap = capOf(def, look, env.era);
@@ -392,8 +525,18 @@ function startWith(mem: Memory, def: Activity, env: PickEnv, nowMs: number, k: n
   if (mem.hist.length > RECENT_IDS) mem.hist.splice(0, mem.hist.length - RECENT_IDS);
   return {
     id: def.id, def, startMs: nowMs, walkMs, holdMs, endMs: nowMs + walkMs + holdMs, react: opts.react === true, look, runStartMs,
-    fromX, toX, toSpot,
+    fromX, toX, toSpot, fromLane, toLane,
   };
+}
+
+// WP28b (B1): a reaction that would cut the current segment before one frame of it was drawn (drawnMs, one clip tick), and start the id the
+// actor showed before it, shows that id twice in a row: the cut segment never reaches a frame (a 10 ms blip between two lookUp holds read as
+// one 12.7 s hold). Such a reaction is dropped; the next cue answers. A segment that was drawn (a 200 ms scratch) still shows and does not count.
+// Pure: the memory's last two started ids are the current segment and the one before it.
+export function reactionRepeatsShown(mem: Memory, def: Activity, cur: Seg | null, atMs: number, drawnMs: number): boolean {
+  if (cur === null || atMs - cur.startMs >= drawnMs) return false;
+  const before = mem.hist[mem.hist.length - 2];
+  return before !== undefined && before === def.id;
 }
 
 // Starts an activity outside a pick (a reaction, a unison action, the debug pin). Consumes one draw index, as a pick does.
@@ -415,10 +558,14 @@ export function pickNext(mem: Memory, cur: Seg | null, pool: readonly Activity[]
   const calm = cur === null ? positive.filter((a) => a.glitch !== true) : positive;
   const free = calm.length > 0 ? calm : positive;
   PICK_STATS.picks += 1;
-  // Rule 1: candidates. The current id only when repeatable and its merged hold (and static run) still fits the cap.
+  // WP28b: the micro activities (weight 0) are never picked by weight; the fallback starts one when nothing else may start.
+  const micro = pool.filter((a) => a.micro === true);
+  // Rule 1: candidates. The current id only for the girl, when repeatable and its merged hold (and static run) still fits the cap. A roamer
+  // never starts its current id again (WP28b: no activity id twice in a row).
   const cands = free.filter((a) => {
     if (cur !== null && a.id === cur.id) {
-      return a.repeatable === true && !cur.react && cur.holdMs + a.holdMs[0] <= capOf(a, cur.look, env.era) - runOffsetOf(cur);
+      return env.actor === 'girl' && a.repeatable === true && !cur.react
+        && cur.holdMs + a.holdMs[0] <= capOf(a, cur.look, env.era) - runOffsetOf(cur);
     }
     return offCooldown(mem, a, nowMs) && passes(mem, a, cur, env, true);
   });
@@ -434,7 +581,7 @@ export function pickNext(mem: Memory, cur: Seg | null, pool: readonly Activity[]
   });
   // Rule 3: choice by hash; picking the current id merges into it.
   const chosen = weighted.length > 0 ? pickWeighted(weighted, hash01(mem.seed, 2 * k + 1)) : undefined;
-  if (chosen === undefined) return fallback(mem, cur, free, env, nowMs, k);
+  if (chosen === undefined) return fallback(mem, cur, free, micro, env, nowMs, k);
   if (cur !== null && chosen.id === cur.id) {
     return extendSeg(mem, cur, chosen, k, capOf(chosen, cur.look, env.era) - runOffsetOf(cur));
   }
@@ -466,11 +613,12 @@ function fpsOf(mode: PlaybackMode): number {
 function ticksSince(ms: number, fps: number): number {
   return Math.max(0, Math.floor((ms * fps) / 1000));
 }
-// Index of the spot nearest x (the first one on a tie).
-function nearestSpot(spots: readonly { x: number }[], x: number): number {
+// Index of the spot nearest x (the first one on a tie). WP28b F25: a visit spot is never a home (the walker's rest row).
+function nearestSpot(spots: readonly SpotLike[], x: number): number {
   let best = 0;
   let bestDist = Infinity;
   spots.forEach((s, i) => {
+    if (isVisitSpot(s.id)) return;
     const d = Math.abs(s.x - x);
     if (d < bestDist) {
       best = i;
@@ -479,17 +627,47 @@ function nearestSpot(spots: readonly { x: number }[], x: number): number {
   });
   return best;
 }
+// Index of the spot nearest the point (x, lane), Euclidean (the first one on a tie); WP28b: the spot a halted walk ends by (never a visit spot).
+function nearestSpotAt(spots: readonly SpotLike[], p: StagePoint): number {
+  let best = 0;
+  let bestDist = Infinity;
+  spots.forEach((s, i) => {
+    if (isVisitSpot(s.id)) return;
+    const d = distOf(s.x - p.x, laneOf(s) - p.lane);
+    if (d < bestDist) {
+      best = i;
+      bestDist = d;
+    }
+  });
+  return best;
+}
 // Cache key of the eligible list: the era, the girl stage and the flags the 'when' conditions read, plus the crank mode (128: eligible
-// drops the glitches in crank playback, so the cached list follows the mode).
+// drops the glitches in crank playback, so the cached list follows the mode). WP28b: the hop, Find and visit flags (256-2048).
 function eligibleKey(c: BehaviourCtx): number {
   const flags = (c.vents ? 1 : 0) | (c.holeDig ? 2 : 0) | (c.sensor ? 4 : 0) | (c.scraps ? 8 : 0) | (c.stare ? 16 : 0)
-    | (c.reduced ? 32 : 0) | (c.demoHold ? 64 : 0) | (c.mode === 'crank' ? 128 : 0);
+    | (c.reduced ? 32 : 0) | (c.demoHold ? 64 : 0) | (c.mode === 'crank' ? 128 : 0)
+    | (c.hopOk ? 256 : 0) | (c.findOuter ? 512 : 0) | (c.findInner ? 1024 : 0) | (c.visitSpot !== null ? 2048 : 0);
   const stage = c.girlStage === 'window' ? 0 : c.girlStage === 'mini' ? 1 : 2;
-  return (c.era * 3 + stage) * 256 + flags;
+  return (c.era * 3 + stage) * 4096 + flags;
 }
-// Drawn walk ticks of a walk over dx world px: one per pxPerFrame (the last one may be short).
-function walkTicksOf(dx: number): number {
-  return Math.ceil(Math.abs(dx) / WORLD_WALK.pxPerFrame);
+// Drawn walk ticks of a walk over (dx, dLane) world px: one per pxPerFrame of the Euclidean length (the last one may be short).
+function walkTicksOf(dx: number, dLane = 0): number {
+  return Math.ceil(distOf(dx, dLane) / WORLD_WALK.pxPerFrame);
+}
+// The cut of a walk at its last drawn tick at or after atMs (WP28b halt; F30 cuts at a due machine-event reaction): the walk time it ends at
+// and the point the walker stands on. The tick is the one the frame at atMs draws (never past the arrival), so the cut is analytic (step-free).
+interface WalkCut { walkMs: number; x: number; lane: number }
+function walkCutOf(seg: Seg, atMs: number, fps: number): WalkCut {
+  const dx = seg.toX - seg.fromX;
+  const dl = seg.toLane - seg.fromLane;
+  const dist = distOf(dx, dl);
+  const tick = Math.min(walkTicksOf(dx, dl), Math.max(0, Math.ceil(((atMs - seg.startMs) * fps) / 1000)));
+  const along = Math.min(tick * WORLD_WALK.pxPerFrame, dist);
+  return {
+    walkMs: (tick * 1000) / fps,
+    x: dist === 0 ? seg.fromX : seg.fromX + (dx * along) / dist,
+    lane: dist === 0 ? seg.fromLane : seg.fromLane + (dl * along) / dist,
+  };
 }
 // The walk frames of one cycle, forward (walk0..walk3) and reversed (walk3..walk0), built once: a tick picks one by its index.
 const WALK_FORWARD: readonly string[] = Object.freeze(Array.from({ length: WALK_CYCLE }, (_, i) => `walk${i}`));
@@ -505,6 +683,73 @@ export function restFlip(actor: BehaviourActor, frame: string, stare: boolean, h
   if (actor === 'crow' || actor === 'girl') return false;
   if (WORLD_STARE_SAFE[actor].includes(stareFrame(actor, frame, false, stare))) return false;
   return homeX < MACHINE_ANCHOR.x;
+}
+
+// WP28b F29: the side of the machine a Find lies on, for an actor at actorX. outer: on the actor's side and farther from the anchor than the
+// actor (point, sniffFind). inner: any other Find, the nearer side, the far wing and an equal distance too (lookFind, sniffHere). No Find: neither.
+// The Director sets ctx.findOuter / findInner from it (the runner's when flags read them).
+export function findSidesOf(actorX: number, findX: number | null, anchorX: number): { outer: boolean; inner: boolean } {
+  if (findX === null) return { outer: false, inner: false };
+  const outer = findOuterOf(actorX, findX, anchorX);
+  return { outer, inner: !outer };
+}
+// WP28b (r2-FX1): the outer test of findSidesOf alone, without the object: the Director calls it per frame and must not allocate.
+export function findOuterOf(actorX: number, findX: number, anchorX: number): boolean {
+  return (findX < anchorX) === (actorX < anchorX) && Math.abs(findX - anchorX) > Math.abs(actorX - anchorX);
+}
+
+// WP28b F25: the visit stand of a woken Splice in a framing (WORLD_VISITS): the actor that walks there and the visit spot id. Null when the
+// object has no stand here (an exempt object), the era is outside the stand's range, or the stand is clean only from some spots and the walker
+// stands on none of them (`from`). The Director sets ctx.visitSpot from it and pushes the splice cue.
+export function visitFor(framing: FramingKey, object: TechId, era: EraNumber, currentSpot: SpotId | null):
+  { actor: 'inspector' | 'dog'; spot: SpotId } | null {
+  const stand = WORLD_VISITS[framing]?.find((v) => v.object === object && (v.minEra ?? 1) <= era && era <= (v.maxEra ?? ERA_V));
+  if (stand === undefined) return null;
+  if (stand.from !== undefined && (currentSpot === null || !stand.from.includes(currentSpot))) return null;
+  return { actor: stand.actor, spot: stand.spot };
+}
+
+// The walk gate (WP28b, B1: no two walkers start a walk within walkStaggerMs). The caller keeps one gate per cast, notes every runner's
+// walking flag each frame (a rising edge is a walk start) and passes walkBlockedFor as ctx.walkBlocked. Pure: the state is the gate's own.
+const WALK_ACTORS: readonly BehaviourActor[] = ['inspector', 'dog', 'crow', 'girl'];
+export interface WalkGate { readonly startedAt: Record<BehaviourActor, number>; readonly walking: Record<BehaviourActor, boolean> }
+export function createWalkGate(): WalkGate {
+  return {
+    startedAt: { inspector: -Infinity, dog: -Infinity, crow: -Infinity, girl: -Infinity },
+    walking: { inspector: false, dog: false, crow: false, girl: false },
+  };
+}
+// True when another actor started a walk less than walkStaggerMs before nowMs. An actor's own start never blocks itself.
+export function walkBlockedFor(gate: WalkGate, actor: BehaviourActor, nowMs: number): boolean {
+  for (const other of WALK_ACTORS) {
+    if (other !== actor && nowMs - gate.startedAt[other] < WORLD_BEHAVIOUR.walkStaggerMs) return true;
+  }
+  return false;
+}
+// Notes one actor's walking flag at nowMs: the rising edge (not walking, now walking) records the start time.
+export function noteWalkFrame(gate: WalkGate, actor: BehaviourActor, walking: boolean, nowMs: number): void {
+  if (walking && !gate.walking[actor]) gate.startedAt[actor] = nowMs;
+  gate.walking[actor] = walking;
+}
+
+// The start gate (WP28b r2-FX4G, V5: plan A2). A boundary pick that would start within startGuardMs of another denizen's latest start is moved
+// on by the runner (see guardHold). The caller keeps one gate per cast and passes it as ctx.startGate; the runner writes each of its segment
+// starts into it (startedAt, the shared clock: its clock plus clockOffsetMs, the latest start of the actor). Pure: one number per denizen;
+// nothing allocates per frame.
+export interface StartGate { readonly startedAt: Record<BehaviourActor, number> }
+export function createStartGate(): StartGate {
+  return { startedAt: { inspector: -Infinity, dog: -Infinity, crow: -Infinity, girl: -Infinity } };
+}
+// The time a boundary at atMs moves to so that it lies at least startGuardMs from every other actor's latest start: the latest (start +
+// startGuardMs) among the starts within startGuardMs of atMs, either side (atMs itself when none is near). An actor's own start never counts.
+export function startGuardTarget(gate: StartGate, actor: BehaviourActor, atMs: number): number {
+  const guard = WORLD_BEHAVIOUR.startGuardMs;
+  let target = atMs;
+  for (const other of WALK_ACTORS) {
+    const s = gate.startedAt[other];
+    if (other !== actor && Math.abs(atMs - s) < guard && s + guard > target) target = s + guard;
+  }
+  return target;
 }
 
 // The shown clip frame: its index in clip.frames, or -1 for a burst's rest frame.
@@ -621,6 +866,14 @@ function wrapIndex(i: number, n: number): number {
   return ((i % n) + n) % n;
 }
 
+// The cues of WP28b that use the actor's stagger band (WORLD_REACT.staggerMs) instead of the latency band. A find's reaction of the Inspector
+// uses findDelayMs (he points 2-4 s after the spawn), not the stagger.
+const STAGGERED_CUES: readonly CueId[] = ['fault', 'faultClear', 'find', 'bigBuy', 'era', 'splice'];
+function reactBand(actor: BehaviourActor, id: CueId): readonly [number, number] {
+  if (id === 'find' && actor === 'inspector') return WORLD_REACT.findDelayMs;
+  return STAGGERED_CUES.includes(id) ? WORLD_REACT.staggerMs[actor] : WORLD_REACT.latencyMs[actor];
+}
+
 // A due event of the runner: a reaction (kind react, the activity to start) or a wake (kind end: the current activity ends at the cue). A poke
 // (kind poke, WP28a T15a) starts its activity like a reaction, with no cue and index -1 (cue indices are never below 0).
 interface Pending { kind: 'react' | 'end' | 'poke'; cue: CueId | null; index: number; due: number; def: Activity | null }
@@ -647,17 +900,23 @@ export function createBehaviourRunner(
   let pin: string | null = null;
   let homeSeen = 0;
   let lastWalkEndMs = -Infinity;
+  // WP28b (r2-FX4G): the start-gate extension taken at the current boundary (at most startGuardExtMax x startGuardMs; a boundary pick resets it).
+  let startExtMs = 0;
   let spotIdNow: SpotId | null = null;
   let spotXNow = 0;
+  let spotLaneNow = 0;
+  // WP28b: the point the walker rests on: its spot, or the point a halt cut its walk at (equal to the spot in every flow but a halt).
+  let restX = 0;
+  let restLane = 0;
   let spotsNow: SpotList = [];
   let lastCtx: BehaviourCtx | null = null;
   let poolKey = -1;
   let pool: readonly Activity[] = [];
-  const home: { id: SpotId; x: number } = { id: 'home', x: 0 };
+  const home: { id: SpotId; x: number; lane: number } = { id: 'home', x: 0, lane: 0 };
   const homeSpots: SpotList = [home];
   const shown: Shown = { frame: '', index: -1 };
   const frame: BehaviourFrame = {
-    activity: 'parked', step: 0, frame: '', flip: false, x: 0, walking: false, poseSet: 'base', risePx: 0, alpha: 1, emitted: null,
+    activity: 'parked', step: 0, frame: '', flip: false, x: 0, walking: false, poseSet: 'base', risePx: 0, alpha: 1, emitted: null, lane: 0,
   };
   // Cues: the last cue index seen, the due responses, and the last reaction time per cue (the pair cooldown of this actor).
   let lastSeen = -1;
@@ -679,6 +938,8 @@ export function createBehaviourRunner(
   let uWalkMs = 0;
   let uFromX = 0;
   let uToX = 0;
+  let uFromLane = 0;
+  let uToLane = 0;
   let uWalked = false;
   let uFps: number = CRANK_FPS;
   let uK = 0;
@@ -699,6 +960,7 @@ export function createBehaviourRunner(
   // The spot list the runner last synced to: the ids and xs of its spots, copied in place (syncSpots compares them each step).
   const slotIds: string[] = [];
   const slotXs: number[] = [];
+  const slotLanes: number[] = [];
   let slotCount = 0;
 
   // The spots of a context: its framing list, or the home spot alone (the runner stands at homeX).
@@ -707,7 +969,9 @@ export function createBehaviourRunner(
     home.x = ctx.homeX;
     return homeSpots;
   };
-  const envAt = (ctx: BehaviourCtx): PickEnv => ({ actor, era: ctx.era, stare: ctx.stare, spots: spotsOf(ctx), fps: fpsOf(ctx.mode) });
+  const envAt = (ctx: BehaviourCtx): PickEnv => ({
+    actor, era: ctx.era, stare: ctx.stare, spots: spotsOf(ctx), fps: fpsOf(ctx.mode), visitSpot: ctx.visitSpot, findX: ctx.findX,
+  });
   // The eligible activities of the context (cached while the key holds).
   const poolOf = (ctx: BehaviourCtx): readonly Activity[] => {
     const key = eligibleKey(ctx);
@@ -717,11 +981,13 @@ export function createBehaviourRunner(
     }
     return pool;
   };
-  // The pool of a pick at nowMs. Reduced motion: no travel within reducedWalkGapMs of the last walk's arrival (the calm ones stay when
-  // they are all there is to pick from, so the pool never empties).
+  // The pool of a pick at nowMs. Reduced motion: no travel within reducedWalkGapMs of the last walk's arrival. WP28b: no travel while the walk
+  // gate is set (another walker started a walk within walkStaggerMs). The calm ones stay when they are all there is to pick from, so the pool
+  // never empties.
   const poolAt = (ctx: BehaviourCtx, nowMs: number): readonly Activity[] => {
     const all = poolOf(ctx);
-    if (!ctx.reduced || nowMs - lastWalkEndMs >= WORLD_WALK.reducedWalkGapMs) return all;
+    const noWalk = ctx.walkBlocked || (ctx.reduced && nowMs - lastWalkEndMs < WORLD_WALK.reducedWalkGapMs);
+    if (!noWalk) return all;
     const calm = all.filter((a) => a.travel === undefined);
     return hasFree(calm) ? calm : all;
   };
@@ -742,6 +1008,8 @@ export function createBehaviourRunner(
     memoSeg = null;
     cur = seg;
     segK = k;
+    startExtMs = 0;
+    if (ctx.startGate !== undefined) ctx.startGate.startedAt[actor] = seg.startMs + (ctx.clockOffsetMs ?? 0);
     segFps = fpsOf(ctx.mode);
     startEmitDone = false;
     if (seg.walkMs > 0) lastWalkEndMs = seg.startMs + seg.walkMs;
@@ -749,7 +1017,10 @@ export function createBehaviourRunner(
     if (sp !== undefined) {
       spotIdNow = sp.id;
       spotXNow = sp.x;
+      spotLaneNow = laneOf(sp);
     }
+    restX = seg.toX;
+    restLane = seg.toLane;
   };
   // Picks the first segment of an idle runner at tMs. shift starts the first segment out of phase (salts.start x its span).
   const freshPick = (ctx: BehaviourCtx, shift: boolean): void => {
@@ -795,7 +1066,7 @@ export function createBehaviourRunner(
     // The draw tick: a walk's tick (one per walk frame from its start, never past the arrival), else a hold's (one per click in crank mode,
     // one per fps tick in timed modes). The drawn frame is a function of it.
     const tick = walkPhase
-      ? Math.min(walkTicksOf(seg.toX - seg.fromX), Math.max(0, Math.ceil(((tMs - seg.startMs) * segFps) / 1000)))
+      ? Math.min(walkTicksOf(seg.toX - seg.fromX, seg.toLane - seg.fromLane), Math.max(0, Math.ceil(((tMs - seg.startMs) * segFps) / 1000)))
       : ctx.mode === 'crank' ? clicksSince(tMs - holdAt) : ticksSince(tMs - holdAt, fps);
     frame.activity = seg.id;
     frame.step = ticksSince(tMs, fps);
@@ -805,12 +1076,17 @@ export function createBehaviourRunner(
       && memoStare === ctx.stare && memoReduced === ctx.reduced && memoHomeX === ctx.homeX) return;
     if (walkPhase) {
       const dx = seg.toX - seg.fromX;
-      const dir = dx < 0 ? -1 : 1;
+      const dl = seg.toLane - seg.fromLane;
+      const dist = distOf(dx, dl);
+      // The tick's point: the Euclidean share of the walk drawn so far (the arrival clamps). A level walk keeps its exact x.
+      const along = Math.min(tick * WORLD_WALK.pxPerFrame, dist);
       const reversed = seg.def.reversed === true;
       walking = true;
-      x = seg.fromX + dir * Math.min(tick * WORLD_WALK.pxPerFrame, Math.abs(dx));
+      x = dist === 0 ? seg.fromX : seg.fromX + (dx * along) / dist;
+      frame.lane = dist === 0 ? seg.fromLane : seg.fromLane + (dl * along) / dist;
       frame.frame = walkFrameOf(tick, reversed);
-      frame.flip = reversed ? dir > 0 : dir < 0;
+      // Facing follows the sign of dx; a walk with no horizontal part keeps the facing it had.
+      if (dx !== 0) frame.flip = reversed ? dx > 0 : dx < 0;
       frame.alpha = seg.def.clip.alpha ?? 1;
     } else {
       const clip = seg.def.clip;
@@ -825,6 +1101,7 @@ export function createBehaviourRunner(
       const i = shown.index;
       // Reduced motion: the crow's stutter, skip and shift hold one pose (no dx offset).
       x = seg.toX + (ctx.reduced ? 0 : (clip.dxPx?.[i] ?? 0));
+      frame.lane = seg.toLane;
       frame.frame = shown.frame;
       frame.flip = restFlip(actor, shown.frame, ctx.stare, ctx.homeX);
       frame.alpha = (clip.alpha ?? 1) * (clip.frameAlpha?.[i] ?? 1);
@@ -862,36 +1139,46 @@ export function createBehaviourRunner(
     }
     mem.spot = idx;
     mem.prevSpot = -1;
+    mem.at = null;
     spotIdNow = sp.id;
     spotXNow = sp.x;
+    spotLaneNow = laneOf(sp);
+    restX = sp.x;
+    restLane = laneOf(sp);
     x = sp.x;
     if (cur !== null) {
       if (tMs < cur.startMs + cur.walkMs) {
-        cur = { ...cur, startMs: tMs, walkMs: 0, endMs: tMs + cur.holdMs, fromX: sp.x, toX: sp.x, toSpot: idx };
+        cur = {
+          ...cur, startMs: tMs, walkMs: 0, endMs: tMs + cur.holdMs, fromX: sp.x, toX: sp.x, toSpot: idx, fromLane: restLane,
+          toLane: restLane,
+        };
       } else {
-        cur = { ...cur, fromX: sp.x, toX: sp.x, toSpot: idx };
+        cur = { ...cur, fromX: sp.x, toX: sp.x, toSpot: idx, fromLane: restLane, toLane: restLane };
       }
     } else if (joined) {
       uWalkMs = Math.min(uWalkMs, Math.max(0, tMs - uStartMs));
       uFromX = sp.x;
       uToX = sp.x;
+      uFromLane = restLane;
+      uToLane = restLane;
     }
   };
-  // Copies a spot list into the slots (the ids and xs syncSpots compares next step).
+  // Copies a spot list into the slots (the ids, xs and lanes syncSpots compares next step).
   const cacheSpots = (list: SpotList): void => {
     slotCount = list.length;
     for (let i = 0; i < slotCount; i++) {
       const s = list[i];
       slotIds[i] = s?.id ?? '';
       slotXs[i] = s?.x ?? NaN;
+      slotLanes[i] = s === undefined ? NaN : laneOf(s);
     }
   };
-  // Whether a spot list is the one the slots hold (the same count, ids and xs).
+  // Whether a spot list is the one the slots hold (the same count, ids, xs and lanes).
   const sameSpots = (list: SpotList): boolean => {
     if (list.length !== slotCount) return false;
     for (let i = 0; i < slotCount; i++) {
       const s = list[i];
-      if (s === undefined || s.id !== slotIds[i] || s.x !== slotXs[i]) return false;
+      if (s === undefined || s.id !== slotIds[i] || s.x !== slotXs[i] || laneOf(s) !== slotLanes[i]) return false;
     }
     return true;
   };
@@ -908,7 +1195,7 @@ export function createBehaviourRunner(
       }
     }
     const here = spotsNow[idx];
-    if (ctx.homeX !== homeSeen || here === undefined || here.x !== spotXNow) {
+    if (ctx.homeX !== homeSeen || here === undefined || here.x !== spotXNow || laneOf(here) !== spotLaneNow) {
       rehomeTo(ctx.homeX);
       refresh();
     } else if (idx !== mem.spot) {
@@ -917,9 +1204,34 @@ export function createBehaviourRunner(
     }
     cacheSpots(spotsNow);
   };
+  // WP28b (r2-FX4G, V5): the start gate of a boundary pick. A boundary within startGuardMs of another denizen's latest start moves to the first
+  // time that is startGuardMs from it (startGuardTarget): the current hold grows by that much, inside the hold cap and the static run cap, and the
+  // extensions of one boundary stay within startGuardExtMax x startGuardMs. The pick then comes at the new boundary. Only a clip that changes no
+  // faster than minHoldMs is stretched (a burst's frames change at its fps too): a hop or a peck keeps its length, since a longer flight shows more
+  // changes in a second (V7). The clip decides, not the look: under the stare a flight looks static. Era IV and a joined runner are never gated.
+  // Wakes, reactions and pokes start without a boundary pick, so they never reach it.
+  const guardHold = (seg: Seg, ctx: BehaviourCtx): boolean => {
+    const gate = ctx.startGate;
+    if (gate === undefined || joined || ctx.era === ERA_IV) return false;
+    if (visibleChangeMs(seg.def.clip) < WORLD_BEHAVIOUR.minHoldMs) return false;
+    // The gate works on the shared clock. A boundary no start is near keeps its exact time: no round trip through the offset (a float
+    // residue would read as an extension).
+    const off = ctx.clockOffsetMs ?? 0;
+    const shared = startGuardTarget(gate, actor, seg.endMs + off);
+    const target = shared === seg.endMs + off ? seg.endMs : shared - off;
+    const ext = target - seg.endMs;
+    if (!(ext > 0) || startExtMs + ext > WORLD_BEHAVIOUR.startGuardExtMax * WORLD_BEHAVIOUR.startGuardMs) return false;
+    // Strictly inside the cap: a hold that reaches its cap exactly would round past it (V3 reads the float ends).
+    const room = capOf(seg.def, seg.look, ctx.era) - runOffsetOf(seg) - seg.holdMs;
+    if (!(ext < room)) return false;
+    startExtMs += ext;
+    cur = { ...seg, holdMs: target - (seg.startMs + seg.walkMs), endMs: target };
+    return true;
+  };
   // Ends the current segment at its boundary and picks the next one from the pool of the context (the next start is the end: analytic).
   // With no free activity left the segment closes and the runner parks (era IV: the pool is empty, so the runner waits to join).
-  const advanceOnce = (ctx: BehaviourCtx): void => {
+  // gated: false for a wake (its pick is the cue's, not a boundary's).
+  const advanceOnce = (ctx: BehaviourCtx, gated = true): void => {
     const from = cur;
     if (from === null) return;
     const list = poolAt(ctx, from.endMs);
@@ -928,6 +1240,8 @@ export function createBehaviourRunner(
       cur = null;
       return;
     }
+    if (gated && guardHold(from, ctx)) return;
+    startExtMs = 0;
     const k = mem.k;
     const next = pickNext(mem, from, list, envAt(ctx), from.endMs);
     if (next.startMs === from.startMs && next.id === from.id) {
@@ -948,21 +1262,74 @@ export function createBehaviourRunner(
     close(cutSeg(seg, tMs));
     cur = null;
   };
-  // Applies one due event at its effective time `at`. A reaction replaces the current activity unless that one is a reaction, has the same
-  // id, or is not interruptible (then the reaction is dropped). A wake ends the current activity when it wakes on the cue, and the normal
-  // pick follows.
+  // WP28b: the gate of a due reaction at `at`, read by applyPending and by the F30 cut. 'drop': it may not start (its activity no longer
+  // holds, the id would show twice, or the current segment is a reaction, the same id or not interruptible). 'wait': it walks while the walk
+  // gate is set (it tries again after reactWaitMs). 'start': it starts now.
+  const reactGate = (def: Activity, ctx: BehaviourCtx, at: number): 'drop' | 'wait' | 'start' => {
+    if (!whenHolds(def, ctx)) return 'drop';
+    if (reactionRepeatsShown(mem, def, cur, at, 1000 / fpsOf(ctx.mode))) return 'drop';
+    // A cue reaction yields to a reaction, to the same activity and to a non-interruptible one.
+    if (cur !== null && (cur.react || cur.id === def.id || cur.def.interruptible === false)) return 'drop';
+    // A reaction that walks obeys the walk gate like a pick (the gate frees within walkStaggerMs, since no walk starts while it is set).
+    return def.travel !== undefined && ctx.walkBlocked ? 'wait' : 'start';
+  };
+  // Cuts the walk of seg at its last drawn tick at or after atMs (the halt cut): the segment ends there and its hold starts there. The walker
+  // rests on that point (mem.at), so the next walk or hold starts from it (WP28b halt; F30 uses the same cut at a due reaction).
+  const cutWalk = (seg: Seg, atMs: number): void => {
+    const c = walkCutOf(seg, atMs, segFps);
+    const toSpot = nearestSpotAt(spotsNow, { x: c.x, lane: c.lane });
+    const sp = spotsNow[toSpot];
+    const runStartMs = seg.startMs + c.walkMs;
+    if (mem.run !== null && mem.run.runStartMs === seg.runStartMs) mem.run.runStartMs = runStartMs;
+    cur = { ...seg, toX: c.x, toLane: c.lane, toSpot, walkMs: c.walkMs, endMs: runStartMs + seg.holdMs, runStartMs };
+    memoSeg = null;
+    mem.at = { x: c.x, lane: c.lane };
+    mem.spot = toSpot;
+    if (c.walkMs > 0) lastWalkEndMs = runStartMs;
+    restX = c.x;
+    restLane = c.lane;
+    if (sp !== undefined) {
+      spotIdNow = sp.id;
+      spotXNow = sp.x;
+      spotLaneNow = laneOf(sp);
+    }
+  };
+  // WP28b F30: the end time of the walk a due machine-event reaction cuts, or null. A cue of haltCues finds the walker mid-walk with more than
+  // haltMinLeftMs left at its due time: the walk is cut at its next drawn tick and the reaction starts there, within one tick of the due time.
+  // Otherwise (or when the reaction may not start now) nothing is cut: the reaction starts at the walk's arrival, at most reactHaltMinLeftMs later.
+  const haltEnd = (p: Pending, ctx: BehaviourCtx): number | null => {
+    const seg = cur;
+    if (p.kind !== 'react' || p.cue === null || p.def === null || !WORLD_REACT.haltCues.includes(p.cue)) return null;
+    if (seg === null || joined || ctx.era === ERA_IV || seg.walkMs <= 0) return null;
+    const walkEnd = seg.startMs + seg.walkMs;
+    if (p.due >= walkEnd || walkEnd - p.due <= WORLD_BEHAVIOUR.reactHaltMinLeftMs) return null;
+    const end = seg.startMs + walkCutOf(seg, p.due, segFps).walkMs;
+    return reactGate(p.def, ctx, end) === 'start' ? end : null;
+  };
+  // Applies one due event at its effective time `at`. A reaction replaces the current activity unless the gate drops it (reactGate). A wake
+  // ends the current activity when it wakes on the cue, and the normal pick follows.
   const applyPending = (p: Pending, at: number, ctx: BehaviourCtx): void => {
     pending = pending.filter((q) => q !== p);
     if (p.kind === 'end') {
       if (cur === null || p.cue === null || cur.def.wakeOn?.includes(p.cue) !== true) return;
       cur = cutSeg(cur, at);
-      advanceOnce(ctx);
+      advanceOnce(ctx, false);
       return;
     }
     const def = p.def;
-    if (def === null || !whenHolds(def, ctx)) return;
-    // A cue reaction yields to a reaction, to the same activity and to a non-interruptible one; a poke (the player's act) always starts.
-    if (p.kind === 'react' && cur !== null && (cur.react || cur.id === def.id || cur.def.interruptible === false)) return;
+    if (def === null) return;
+    if (p.kind === 'react') {
+      const gate = reactGate(def, ctx, at);
+      if (gate === 'drop') return;
+      // WP28b: a reaction that walks waits reactWaitMs and tries again while the walk gate is set.
+      if (gate === 'wait') {
+        pending.push({ ...p, due: tMs + WORLD_BEHAVIOUR.reactWaitMs });
+        return;
+      }
+    } else if (!whenHolds(def, ctx)) {
+      // A poke (the player's act) always starts, when its activity holds in this context.
+      return;
+    }
     if (cur !== null) close(cutSeg(cur, at));
     cur = null;
     const k = mem.k;
@@ -982,8 +1349,11 @@ export function createBehaviourRunner(
     for (;;) {
       const p = earliestPending();
       const segEnd = cur !== null ? cur.endMs : Infinity;
-      const at = p === undefined ? Infinity : cur !== null ? Math.max(p.due, cur.startMs + cur.walkMs) : p.due;
+      // WP28b F30: a machine-event reaction due in a walk takes the walk's cut point as its time (haltEnd); the others wait for the arrival.
+      const cutEnd = p === undefined ? null : haltEnd(p, ctx);
+      const at = p === undefined ? Infinity : (cutEnd ?? (cur !== null ? Math.max(p.due, cur.startMs + cur.walkMs) : p.due));
       if (p !== undefined && at <= tMs && at < segEnd) {
+        if (cutEnd !== null && cur !== null) cutWalk(cur, p.due);
         applyPending(p, at, ctx);
       } else if (cur !== null && segEnd <= tMs) {
         advanceOnce(ctx);
@@ -994,14 +1364,15 @@ export function createBehaviourRunner(
   };
   // Records each new cue as seen (an index above the last seen), even when paused, and schedules its response: a wake when the current
   // activity wakes on it (no chance gate), else a reaction (the activities whose reaction holds the cue, off cooldown, the pair cooldown
-  // free, the chance gate, one picked by hash). The due time is the clock now plus the actor's latency band.
+  // free, the chance gate, one picked by hash). The due time is the clock now plus the cue's delay: the caller's delayMs for this actor, else
+  // a draw in the cue's band (reactBand).
   const seeCues = (ctx: BehaviourCtx): void => {
     const before = lastSeen;
     for (const c of ctx.cues) {
       if (c.index <= before) continue;
       lastSeen = Math.max(lastSeen, c.index);
       if (pending.some((p) => p.index === c.index)) continue;
-      const delay = lerpHold(hash01(seedNow + WORLD_BEHAVIOUR.salts.latency, c.index), WORLD_REACT.latencyMs[actor]);
+      const delay = c.delayMs?.[actor] ?? lerpHold(hash01(seedNow + WORLD_BEHAVIOUR.salts.latency, c.index), reactBand(actor, c.id));
       if (cur !== null && cur.def.wakeOn?.includes(c.id) === true) {
         pending.push({ kind: 'end', cue: c.id, index: c.index, due: tMs + delay, def: null });
         continue;
@@ -1010,7 +1381,7 @@ export function createBehaviourRunner(
       if (last !== undefined && tMs - last < WORLD_REACT.pairCooldownMs) continue;
       const cands = eligible(actor, ctx.era, ctx).filter((a) => a.reaction?.includes(c.id) === true && offCooldown(mem, a, tMs));
       if (cands.length === 0) continue;
-      if (!(hash01(seedNow + WORLD_BEHAVIOUR.salts.react, c.index) < WORLD_REACT.chance)) continue;
+      if (!(hash01(seedNow + WORLD_BEHAVIOUR.salts.react, c.index) < (WORLD_REACT.chanceByCue[c.id] ?? WORLD_REACT.chance))) continue;
       const def = cands[Math.floor(hash01(seedNow + WORLD_BEHAVIOUR.salts.react + 1, c.index) * cands.length)];
       if (def === undefined) continue;
       pairAt.set(c.id, tMs);
@@ -1077,6 +1448,9 @@ export function createBehaviourRunner(
     mem.prevSpot = -1;
     spotIdNow = sp?.id ?? null;
     spotXNow = sp?.x ?? ctx.homeX;
+    spotLaneNow = sp === undefined ? 0 : laneOf(sp);
+    restX = spotXNow;
+    restLane = spotLaneNow;
     x = spotXNow;
     freshPick(ctx, true);
     fill(ctx);
@@ -1098,25 +1472,32 @@ export function createBehaviourRunner(
     uWalked = false;
     uFromX = x;
     uToX = x;
+    uFromLane = restLane;
+    uToLane = restLane;
     // The walker (the Inspector's walkFirst actions) walks to another spot on the action's first downbeat, a spot minTravelPx away, unless
     // reduced motion allows no walk yet (one per reducedWalkGapMs).
     const walkOk = !ctx.reduced || tMs - lastWalkEndMs >= WORLD_WALK.reducedWalkGapMs;
     if (uClip?.walkFirst === true && actor === WALKER && c.startBeat === ctx.beat.index && walkOk) {
       const cands: number[] = [];
       spotsNow.forEach((s, i) => {
-        if (i !== mem.spot && Math.abs(s.x - spotXNow) >= WORLD_WALK.minTravelPx) cands.push(i);
+        if (i !== mem.spot && !isVisitSpot(s.id) && distOf(s.x - restX, laneOf(s) - restLane) >= WORLD_WALK.minTravelPx) cands.push(i);
       });
       const j = cands[Math.floor(hash01(seedNow + WORLD_BEHAVIOUR.salts.spot, uK) * cands.length)];
       const sp = j !== undefined ? spotsNow[j] : undefined;
       if (j !== undefined && sp !== undefined) {
         uToX = sp.x;
-        uWalkMs = (walkTicksOf(sp.x - spotXNow) * 1000) / uFps;
+        uToLane = laneOf(sp);
+        uWalkMs = (walkTicksOf(sp.x - restX, uToLane - restLane) * 1000) / uFps;
         uWalked = true;
         lastWalkEndMs = tMs + uWalkMs;
         mem.prevSpot = mem.spot;
         mem.spot = j;
+        mem.at = null;
         spotIdNow = sp.id;
         spotXNow = sp.x;
+        spotLaneNow = uToLane;
+        restX = sp.x;
+        restLane = uToLane;
       }
     }
   };
@@ -1139,16 +1520,20 @@ export function createBehaviourRunner(
     frame.alpha = clip.alpha ?? 1;
     if (tMs < holdAt) {
       const dx = uToX - uFromX;
-      const dir = dx < 0 ? -1 : 1;
-      const tick = Math.min(walkTicksOf(dx), Math.max(0, Math.ceil(((tMs - uStartMs) * uFps) / 1000)));
+      const dl = uToLane - uFromLane;
+      const dist = distOf(dx, dl);
+      const tick = Math.min(walkTicksOf(dx, dl), Math.max(0, Math.ceil(((tMs - uStartMs) * uFps) / 1000)));
+      const along = Math.min(tick * WORLD_WALK.pxPerFrame, dist);
       walking = true;
-      x = uFromX + dir * Math.min(tick * WORLD_WALK.pxPerFrame, Math.abs(dx));
+      x = dist === 0 ? uFromX : uFromX + (dx * along) / dist;
+      frame.lane = dist === 0 ? uFromLane : uFromLane + (dl * along) / dist;
       frame.frame = walkFrameOf(tick, false);
-      frame.flip = dir < 0;
+      if (dx !== 0) frame.flip = dx < 0;
       frame.risePx = 0;
     } else {
       walking = false;
-      x = spotXNow;
+      x = restX;
+      frame.lane = restLane;
       if (clip.perBeat === true) {
         frame.frame = clip.frames[wrapIndex(ctx.beat.index - uStartBeat, clip.frames.length)] ?? '';
       } else if (accentOn && clip.accent !== undefined) {
@@ -1187,17 +1572,19 @@ export function createBehaviourRunner(
     frame.frame = stareFrame(actor, rest, false, ctx.stare);
     frame.flip = restFlip(actor, rest, ctx.stare, ctx.homeX);
     frame.x = x;
+    frame.lane = restLane;
     frame.walking = false;
     frame.poseSet = 'base';
     frame.risePx = 0;
     frame.alpha = clip?.alpha ?? 1;
   };
-  // The clip of the settled frame (C7 worldSettle): era IV's hold frame of the stare set; else the first repeatable free activity of the
-  // context (undefined: no rest frame, the girl in the window stage).
+  // The clip of the settled frame (C7 worldSettle): era IV's hold frame of the stare set; else the first free activity of the context that
+  // holds in place (no travel: the rest pose; undefined: no rest frame, the girl in the window stage). WP28b: the roamers' rest poses are no
+  // longer repeatable, so the first in-place activity stands for them.
   const restClipOf = (ctx: BehaviourCtx): Clip | undefined => {
     if (ctx.era === ERA_IV) return holdClipOf(actor, ctx.stare);
     for (const a of poolOf(ctx)) {
-      if (a.repeatable === true && a.weight > 0) return a.clip;
+      if (a.weight > 0 && a.travel === undefined) return a.clip;
     }
     return undefined;
   };
@@ -1213,6 +1600,10 @@ export function createBehaviourRunner(
     const rest = clip.frames[0] ?? '';
     walking = false;
     x = ctx.homeX;
+    // The home row: the lane of the spot nearest home (the dog's front row, the Inspector's back row).
+    const list = spotsOf(ctx);
+    const homeSp = list[nearestSpot(list, ctx.homeX)];
+    frame.lane = homeSp === undefined ? 0 : laneOf(homeSp);
     frame.activity = 'settled';
     frame.step = 0;
     frame.frame = stareFrame(actor, rest, false, ctx.stare);
@@ -1251,6 +1642,13 @@ export function createBehaviourRunner(
     if (joined) {
       const c = conductor.current();
       if (c.id !== uId || c.post !== uPost || c.startBeat !== uStartBeat) {
+        // WP28b (V6): a switch that lands inside a walk (a walkFirst walk can outlast a short action) stops the walker where it stands. Its
+        // rest point becomes the point it has reached, so the next action starts there and the walker does not jump to the walk's end.
+        if (walking) {
+          mem.at = { x, lane: frame.lane };
+          restX = x;
+          restLane = frame.lane;
+        }
         closeUnison(tMs);
         startUnison(c, ctx);
       }
@@ -1351,6 +1749,9 @@ export function createBehaviourRunner(
       lastWalkEndMs = -Infinity;
       spotIdNow = null;
       spotXNow = 0;
+      spotLaneNow = 0;
+      restX = homeX;
+      restLane = 0;
       spotsNow = [];
       slotCount = 0;
       lastCtx = null;
@@ -1370,6 +1771,8 @@ export function createBehaviourRunner(
       uWalked = false;
       uFromX = homeX;
       uToX = homeX;
+      uFromLane = 0;
+      uToLane = 0;
       uStartMs = 0;
       uEndMs = 0;
       uStartBeat = 0;
@@ -1378,6 +1781,7 @@ export function createBehaviourRunner(
       frame.frame = '';
       frame.flip = false;
       frame.x = homeX;
+      frame.lane = 0;
       frame.walking = false;
       frame.poseSet = 'base';
       frame.risePx = 0;
@@ -1398,6 +1802,20 @@ export function createBehaviourRunner(
       const wait = Number.isFinite(delayMs) ? Math.max(0, delayMs) : 0;
       pending.push({ kind: 'poke', cue: null, index: -1, due: tMs + wait, def });
       return true;
+    },
+    // WP28b: a walk with more than haltMinLeftMs left is cut at the point of its last drawn tick. The walk ends on that tick (walkMs), the
+    // point becomes the segment's end (toX / toLane, toSpot the nearest spot) and the hold starts there. The walker stands on that point
+    // (mem.at), so the next walk or hold starts from it: nothing jumps. Era IV and a joined runner never cut.
+    halt(): boolean {
+      const seg = cur;
+      if (seg === null || joined || lastCtx === null || lastCtx.era === ERA_IV || spotsNow.length === 0) return false;
+      const walkEnd = seg.startMs + seg.walkMs;
+      if (seg.walkMs <= 0 || tMs >= walkEnd || walkEnd - tMs <= WORLD_BEHAVIOUR.haltMinLeftMs) return false;
+      cutWalk(seg, tMs);
+      return true;
+    },
+    clockMs(): number {
+      return tMs;
     },
     snapshot() {
       if (joined) {

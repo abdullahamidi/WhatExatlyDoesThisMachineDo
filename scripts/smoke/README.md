@@ -834,10 +834,10 @@ Expected run: `fail: []` and `errors: []` for `demo.mjs` on `http://localhost:41
 
 Same usage and `ONLY` as WP23. The WP24 keys are `NV`, `NC`, `NT`, `NU`, `NK`, `ND`, `NE`, `NY`, `NS`, `NH` (run alone with `ONLY=ND,NE,NY,NS`). The demo edition records `value.skipped` where a check needs era III: NV / NC / NU / NK era III stages, `NE`, `NS`, and the `NY` tint and held checks. Where the demo cap sleeps the world after the S9 buys, the motion checks record `value.skipped` too (demo note below). Each new check name is listed once below. Timing checks (`N_defer_*`, `N_lamp_buzz`, `N_flicker*`, `N_era_fade`) read rAF samples in wall time with one frame of slack (`FRAME_SLACK_MS`); the queue's own `startedAtMs` spacing is exact.
 
-- `N_<s>_distinct`, `N_<s>_no_repeat`, `N_<s>_walk_share`, `N_<s>_lockstep` (NV, 10 min windows at 250 ms steps, s = s7, s8, s9, s10, s11, s13b, s13a, s15): distinct looks (V1), no 4-activity run seen more than twice and no adjacent repeat (V2), walk share at most 30 % (V8), starts within 125 ms of another runner (V5, rest stages low, era IV high). Every value carries the runner `k` at the window start.
+- `N_<s>_distinct`, `N_<s>_no_repeat`, `N_<s>_walk_share`, `N_<s>_lockstep` (NV, 10 min windows at 250 ms steps, s = s7, s8, s9, s10, s11, s13b, s13a, s15): distinct looks (V1), no 4-activity run seen more than twice and no adjacent repeat (V2), walk share at most 30 % (V8) and, for the Inspector and the dog outside era IV, at least 1.5 % (WP28b r2, a dead-roamer floor; an absent actor is skipped), starts within 125 ms of another runner (V5, rest stages low, era IV high). Every value carries the runner `k` at the window start.
 - `N_s9_changes`, `N_s11_changes`, `N_s13a_changes`, `N_s15_changes` (NC, V4): every walker, the receiver, the motes, the lamp glow, the booth hood, the Sensor 7 LED, the scraps, the sprout, the Chladni rings and the clock change inside their gap limits over 180 s. The rows listed for the stage in `CHANGE_REQUIRED` must be shown in the window: S9 the receiver, motes 0-4, scrap0, scrap1, the lamp glow, booth hood, Sensor 7 LED and clock; S11 the receiver, motes 0-4, scrap0, the sprout, the lamp glow, booth hood, Sensor 7 LED and clock; S13 (after) the lamp glow, booth hood, Sensor 7 LED and clock; S15 the booth hood, Sensor 7 LED, rings 0-2 and clock. A required row never shown fails as `missing:<key>` in `over`. The walkers stay checked by the `denizens` test.
 - `N_s13a_rendered`, `N_s15_rendered` (NC, stare): under the stare each walker shows at least 3 distinct rendered states and no variant outside `WORLD_STARE_SAFE`.
-- `N_no_teleport` (NT, V6): walker x steps at most 8 world px on a walk and 4 px at rest over 15 s, with a forced glance. Demo: skipped (demo note) when the cap sleeps the world.
+- `N_no_teleport` (NT, V6): walker x steps at most 8 world px on a walk and 4 px at rest over 15 s, with a forced glance (WP28b r1: on a flight the bound is time-aware, see the WP28b action-gap section). Demo: skipped (demo note) when the cap sleeps the world.
 - `N_umbrella`, `N_umbrella_talk` (NU, replaces `I_umbrella`; the trigger is read from the behaviour log, not from snapshot sampling): seen = a natural Inspector umbrella is logged with `reaction` true (1 s `worldAdvance` steps, 180 at most); talk = `worldBehaviourNext('inspector', 'umbrella')` pins a new umbrella, and the forced INS-08 line shows `talkUmbrella` while that pinned umbrella is open; ended = an umbrella entry in the log after the pin cursor (the last log entry before the pin). The demo skips both.
 - `N_crank` (NK): one crank click steps every visible walker by one (a parked walker, the girl in the window stage, is not counted: her step stays 0), and `worldBehaviour()` holds for 2 s without clicks. `N_reduced` (WP24 r2): one reduced-motion page, stages S9, S11 and S13 in that order (each buys the rest of its cumulative list), 10 min each. Per stage: the receiver stays on `hang` on every shown sample; the micro flags `hitch`, `clockTwitch`, `lampDip` and `boothDip` are never true (read per sample from `worldDay().micro`, `micro.samples` must be above 0); every runner shows at least 3 activities (the girl at S9: 2, the mini has two before the vents). No Sensor 7 term: its double blink is canon under reduced motion and draws the front head.
 - `G_cost` (G, WP24 r2): the check value also carries `parts`, the `worldStats().parts` means in ms (`cast`, `props`, `atmos`, `clocks`, `runners`), read once after the 20 samples. Informational: the 0.3 ms limit and the gate are unchanged.
@@ -1023,7 +1023,7 @@ The buys use `buyList` (`lib/common.mjs`), then the F6.4 commit step (press `t`,
 | `D` key | `forceFind()`, press `g` | `D_key` (caught +1) | none |
 | `E` expire | `forceFind()`, wait 26.5 s | `E_gone` (marker hidden, alive null, missed +1), `E_input` (`marker.interactive` false), `E_quiet` (no `miss` text in `document.body`) | none |
 | `F` single | `forceFind()` twice | `F_single` (spawned +1 only) | none |
-| `G` gates | photo mode on, `forceFind()`; TECH INDEX open, `forceFind()` | `G_photo`, `G_tree` (no marker for 3 s; a spawn within 1.5 s after the gate closes) | none |
+| `G` gates | photo mode on, `forceFind()`; then the live Find is cleared (`clearLive`); TECH INDEX open, `forceFind()` | `G_photo`, `G_clear` (WP28b r1: the Find is taken before the next gate; each try waits for the marker, presses G and polls for caught +1; up to 5 tries 500 ms apart; the detail carries `visibleAtPress`), `G_tree` (no marker for 3 s; a spawn within 1.5 s after the gate closes) | none |
 | `H` reduced motion | reduced motion on, `forceFind()` | `H_steady` (`marker.glintFrame` constant over 6 samples in 2 s) | none |
 | `I` relic | four Finds by the key path (serials 0-3), then serial 4 (a relic) | `I_toast` (toast titled `FIELD NOTE 1/15`, `1/6` on the demo), `I_records` (RECORDS `FIELD NOTES 1/15`, note 1), `I_save` (after a save and a reload, `world.relics` is 1) | none |
 | `J` coexist | S7 list and `faultLamp`; `forceFault()` and `forceFind()` | `J_both` (both markers visible; `f` clears the fault; `g` takes the Find) | none |
@@ -1093,3 +1093,62 @@ Each Find pays 4, 6 or 8 s (`FINDS.payoutS` 6 with `payoutSpreadS` [-2, 0, 2]); 
 ### Economy HUD fit: NEXT BUY (`economy.mjs`, `F_hud_fit`)
 
 `F_hud_fit` also covers the NEXT BUY line (`#hud-goal-buy`, WP28). When the line is shown at UI 100, 125 and 150, its whole box must lie inside `#hud-panel` (`buy.contained`); when it is hidden, the scale passes without it. The per-scale records `F_hud_fit_100`, `F_hud_fit_125` and `F_hud_fit_150` carry `buy` (`shown`, `lines`, `contained`). The line count is recorded, not gated: a readout that wraps stays inside the panel.
+
+## Roaming and reach (WP28b)
+
+```
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/roam.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/roam
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/world.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/world
+PW_PATH=C:/Users/<you>/AppData/Roaming/npm/node_modules/playwright node scripts/smoke/splices.mjs "<preview>/?debug=1" C:/Users/<you>/AppData/Local/Temp/smoke/splices
+```
+
+`roam.mjs` runs in real time on a quiet PC: nothing is paused or advanced, the scheduler runs on the frames, so a full run takes several minutes (the A cases sample 90 s each). It runs one browser, a fresh context per case, 1920x1080, and prints `{ edition, results, fail, errors }` (it writes `<outdir>/roam.json`). `ONLY=<comma list>` (env, WP28b r1) runs cases alone: `A_e1`, `A_s9`, `A_s11`, `A_s13`, `A_s15`, `C`, `D`, `E` (the five E cases and `E_reduced`), `F`; an unknown key exits 2 before the browser starts. Example: `ONLY=C,D node scripts/smoke/roam.mjs ...`. The edition is read on the first page of the run, so a lone case reads it too. Expected run: `fail: []` and `errors: []` on `http://localhost:4174/?debug=1` (full) and on `http://localhost:4177/?debug=1` (demo, where the era III-V cases skip with a reason). Exit codes as the other smokes.
+
+### `roam.mjs` (roaming and reach, WP28b C15)
+
+| case | setup | checks | shots |
+|---|---|---|---|
+| `A` gap | S7 (e1), S9, S11 and S15, each a fresh run: 90 s of samples every 250 ms; S13 (era IV) the same run with the conductor | `A_gap_e1`, `A_gap_s9`, `A_gap_s11`, `A_gap_s15` (the Inspector, the dog and the crow each act at least every 12 s), `A_gap_s13` (the era IV conductor switches at least every 12 s) | `roam-<stage>.png` per stage |
+| `B` range | the same runs | `B_range_e1`, `B_range_s9`, `B_range_s11`, `B_range_s15` (the Inspector and the dog cover at least 60 % of their spot x-range; `SPOT_RANGE` mirrors `WORLD_SPOTS`) | none |
+| `C` reactions | S9; the big buy that sends the ground wave (waits out the 30 s big-buy cooldown first; then one 8 h jump, a 5 s settle and the unlock bought with no jump), `forceFault()`, `forceFind()`, then the era III keystone (a 5 s settle after its buys) and the era card closed | `C_wave` (the Inspector startles within the wave's travel time to his spot + 1 s: 2.65 s at S9), `C_fault` (the Inspector, the dog and the crow within 1.1 s: 1 s + one sample), `C_find` (the Inspector points or looks up within 5.5 s; the dog sniffs within 1.5 s), `C_era` (8 s: the Inspector's `eraFront` must start inside the window and he rests front at his inner-most spot); `C_facing`: no profile frame of the Inspector or the dog faces the machine in any sample taken in those windows | none |
+| `D` gather | S7; the bicycle bought by `buyList` (a session purchase), then the walker on its wing | `D_visit`: within 15 s the walker shows its visit activity (`visitSniff` for the dog, `visitWrite` for the Inspector) while it stands at the visit stand (48 px on the machine side of the bicycle: 2440 at e1, AD3 C-c; a normal spot near it does not pass). The detail carries `activity`, `activitySeenMs`, `hitAtMs`, `standX` and `lastWalkerX` | none |
+| `E` reach | crank 10 clicks on S7; S9, S11, S13 and S15 (the same stages with reduced motion for `E_reduced`) | `E_pulse` (`groundPulse` rises by 1-10 and at most 4 per second of the run), `E_arc` (era II: `arc` grows within 20 s), `E_drift` (era III: `drift` above 0 within 30 s), `E_hum` (era IV: the lamp glow or the booth hood moves at least 1 px in x over 3 s), `E_lift` (era V: `debris` above 0 within 20 s); `E_reduced`: with reduced motion no part reports activity (one check over e1, s9, s11, s13 and s15) | none |
+| `F` budget | S9, one retry after 5 s when the first read is above the cap; then S15 | `F_cost`: `worldStats().meanMs` at most 0.30 at S9; `reachStats().meanMs` at most 0.12 at S9 and S15. `F_display`: display objects at most 100 at S9 and S15 | none |
+
+Each `A_gap` row measures the gap of one actor as the longest run of samples with no action: an activity id change, a restarted activity clock or 8 px of travel from the last action (`actionGapMs`; the close cousin of `worstActionGap` in `world.mjs`, below). `A_gap_s13` counts the conductor's switches (a new activity id or a restarted clock on the Inspector or the dog). `roam.mjs` has no canon-hold exemption, so an era IV `hold` counts toward the gap here; `world.mjs` (`ACTION_EXEMPT`) and the unit gate (`worldBehaviourMetrics.ts`) do not count it.
+
+### `world.mjs` action gap (WP28b B1)
+
+- The three roamers (the Inspector, the dog, the crow) take the action gap in the V4 changes checks (`N_s9_changes`, `N_s11_changes`, `N_s13a_changes`, `N_s15_changes`): at most 12 s in every stage (`ACTION_LIMIT_S`, `WORLD_BEHAVIOUR.actionGapMs`; it was the 20 s / 30 s V4 gap).
+- An action is an id change of the activity, a step of a walk or a flight (a walk counts continuously while x changes), or 8 px of travel (`ACTION_PX`) from where the last action left the sprite. A same-clip loop (the idle breath, `sit0` / `sit1`, `perch0` / `perch1`) is not an action. A hidden sample ends the run.
+- Era IV (`s13a`): the `hold` id stops the clock (`ACTION_EXEMPT`, the canon hold of `worldBehaviourMetrics.ts`). WP28b r1: the `stare` is no longer exempt (the POST stare is capped by the metrics task). No other stage exempts an id, the era V stare included.
+- The girl keeps the V4 gap (20 s; 30 s in era V) and every prop row keeps its limit. Prop rows now carry `hold: true` (no prop has an activity, so nothing changes for them).
+- `N_no_teleport` (WP28b r1, time-aware): a step on a move variant (a walk, `walk0`-`walk3`, or a flight, `fly0`-`fly2`) may move up to `max(8, speed x dt + 1)` px, where `dt` is the frame gap in seconds (`moveLimitPx`): a walk at 64 px/s (8 px a tick at 8 fps) and a flight at 160 px/s (`CROW_HOP.pxPerS`). At 60 fps the walk bound stays 8 px (strict); a 50 ms rAF gap lets a flight move 8 px. A step off a move variant keeps 4 px (`REST_PX`). Each sampled row carries its frame time `t`; a violation reports `dx`, `limit`, `dtMs`.
+- `N_<s>_walk_share` (WP28b r1, r2): the walk share is at most 30 % (`WALK_SHARE_MAX`). For the Inspector and the dog it is at least 1.5 % (`WALK_SHARE_MIN` 0.015, `WALK_SHARE_FLOOR`) in every stage except era IV (`s13a`, `s13b`: `WALK_SHARE_SKIP`, the conductor runs the cast there), and only for an actor present in the window (an absent actor is skipped, not failed). Director ruling 2026-10-30 R1: the row only catches a dead roamer; the 12-20 % rule belongs to the unit gate (`worldBehaviourMetrics.test.ts`, per-state floors). The detail carries `floor`.
+- `N_<s>_rendered` (`s13a`, `s15`): the stray-variant test skips walk and flight frames (the stare rest rule, A3 of the metrics: a flight is a move).
+- The variety rows (`N_<s>_distinct`, `no_repeat`, `lockstep`) are unchanged. `G_cost` and `G_display` are unchanged.
+
+### `splices.mjs` M_eras (WP28b B5)
+
+| case | setup | checks | shots |
+|---|---|---|---|
+| `M_s11` | era III: the S11 list, one page; the pump, the whistle and the hydrant | `M_s11` (before the buys each object is placed and visible; each wakes; after the wakes each reads `line` true and `pulses` 1-4); `M_s11_buys` (setup) | `splices-M-s11.png` |
+| `M_s13` | era IV: the S13 list, one page; the bell, the gramophone and the chimes | `M_s13` (as above) | `splices-M-s13.png` |
+| `M_s15` | era V: the S15 list, one page; the payphone wakes first, then the weathervane, the kite, the cairn and the Coin Return (it needs the payphone) | `M_s15` (as above, for the four era V objects) | `splices-M-s15.png` |
+
+Each object is bought after 8 h jumps (12 at most) until it is affordable: by a click on its object when the object is on screen and enabled, else through the SPLICES tab path (case E's keys). `EXEMPT_M` lists no documented null cell: every era object stands at its stage's framing. Demo: the three checks skip with a reason.
+
+### Debug hook names used (WP28b, `src/game/debugHook.ts`)
+
+- `reachStats()`: `{ objects, meanMs, parts }`. The `parts` keys: `groundPulse` (ground pulses started since load), `groundWave` (ground waves started), `baseDust` (base specks hopping now), `pylonPulse` (pylon dots drawn), `arc` (arcs started), `drift` (drift puffs alive), `debris` (debris specks alive) and `debrisMoving` (the debris specks that move: 0 under reduced motion).
+- `worldStats()`, `livingWorld()`, `worldBehaviour()`, `worldBehaviourLog()`, `worldProps()`, `spliceStats()`, `pokeTargets()` and `forceFault()` / `forceFind()` are as before.
+
+### Known gaps (read before a run)
+
+- The era IV Chladni amplitude (D6 (c) IV, `WorldAtmos`) is not in WP28b: no task owns `WorldAtmos`. `E_hum` checks the lamp and booth hum only.
+- `roam.mjs` `F_cost` and `world.mjs` `G_cost` are timing checks: see the load rule below.
+- `M_eras` clicks an object only when it is on screen; the SPLICES tab path covers the rest. The detail of each `M_<stage>` row carries the path used (`wake`: `via` and `woken` per object).
+
+### Load rule (timing checks)
+
+Timing checks (`world.mjs` `G_cost`, `finds.mjs` `K_cost`, `faults.mjs` `N_cost` and `C_order`, `roam.mjs` `F_cost`, the `perf.mjs` boot and machine times) that fail under load are rerun alone with nothing else running on the PC before they are judged. If a quiet rerun still fails, an A/B against a scratch build of `0db4856` under the same load decides whether the code is the cause.

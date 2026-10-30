@@ -6,8 +6,9 @@
 // avoids the bag's last two picks and never repeats the target's previous reaction (across the levels and the unavailable window).
 // Deterministic from the seed: a sine hash of the seed and the draw count (the hash01 law of worldBehaviour.ts, copied here so the poke maths
 // imports no runner code). Nothing draws from Math.random. Pure: no Phaser, no DOM. Every number lives in src/data/pokes.ts.
-import { POKES, POKE_OBJECT_KEY, POKE_OBJECT_TABLES, POKE_TABLES } from '../../data/pokes';
+import { POKES, POKE_BUBBLE, POKE_OBJECT_KEY, POKE_OBJECT_TABLES, POKE_TABLES } from '../../data/pokes';
 import type { PokeClip, PokeSoundId, PokeTable, PokeTargetKey } from '../../data/pokes';
+import type { WorldVoices } from '../../data/types';
 
 // One answer of the ladder: its level, whether it is the unavailable window, the clip, the leave activity (level 3 only), the sound (null:
 // silent) and the delay before the answer starts (300-500 ms).
@@ -148,4 +149,40 @@ export function reducedClip(clip: PokeClip): PokeClip {
   const held = clip.frames[best];
   if (held === undefined) return { ...clip, frames: [], frameMs: [], durMs };
   return { ...clip, frames: [held], frameMs: [durMs], durMs };
+}
+
+// The poke bubbles (WP28b, P12): the rule and its state. The state keeps each actor's last shown bubble and the shown times of the last hour
+// (oldest first). Neither bubble counts against the era voice caps: nothing here touches the scheduler.
+export type PokeBubbleActor = 'inspector' | 'girl';
+export interface PokeBubbleState { lastAtMs: Record<'inspector' | 'girl', number>; hourStamps: number[] }
+
+// A fresh state: no bubble shown yet, no stamps.
+export function createPokeBubbleState(): PokeBubbleState {
+  return { lastAtMs: { inspector: -Infinity, girl: -Infinity }, hourStamps: [] };
+}
+
+// The bubbles shown inside the last hour at nowMs (a stamp counts while it is less than hourMs old).
+function stampsInHour(s: PokeBubbleState, nowMs: number): number {
+  let n = 0;
+  for (const t of s.hourStamps) if (nowMs - t < POKE_BUBBLE.hourMs) n += 1;
+  return n;
+}
+
+// Whether the actor's bubble may start at nowMs. u01 is a draw in [0, 1) from the caller. Pure: the state is read only. Off is never; a line
+// bubble up blocks; the actor's gap and the hour's cap (across both actors) block; then the draw against the chance (RARE: the lower one).
+export function pokeBubbleDue(s: PokeBubbleState, actor: PokeBubbleActor, nowMs: number, u01: number,
+  opts: { voices: WorldVoices; lineBubbleUp: boolean }): boolean {
+  if (opts.voices === 'off' || opts.lineBubbleUp) return false;
+  if (nowMs - s.lastAtMs[actor] < POKE_BUBBLE.perActorGapMs) return false;
+  if (stampsInHour(s, nowMs) >= POKE_BUBBLE.perHourMax) return false;
+  return u01 < (opts.voices === 'rare' ? POKE_BUBBLE.chanceRare : POKE_BUBBLE.chance);
+}
+
+// Records a bubble that starts at nowMs. Stamps an hour or more old are dropped, so the list holds the shown times of the last hour only.
+export function notePokeBubble(s: PokeBubbleState, actor: PokeBubbleActor, nowMs: number): void {
+  s.lastAtMs[actor] = nowMs;
+  let drop = 0;
+  while (drop < s.hourStamps.length && nowMs - (s.hourStamps[drop] ?? nowMs) >= POKE_BUBBLE.hourMs) drop += 1;
+  if (drop > 0) s.hourStamps.splice(0, drop);
+  s.hourStamps.push(nowMs);
 }

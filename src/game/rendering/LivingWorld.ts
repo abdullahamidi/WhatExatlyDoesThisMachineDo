@@ -13,11 +13,12 @@ import { ASSET_MANIFEST } from '../../assets/manifest';
 import type { AssetId } from '../../assets/assetIds';
 import { AUDIO } from '../../data/audio';
 import { PALETTE } from '../../data/palette';
-import { MACHINE_ANCHOR, PIXEL_SCALE, VIEW } from '../../data/world';
+import { GROUND_Y, MACHINE_ANCHOR, PIXEL_SCALE, VIEW } from '../../data/world';
 import { WORLD_DEPTH_OFFSETS, WORLD_ENV, WORLD_FRAMES, WORLD_PLAYBACK, WORLD_ROWS, WORLD_SHADOW_WIDTHS, WORLD_SHEET_KEYS } from '../../data/livingWorld';
 import type { DenizenId, GroundId, WorldPlacement, WorldRow } from '../../data/livingWorld';
 import { WORLD_ERA_ENV, WORLD_ERA_LOOPS } from '../../data/worldEras';
 import { WORLD_AMBIENT } from '../../data/worldDay';
+import { YARD_DEPTH_STEP } from '../../data/worldShared';
 import { WORLD_STARE_SAFE } from '../../data/worldBehaviour';
 import type { BehaviourActor } from '../../data/worldBehaviour';
 import { CROW_HOP, POKE_RENDER, POKES } from '../../data/pokes';
@@ -53,6 +54,11 @@ function frontOf(actor: WalkerId): string {
   return WORLD_STARE_SAFE[actor][0] ?? '';
 }
 
+// WP28b: the feet lane of a walker's home row (lane 0 is the back row, the dog's front row is its home lane).
+function homeLaneOf(home: WorldRow): number {
+  return WORLD_ROWS[home].y - GROUND_Y;
+}
+
 // Frame names per member (DENIZEN_ART 2.1-2.4, 2.6 and 4.3).
 const POSE_FRAMES: Record<LivingId, PoseNames> = {
   inspector: { front: frontOf('inspector'), talk: 'talk', glance: 'glance' },
@@ -83,6 +89,32 @@ const RIPPLE_NUDGE_WORLD_PX = 2;
 const BLINK_STEPS = 4;
 // Frame-time window for the mean in stats().
 const TIMING_WINDOW = 120;
+// The last `size` update durations (ms) and their mean (stats().meanMs). WP28b FX6: the cast, the props and the Director keep their timings
+// in this one ring; the mean sums the slots in order, as the array mean did, so the readings are the same.
+export class TimingRing {
+  private readonly values: Float64Array;
+  private readonly size: number;
+  private count = 0;
+  private next = 0;
+
+  constructor(size: number) {
+    this.size = size;
+    this.values = new Float64Array(size);
+  }
+
+  record(ms: number): void {
+    this.values[this.next] = ms;
+    this.next = (this.next + 1) % this.size;
+    if (this.count < this.size) this.count += 1;
+  }
+
+  mean(): number {
+    if (this.count === 0) return 0;
+    let sum = 0;
+    for (let i = 0; i < this.count; i++) sum += this.values[i] ?? 0;
+    return sum / this.count;
+  }
+}
 // Unlit LED colour (palette).
 const LED_DIM = PALETTE.rustDark;
 // Sensor 7 LED frame names by crossfade level (0 red, 1 amber); the sensorRows frame of a lit LED.
@@ -102,6 +134,11 @@ const ALPHA_LEVELS = 255;
 const CROSS_MIDPOINT = 0.5;
 // The crow's landing after a hop: two frames of landMs each (crowLandFrame); the hop is over after them.
 const HOP_LAND_MS = 2 * CROW_HOP.landMs;
+// WP28b yard lanes (lane = feet px below GROUND_Y). The Inspector takes the front row from the middle of the two rows on; the dog's home lane
+// is its front row. A walker's child depth steps YARD_DEPTH per lane px: the yard convention of SpliceProps and the Find marker, so the
+// lower feet draw in front.
+const FRONT_ROW_LANE = (WORLD_ROWS.front.y - WORLD_ROWS.back.y) / 2;
+const DOG_HOME_LANE = WORLD_ROWS.front.y - GROUND_Y;
 
 /**
  * A snap-turn to camera. talk runs open until release (tl holds the bubble window, blips the mouth alternation of the line);
@@ -151,6 +188,7 @@ interface Walker {
   readonly blend: Phaser.GameObjects.Sprite;   // the crossfade row over the body: the film's blend, or the era twin (the to row at alpha k)
   readonly shadow: Phaser.GameObjects.Image | null;
   feetY: number;                      // rest feet y, world px (crow: lifted for its perch; girl: placement row + dy)
+  lane: number;                       // WP28b: drawn feet lane (feetY = GROUND_Y + lane) of the Inspector and the dog; the rest lane otherwise
   anchorY: number;                    // feet y the speech tail follows: the film's feet y in script mode, else feetY
   row: WorldRow;                      // the row container the body, blend and shadow sit in (the girl and the film move between rows)
   home: WorldRow;                     // the row without a film: the construction row (the girl: her placement row)
@@ -342,7 +380,7 @@ function filmShadowAlpha(state: WorldVisualState): number {
 
 // The era crossfade of a Blend into c: a settled blend (from = to, or k 1) shows its to row alone; a blend at k 0 shows its from row alone;
 // between, main = the from row and twin = the to row at k.
-function crossInto(c: Cross, b: Blend): void {
+export function crossInto(c: Cross, b: Blend): void {
   if (b.from === b.to || b.k >= 1) {
     c.main = b.to;
     c.twin = b.to;
@@ -358,7 +396,7 @@ function crossInto(c: Cross, b: Blend): void {
   }
 }
 
-function clamp01(v: number): number {
+export function clamp01(v: number): number {
   return Math.min(1, Math.max(0, v));
 }
 
@@ -439,8 +477,7 @@ export class LivingWorld {
   private readonly objects: Phaser.GameObjects.GameObject[] = [];
   private readonly ownedTextures: string[] = [];
   private readonly tracks: Record<LivingId, string | null>;
-  private readonly timings: number[] = [];
-  private timingNext = 0;
+  private readonly timings = new TimingRing(TIMING_WINDOW);
   private readonly inspector: Walker;
   private readonly dog: Walker;
   private readonly crow: Walker;
@@ -561,6 +598,11 @@ export class LivingWorld {
     if (isFilm) {
       this.dropOverlays();
       this.crowSnapHome();
+    }
+    // WP28b: the film draws the Inspector and the dog on their home lines (drawScriptWalker reads feetY), so a lane held by a walk is dropped.
+    if (isFilm && !wasFilm) {
+      this.restLane(this.inspector);
+      this.restLane(this.dog);
     }
     // Only a switch re-applies the placed members; a film frame to the next frame draws in update() alone.
     if (wasFilm !== isFilm) this.applyAll();
@@ -790,6 +832,13 @@ export class LivingWorld {
   }
 
   /**
+   * WP28b: the amber glint ends now (a Machine Fault clears or expires). The blink schedule resumes at once; a glint span still running is cut.
+   */
+  sensorLedClear(): void {
+    this.ledUntil.glint = Number.NEGATIVE_INFINITY;
+  }
+
+  /**
    * Tier-up world ripple, never under reduced motion. Eras I-II: the crow or the dog nudges one frame. Era III: every walker gusts
    * one frame. Era IV: every walker rises on the next downbeat. Era V: the shadows slide toward the machine (only with shadows).
    */
@@ -873,6 +922,11 @@ export class LivingWorld {
     return true;
   }
 
+  /** WP28b: whether a crow hop is still in flight or landing at nowMs (its arc and its two landing frames): the director waits for it. */
+  hopBusy(nowMs: number): boolean {
+    return this.hop.set && nowMs < this.hop.startMs + this.hop.durMs + HOP_LAND_MS;
+  }
+
   /** Clears the crow's hop and perch offset at once, no animation: the crow draws on its placement until its next hop. */
   crowSnapHome(): void {
     this.hop.set = false;
@@ -880,6 +934,20 @@ export class LivingWorld {
     this.perch.dx = 0;
     this.perch.dy = 0;
     this.crow.anchorY = this.crow.feetY;
+  }
+
+  /**
+   * WP28b F33: the crow sits at (x, y) with no flight, for an unseen relocation (its perch took over by a Splice top, or its home moved at an unseen
+   * moment). It draws there from the next frame as a landed hop does, so the perch offset and the anchor follow it.
+   */
+  crowSettleAt(x: number, y: number): void {
+    if (this.destroyed) return;
+    const hop = this.hop;
+    hop.set = true;
+    hop.fromX = hop.toX = hop.x = x;
+    hop.fromY = hop.toY = hop.y = y;
+    hop.startMs = Number.NEGATIVE_INFINITY;
+    hop.durMs = 0;
   }
 
   /**
@@ -984,11 +1052,9 @@ export class LivingWorld {
 
   /** Created objects (extras included), and the mean update time over the last 120 frames (ms). */
   stats(): { objects: number; meanMs: number } {
-    let sum = 0;
-    for (const ms of this.timings) sum += ms;
     return {
       objects: this.objects.length + this.extras.stats().objects,
-      meanMs: this.timings.length === 0 ? 0 : sum / this.timings.length,
+      meanMs: this.timings.mean(),
     };
   }
 
@@ -1033,7 +1099,7 @@ export class LivingWorld {
     }
     this.rowOf(row).add(blend);
     return {
-      id, body, blend, shadow, feetY, anchorY: feetY, row, home: row, placement: null, visible: false, feetX: 0,
+      id, body, blend, shadow, feetY, lane: feetY - GROUND_Y, anchorY: feetY, row, home: row, placement: null, visible: false, feetX: 0,
       frame: POSE_FRAMES[id].front, flip: false, dx: 0,
       run: { x: null, frame: POSE_FRAMES[id].front, activity: '', walking: false, flip: false, alpha: 1, rise: 0, umbrella: false },
       look: { valid: false, frame: '', walking: false, flip: false, stared: false, placementX: 0, shown: '', mirror: false },
@@ -1179,6 +1245,34 @@ export class LivingWorld {
     sortWorldRows(this.rows);
   }
 
+  // WP28b: the feet of a walker on a lane. feetY follows it, so the anchor, the shadow and the speech bubble follow the feet.
+  private setLane(w: Walker, lane: number): void {
+    w.lane = lane;
+    w.feetY = GROUND_Y + lane;
+  }
+
+  // WP28b: a walker back on its home lane (the film start): its feet and row follow the rest lane.
+  private restLane(w: Walker): void {
+    this.setLane(w, homeLaneOf(w.home));
+    this.placeLane(w);
+  }
+
+  // WP28b: the row and child depth of an Inspector or a dog on its lane. The Inspector takes the front row from FRONT_ROW_LANE on, at
+  // cast + YARD_DEPTH x lane; the dog keeps the front row and steps deeper past its home lane; otherwise the depth is the home depth. A row
+  // change goes through placeInRow; the rows re-sort only when the row or the depth step changes (the step is whole lane px).
+  private placeLane(w: Walker): void {
+    const front = w.id === 'inspector' && w.lane >= FRONT_ROW_LANE;
+    const row: WorldRow = front ? 'front' : w.home;
+    const lane = Math.round(w.lane);
+    const step = w.id === 'dog' ? Math.max(0, lane - DOG_HOME_LANE) : front ? lane : 0;
+    const depth = WORLD_DEPTH_OFFSETS.cast + YARD_DEPTH_STEP * step;
+    this.placeInRow(w, row);
+    if (w.body.depth === depth) return;
+    w.body.setDepth(depth);
+    w.blend.setDepth(depth);
+    sortWorldRows(this.rows);
+  }
+
   private applySensor(placement: WorldPlacement | null, state: WorldVisualState | null): void {
     const s = this.sensor;
     const shown = state !== null && state.visible && placement !== null;
@@ -1281,7 +1375,9 @@ export class LivingWorld {
       return;
     }
     if (!w.visible) this.showWalker(w);
-    this.placeInRow(w, w.home);
+    // WP28b: the Inspector and the dog take their row from their lane (placeLane below); the crow and the girl keep their home row.
+    const laned = w.id === 'inspector' || w.id === 'dog';
+    if (!laned) this.placeInRow(w, w.home);
     if (w.id === 'crow' && this.hop.set) {
       if (now - this.hop.startMs < this.hop.durMs + HOP_LAND_MS) {
         this.drawCrowHop(w, now, placement, state, tween, flicker);
@@ -1309,8 +1405,12 @@ export class LivingWorld {
       run.rise = f.risePx;
       run.umbrella = f.poseSet === 'umbrella';
       if (!held) run.x = f.x;
+      // The feet follow the drawn frame's lane (a lying dog stays on its home line, as it stays at its placement x).
+      if (laned) this.setLane(w, lying ? homeLaneOf(w.home) : f.lane);
     }
     if (lying && !held) w.run.x = placement.x;
+    // Runs on every frame, a valid runner frame or not, so the row and depth always match the lane held.
+    if (laned) this.placeLane(w);
     const x = w.run.x ?? placement.x;
     w.run.x = x;
     const names = this.poseNamesOf(w, state.era);
@@ -1701,12 +1801,7 @@ export class LivingWorld {
   }
 
   private recordTiming(ms: number): void {
-    if (this.timings.length < TIMING_WINDOW) {
-      this.timings.push(ms);
-      return;
-    }
-    this.timings[this.timingNext] = ms;
-    this.timingNext = (this.timingNext + 1) % TIMING_WINDOW;
+    this.timings.record(ms);
   }
 
   // ---- events ----

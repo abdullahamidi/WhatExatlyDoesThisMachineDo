@@ -1,15 +1,20 @@
 // Living world behaviour data tests (WP24 T1): every clip frame, burst rest frame and unison accent exists in its sheet; the clip fields are
 // well formed; no finale payoff frame is used before the finale; the girl and the crow stay still; the stare-safe rules; the era lists and
-// the unison map cover their actions; the cue routes and producers match; the spots sit inside their actor bands (actorBand).
+// the unison map cover their actions; the cue routes and producers match; the spots sit inside their actor bands (actorBand); the roaming
+// holds, repeats and micro activities (WP28b).
 // Why: a frame name, cue or spot that does not exist fails silently in the renderers, so the data is checked where it is written.
 // Structure and canon only: the hold, weight and cooldown numbers are tuned by T3d and are never pinned here. Pure data test; the spot
 // rule reads the placement maths (src/game/math/worldPlacement.ts), which is pure (no Phaser).
 import { describe, it, expect } from 'vitest';
 import {
-  WORLD_BEHAVIOUR, WORLD_PREFINALE_BANNED, WORLD_REACT, WORLD_REPERTOIRE, WORLD_SPOTS, WORLD_STARE_SAFE, WORLD_UNISON, WORLD_WALK,
+  WORLD_BEHAVIOUR, WORLD_PREFINALE_BANNED, WORLD_REACT, WORLD_REPERTOIRE, WORLD_SPOTS, WORLD_STARE_SAFE, WORLD_UNISON, WORLD_VISITS, WORLD_WALK,
+  WORLD_YARD,
 } from './worldBehaviour';
-import type { Activity, BehaviourActor, Clip, CueId, UnisonClip, UnisonId } from './worldBehaviour';
-import { WORLD_ENV, WORLD_FRAMES, WORLD_PLACEMENTS, WORLD_PLAYBACK } from './livingWorld';
+import type { Activity, BehaviourActor, BehaviourCond, Clip, CueId, UnisonClip, UnisonId } from './worldBehaviour';
+import { WORLD_ENV, WORLD_FRAMES, WORLD_PLACEMENTS, WORLD_PLAYBACK, WORLD_ROWS } from './livingWorld';
+import { GROUND_Y, MACHINE_ANCHOR } from './world';
+import { SPLICE_WORLD } from './spliceWorld';
+import type { SpliceObjectId } from './spliceWorld';
 import type { FramingKey } from './livingWorld';
 import type { TechId } from './types';
 import { actorBand, framingKey, framingPose, placeCast } from '../game/math/worldPlacement';
@@ -47,7 +52,8 @@ function levelsOf(buys: readonly string[]): Record<TechId, number> {
 
 const ACTORS: readonly BehaviourActor[] = ['inspector', 'dog', 'crow', 'girl'];
 const ERA_KEYS = [1, 2, 3, 5] as const;
-const CUES: readonly CueId[] = ['atSensor', 'digBout', 'crowMove', 'ring', 'ventPuff', 'rapid', 'crankClick', 'gust'];
+const CUES: readonly CueId[] = ['atSensor', 'digBout', 'crowMove', 'ring', 'ventPuff', 'rapid', 'crankClick', 'gust', 'fault', 'faultClear', 'find',
+  'bigBuy', 'era', 'splice'];
 const UNISON_IDS: readonly UnisonId[] = ['still', 'stare', 'sway', 'beat', 'look', 'mouth', 'hold', 'rise'];
 const SHEET: Record<BehaviourActor, readonly string[]> = {
   inspector: WORLD_FRAMES.inspector, dog: WORLD_FRAMES.dog, crow: WORLD_FRAMES.crow, girl: WORLD_FRAMES.girl,
@@ -162,14 +168,15 @@ describe('girl and crow stay still on screen', () => {
 // The crow perched with folded wings in eras I-II (WP27 D5): the base activities draw only the perched frames; the spread-wing freeze is
 // the one tip try glitch (at most 1.8 s, weight at most 0.5), the only activity marked glitch.
 describe('the crow is perched in eras I-II (WP27 D5)', () => {
-  const PERCH_FRAMES = ['perch0', 'perch1', 'perchTurn', 'peck0', 'peck1', 'ruffle'];
+  // perchHead and perchTalk are folded-wing head frames (WP28b: the crow's era card reaction, eraPerchHead, draws perchHead).
+  const PERCH_FRAMES = ['perch0', 'perch1', 'perchTurn', 'perchHead', 'perchTalk', 'peck0', 'peck1', 'ruffle'];
   const SPREAD_FRAMES = ['frozen', 'frozenTip', 'head', 'talk', 'fly0', 'fly1', 'fly2'];
   const EARLY_CROW = ROWS.filter((r) => r.actor === 'crow' && (r.era === 1 || r.era === 2));
 
   it('every era I-II crow activity but tipTry draws only the perched frames, never a spread-wing or head or talk frame', () => {
     for (const { era, act } of EARLY_CROW) {
-      // The poke-only hop is the one flight (C3, the hop rule below).
-      if (act.id === 'tipTry' || act.poke === true) continue;
+      // The poke-only hop is the one flight (C3, the hop rule below); the WP28b free hop (hopFree) is the other.
+      if (act.id === 'tipTry' || act.poke === true || act.id === 'hopFree') continue;
       for (const f of shownFrames(act.clip)) {
         expect(PERCH_FRAMES, `era ${era} crow ${act.id} ${f}`).toContain(f);
         expect(SPREAD_FRAMES, `era ${era} crow ${act.id} ${f}`).not.toContain(f);
@@ -213,12 +220,12 @@ describe('the poke-only activities (WP28a T15a, C3)', () => {
   const FLY = ['fly0', 'fly1', 'fly2'];
   const POKE_ROWS = ROWS.filter((r) => r.act.poke === true);
 
-  it('the fly frames are not banned before the finale, and only poke-only activities draw them', () => {
+  it('the fly frames are not banned before the finale, and only poke-only activities and the WP28b free hop draw them', () => {
     expect(WORLD_PREFINALE_BANNED.crow).toEqual([]);
     for (const { actor, era, act } of ROWS) {
       if (!shownFrames(act.clip).some((f) => FLY.includes(f))) continue;
       expect(actor, `era ${era} ${act.id}`).toBe('crow');
-      expect(act.poke, `era ${era} ${act.id}`).toBe(true);
+      expect(act.poke === true || act.id === 'hopFree', `era ${era} ${act.id}`).toBe(true);
     }
   });
 
@@ -265,8 +272,8 @@ describe('stare-safe rules (D2, Q7)', () => {
 
   it('every rest frame of the era V lists and of the post-observer unison is stare-safe', () => {
     for (const r of ROWS) {
-      // The hop's fly frames are the one facing exemption (C3), so the hop is not a stare-safe rest frame.
-      if (r.era !== 5 || r.act.travel !== undefined || r.act.id === 'hop') continue;
+      // The hop's fly frames are the one facing exemption (C3), so the hop is not a stare-safe rest frame (WP28b: nor is the free hop).
+      if (r.era !== 5 || r.act.travel !== undefined || r.act.id === 'hop' || r.act.id === 'hopFree') continue;
       for (const f of shownFrames(r.act.clip)) expect(WORLD_STARE_SAFE[r.actor], `era 5 ${r.actor} ${r.act.id} ${f}`).toContain(f);
     }
     for (const u of UNISON_ROWS) {
@@ -291,8 +298,8 @@ describe('repertoires', () => {
         const ids = list.map((a) => a.id);
         expect(new Set(ids).size, `${actor} era ${era} ids`).toBe(ids.length);
         for (const a of list) {
-          // A poke-only activity holds one fixed time (the hop: 600 ms); every other hold is a range.
-          if (a.poke === true) expect(a.holdMs[0], `${actor} ${a.id} hold`).toBeLessThanOrEqual(a.holdMs[1]);
+          // A poke-only activity holds one fixed time (the hop: 600 ms); so do the WP28b free hop and the dog's bark (1.5 s). Every other hold is a range.
+          if (a.poke === true || a.id === 'hopFree' || a.id === 'bark') expect(a.holdMs[0], `${actor} ${a.id} hold`).toBeLessThanOrEqual(a.holdMs[1]);
           else expect(a.holdMs[0], `${actor} ${a.id} hold`).toBeLessThan(a.holdMs[1]);
           expect(a.weight, `${actor} ${a.id} weight`).toBeGreaterThanOrEqual(0);
         }
@@ -307,6 +314,13 @@ describe('repertoires', () => {
         expect(act.weight, `${actor} ${act.id} weight`).toBe(0);
         expect(act.reaction, `${actor} ${act.id} reaction`).toBeUndefined();
         expect(act.interruptible, `${actor} ${act.id} interruptible`).toBe(false);
+        continue;
+      }
+      // A micro activity (WP28b) is weight 0 with no reaction: the scheduler's fallback starts it, a cue never does.
+      if (act.micro === true) {
+        expect(act.weight, `${actor} ${act.id} weight`).toBe(0);
+        expect(act.reaction, `${actor} ${act.id} reaction`).toBeUndefined();
+        expect(act.interruptible, `${actor} ${act.id} interruptible`).toBe(true);
         continue;
       }
       if (act.weight === 0) {
@@ -332,6 +346,95 @@ describe('repertoires', () => {
   });
 });
 
+// The roaming rules (WP28b, B-T1a): every roamer rest hold ends by the guard bound (9 s) and the rest poses hold at least 3 s; no roamer
+// repeats an id (only the girl merges one); each roamer has its micro activity in eras I, II, III and V.
+describe('roaming holds, repeats and micro activities (WP28b, B-T1a)', () => {
+  const ROAM_ROWS = ROWS.filter((r) => r.actor !== 'girl');
+  // The rest poses of each roamer: the ids whose holds the caps shorten (the rest range of WORLD_BEHAVIOUR.restHoldMs applies).
+  const REST_IDS: Partial<Record<BehaviourActor, readonly string[]>> = {
+    inspector: ['stand', 'write', 'reading', 'lookUp', 'crouch', 'umbrella', 'withSensor'],
+    dog: ['sit', 'sniff', 'sleep', 'lookUp', 'dig', 'leaveSit'],
+    crow: ['perch', 'stutterV', 'stillV'],
+  };
+  // The one micro activity of each roamer per era (weight 0, micro: true).
+  const MICRO_IDS: Partial<Record<BehaviourActor, Partial<Record<1 | 2 | 3 | 5, string>>>> = {
+    inspector: { 1: 'microGlance', 2: 'microGlance', 3: 'microGlance', 5: 'microTalk' },
+    dog: { 1: 'microScratch', 2: 'microScratch', 3: 'microScratch', 5: 'microTalk' },
+    crow: { 1: 'microPeck', 2: 'microPeck', 3: 'microPeck', 5: 'microCaw' },
+  };
+
+  it('the rest hold range is 3 to 9 s, and the hold caps are 10 s, 8 s and 10 s (the hold, early static and era V static caps)', () => {
+    expect(WORLD_BEHAVIOUR.restHoldMs).toEqual([3000, 9000]);
+    expect(WORLD_BEHAVIOUR.capMs).toEqual({ hold: 10000, staticEarly: 8000, staticV: 10000 });
+    expect(WORLD_BEHAVIOUR.actionGapMs).toBeLessThanOrEqual(12000);
+    // WP28b: the plan's 9.5 s micro rule is not built (the micro fallback runs only when nothing else passes), so there is no micro gap key.
+    expect('microGapMs' in WORLD_BEHAVIOUR).toBe(false);
+  });
+
+  it('the machine-event cut keeps 250 ms of walk left (WP28b B3); the poke halt keeps haltMinLeftMs at 1 s', () => {
+    expect(WORLD_BEHAVIOUR.reactHaltMinLeftMs).toBe(250);
+    expect(WORLD_BEHAVIOUR.haltMinLeftMs).toBe(1000);
+  });
+
+  // WP28b (r2-FX4G, V5): the start gate holds a boundary pick by 150 ms, at most 3 times, and 150 ms clears the 125 ms lock window.
+  it('the start gate moves a boundary pick by 150 ms at most 3 times (V5 window 125 ms)', () => {
+    expect(WORLD_BEHAVIOUR.startGuardMs).toBe(150);
+    expect(WORLD_BEHAVIOUR.startGuardExtMax).toBe(3);
+    expect(WORLD_BEHAVIOUR.startGuardMs).toBeGreaterThan(125);
+  });
+
+  it('the girl ground statics (stand, lanternUp, tilt) keep the v0.11.0 cap of 16 s; the sway keeps 45 s (WP28b D)', () => {
+    const girl = ROWS.filter((r) => r.actor === 'girl');
+    for (const id of ['stand', 'lanternUp', 'tilt']) {
+      const rows = girl.filter((r) => r.act.id === id);
+      expect(rows.length, `girl ${id} exists`).toBeGreaterThan(0);
+      for (const { era, act } of rows) expect(act.capMs, `era ${era} girl ${id}`).toBe(16000);
+    }
+    for (const { era, act } of girl.filter((r) => r.act.id === 'sway')) expect(act.capMs, `era ${era} girl sway`).toBe(45000);
+  });
+
+  it('every roamer activity holds at most the 9 s guard bound', () => {
+    for (const { actor, era, act } of ROAM_ROWS) {
+      expect(act.holdMs[1], `era ${era} ${actor} ${act.id}`).toBeLessThanOrEqual(WORLD_BEHAVIOUR.restHoldMs[1]);
+    }
+  });
+
+  it('every roamer rest pose holds between the rest range bounds, and each named rest pose exists', () => {
+    for (const actor of ['inspector', 'dog', 'crow'] as const) {
+      for (const id of REST_IDS[actor] ?? []) {
+        const rows = ROAM_ROWS.filter((r) => r.actor === actor && r.act.id === id);
+        expect(rows.length, `${actor} ${id} exists`).toBeGreaterThan(0);
+        for (const { era, act } of rows) {
+          expect(act.holdMs[0], `era ${era} ${actor} ${id} lower`).toBeGreaterThanOrEqual(WORLD_BEHAVIOUR.restHoldMs[0]);
+          expect(act.holdMs[1], `era ${era} ${actor} ${id} upper`).toBeLessThanOrEqual(WORLD_BEHAVIOUR.restHoldMs[1]);
+        }
+      }
+    }
+  });
+
+  it('no roamer activity is repeatable; the girl keeps her merged rest poses', () => {
+    for (const { actor, era, act } of ROAM_ROWS) expect(act.repeatable, `era ${era} ${actor} ${act.id}`).toBeUndefined();
+    expect(ROWS.some((r) => r.actor === 'girl' && r.act.repeatable === true)).toBe(true);
+  });
+
+  it('each roamer has exactly one micro activity in eras I, II, III and V, weight 0, no cooldown, holds 1.2 to 2.2 s', () => {
+    for (const actor of ['inspector', 'dog', 'crow'] as const) {
+      for (const era of ERA_KEYS) {
+        const micros = ROWS.filter((r) => r.actor === actor && r.era === era && r.act.micro === true);
+        expect(micros.map((r) => r.act.id), `${actor} era ${era} micro`).toEqual([MICRO_IDS[actor]?.[era]]);
+        for (const { act } of micros) {
+          expect(act.weight, act.id).toBe(0);
+          expect(act.cooldownMs, act.id).toBe(0);
+          expect(act.interruptible, act.id).toBe(true);
+          expect(act.holdMs, act.id).toEqual([1200, 2200]);
+          expect(act.travel, act.id).toBeUndefined();
+        }
+      }
+    }
+    expect(ROWS.some((r) => r.actor === 'girl' && r.act.micro === true)).toBe(false);
+  });
+});
+
 describe('cues (WORLD_REACT)', () => {
   it('the producers name every cue, and each cue has at least one consumer route', () => {
     expect(Object.keys(WORLD_REACT.producers).sort()).toEqual([...CUES].sort());
@@ -350,6 +453,107 @@ describe('cues (WORLD_REACT)', () => {
     for (const actor of ACTORS) {
       const [lo, hi] = WORLD_REACT.latencyMs[actor];
       expect(lo, actor).toBeLessThanOrEqual(hi);
+    }
+  });
+
+  it('the WP28b stagger bands and the find delay are ordered; the six new cues react at chance 1 (C2, C11)', () => {
+    for (const actor of ACTORS) {
+      const [lo, hi] = WORLD_REACT.staggerMs[actor];
+      expect(lo, `${actor} stagger`).toBeLessThanOrEqual(hi);
+    }
+    expect(WORLD_REACT.findDelayMs[0]).toBeLessThanOrEqual(WORLD_REACT.findDelayMs[1]);
+    expect(WORLD_REACT.staggerMs.inspector[1]).toBeLessThanOrEqual(WORLD_REACT.staggerMs.dog[0]);
+    expect(WORLD_REACT.staggerMs.dog[1]).toBeLessThanOrEqual(WORLD_REACT.staggerMs.crow[0]);
+    expect(WORLD_REACT.chanceByCue).toEqual({ fault: 1, faultClear: 1, find: 1, bigBuy: 1, era: 1, splice: 1 });
+  });
+
+  it('every route of a new cue names an activity that answers it, and every activity that answers it is routed', () => {
+    const NEW_CUES: readonly CueId[] = ['fault', 'faultClear', 'find', 'bigBuy', 'era', 'splice'];
+    for (const cue of NEW_CUES) {
+      const routed = [...WORLD_REACT.routes[cue]].sort();
+      const answering = [...new Set(ROWS.filter((r) => r.act.reaction?.includes(cue) === true).map((r) => `${r.actor}.${r.act.id}`))].sort();
+      expect(routed, cue).toEqual(answering);
+    }
+  });
+});
+
+// The WP28b reactions, visits and free hop (B-T3a): the cue answers, the walks each travel kind allows (C1: a Find walk goes outward only, a
+// visit walks to the Splice's visit spot), the stare set of era V and the hop's data guard.
+describe('reactions, gathering and the free hop (WP28b, B-T3a)', () => {
+  const FLY = ['fly0', 'fly1', 'fly2'];
+  const NEW_REACTIONS = ['startle', 'writeTick', 'point', 'lookFind', 'eraFront', 'bark', 'sniffFind', 'sniffHere', 'eraHead', 'lookBigV',
+    'ruffleReact', 'glanceDown', 'eraPerchHead', 'settle'];
+  const VISITS = ['visitWrite', 'visitSniff'];
+
+  it('the free hop is a weight 1.2 crow activity in eras I, II, III and V only: 20 s cooldown, hopOk, the three fly frames', () => {
+    const hops = ROWS.filter((r) => r.act.id === 'hopFree');
+    expect(hops.map((r) => `${r.actor} ${r.era}`)).toEqual(['crow 1', 'crow 2', 'crow 3', 'crow 5']);
+    for (const { era, act } of hops) {
+      expect(act.weight, `era ${era} hop weight`).toBe(1.2);
+      expect(act.cooldownMs, `era ${era} hop cooldown`).toBe(20000);
+      expect(act.when, `era ${era} hop when`).toEqual(['hopOk']);
+      expect(act.clip.frames, `era ${era} hop frames`).toEqual(FLY);
+      expect(act.reversed === true, `era ${era} hop reversed`).toBe(era === 5);
+      expect(act.travel, `era ${era} hop travel`).toBeUndefined();
+    }
+  });
+
+  it('a Find walks only outward (C1): sniffFind and point on the outer side, lookFind and sniffHere on the inner side', () => {
+    const whenOf = (id: string): BehaviourCond[] => ROWS.filter((r) => r.act.id === id).flatMap((r) => r.act.when ?? []);
+    expect([...new Set(whenOf('sniffFind'))]).toEqual(['findOuter']);
+    expect([...new Set(whenOf('point'))]).toEqual(['findOuter']);
+    expect([...new Set(whenOf('lookFind'))]).toEqual(['findInner']);
+    expect([...new Set(whenOf('sniffHere'))]).toEqual(['findInner']);
+    for (const { act } of ROWS.filter((r) => r.act.travel === 'find')) expect(act.when, act.id).toEqual(['findOuter']);
+  });
+
+  it('only the table names use the inner, visit and find travel; a visit needs its Splice (visits)', () => {
+    const travelling = ROWS.filter((r) => r.act.travel === 'inner' || r.act.travel === 'visit' || r.act.travel === 'find')
+      .map((r) => `${r.actor} ${r.act.id} ${r.act.travel}`);
+    expect([...new Set(travelling)].sort()).toEqual([
+      'dog eraHead inner', 'dog sniffFind find', 'dog visitSniff visit', 'inspector eraFront inner', 'inspector visitWrite visit',
+    ]);
+    for (const { act } of ROWS.filter((r) => r.act.travel === 'visit')) expect(act.when, act.id).toEqual(['visits']);
+  });
+
+  it('the visits are free (weight 2, 40 s cooldown) and answer the splice cue; the other reactions are reaction-only', () => {
+    for (const r of ROWS.filter((x) => VISITS.includes(x.act.id))) {
+      expect(r.act.weight, `${r.actor} ${r.act.id} ${r.era}`).toBe(2);
+      expect(r.act.cooldownMs, `${r.actor} ${r.act.id} ${r.era}`).toBe(40000);
+      expect(r.act.reaction, `${r.actor} ${r.act.id} ${r.era}`).toEqual(['splice']);
+    }
+    for (const r of ROWS.filter((x) => NEW_REACTIONS.includes(x.act.id))) {
+      expect(r.act.weight, `${r.actor} ${r.act.id} ${r.era}`).toBe(0);
+      expect(r.act.cooldownMs, `${r.actor} ${r.act.id} ${r.era}`).toBe(0);
+      expect(r.act.interruptible, `${r.actor} ${r.act.id} ${r.era}`).toBe(false);
+      expect(r.act.reaction?.length ?? 0, `${r.actor} ${r.act.id} ${r.era}`).toBeGreaterThan(0);
+    }
+  });
+
+  it('every new reaction and visit holds at most the 9 s guard bound', () => {
+    for (const r of ROWS.filter((x) => NEW_REACTIONS.includes(x.act.id) || VISITS.includes(x.act.id))) {
+      expect(r.act.holdMs[1], `era ${r.era} ${r.actor} ${r.act.id}`).toBeLessThanOrEqual(WORLD_BEHAVIOUR.restHoldMs[1]);
+    }
+  });
+
+  it('era V keeps the same reaction and visit ids with stare-safe frames only (the free hop excepted, C3)', () => {
+    for (const r of ROWS) {
+      if (r.era !== 5 || !(NEW_REACTIONS.includes(r.act.id) || VISITS.includes(r.act.id))) continue;
+      for (const f of shownFrames(r.act.clip)) expect(WORLD_STARE_SAFE[r.actor], `era 5 ${r.actor} ${r.act.id} ${f}`).toContain(f);
+    }
+  });
+
+  it('the startle, point and bark cells are profile frames: none is a stare-safe frame of its actor', () => {
+    expect(WORLD_STARE_SAFE.inspector).not.toContain('startle');
+    expect(WORLD_STARE_SAFE.inspector).not.toContain('point');
+    expect(WORLD_STARE_SAFE.dog).not.toContain('bark0');
+    expect(WORLD_STARE_SAFE.dog).not.toContain('bark1');
+  });
+
+  it('the new reaction and visit frames are sheet frames of their actor', () => {
+    for (const { actor, act } of ROWS) {
+      if (!NEW_REACTIONS.includes(act.id) && !VISITS.includes(act.id) && act.id !== 'hopFree') continue;
+      for (const f of shownFrames(act.clip)) expect(SHEET[actor], `${actor} ${act.id} ${f}`).toContain(f);
     }
   });
 });
@@ -395,52 +599,104 @@ describe('behaviour constants', () => {
   });
 });
 
-// Spots (WP24 T1, decision 3): each Inspector and dog spot FEET x (the base placement x plus dx) must lie in the actor band of the
-// framing; neighbouring spots are at least minTravelPx apart; the Inspector has at least two spots and the dog three, except that the
-// Inspector keeps one spot beside Sensor 7 in the sensor-side framings (WP27 F6.2: s8, s8w, s10).
+// Spots (WP24 T1, decision 3; WP28b Spots v2). The spots of a stage: each feet x lies in the actor band of its framing; two spots of one
+// actor are at least minTravelPx apart (Euclidean, the lane counts) or share x in two lanes; the Inspector has one spot at least and the dog
+// two, and the Inspector keeps one spot beside Sensor 7 in the sensor-side framings (WP27 F6.2: s8, s8w, s10).
+// KNOWN_SPOT_FINDINGS (WP28b): the pairs the table keeps although they break the pair rule, as 'framing actor a-b'. The AD3 spot check (C-b) corrected
+// the two findings of the plan table (e1 dog stake-home, s10 dog home-y1), so the list is empty: a new breach fails the test.
+const KNOWN_SPOT_FINDINGS: readonly string[] = [];
 describe('spots against the actor bands (actorBand)', () => {
   // The framings where Sensor 7 stands beside the Inspector (WP27 F6.2): the Inspector keeps his one spot there.
   const SENSOR_SIDE_FRAMINGS: readonly FramingKey[] = ['s8', 's8w', 's10'];
-
-  const SPOT_STAGES: readonly { name: string; buys: readonly string[] }[] = [
-    { name: 'S7', buys: S7 }, { name: 'S8', buys: S8 }, { name: 'S9', buys: S9 }, { name: 'S10', buys: S10 }, { name: 'S11', buys: S11 },
-    { name: 'S15', buys: S15 },
+  const S8W = S9.slice(0, S9.indexOf('transformer'));
+  const SPOT_STAGES: readonly { name: string; buys: readonly string[]; framing: FramingKey }[] = [
+    { name: 'S7', buys: S7, framing: 'e1' }, { name: 'S8', buys: S8, framing: 's8' }, { name: 'S8W', buys: S8W, framing: 's8w' },
+    { name: 'S9', buys: S9, framing: 's9' }, { name: 'S10', buys: S10, framing: 's10' }, { name: 'S11', buys: S11, framing: 's11' },
+    { name: 'S15', buys: S15, framing: 's15' },
   ];
+  const ACTORS_WITH_SPOTS = ['inspector', 'dog'] as const;
+  const framingsWithSpots = (): FramingKey[] => Object.keys(WORLD_SPOTS) as FramingKey[];
 
-  it.each(SPOT_STAGES)('$name: every Inspector and dog spot feet x lies in its band, neighbours are >= minTravelPx apart', (s) => {
-    const levels = levelsOf(s.buys);
-    const framing: FramingKey = framingKey(levels);
-    const pose = framingPose(levels);
-    for (const actor of ['inspector', 'dog'] as const) {
-      const spots = WORLD_SPOTS[framing]?.[actor] ?? [];
-      const base = WORLD_PLACEMENTS[framing][actor];
-      const band = actorBand(framing, pose, levels, actor);
-      console.log(`${s.name} ${framing} ${actor} spots ${JSON.stringify(spots.map((p) => [p.id, p.dx]))} band ${JSON.stringify(band)}`);
-      expect(base, `${framing} ${actor} placement`).toBeDefined();
-      const minSpots = actor === 'dog' ? 3 : SENSOR_SIDE_FRAMINGS.includes(framing) ? 1 : 2;
-      expect(spots.length, `${framing} ${actor} spot count`).toBeGreaterThanOrEqual(minSpots);
-      expect(new Set(spots.map((p) => p.id)).size, `${framing} ${actor} unique spot ids`).toBe(spots.length);
-      for (let i = 1; i < spots.length; i++) {
-        const prev = spots[i - 1];
-        const cur = spots[i];
-        if (prev === undefined || cur === undefined) continue;
-        expect(Math.abs(cur.dx - prev.dx), `${framing} ${actor} ${prev.id} to ${cur.id}`).toBeGreaterThanOrEqual(WORLD_WALK.minTravelPx);
+  // The pairs of one actor's roaming spots that break the pair rule (every framing, table order). WP28b F25: a visit stand (v<n>) is AD3's
+  // C-c stand next to its object, and plain travel never walks to one, so the roaming pair rule does not apply to it.
+  function pairFindings(): string[] {
+    const out: string[] = [];
+    for (const framing of framingsWithSpots()) {
+      for (const actor of ACTORS_WITH_SPOTS) {
+        const spots = (WORLD_SPOTS[framing]?.[actor] ?? []).filter((s) => !s.id.startsWith('v'));
+        for (let i = 0; i < spots.length; i++) {
+          for (let j = i + 1; j < spots.length; j++) {
+            const a = spots[i];
+            const b = spots[j];
+            if (a === undefined || b === undefined) continue;
+            const sameColumn = a.x === b.x && a.lane !== b.lane;
+            if (Math.hypot(b.x - a.x, b.lane - a.lane) < WORLD_WALK.minTravelPx && !sameColumn) out.push(`${framing} ${actor} ${a.id}-${b.id}`);
+          }
+        }
       }
+    }
+    return out;
+  }
+
+  it.each(SPOT_STAGES)('$name: the framing is $framing, every Inspector and dog spot feet x lies in its band, the counts and ids hold', (s) => {
+    const levels = levelsOf(s.buys);
+    expect(framingKey(levels), s.name).toBe(s.framing);
+    const pose = framingPose(levels);
+    for (const actor of ACTORS_WITH_SPOTS) {
+      const spots = WORLD_SPOTS[s.framing]?.[actor] ?? [];
+      const base = WORLD_PLACEMENTS[s.framing][actor];
+      const band = actorBand(s.framing, pose, levels, actor);
+      expect(base, `${s.framing} ${actor} placement`).toBeDefined();
+      const minSpots = actor === 'dog' ? 2 : SENSOR_SIDE_FRAMINGS.includes(s.framing) ? 1 : 2;
+      expect(spots.length, `${s.framing} ${actor} spot count`).toBeGreaterThanOrEqual(minSpots);
+      expect(new Set(spots.map((p) => p.id)).size, `${s.framing} ${actor} unique spot ids`).toBe(spots.length);
       for (const spot of spots) {
-        const feet = (base?.x ?? Number.NaN) + spot.dx;
-        expect(band !== null && band.min <= feet && feet <= band.max, `${framing} ${actor} ${spot.id} feet ${feet} band ${JSON.stringify(band)}`)
+        expect(band !== null && band.min <= spot.x && spot.x <= band.max, `${s.framing} ${actor} ${spot.id} x ${spot.x} band ${JSON.stringify(band)}`)
           .toBe(true);
       }
     }
   });
 
-  it('the placed Inspector and dog stand where their band says (placeCast agrees with actorBand)', () => {
-    for (const s of SPOT_STAGES) {
-      const levels = levelsOf(s.buys);
-      const framing = framingKey(levels);
-      const placed = placeCast(levels, framing);
-      expect(placed.inspector === null, `${s.name} inspector`).toBe(actorBand(framing, undefined, levels, 'inspector') === null);
-      expect(placed.dog === null, `${s.name} dog`).toBe(actorBand(framing, undefined, levels, 'dog') === null);
+  it('the pair rule: two spots of one actor are >= minTravelPx apart or share x in two lanes; only the known findings break it', () => {
+    expect(pairFindings()).toEqual(KNOWN_SPOT_FINDINGS);
+  });
+
+  it('ids: the Inspector has sensor (the back-row spot nearest Sensor 7), mid at his placement x and b / y numbers; the dog has home at his x', () => {
+    for (const framing of framingsWithSpots()) {
+      const ins = WORLD_SPOTS[framing]?.inspector ?? [];
+      const sensor7 = WORLD_PLACEMENTS[framing].sensor7;
+      const insX = WORLD_PLACEMENTS[framing].inspector?.x ?? NaN;
+      const back = ins.filter((p) => p.lane === 0);
+      const nearest = sensor7 === undefined ? back[0] : back.reduce((best, p) => (Math.abs(p.x - sensor7.x) < Math.abs(best.x - sensor7.x) ? p : best));
+      expect(ins.find((p) => p.id === 'sensor')?.x, `${framing} sensor`).toBe(nearest?.x);
+      const mid = ins.find((p) => p.id === 'mid');
+      if (mid !== undefined) expect(mid.x, `${framing} mid`).toBe(insX);
+      const backB = back.filter((p) => p.id.startsWith('b')).map((p) => p.x);
+      expect(backB, `${framing} b ids by x`).toEqual([...backB].sort((a, b) => a - b));
+      const dog = WORLD_SPOTS[framing]?.dog ?? [];
+      const dogX = WORLD_PLACEMENTS[framing].dog?.x ?? NaN;
+      expect(dog.find((p) => p.id === 'home'), `${framing} home`).toEqual({ id: 'home', x: dogX, lane: 32 });
+      const stake = dog.find((p) => p.id === 'stake');
+      expect(stake !== undefined, `${framing} stake only at e1 and s15`).toBe(framing === 'e1' || framing === 's15');
+      if (stake !== undefined) expect(stake.lane, `${framing} stake lane`).toBe(32);
+    }
+  });
+
+  // The dog's front row (lane 32, WORLD_ROWS.front) is the canon home row, not a yard: it is exempt from the yard limit (world.md section 5 lists
+  // the s15 limit for the yard only; the front row there lies under the buttons already).
+  it('every yard spot (below the front row) inside the HUD-button x-range of its framing stays within WORLD_YARD.maxLane', () => {
+    const frontLane = WORLD_ROWS.front.y - GROUND_Y;
+    for (const framing of framingsWithSpots()) {
+      const yard = WORLD_YARD[framing];
+      expect(yard, `${framing} yard limits`).toBeDefined();
+      if (yard === undefined) continue;
+      for (const actor of ACTORS_WITH_SPOTS) {
+        for (const spot of WORLD_SPOTS[framing]?.[actor] ?? []) {
+          if (spot.lane > frontLane && spot.x >= yard.hudMinX && spot.x <= yard.hudMaxX) {
+            expect(spot.lane, `${framing} ${actor} ${spot.id}`).toBeLessThanOrEqual(yard.maxLane);
+          }
+        }
+      }
     }
   });
 
@@ -448,5 +704,109 @@ describe('spots against the actor bands (actorBand)', () => {
     expect(WORLD_SPOTS.portrait).toBeUndefined();
     expect(WORLD_SPOTS.baseL).toBeUndefined();
     expect(WORLD_SPOTS.baseR).toBeUndefined();
+  });
+});
+
+// WP28b F25 (visit stands, AD3 hand-off C-c), the cue keys of WP28b and the reaction gaps (the era I and V dog wag, the crow settle).
+describe('visits, the new cue keys and the reaction gaps (WP28b F25, F30, reaction gaps)', () => {
+  const ACTORS_WITH_SPOTS = ['inspector', 'dog'] as const;
+  // The stand of each visit spot as AD3 placed it (C-c): framing, actor, id, feet x and lane. Pinned here so an edit shows up.
+  const PINNED_STANDS: readonly [FramingKey, 'inspector' | 'dog', string, number, number][] = [
+    ['e1', 'inspector', 'v1', 1390, 64], ['e1', 'dog', 'v1', 2440, 96], ['e1', 'dog', 'v2', 2484, 32],
+    ['s8', 'dog', 'v1', 2576, 32], ['s8', 'dog', 'v2', 2648, 32],
+    ['s8w', 'inspector', 'v1', 1548, 56],
+    ['s9', 'inspector', 'v1', 1430, 80], ['s9', 'dog', 'v1', 2900, 32], ['s9', 'dog', 'v2', 2906, 32], ['s9', 'dog', 'v3', 2868, 32],
+    ['s11', 'inspector', 'v1', 750, 72], ['s11', 'inspector', 'v2', 910, 170],
+    ['s11', 'dog', 'v1', 2912, 130], ['s11', 'dog', 'v2', 3012, 76], ['s11', 'dog', 'v3', 3110, 120], ['s11', 'dog', 'v4', 3018, 32],
+    ['s11', 'dog', 'v5', 3072, 128], ['s11', 'dog', 'v6', 2938, 32], ['s11', 'dog', 'v7', 2858, 32],
+    ['s15', 'inspector', 'v1', 756, 56], ['s15', 'inspector', 'v2', 722, 128], ['s15', 'inspector', 'v3', 792, 112], ['s15', 'dog', 'v1', 2858, 32],
+  ];
+
+  it('the visit stands are the pinned C-c spots, numbered v1, v2, ... per framing and actor with no gap', () => {
+    for (const [framing, actor, id, x, lane] of PINNED_STANDS) {
+      expect(WORLD_SPOTS[framing]?.[actor]?.find((s) => s.id === id), `${framing} ${actor} ${id}`).toEqual({ id, x, lane });
+    }
+    for (const framing of Object.keys(WORLD_SPOTS) as FramingKey[]) {
+      for (const actor of ACTORS_WITH_SPOTS) {
+        const ids = (WORLD_SPOTS[framing]?.[actor] ?? []).map((s) => s.id).filter((id) => id.startsWith('v'));
+        expect(ids, `${framing} ${actor} visit ids`).toEqual(ids.map((_, i) => `v${i + 1}`));
+      }
+    }
+  });
+
+  it('every visit names a woken Splice placed in its framing, a spot of its actor, on the walker of its wing, 24 to 48 px toward the machine', () => {
+    for (const framing of Object.keys(WORLD_VISITS) as FramingKey[]) {
+      for (const v of WORLD_VISITS[framing] ?? []) {
+        const label = `${framing} ${v.object} ${v.actor} ${v.spot}`;
+        const placement = SPLICE_WORLD[v.object as SpliceObjectId]?.placements[framing];
+        expect(placement, `${label} placed`).toBeTruthy();
+        if (placement === undefined || placement === null) continue;
+        const stand = WORLD_SPOTS[framing]?.[v.actor]?.find((s) => s.id === v.spot);
+        expect(stand, `${label} stand`).toBeDefined();
+        const left = placement.x < MACHINE_ANCHOR.x;
+        expect(v.actor === 'inspector', `${label} wing`).toBe(left);
+        if (stand !== undefined) {
+          const dx = stand.x - placement.x;
+          expect(Math.abs(dx), `${label} distance`).toBeGreaterThanOrEqual(24);
+          expect(Math.abs(dx), `${label} distance`).toBeLessThanOrEqual(48);
+          expect(left ? dx > 0 : dx < 0, `${label} faces the object from the machine side`).toBe(true);
+        }
+        for (const id of v.from ?? []) {
+          expect(WORLD_SPOTS[framing]?.[v.actor]?.some((s) => s.id === id), `${label} from ${id}`).toBe(true);
+        }
+        expect(v.minEra ?? 1, `${label} era range`).toBeLessThanOrEqual(v.maxEra ?? 5);
+      }
+    }
+  });
+
+  it('the era windows of the stands: no era IV-only stand (era IV plays no visit, R3), the cairn from era V on, the s11 gramophone dropped', () => {
+    const stand = (framing: FramingKey, object: string) => WORLD_VISITS[framing]?.find((v) => v.object === object);
+    expect(stand('s11', 'spliceGramophone'), 'era IV only, so dropped').toBeUndefined();
+    const eraIvOnly = Object.entries(WORLD_VISITS).flatMap(([framing, list]) => (list ?? []).filter((v) => v.minEra === 4 && v.maxEra === 4)
+      .map((v) => `${framing} ${v.object}`));
+    expect(eraIvOnly).toEqual([]);
+    expect(stand('s11', 'spliceCairn')).toMatchObject({ minEra: 5, spot: 'v2' });
+    expect(stand('s15', 'spliceGramophone')).toBeDefined();
+    expect(stand('s9', 'spliceBicycle'), 'exempt at s9').toBeUndefined();
+    expect(stand('s15', 'spliceChimes'), 'exempt at s15').toBeUndefined();
+  });
+
+  it('the new cue keys: the splice delay 3-8 s, the visit hold 20 s, the halt cues, the lantern dim 1 s and the bigBuy hop chance 0.3', () => {
+    expect(WORLD_REACT.spliceDelayMs).toEqual([3000, 8000]);
+    expect(WORLD_REACT.visitHoldMs).toBe(20000);
+    expect(WORLD_REACT.haltCues).toEqual(['fault', 'faultClear', 'find', 'bigBuy', 'era']);
+    expect(WORLD_REACT.faultDimMs).toBe(1000);
+    expect(WORLD_REACT.hopChanceByCue).toEqual({ bigBuy: 0.3 });
+  });
+
+  it('every halt cue and hop cue names a known cue; the splice cue never cuts a walk (a visit walks, it does not cut)', () => {
+    for (const cue of WORLD_REACT.haltCues) expect(CUES).toContain(cue);
+    expect(WORLD_REACT.haltCues).not.toContain('splice');
+    for (const cue of Object.keys(WORLD_REACT.hopChanceByCue) as CueId[]) {
+      expect(CUES).toContain(cue);
+      const p = WORLD_REACT.hopChanceByCue[cue] ?? NaN;
+      expect(p, cue).toBeGreaterThan(0);
+      expect(p, cue).toBeLessThanOrEqual(1);
+    }
+    const [lo, hi] = WORLD_REACT.spliceDelayMs;
+    expect(lo).toBeGreaterThan(0);
+    expect(lo).toBeLessThanOrEqual(hi);
+    expect(WORLD_REACT.faultDimMs).toBeGreaterThan(0);
+    expect(WORLD_REACT.visitHoldMs).toBeGreaterThan(0);
+  });
+
+  it('the faultClear reactions: the dog wags in eras I, II, III and V (era V on the stare-safe frames) and the crow settles on its perch', () => {
+    expect(WORLD_REACT.routes.faultClear).toEqual(expect.arrayContaining(['inspector.writeTick', 'dog.wag', 'crow.settle']));
+    const wags = ROWS.filter((r) => r.actor === 'dog' && r.act.id === 'wag');
+    expect(wags.map((r) => r.era).sort((a, b) => a - b)).toEqual([1, 2, 3, 5]);
+    for (const { era, act } of wags) expect(act.reaction, `era ${era} wag`).toContain('faultClear');
+    const wagV = wags.find((r) => r.era === 5);
+    expect(wagV, 'era 5 wag').toBeDefined();
+    if (wagV !== undefined) {
+      for (const f of shownFrames(wagV.act.clip)) expect(WORLD_STARE_SAFE.dog, `era 5 wag ${f}`).toContain(f);
+    }
+    const settles = ROWS.filter((r) => r.actor === 'crow' && r.act.id === 'settle');
+    expect(settles.map((r) => r.era).sort((a, b) => a - b)).toEqual([1, 2, 3, 5]);
+    for (const { act } of settles) expect(act.reaction).toEqual(['faultClear']);
   });
 });

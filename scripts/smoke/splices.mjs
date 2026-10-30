@@ -28,11 +28,14 @@
 //                   same probe over an idle second)
 //   K NEXT BUY      K_text (after a spend-down of every affordable tech, nextBuyText() matches the readout pattern; nothing affordable)
 //   L demo          L_demo (demo build only: the six era I-II Splices placed and not locked; the era III-V rows read FULL GAME)
+//   M eras          M_s11, M_s13, M_s15 (WP28b B5; one page per era stage: S11 era III, S13 era IV, S15 era V): each era object placed and
+//                   visible before the buys (EXEMPT_M empty), woken after (line true, pulses 1-4); the era V stage wakes the payphone first
+//                   (the Coin Return needs it). splices-M-<stage>.png. Full build only (demo: skip).
 //   N drag          N_drag (a 120 px drag from the affordable dead bicycle pans the camera by at least 40 px; the bicycle stays dead)
 // Exit: 0 ok; 1 when fail or errors is non-empty; 2 usage error (bad args or PW_PATH unset).
 import fs from 'fs';
 import path from 'path';
-import { S7, S9, S11, S15, buyList, crankClicks, delta, dismissEraCard, loadChromium, makeReport, poll, waitReady, watchPage, withQuery } from './lib/common.mjs';
+import { S7, S9, S11, S13, S15, buyList, crankClicks, delta, dismissEraCard, loadChromium, makeReport, poll, waitReady, watchPage, withQuery } from './lib/common.mjs';
 
 const USAGE = 'usage: PW_PATH=<playwright dir> node scripts/smoke/splices.mjs "<url with ?debug=1>" <outdir>';
 const [url, out] = process.argv.slice(2);
@@ -62,6 +65,15 @@ const ERA345 = ['splicePump', 'spliceWhistle', 'spliceHydrant', 'spliceBell', 's
   'spliceCairn', 'spliceCoinReturn'];
 // F_s9: documented placement exemptions at s9 (the placement table has none); a missing placement must be listed here.
 const EXEMPT_S9 = {};
+// M_eras (WP28b B5): the era stages, their buy lists and their objects in table order. first: the Splices woken before the objects (the
+// Coin Return needs the payphone, spliceCoinReturn requires splicePayphone). EXEMPT_M: documented null cells of src/data/spliceWorld.ts at the
+// stage's framing (s11 serves eras III-V; s15 for era V); none, every era object stands at its framing.
+const ERA_STAGES = [
+  { key: 's11', list: S11, objects: ['splicePump', 'spliceWhistle', 'spliceHydrant'], first: [] },
+  { key: 's13', list: S13, objects: ['spliceBell', 'spliceGramophone', 'spliceChimes'], first: [] },
+  { key: 's15', list: S15, objects: ['spliceVane', 'spliceKite', 'spliceCairn', 'spliceCoinReturn'], first: ['splicePayphone'] },
+];
+const EXEMPT_M = { s11: [], s13: [], s15: [] };
 const LIST_B = [...S7];
 const DEMO_SKIP = 'demo build: era III-V are not in the demo (era cap)';
 const FULL_ONLY_SKIP = 'full build: case L is the demo case (demoState() is null here)';
@@ -676,6 +688,82 @@ const caseL = async ctx => {
   });
 };
 
+// M eras helpers (WP28b B5). The SPLICES tab path is case E's keys: the TECH INDEX, Tab to the selected tab, End (SPLICES), Enter, Tab to the
+// row, Enter, Tab to BUY, Enter; then Escape. Returns whether the object woke.
+const buyByTab = async (page, id) => {
+  await openTree(page);
+  await tabUntilSelectedTab(page, 14);
+  await page.keyboard.press('End');
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(150);
+  await tabUntil(page, 'data', id, 60);
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(150);
+  await tabUntil(page, 'id', 'tech-buy', 14);
+  await page.keyboard.press('Enter');
+  const woken = await poll(page, want => (window.__wedtmd.spliceStats?.() ?? []).find(r => r.id === want)?.state === 'woken', id, 2000, 50);
+  await page.keyboard.press('Escape');
+  await poll(page, () => window.__wedtmd.techTreeOpen() === false, null, 2000, 50);
+  return woken === true;
+};
+// One era Splice: 8 h jumps (12 at most) until it is affordable, then a click on its object when the object is on screen and enabled, else
+// the SPLICES tab path. Returns { via, woken }.
+const wakeSplice = async (page, id) => {
+  for (let k = 0; k < 12; k++) {
+    if (rowOf(await spliceRows(page), id)?.state === 'affordable') break;
+    await jump8(page);
+    await page.waitForTimeout(150);
+  }
+  const t = await targetOf(page, id);
+  if (t !== null && t.enabled === true) {
+    await page.mouse.click(t.cx, t.cy);
+    const woken = await poll(page, want => (window.__wedtmd.spliceStats?.() ?? []).find(r => r.id === want)?.state === 'woken', id, 1500, 50);
+    return { via: 'click', woken: woken === true };
+  }
+  return { via: 'tab', woken: await buyByTab(page, id) };
+};
+const placementOf = (rows, id) => {
+  const r = rowOf(rows, id);
+  return { id, placed: r?.placed === true, visible: r?.visible === true };
+};
+
+// M eras (WP28b B5): one page per era stage. The stage's list is bought and committed; each era object must be placed and visible (or
+// exempt) before its buy; the era V payphone wakes first (the Coin Return needs it). After the wakes each object reads woken, line true and
+// pulses 1-4. Full build only: the demo edition stops at era II.
+const caseM = stage => async ctx => {
+  const page = await openPage(ctx);
+  const key = `M_${stage.key}`;
+  await step(key, async () => {
+    if (await isDemo(page)) {
+      skip(key, DEMO_SKIP);
+      return;
+    }
+    await crankClicks(page, 45, 0);
+    await buildStage(page, key, stage.list);
+    await commit(page);
+    const rows0 = await spliceRows(page);
+    const before = stage.objects.map(id => placementOf(rows0, id));
+    const exempt = EXEMPT_M[stage.key] ?? [];
+    const readyBefore = before.every(p => (p.placed && p.visible) || exempt.includes(p.id));
+    const wake = {};
+    for (const id of [...stage.first, ...stage.objects]) wake[id] = await wakeSplice(page, id);
+    // the wake beat and the first pulse redraw (at most 15 Hz) have run after this wait
+    await page.waitForTimeout(1500);
+    const rows = await spliceRows(page);
+    const woken = stage.objects.every(id => rowOf(rows, id)?.state === 'woken');
+    const lines = stage.objects.every(id => rowOf(rows, id)?.line === true);
+    const pulses = stage.objects.every(id => {
+      const n = rowOf(rows, id)?.pulses ?? 0;
+      return n >= 1 && n <= 4;
+    });
+    report.check(key, readyBefore && woken && lines && pulses, {
+      before, wake, after: stage.objects.map(id => briefRow(rowOf(rows, id))), readyBefore, woken, lines, pulses,
+    });
+    await shot(page, `splices-M-${stage.key}.png`);
+  });
+};
+
 // N drag: an 8 h jump makes the bicycle affordable; a 120 px drag that starts on it pans the camera and buys nothing.
 const caseN = async ctx => {
   const page = await openPage(ctx);
@@ -716,6 +804,7 @@ try {
   await runContext(browser, 'J', caseJ);
   await runContext(browser, 'K', caseK);
   await runContext(browser, 'L', caseL);
+  for (const stage of ERA_STAGES) await runContext(browser, `M_${stage.key}`, caseM(stage));
   await runContext(browser, 'N', caseN);
 } catch (e) {
   recordThrow('run', e);

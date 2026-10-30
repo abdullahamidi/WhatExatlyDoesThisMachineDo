@@ -23,7 +23,8 @@ const ENDING_SRC = readFileSync(new URL('./worldEnding.ts', import.meta.url), 'u
 const KNOWN_TECH: readonly string[] = TECH_IDS;
 const onSheet = (sheet: WorldSheetId, frame: string): boolean => WORLD_FRAMES[sheet].includes(frame);
 // Face-on or hidden Inspector frames: no clipboard overlay on them (AD3a notes, scripts/art/world/README.md).
-const FACE_ON_FRAMES = ['front', 'talk', 'frontUmbrella', 'talkUmbrella', 'shield', 'umbrellaOpen', 'umbrellaHalf'];
+// WP28b: startle and point have none either, the board stands upright or sits under the chin (DENIZEN_ART, ART_AUDIT WP28b).
+const FACE_ON_FRAMES = ['front', 'talk', 'frontUmbrella', 'talkUmbrella', 'shield', 'umbrellaOpen', 'umbrellaHalf', 'startle', 'point'];
 // The segment that covers second s of a 90 s loop (fromS <= s < toS), and the segments that move (dx or dy change).
 const segAt = (segs: readonly PostgameSegment[], s: number): PostgameSegment | undefined => segs.find((seg) => s >= seg.fromS && s < seg.toS);
 const movingOf = (segs: readonly PostgameSegment[]): PostgameSegment[] => segs.filter((seg) => seg.dxFrom !== seg.dxTo || seg.dyFrom !== seg.dyTo);
@@ -166,7 +167,7 @@ describe('worldEras: tech rules', () => {
     expect(WORLD_DOUBLE_EXPOSURE.targets).toEqual(['inspector', 'dog', 'crow', 'girl']);
   });
 
-  it('keys the Inspector clipboard overlay on sheet frames: every walk, write, glance and pat frame, none of the six face-on ones', () => {
+  it('keys the Inspector clipboard overlay on sheet frames: every walk, write, glance and pat frame, none of the face-on or reaction ones', () => {
     const keys = Object.keys(WORLD_TRACES.clipboardOffsetArt).sort();
     expect(keys.filter((f) => !onSheet('inspector', f))).toEqual([]);
     expect(keys.filter((f) => FACE_ON_FRAMES.includes(f))).toEqual([]);

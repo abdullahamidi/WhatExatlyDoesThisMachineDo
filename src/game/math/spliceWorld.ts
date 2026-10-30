@@ -1,6 +1,7 @@
 // Splice world maths (WP28a): the state of a Splice (locked, available, affordable, woken), its four tooltip lines, the pulse law
 // (count and speed by the reach level), the line route per framing and its polyline, the pulse dots along a line, the object boxes,
-// and the clock's tick schedule. Why: the renderers and the placement guard (A14) read one copy of each rule. Pure: no Phaser, no DOM.
+// and the clock's tick schedule. WP28b adds the eras III-V shapes (collars, the standing wave, debris specks), the crank pulse delay and
+// the KEEP beat's side and alpha (F23, F24). Why: the renderers and the placement guard (A14) read one copy of each rule. Pure: no Phaser, no DOM.
 // Numbers and the machine's words come from src/data (spliceWorld, ux, world, resources) and from the TechView the caller holds.
 import type { Vec2 } from '../../data/machineComponents';
 import type { FramingKey } from '../../data/livingWorld';
@@ -9,6 +10,7 @@ import { SPLICE_CLOCK, SPLICE_FX, SPLICE_LINE_STYLE } from '../../data/spliceWor
 import { SPLICE_TEXT } from '../../data/ux';
 import type { SpliceLineRoute, SpliceOwnEntry, SplicePlacement, SpliceWorldEntry } from '../../data/spliceWorld';
 import { GROUND_Y, PIXEL_SCALE } from '../../data/world';
+import { GROUND_PULSE_SPEED_PX_PER_S } from '../../data/worldShared';
 import type { GameState, TechView } from '../../data/types';
 import { formatCost, formatNumber } from '../../utils/format';
 
@@ -85,14 +87,22 @@ export function placementFeetY(placement: SplicePlacement): number {
   return placement.lane === 'back' ? GROUND_Y : GROUND_Y + placement.lane;
 }
 
-/** World box of an object whose feet sit at feet (art px box and pivot from the entry, PIXEL_SCALE world px each). */
+/** Where the sprite is drawn: the feet, moved by a hosted object's offsetWorld (WP28b). The line still ends at the feet. */
+export function spriteOriginOf(entry: SpliceWorldEntry, feet: Vec2): Vec2 {
+  if (!hasOwnArt(entry) || entry.offsetWorld === undefined) return feet;
+  return { x: feet.x + entry.offsetWorld.x, y: feet.y + entry.offsetWorld.y };
+}
+
+/** World box of an object whose feet sit at feet (art px box and pivot from the entry, PIXEL_SCALE world px each); the box follows the
+ *  sprite origin (spriteOriginOf). */
 export function spliceBoxWorld(entry: SpliceWorldEntry, feet: Vec2): SpliceBoxWorld {
   const { bboxArt, footArt } = entry;
+  const origin = spriteOriginOf(entry, feet);
   return {
-    left: feet.x + (bboxArt.x - footArt.x) * PIXEL_SCALE,
-    right: feet.x + (bboxArt.x + bboxArt.w - footArt.x) * PIXEL_SCALE,
-    top: feet.y + (bboxArt.y - footArt.y) * PIXEL_SCALE,
-    bottom: feet.y + (bboxArt.y + bboxArt.h - footArt.y) * PIXEL_SCALE,
+    left: origin.x + (bboxArt.x - footArt.x) * PIXEL_SCALE,
+    right: origin.x + (bboxArt.x + bboxArt.w - footArt.x) * PIXEL_SCALE,
+    top: origin.y + (bboxArt.y - footArt.y) * PIXEL_SCALE,
+    bottom: origin.y + (bboxArt.y + bboxArt.h - footArt.y) * PIXEL_SCALE,
   };
 }
 
@@ -128,8 +138,8 @@ export function linePath(route: SpliceLineRoute, foot: Vec2, objectFoot: Vec2): 
   return [foot, end];
 }
 
-// Length of a polyline (world px); fewer than two points has no length.
-function pathLength(path: readonly Vec2[]): number {
+// Length of a polyline (world px); fewer than two points has no length. Exported so SpliceLines reads this one rule (WP28b).
+export function pathLength(path: readonly Vec2[]): number {
   let total = 0;
   for (let i = 1; i < path.length; i++) {
     const a = path[i - 1];
@@ -176,6 +186,33 @@ export function pulsePositions(path: readonly Vec2[], count: number, phase: numb
   return n;
 }
 
+// A wanted pulse count as a whole number (0 for a missing or non-finite count).
+function wantOf(w: number | undefined): number {
+  return w !== undefined && Number.isFinite(w) ? Math.max(0, Math.floor(w)) : 0;
+}
+
+/** WP28b F27: the pulses each woken line draws inside one dot budget (SPLICE_FX.maxDots less the reserved dots). Pass 1 gives every line
+ *  min(1, wanted) while the budget lasts, in line (TECH) order; pass 2 gives each line up to wanted - 1 more, in the same order, while it
+ *  lasts. So with one dot per woken line in the budget, no woken line is left at 0. Writes out (resized to wanted.length; the counts are
+ *  numbers, so nothing else is allocated) and returns it. The total is at most maxDots (0 when maxDots is not a finite number). Deterministic. */
+export function allocatePulses(wanted: readonly number[], maxDots: number, out: number[]): number[] {
+  const n = wanted.length;
+  out.length = n;
+  let budget = Number.isFinite(maxDots) ? Math.max(0, Math.floor(maxDots)) : 0;
+  for (let i = 0; i < n; i++) {
+    const give = Math.min(1, wantOf(wanted[i]), budget);
+    out[i] = give;
+    budget -= give;
+  }
+  for (let i = 0; i < n; i++) {
+    const got = out[i] ?? 0;
+    const extra = Math.min(wantOf(wanted[i]) - got, budget);
+    out[i] = got + extra;
+    budget -= extra;
+  }
+  return out;
+}
+
 /** Distances (world px along a line of length len) of the era I pulley stakes: one every everyPx starting at everyPx while d < len - endInsetPx, so the last stake stands at least endInsetPx short of the object end. A line longer than endInsetPx always keeps at least one stake: when the loop gives none, one stands at len - endInsetPx. Empty for a line no longer than endInsetPx, or when an input is not a finite number (everyPx must be > 0, endInsetPx >= 0). */
 export function stakeDistances(len: number, everyPx: number, endInsetPx: number): number[] {
   const out: number[] = [];
@@ -209,4 +246,88 @@ export function clockTick(tMs: number, seed: number): { readonly displacementDeg
   const instant = k * TICK_SLOT_MS + Math.floor(slotUnit(seed, k) * TICK_JITTER_MS);
   const since = tMs - instant;
   return since >= 0 && since < SPLICE_CLOCK.snapBackMs ? STEP_TICK : REST_TICK;
+}
+
+/** Where a reduced-motion steady dot sits on a line of length len (0..1 of the length): insetPx before the object end (F23). A line too
+ *  short for the inset (under 2 x inset) takes its midpoint, so the dot never lands on the object's own box. 0 for a line with no length. */
+export function steadyDotPhase(len: number, insetPx: number): number {
+  if (!Number.isFinite(len) || !(len > 0)) return 0;
+  const inset = Number.isFinite(insetPx) ? Math.max(0, insetPx) : 0;
+  return Math.min(1 - 1e-9, Math.max(0.5, (len - inset) / len));
+}
+
+// ---- WP28b: the KEEP beat (F24), the crank pulse delay, and the eras III-V shapes ----
+
+/** Which side an object shows at KEEP + keepS seconds (F24): 'portrait' (its portrait cell) or 'postgame' (its postgame feet). The side
+ *  flips at the middle of the hidden window (outToS .. inFromS), or at inFromS under reduced motion (no fade). A negative or NaN keepS
+ *  (no KEEP yet) is the portrait side; Infinity (a boot into the postgame) is the postgame side. */
+export function postgameMoveAt(keepS: number, reduced = false): 'portrait' | 'postgame' {
+  const m = SPLICE_FX.postgameMove;
+  const flipS = reduced ? m.inFromS : (m.outToS + m.inFromS) / 2;
+  return keepS >= flipS ? 'postgame' : 'portrait';
+}
+
+/** The alpha of the object at KEEP + keepS seconds (F24): 1 before outFromS, linear to 0 at outToS, 0 until inFromS, linear to 1 at
+ *  inToS, 1 after. Reduced motion has no fade (1). No KEEP yet (keepS < 0 or NaN) and a boot into the postgame (Infinity) are 1. */
+export function postgameMoveAlpha(keepS: number, reduced = false): number {
+  const m = SPLICE_FX.postgameMove;
+  if (reduced || !(keepS >= m.outFromS) || keepS >= m.inToS) return 1;
+  if (keepS < m.outToS) return 1 - (keepS - m.outFromS) / (m.outToS - m.outFromS);
+  if (keepS < m.inFromS) return 0;
+  return (keepS - m.inFromS) / (m.inToS - m.inFromS);
+}
+
+/** Delay (ms) of the extra pulse on a line whose foot a crank ground pulse reaches: distance / GROUND_PULSE_SPEED_PX_PER_S (the same speed
+ *  the WorldReach ground pulse runs at; WP28b). 0 for a non-positive or non-finite distance. */
+export function crankPulseDelayMs(distancePx: number): number {
+  return Number.isFinite(distancePx) && distancePx > 0 ? (distancePx / GROUND_PULSE_SPEED_PX_PER_S) * 1000 : 0;
+}
+
+/** Distances (world px along a line of length len) of the era III collar feet: the stake rule with the collar spacing and the F22 end
+ *  inset (era3.flangeEveryPx, era3.flangeEndInsetPx by default). */
+export function flangeDistances(
+  len: number,
+  everyPx: number = SPLICE_LINE_STYLE.era3.flangeEveryPx,
+  endInsetPx: number = SPLICE_LINE_STYLE.era3.flangeEndInsetPx,
+): number[] {
+  return stakeDistances(len, everyPx, endInsetPx);
+}
+
+/** Signed offset (world px) of the era IV standing wire at distAlongPx of a line of length len, at tMs: ampPx x sin(pi x loops x d / len)
+ *  x cos(2 pi t / era4.breathPeriodMs). loops = half-waves (era4.waveLoops). Zero at both ends and at every node; the antinodes breathe
+ *  once per era IV beat. 0 for any non-finite input or a line with no length. */
+export function waveOffsetPx(tMs: number, distAlongPx: number, len: number, loops: number, ampPx: number): number {
+  if (![tMs, distAlongPx, len, loops, ampPx].every(Number.isFinite) || !(len > 0)) return 0;
+  const shape = Math.sin((Math.PI * loops * distAlongPx) / len);
+  return ampPx * shape * Math.cos((2 * Math.PI * tMs) / SPLICE_LINE_STYLE.era4.breathPeriodMs);
+}
+
+/** Era V debris specks on a line: round(len / everyPx) clamped to speckCount.min..max; 0 for a line with no length. */
+export function debrisSpeckCount(len: number): number {
+  const { min, max, everyPx } = SPLICE_LINE_STYLE.era5.speckCount;
+  if (!Number.isFinite(len) || !(len > 0)) return 0;
+  return Math.min(max, Math.max(min, Math.round(len / everyPx)));
+}
+
+/** Writes count era V specks along path into out (the objects are reused, as pulsePositions does): evenly spaced, the ends inset
+ *  era5.endInsetPx (half the path for a short one), each hanging 2-6 art px above the route by a hash of its index. count is capped at
+ *  speckCount.max. Returns the specks written (0 for a path with no length). Deterministic per seed. */
+export function debrisSpecks(path: readonly Vec2[], count: number, seed: number, out: Vec2[]): number {
+  const style = SPLICE_LINE_STYLE.era5;
+  const n = Math.min(style.speckCount.max, Math.max(0, Math.floor(count)));
+  const total = pathLength(path);
+  if (n === 0 || !(total > 0)) return 0;
+  const start = Math.min(style.endInsetPx, total / 2);
+  const span = total - 2 * start;
+  const [loArt, hiArt] = style.hoverArt;
+  for (let k = 0; k < n; k++) {
+    let slot = out[k];
+    if (slot === undefined) {
+      slot = { x: 0, y: 0 };
+      out.push(slot);
+    }
+    placeAt(path, n === 1 ? total / 2 : start + (span * k) / (n - 1), slot);
+    slot.y -= (loArt + Math.floor(slotUnit(seed, k) * (hiArt - loArt + 1))) * PIXEL_SCALE;
+  }
+  return n;
 }

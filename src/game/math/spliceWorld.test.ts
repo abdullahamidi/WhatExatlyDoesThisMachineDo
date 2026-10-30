@@ -10,9 +10,10 @@ import type { GameState, TechId, TechView } from '../../data/types';
 import {
   SPLICE_CLOCK, SPLICE_FX, SPLICE_HUD_RECT, SPLICE_LINE_STYLE, SPLICE_PAYPHONE, SPLICE_SHEETS, SPLICE_WORLD, SPLICE_YARD_LIMITS,
 } from '../../data/spliceWorld';
-import type { SpliceWorldEntry } from '../../data/spliceWorld';
+import type { SpliceObjectId, SpliceWorldEntry } from '../../data/spliceWorld';
+import { GROUND_PULSE_SPEED_PX_PER_S } from '../../data/worldShared';
 import { SPLICE_TEXT } from '../../data/ux';
-import { WORLD_ENV, WORLD_FAR_PLANES, WORLD_LAYOUT, WORLD_PLACEMENTS, WORLD_ROWS } from '../../data/livingWorld';
+import { WORLD_ENV, WORLD_FAR_PLANES, WORLD_LAYOUT, WORLD_PLACEMENTS } from '../../data/livingWorld';
 import { WORLD_SPOTS } from '../../data/worldBehaviour';
 import { WORLD_ENDING } from '../../data/worldEnding';
 import { CRANK_FEEDBACK, GROUND_Y, PIXEL_SCALE } from '../../data/world';
@@ -22,11 +23,12 @@ import { componentBounds, isComponentVisible } from './machineLayout';
 import { boundsToWorld, visibleMachineBounds } from './machineBounds';
 import type { Bounds } from './camera';
 import type { CameraPose } from './finale';
-import { framingKey, framingPose, screenOfWorld } from './worldPlacement';
+import { framingKey, framingPose, screenOfWorld, usableX, viewRectOf } from './worldPlacement';
 import { STAGE_LISTS } from './worldBehaviourMetrics';
 import {
-  clockTick, hasOwnArt, lineRouteAt, linePath, placementFeetY, pulseCount, pulsePositions, pulseSpeed, spliceBoxWorld,
-  spliceState, spliceTooltip, stakeDistances,
+  allocatePulses, clockTick, crankPulseDelayMs, debrisSpeckCount, debrisSpecks, flangeDistances, hasOwnArt, lineRouteAt, linePath,
+  placementFeetY, postgameMoveAlpha, postgameMoveAt, pulseCount, pulsePositions, pulseSpeed, spliceBoxWorld, spliceState, spliceTooltip,
+  spriteOriginOf, stakeDistances, steadyDotPhase, waveOffsetPx,
 } from './spliceWorld';
 
 // A buy list to tech levels: plain id += 1; '@tech' = 1; '@tech:n' = n ('@blueprint' is generatorBlueprint).
@@ -60,6 +62,13 @@ function craft(edit: {
 
 function viewOf(id: TechId, state: GameState, maxEra: number | null = null): TechView {
   return getTechView(state, id, TECHNOLOGIES, maxEra);
+}
+
+// The entry of a Splice object; every SpliceObjectId has one (tested below), so a miss is a broken table.
+function entryOf(id: SpliceObjectId): SpliceWorldEntry {
+  const entry = SPLICE_WORLD[id];
+  if (entry === undefined) throw new Error(`no Splice entry for ${id}`);
+  return entry;
 }
 
 // ---- states and tooltip ----
@@ -196,6 +205,53 @@ describe('pulsePositions', () => {
   });
 });
 
+// ---- the pulse budget (WP28b F27) ----
+
+describe('allocatePulses (WP28b F27)', () => {
+  it('16 lines wanting 4 each within 24 dots: every line draws at least one, the total is 24, the first lines take the extra dots', () => {
+    const out: number[] = [];
+    const granted = allocatePulses(Array.from({ length: 16 }, () => 4), 24, out);
+    expect(granted.reduce((sum, n) => sum + n, 0)).toBeLessThanOrEqual(24);
+    expect(granted.reduce((sum, n) => sum + n, 0)).toBe(24);
+    expect(granted.every((n) => n >= 1)).toBe(true);
+    expect(granted.slice(0, 3)).toEqual([4, 4, 3]);
+    expect(granted.slice(3)).toEqual(Array.from({ length: 13 }, () => 1));
+  });
+
+  it('3 lines wanting 4, 1 and 4 within 24 dots get 4, 1 and 4', () => {
+    expect(allocatePulses([4, 1, 4], 24, [])).toEqual([4, 1, 4]);
+  });
+
+  it('2 lines within 1 dot: the first line gets the dot (edge)', () => {
+    expect(allocatePulses([4, 4], 1, [])).toEqual([1, 0]);
+    expect(allocatePulses([4, 4], 0, [])).toEqual([0, 0]);
+  });
+
+  it('the grant follows line order, is the same on every call, and writes into the given array', () => {
+    const out: number[] = [9, 9, 9, 9, 9];
+    const first = allocatePulses([4, 4, 4], 5, out);
+    expect(first).toBe(out);
+    expect(first).toEqual([3, 1, 1]);
+    const copy = [...first];
+    expect(allocatePulses([4, 4, 4], 5, out)).toEqual(copy);
+    expect(allocatePulses([1, 1], 24, out)).toEqual([1, 1]);
+    expect(out.length).toBe(2);
+  });
+
+  it('never grants more than a line wants or than the budget, and a line that wants nothing gets nothing', () => {
+    expect(allocatePulses([0, 3, 2], 10, [])).toEqual([0, 3, 2]);
+    expect(allocatePulses([4, 4], Number.NaN, [])).toEqual([0, 0]);
+    expect(allocatePulses([], 24, [])).toEqual([]);
+    for (let budget = 0; budget <= 30; budget++) {
+      const wanted = [4, 1, 3, 2, 4, 1, 1, 4, 2, 3, 1, 4, 4, 1, 2, 3];
+      const granted = allocatePulses(wanted, budget, []);
+      expect(granted.reduce((sum, n) => sum + n, 0)).toBeLessThanOrEqual(budget);
+      granted.forEach((n, i) => expect(n <= (wanted[i] ?? 0)).toBe(true));
+      if (budget >= wanted.length) expect(granted.every((n) => n >= 1)).toBe(true);
+    }
+  });
+});
+
 // ---- data and line ----
 
 // The outer base feet of the machine per framing (AD1 hand-off d): the visible machine's edges at the base.
@@ -281,20 +337,95 @@ describe('clockTick (C6)', () => {
 });
 
 describe('Splice world data', () => {
-  it('has the six era I-II objects, sheet frames inside the sheet, and frame rates at or below 8 fps', () => {
-    expect(Object.keys(SPLICE_WORLD).sort()).toEqual(
-      ['spliceBicycle', 'spliceClock', 'spliceOrgan', 'spliceRadio', 'splicePayphone', 'spliceSign'].sort(),
-    );
-    const sheet = SPLICE_SHEETS.splicesA;
-    expect(sheet.assetId).toBe('world.splicesA');
-    expect(sheet.cols * sheet.rows).toBe(20);
+  // A missing id is a compile error here (Record over SpliceObjectId), so the list and the type cannot drift apart.
+  const ALL_IDS: Record<SpliceObjectId, true> = {
+    spliceBicycle: true, spliceOrgan: true, spliceClock: true, spliceRadio: true, splicePayphone: true, spliceSign: true,
+    splicePump: true, spliceWhistle: true, spliceHydrant: true, spliceBell: true, spliceGramophone: true, spliceChimes: true,
+    spliceVane: true, spliceKite: true, spliceCairn: true, spliceCoinReturn: true,
+  };
+
+  it('has the sixteen Splice objects (every id has an entry), sheet frames inside their sheet, and frame rates at or below 8 fps', () => {
+    expect(Object.keys(SPLICE_WORLD).sort()).toEqual(Object.keys(ALL_IDS).sort());
+    expect(SPLICE_SHEETS.splicesA).toMatchObject({ assetId: 'world.splicesA', cols: 20, rows: 1 });
+    expect(SPLICE_SHEETS.splicesB).toMatchObject({ assetId: 'world.splicesB', cellW: 18, cellH: 56, cols: 22, rows: 1 });
+    expect(SPLICE_SHEETS.splicesC).toMatchObject({ assetId: 'world.splicesC', cellW: 24, cellH: 18, cols: 24, rows: 1 });
     for (const entry of Object.values(SPLICE_WORLD)) {
       if (entry === undefined || !hasOwnArt(entry)) continue;
+      const sheet = SPLICE_SHEETS[entry.sheet];
       for (const f of [entry.frames.dead, ...entry.frames.woken, entry.frames.whole]) {
         expect(Number.isInteger(f) && f >= 0 && f < sheet.cols * sheet.rows).toBe(true);
       }
       expect(entry.frames.fps).toBeLessThanOrEqual(8);
     }
+  });
+
+  it('every bbox and foot pivot lies inside its cell, and every object has at least one woken frame', () => {
+    for (const [id, entry] of Object.entries(SPLICE_WORLD)) {
+      if (entry === undefined || !hasOwnArt(entry)) continue;
+      const sheet = SPLICE_SHEETS[entry.sheet];
+      expect(entry.bboxArt.x + entry.bboxArt.w, id).toBeLessThanOrEqual(sheet.cellW);
+      expect(entry.bboxArt.y + entry.bboxArt.h, id).toBeLessThanOrEqual(sheet.cellH);
+      expect(entry.footArt.x, id).toBeLessThanOrEqual(sheet.cellW);
+      expect(entry.footArt.y, id).toBeLessThanOrEqual(sheet.cellH);
+      expect(entry.frames.woken.length, id).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('every once object (vane, kite, cairn) plays at least two woken frames, and no other object is once', () => {
+    const onces: string[] = [];
+    for (const [id, entry] of Object.entries(SPLICE_WORLD)) {
+      if (entry === undefined || !hasOwnArt(entry) || entry.frames.once !== true) continue;
+      onces.push(id);
+      expect(entry.frames.woken.length, id).toBeGreaterThanOrEqual(2);
+    }
+    expect(onces.sort()).toEqual(['spliceCairn', 'spliceKite', 'spliceVane']);
+  });
+
+  it('perchTop.replaces names a crow perch only on the vane (boothRoof) and the kite (lampTop)', () => {
+    const replaces: string[] = [];
+    for (const [id, entry] of Object.entries(SPLICE_WORLD)) {
+      const top = entry?.perchTop;
+      if (top?.replaces !== undefined) replaces.push(`${id}:${top.replaces}`);
+    }
+    expect(replaces).toEqual(['spliceVane:boothRoof', 'spliceKite:lampTop']);
+  });
+
+  it('the hosted objects sit at the lamp x (chimes, kite) and the payphone x (vane, coin flap) on the back row', () => {
+    const hosts: [SpliceObjectId, 'lamp' | 'payphone'][] = [
+      ['spliceChimes', 'lamp'], ['spliceKite', 'lamp'], ['spliceVane', 'payphone'], ['spliceCoinReturn', 'payphone'],
+    ];
+    for (const f of GUARD_FRAMINGS) {
+      for (const [id, host] of hosts) {
+        const cell = SPLICE_WORLD[id]?.placements[f];
+        const hostCell = WORLD_PLACEMENTS[f][host];
+        if (cell === undefined || cell === null || hostCell === undefined) continue;
+        expect(cell.x, `${id} ${f}`).toBe(hostCell.x);
+        expect(cell.lane, `${id} ${f}`).toBe('back');
+      }
+    }
+  });
+
+  it('a hosted sprite is drawn at feet + offsetWorld; its box follows (AD3 O-b); a plain object keeps its feet', () => {
+    const feet = { x: 3104, y: GROUND_Y };
+    expect(spriteOriginOf(entryOf('spliceChimes'), feet)).toEqual({ x: 3124, y: GROUND_Y - 50 });
+    expect(spriteOriginOf(entryOf('spliceBicycle'), feet)).toBe(feet);
+    // The s11 hosted boxes (AD3 O-g table): chimes 3108-3138 x -86..-50, kite 3086-3122 x -198..-92, vane 3034-3066 x -138..-102, coin 3070-3080 x -54..-46.
+    const boxAt = (id: SpliceObjectId, x: number) => spliceBoxWorld(entryOf(id), { x, y: GROUND_Y });
+    expect(boxAt('spliceChimes', 3104)).toEqual({ left: 3108, top: GROUND_Y - 86, right: 3138, bottom: GROUND_Y - 50 });
+    expect(boxAt('spliceKite', 3104)).toEqual({ left: 3086, top: GROUND_Y - 198, right: 3122, bottom: GROUND_Y - 92 });
+    expect(boxAt('spliceVane', 3050)).toEqual({ left: 3034, top: GROUND_Y - 138, right: 3066, bottom: GROUND_Y - 102 });
+    expect(boxAt('spliceCoinReturn', 3050)).toEqual({ left: 3070, top: GROUND_Y - 54, right: 3080, bottom: GROUND_Y - 46 });
+    // The s11 back-row pump and whistle (AD3 O-g): pump 930-964 x -60..0, whistle 2954-2988 x -112..0.
+    expect(boxAt('splicePump', 946)).toEqual({ left: 930, top: GROUND_Y - 60, right: 964, bottom: GROUND_Y });
+    expect(boxAt('spliceWhistle', 2970)).toEqual({ left: 2954, top: GROUND_Y - 112, right: 2988, bottom: GROUND_Y });
+  });
+
+  it('the era V and era IV line looks and the crank pulse speed are the hand-off values (AD3 O-d; WP28b D6a)', () => {
+    expect(GROUND_PULSE_SPEED_PX_PER_S).toBe(480);
+    expect(SPLICE_FX.postgameMove).toEqual({ outFromS: 4, outToS: 4.5, inFromS: 5, inToS: 5.6 });
+    expect(SPLICE_LINE_STYLE.era4.breathPeriodMs).toBe(2400);
+    expect(SPLICE_LINE_STYLE.era5.speckCount).toEqual({ min: 6, max: 10, everyPx: 32 });
+    expect(SPLICE_LINE_STYLE.era3.flangeEveryPx).toBe(32);
   });
 
   it('the woken payphone rings once every 60-120 s (AD2 F13)', () => {
@@ -344,11 +475,26 @@ const STAND_PX: Record<'inspector' | 'dog', number> = { inspector: 66, dog: 40 }
 const OBJECT_GAP_PX = 4;
 // The far-plane girl mini frame (world.girlMini: 8 x 12 art px, origin bottom centre).
 const MINI_ART = { w: 8, h: 12 };
-// AD1's 2D exemptions (a spot's keep-out box cleared on y, not on x). None in WP28a: the s8w bicycle is null (AD2 F5), so every placement
-// must clear the spots on x alone.
-const SPOT_2D_CLEARED: ReadonlySet<string> = new Set<string>();
+// The 2D exemptions (a spot's keep-out box cleared on y, not on x): an object whose box meets a spot's x band but clears the walker's
+// standing box on y. WP28a had none. WP28b (spots v2) lists the x-only overlaps the guard measured as 2D clear: AD3 O-g's six era III-V
+// rows, the kite and the coin flap above the dog's 3080 spot (boxes end at G-92 and G-46; the dog's band starts at G+24), and the era I-II
+// rows the v2 table brushes on x only. Any other x-overlap fails the guard (no exemption for a real 2D conflict).
+// AD4 F39: the e1 bicycle's box clears the e1 dog's y3 spot (2520@48) on y, so it is a 2D-clear overlap too.
+// WP28b r2-FX1 (A14): the s11 sign's box ends 12 px above the dog's chimes and kite stand band (yard lane 128), and the vane sits on the booth
+// roof (its box ends 102 px above the ground), so both clear that stand on y. The pump's exemption went with the radio stand it cleared (dropped).
+const SPOT_2D_CLEARED: ReadonlySet<string> = new Set<string>([
+  'spliceBell s11', 'spliceCairn s11', 'spliceGramophone s11', 'spliceGramophone s15', 'spliceHydrant s11', 'spliceWhistle s11',
+  'spliceKite s11', 'spliceCoinReturn s11', 'spliceChimes s11', 'spliceSign s11', 'spliceVane s11',
+  'spliceBicycle e1', 'spliceBicycle s9', 'spliceBicycle s11', 'spliceOrgan e1', 'spliceOrgan s9', 'spliceOrgan s11', 'spliceOrgan s15',
+  'spliceRadio s9', 'spliceRadio s11', 'spliceRadio s15', 'spliceSign s9',
+]);
 // The sign at s9 stands in front of the booth: its box meets the payphone's booth box (layering, AD2 F5). Sorted names, so the order of the pair does not matter.
 const FRONT_OF_BOOTH: ReadonlySet<string> = new Set(['splicePayphone s9 / spliceSign s9']);
+// The hosted objects (WP28b, AD3 O-c): the vane stands on the booth apex and the coin flap sits on the phone unit, so their boxes meet the
+// payphone's box by design; the 4 px object gap does not apply to those pairs.
+const HOSTED_ON_BOOTH: ReadonlySet<string> = new Set(
+  ['s11', 's15', 'portrait', 'baseR'].flatMap((f) => ['spliceVane', 'spliceCoinReturn'].map((h) => [`splicePayphone ${f}`, `${h} ${f}`].sort().join(' / '))),
+);
 // AD2 N3 (accepted): the s9 bicycle's box top is G + 100 and the UI 150 buttons end at G + 101 (1 world px, AD2 underButtons 3 game px).
 // A 'below the buttons' rule cannot pass it, so it is a documented exemption from the HUD lane limit (lane 130 > 25).
 const HUD_EXEMPT: ReadonlySet<string> = new Set(['spliceBicycle s9']);
@@ -462,21 +608,20 @@ describe('placement guard (A14)', () => {
     if (c.box.left < hud.max && c.box.right > hud.min) expect(c.lane, c.name).toBeLessThanOrEqual(limit);
   });
 
-  it.each(CASES.filter((c) => hasOwnArt(c.entry)))('$name keeps out of the spot keep-out boxes of both actors (x only; AD1 2D exemption listed)', (c) => {
-    const row = WORLD_PLACEMENTS[c.framing];
+  it.each(CASES.filter((c) => hasOwnArt(c.entry)))('$name keeps out of the spot keep-out boxes of both actors (x only; the 2D exemptions listed)', (c) => {
+    const bad: string[] = [];
     for (const actor of ['inspector', 'dog'] as const) {
-      const placed = row[actor];
-      if (placed === undefined) continue;
-      const feetY = WORLD_ROWS[placed.row].y;
-      const band = { top: feetY - STAND_PX[actor], bottom: feetY };
       for (const spot of WORLD_SPOTS[c.framing]?.[actor] ?? []) {
-        const sx = placed.x + spot.dx;
-        const clearX = c.box.left >= sx + SPOT_HALF_PX || c.box.right <= sx - SPOT_HALF_PX;
+        // Spots v2 are absolute: feet x and a lane (GROUND_Y + lane); the walker stands STAND_PX[actor] above its feet.
+        const feetY = GROUND_Y + spot.lane;
+        const band = { top: feetY - STAND_PX[actor], bottom: feetY };
+        const clearX = c.box.left >= spot.x + SPOT_HALF_PX || c.box.right <= spot.x - SPOT_HALF_PX;
         if (clearX) continue;
         const clearY = c.box.top >= band.bottom || c.box.bottom <= band.top;
-        expect(SPOT_2D_CLEARED.has(c.name) && clearY, `${c.name} vs ${actor} spot ${spot.id}`).toBe(true);
+        if (!(SPOT_2D_CLEARED.has(c.name) && clearY)) bad.push(`${actor} spot ${spot.id} (${spot.x}@${spot.lane})`);
       }
     }
+    expect(bad, c.name).toEqual([]);
   });
 
   it.each(CASES)('$name is clear of the far-plane girl mini (game px at the framing pose)', (c) => {
@@ -507,7 +652,8 @@ describe('placement guard (A14)', () => {
         const b = here[j];
         // The clock and the payphone keep their WP23 layout (an existing pair is not a new placement): only pairs with new art.
         if (a === undefined || b === undefined || (!hasOwnArt(a.entry) && !hasOwnArt(b.entry))) continue;
-        if (FRONT_OF_BOOTH.has([a.name, b.name].sort().join(' / '))) continue;
+        const pair = [a.name, b.name].sort().join(' / ');
+        if (FRONT_OF_BOOTH.has(pair) || HOSTED_ON_BOOTH.has(pair)) continue;
         const gapX = Math.max(a.box.left - b.box.right, b.box.left - a.box.right);
         const gapY = Math.max(a.box.top - b.box.bottom, b.box.top - a.box.bottom);
         expect(Math.max(gapX, gapY), `${a.name} / ${b.name}`).toBeGreaterThanOrEqual(OBJECT_GAP_PX);
@@ -549,9 +695,12 @@ describe('postgame placements (AD2 R2 F20)', () => {
     expect(radioBox).toEqual({ left: 674, top: GROUND_Y + 60, right: 706, bottom: GROUND_Y + 100 });
   });
 
-  it.each(POSTGAME)('$name sits in the portrait left wing, left of the left anchor foot (848)', ({ box }) => {
+  // WP28b (AD3 O-c, the postgame row): the postgame wings run from 648 to 3176 (the gramophone takes the inner gap at 958). The whistle's
+  // union box reaches 3184 (its whole frame has no plume; the body box is 3156-3178): a documented exemption, AD3 to confirm.
+  const POSTGAME_RIGHT_EXEMPT: ReadonlySet<string> = new Set(['spliceWhistle postgame']);
+  it.each(POSTGAME)('$name sits in the postgame wings (648 to 3176; 3184 for the whistle exemption)', ({ name, box }) => {
     expect(box.left).toBeGreaterThanOrEqual(648);
-    expect(box.right).toBeLessThanOrEqual(848);
+    expect(box.right).toBeLessThanOrEqual(POSTGAME_RIGHT_EXEMPT.has(name) ? 3184 : 3176);
   });
 
   it.each(POSTGAME)('$name stays above the portrait frame bottom (G + 112)', ({ box }) => {
@@ -652,5 +801,215 @@ describe('era I pulley stakes (A14)', () => {
     expect(x, c.name).toBeGreaterThanOrEqual(2850);
     expect(x, c.name).toBeLessThanOrEqual(2858);
     expect(x, c.name).toBeLessThan(c.box.left);
+  });
+});
+
+// ---- WP28b: the era II steady dots (F23), the KEEP beat (F24), the crank pulse and the eras III-V shapes ----
+
+// The length of a polyline (world px).
+function lengthOf(path: readonly Vec2[]): number {
+  let total = 0;
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1];
+    const b = path[i];
+    if (a !== undefined && b !== undefined) total += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return total;
+}
+
+// The one point at phase (0..1 of the length) of a path, through pulsePositions.
+function pointAt(path: readonly Vec2[], phase: number): Vec2 | undefined {
+  const out: Vec2[] = [{ x: 0, y: 0 }];
+  return pulsePositions(path, 1, phase, out) > 0 ? out[0] : undefined;
+}
+
+// The line of a placement as SpliceLines routes it: the framing's route from the machine's outer foot to the placement feet.
+function routeOf(c: Case): readonly Vec2[] {
+  const foot = { x: c.entry.line.from === 'left' ? FOOT_TABLE[c.framing].left : FOOT_TABLE[c.framing].right, y: GROUND_Y };
+  return linePath(lineRouteAt(c.entry.line, c.framing), foot, c.feet);
+}
+
+// The reduced-motion steady dot of a line (era II): the path point at steadyDotPhase(len, steadyInsetPx).
+function steadyDotOf(c: Case): Vec2 | undefined {
+  const path = routeOf(c);
+  return pointAt(path, steadyDotPhase(lengthOf(path), SPLICE_LINE_STYLE.era2.steadyInsetPx));
+}
+
+const ERA2_CASES = CASES.filter((c) => TECHNOLOGIES[c.id as TechId]?.era === 2);
+
+describe('era II steady dots (F23, reduced motion)', () => {
+  it('the steady inset is 48 world px', () => {
+    expect(SPLICE_LINE_STYLE.era2.steadyInsetPx).toBe(48);
+  });
+
+  it.each([
+    [200, 48, (200 - 48) / 200], [96, 48, 0.5], [60, 48, 0.5], [48, 48, 0.5], [30, 48, 0.5],
+    [200, 0, 1 - 1e-9], [200, -4, 1 - 1e-9], [200, NaN, 1 - 1e-9],
+    [0, 48, 0], [-5, 48, 0], [NaN, 48, 0], [Infinity, 48, 0],
+  ])('steadyDotPhase(%s, %s) = %s (the midpoint for a line under twice the inset)', (len, inset, expected) => {
+    expect(steadyDotPhase(len, inset)).toBeCloseTo(expected, 9);
+  });
+
+  it.each(ERA2_CASES)('$name: the steady dot lies outside its object box', (c) => {
+    const dot = steadyDotOf(c);
+    expect(dot, c.name).toBeDefined();
+    if (dot === undefined) return;
+    const inside = dot.x >= c.box.left && dot.x <= c.box.right && dot.y >= c.box.top && dot.y <= c.box.bottom;
+    expect(inside, `${c.name} dot at ${dot.x}, ${dot.y}`).toBe(false);
+  });
+
+  it.each([
+    { name: 'spliceRadio s9', x: 1549, y: 1740 }, { name: 'spliceRadio s11', x: 939, y: 1748 }, { name: 'spliceRadio s15', x: 731, y: 1754 },
+    { name: 'spliceSign s9', x: 2907, y: 1695 }, { name: 'spliceSign s11', x: 3014, y: 1742 },
+  ])('$name: the steady dot sits at ($x, $y) +- 2 (the AD2 round 3 F23 measure)', ({ name, x, y }) => {
+    const c = CASES.find((k) => k.name === name);
+    expect(c, name).toBeDefined();
+    if (c === undefined) return;
+    const dot = steadyDotOf(c);
+    expect(dot, name).toBeDefined();
+    if (dot === undefined) return;
+    expect(Math.abs(dot.x - x), name).toBeLessThanOrEqual(2);
+    expect(Math.abs(dot.y - y), name).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('the KEEP beat (F24)', () => {
+  it('the side and the alpha at the 4, 4.5, 5 and 5.6 s marks; the side flips in the middle of the hidden window (4.75 s)', () => {
+    expect(SPLICE_FX.postgameMove).toEqual({ outFromS: 4, outToS: 4.5, inFromS: 5, inToS: 5.6 });
+    expect(postgameMoveAt(4)).toBe('portrait');
+    expect(postgameMoveAlpha(4)).toBe(1);
+    expect(postgameMoveAlpha(4.25)).toBeCloseTo(0.5, 9);
+    expect(postgameMoveAlpha(4.5)).toBe(0);
+    expect(postgameMoveAt(4.74)).toBe('portrait');
+    expect(postgameMoveAt(4.75)).toBe('postgame');
+    expect(postgameMoveAlpha(4.75)).toBe(0);
+    expect(postgameMoveAlpha(5)).toBe(0);
+    expect(postgameMoveAt(5)).toBe('postgame');
+    expect(postgameMoveAlpha(5.3)).toBeCloseTo(0.5, 9);
+    expect(postgameMoveAlpha(5.6)).toBe(1);
+    expect(postgameMoveAt(5.6)).toBe('postgame');
+  });
+
+  it('no KEEP yet (negative, NaN) is the portrait side at alpha 1; a boot into the postgame (Infinity) is the postgame side at alpha 1', () => {
+    for (const s of [-1, -0.001, NaN]) {
+      expect(postgameMoveAt(s), `${s}`).toBe('portrait');
+      expect(postgameMoveAlpha(s), `${s}`).toBe(1);
+    }
+    expect(postgameMoveAt(Infinity)).toBe('postgame');
+    expect(postgameMoveAlpha(Infinity)).toBe(1);
+  });
+
+  it('reduced motion has no fade (alpha 1) and flips the side at inFromS (5 s)', () => {
+    for (const s of [-1, 0, 4, 4.5, 4.75, 4.99]) {
+      expect(postgameMoveAlpha(s, true), `${s}`).toBe(1);
+      expect(postgameMoveAt(s, true), `${s}`).toBe('portrait');
+    }
+    expect(postgameMoveAt(5, true)).toBe('postgame');
+    expect(postgameMoveAt(Infinity, true)).toBe('postgame');
+    expect(postgameMoveAlpha(5.2, true)).toBe(1);
+  });
+
+  it('over a sweep the alpha falls in 4-4.5 s, is 0 to 5 s, rises in 5-5.6 s, and the side only flips where alpha is 0', () => {
+    let prevSide = postgameMoveAt(0);
+    let prevAlpha = 1;
+    for (let i = 0; i <= 160; i++) {
+      const s = i * 0.05;
+      const alpha = postgameMoveAlpha(s);
+      const side = postgameMoveAt(s);
+      expect(alpha, `${s}`).toBeGreaterThanOrEqual(0);
+      expect(alpha, `${s}`).toBeLessThanOrEqual(1);
+      if (s >= 4 && s <= 4.5) expect(alpha, `${s}`).toBeLessThanOrEqual(prevAlpha);
+      if (s >= 5 && s <= 5.6) expect(alpha, `${s}`).toBeGreaterThanOrEqual(prevAlpha);
+      if (side !== prevSide) expect(alpha, `the side flips at ${s}`).toBe(0);
+      prevSide = side;
+      prevAlpha = alpha;
+    }
+    expect(postgameMoveAlpha(8)).toBe(1);
+  });
+});
+
+describe('crank pulse delay and the era III-V shapes (WP28b)', () => {
+  it('the crank pulse delay is the distance over 480 px/s, in ms (0 for no distance)', () => {
+    expect(GROUND_PULSE_SPEED_PX_PER_S).toBe(480);
+    expect(crankPulseDelayMs(480)).toBe(1000);
+    expect(crankPulseDelayMs(240)).toBe(500);
+    expect(crankPulseDelayMs(0)).toBe(0);
+    expect(crankPulseDelayMs(-5)).toBe(0);
+    expect(crankPulseDelayMs(NaN)).toBe(0);
+  });
+
+  it('flangeDistances: one collar every 32 px, none within the 36 px object-end inset (the stake law, F22)', () => {
+    expect(flangeDistances(200)).toEqual([32, 64, 96, 128, 160]);
+    expect(flangeDistances(128)).toEqual([32, 64]);
+    expect(flangeDistances(100)).toEqual([32]);
+    expect(flangeDistances(30)).toEqual([]);
+    expect(flangeDistances(200, 0)).toEqual([]);
+  });
+
+  it('waveOffsetPx: zero at both ends and at the two interior nodes; the antinodes swing with the breath (3 half-waves)', () => {
+    const len = 300;
+    const amp = 4;
+    for (const d of [0, 100, 200, 300]) expect(waveOffsetPx(0, d, len, 3, amp), `node ${d}`).toBeCloseTo(0, 9);
+    expect(waveOffsetPx(0, 50, len, 3, amp)).toBeCloseTo(amp, 9);
+    expect(waveOffsetPx(1200, 50, len, 3, amp)).toBeCloseTo(-amp, 9);
+    expect(waveOffsetPx(0, 150, len, 3, amp)).toBeCloseTo(-amp, 9);
+    expect(waveOffsetPx(0, 50, len, 3, 0)).toBe(0);
+    expect(waveOffsetPx(NaN, 50, len, 3, amp)).toBe(0);
+    expect(waveOffsetPx(0, 50, 0, 3, amp)).toBe(0);
+  });
+
+  it('debrisSpeckCount: round(len / 32) clamped to 6..10, and 0 for a line with no length', () => {
+    expect(debrisSpeckCount(50)).toBe(6);
+    expect(debrisSpeckCount(200)).toBe(6);
+    expect(debrisSpeckCount(260)).toBe(8);
+    expect(debrisSpeckCount(400)).toBe(10);
+    expect(debrisSpeckCount(0)).toBe(0);
+    expect(debrisSpeckCount(NaN)).toBe(0);
+  });
+
+  it('debrisSpecks: evenly spaced, ends inset 12 px, each 2-6 art px above the route; deterministic; reuses out; capped at 10', () => {
+    const straight: readonly Vec2[] = [{ x: 0, y: 0 }, { x: 100, y: 0 }];
+    const out: Vec2[] = [];
+    expect(debrisSpecks(straight, 6, 7, out)).toBe(6);
+    expect(out[0]?.x).toBeCloseTo(12, 9);
+    expect(out[5]?.x).toBeCloseTo(88, 9);
+    for (let i = 1; i < 6; i++) expect(out[i]?.x ?? 0).toBeGreaterThan(out[i - 1]?.x ?? 0);
+    for (const p of out) {
+      expect(-p.y).toBeGreaterThanOrEqual(4);
+      expect(-p.y).toBeLessThanOrEqual(12);
+      expect((-p.y) % 2).toBe(0);
+    }
+    const again: Vec2[] = [];
+    debrisSpecks(straight, 6, 7, again);
+    expect(again).toEqual(out);
+    const kept = out[0];
+    expect(debrisSpecks(straight, 6, 8, out)).toBe(6);
+    expect(out[0]).toBe(kept);
+    expect(debrisSpecks(straight, 50, 7, out)).toBe(10);
+    expect(debrisSpecks(straight, 0, 7, out)).toBe(0);
+    expect(debrisSpecks([{ x: 5, y: 5 }, { x: 5, y: 5 }], 6, 7, [])).toBe(0);
+  });
+});
+
+describe('the wing rule (A14, usableX; AD3 O-g)', () => {
+  // The pump and the cairn may stand in the inner gap between the machine's outer feet; every other Splice foot stands in a wing.
+  const INNER_OK: ReadonlySet<string> = new Set(['splicePump', 'spliceCairn']);
+  // WP28a finale cells that fail usableX at the reference pose (accepted by AD2 round 3; WP28b does not move them): the radio's baseL cell
+  // (690) and the bicycle's baseR cell (3150). Listed, not loosened: every WP28b entry passes the rule as written.
+  const WING_LEGACY_EXEMPT: ReadonlySet<string> = new Set(['spliceRadio baseL', 'spliceBicycle baseR']);
+  it.each(CASES.filter((c) => hasOwnArt(c.entry)))('$name: the foot is in a wing of its view', (c) => {
+    if (WING_LEGACY_EXEMPT.has(c.name)) return;
+    const frame = FRAME[c.framing];
+    const view = viewRectOf(frame.pose);
+    const machine = boundsToWorld(visibleMachineBounds(frame.levels));
+    const inWing = usableX(c.feet.x, view, machine, false);
+    const inGap = INNER_OK.has(c.id) && usableX(c.feet.x, view, machine, true);
+    expect(inWing || inGap, `${c.name} at x ${c.feet.x}`).toBe(true);
+  });
+});
+
+describe('portrait cells (AD3 O-g)', () => {
+  it.each(CASES.filter((c) => c.framing === 'portrait'))('$name: the portrait cell bottom stays at or above G + 112', (c) => {
+    expect(c.box.bottom).toBeLessThanOrEqual(GROUND_Y + 112);
   });
 });

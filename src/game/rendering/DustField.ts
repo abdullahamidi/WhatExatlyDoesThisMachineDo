@@ -47,6 +47,7 @@ export class DustField {
   private gravityX = 0; // last horizontal gravity written to the normal and rising streams
   private risingOn = false;
   private finale: FinaleFrame['dust'] = 'normal';
+  private frequency = DUST.frequencyMs; // the mote interval the streams run at (setFrequencyMs; the data default until it is set)
 
   constructor(scene: Phaser.Scene) {
     this.normal = scene.add.particles(0, 0, DUST_TEXTURE, moteConfig(DUST.spawnTopY, DUST.speedY, true)).setDepth(DUST.depth);
@@ -85,6 +86,19 @@ export class DustField {
       windSpeeds(this.normal, DUST.speedY, drift);
       windSpeeds(this.rising, DUST_RISING.speedY, drift);
     }
+  }
+
+  /**
+   * WP28b (D6 b): the mote interval (ms) of all three streams; null restores the data default (DUST.frequencyMs). The emitters are written
+   * only when the value changed, so a steady output costs nothing.
+   */
+  setFrequencyMs(ms: number | null): void {
+    const next = ms ?? DUST.frequencyMs;
+    if (next === this.frequency) return;
+    this.frequency = next;
+    this.normal.frequency = next;
+    this.rising.frequency = next;
+    this.reverse.frequency = next;
   }
 
   /**
