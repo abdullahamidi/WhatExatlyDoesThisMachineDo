@@ -396,7 +396,7 @@ export class PokeLayer {
 
   /**
    * Places the slab above its object's box, or below when the top would leave #ui-root or meet the crank circle, and clamps it into
-   * the root. Written as a transform only when the snapped place moved.
+   * the root, tipEdgePx in from every side. Written as a transform only when the snapped place moved.
    */
   private placeTip(slot: ZoneSlot): void {
     const g = this.geo;
@@ -405,6 +405,7 @@ export class PokeLayer {
     const bw = slot.sw * g.kx;
     const bh = slot.sh * g.ky;
     const gap = POKE_LAYOUT.tipGapPx;
+    const edge = POKE_LAYOUT.tipEdgePx;
     const tw = this.tipW;
     const th = this.tipH;
     const cx = this.hubX * g.kx + g.ox;
@@ -413,10 +414,10 @@ export class PokeLayer {
     const x = bx + (bw - tw) / 2;
     const aboveY = by - gap - th;
     const belowY = by + bh + gap;
-    const aboveOk = aboveY >= 0 && !rectHitsCircle(x, aboveY, tw, th, cx, cy, cr);
-    const belowOk = belowY + th <= g.vh && !rectHitsCircle(x, belowY, tw, th, cx, cy, cr);
-    const y = aboveOk || !belowOk ? aboveY : belowY;
-    const px = Math.max(0, Math.min(x, g.vw - tw));
+    const aboveOk = aboveY >= edge && !rectHitsCircle(x, aboveY, tw, th, cx, cy, cr);
+    const belowOk = belowY + th <= g.vh - edge && !rectHitsCircle(x, belowY, tw, th, cx, cy, cr);
+    const y = Math.max(edge, Math.min(aboveOk || !belowOk ? aboveY : belowY, g.vh - th - edge));
+    const px = Math.round(Math.max(edge, Math.min(x, g.vw - tw - edge)));
     if (px === this.tipX && y === this.tipY) return;
     this.tipX = px;
     this.tipY = y;

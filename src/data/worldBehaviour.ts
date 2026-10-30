@@ -99,6 +99,7 @@ export const WORLD_WALK = {
 // routes name the consumers of each cue (the reaction activities and the renderer effects); producers say who emits the cue.
 // WP28b: the six new cues (fault, faultClear, find, bigBuy, era, splice) start after the actor's staggerMs band (the Inspector's find after
 // findDelayMs, he points 2-4 s after the spawn) instead of latencyMs; chanceByCue overrides the chance of a cue (1 for the new ones).
+// AD4 F47: rapid is at 1 too (a crank burst always ruffles the crow; the pair cooldown still holds).
 // WP28b F25: spliceDelayMs is the delay of the splice cue after a wake (the Director pushes it; the visit then walks to its stand). visitHoldMs
 // is how long a named visit stand stays valid. WP28b F30: haltCues are the machine-event cues whose reaction cuts a walk in progress at its next
 // drawn tick (the runner's halt, then the reaction at once), so a reaction starts within a tick of its due time, not at the walk's arrival.
@@ -128,7 +129,7 @@ export const WORLD_REACT: {
   visitHoldMs: 20000,
   haltCues: ['fault', 'faultClear', 'find', 'bigBuy', 'era'],
   faultDimMs: 1000,
-  chanceByCue: { fault: 1, faultClear: 1, find: 1, bigBuy: 1, era: 1, splice: 1 },
+  chanceByCue: { fault: 1, faultClear: 1, find: 1, bigBuy: 1, era: 1, splice: 1, rapid: 1 },
   hopChanceByCue: { bigBuy: 0.3 },
   routes: {
     atSensor: ['sensor.doubleBlink'], digBout: ['props.holeStep'], crowMove: ['dog.lookUp'], ring: ['dog.wake', 'dog.lookUp', 'dog.wag'],
@@ -475,7 +476,8 @@ const visitAct = (id: string, clip: Clip, holdMs: readonly [number, number]): Ac
 // The Inspector: startle (fault, bigBuy), the write tick (faultClear), point (a Find on his outer side), lookFind (one on the inner side),
 // the era front walk to the inner spot, and the visit (the Splice).
 const INS_REACT: readonly Activity[] = [
-  reactAct('startle', c('startle lookUp', 1), [1800, 2200], ['fault', 'bigBuy']),
+  // AD4 F42: the startle holds 1.8-2.0 s, since its 2-frame clip at 1 fps wraps above 2 s; capMs 2000 keeps the start gate (guardHold) from stretching it past that.
+  reactAct('startle', c('startle lookUp', 1), [1800, 2000], ['fault', 'bigBuy'], { capMs: 2000 }),
   reactAct('writeTick', c('write0 write1', 2), [1500, 2000], ['faultClear']),
   reactAct('point', one('point'), [2000, 4000], ['find'], { when: ['findOuter'] }),
   reactAct('lookFind', one('lookUp'), [1500, 2500], ['find'], { when: ['findInner'] }),
@@ -483,7 +485,7 @@ const INS_REACT: readonly Activity[] = [
   visitAct('visitWrite', c('write0 write1', 2), [4000, 8000]),
 ];
 const INS_REACT_V: readonly Activity[] = [
-  reactAct('startle', c('front talk', 1), [1800, 2200], ['fault', 'bigBuy']),
+  reactAct('startle', c('front talk', 1), [1800, 2000], ['fault', 'bigBuy'], { capMs: 2000 }),
   reactAct('writeTick', c('talk front', 2), [1500, 2000], ['faultClear']),
   reactAct('point', one('front'), [2000, 4000], ['find'], { when: ['findOuter'] }),
   reactAct('lookFind', one('front'), [1500, 2500], ['find'], { when: ['findInner'] }),

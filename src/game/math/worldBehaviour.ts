@@ -867,7 +867,8 @@ function wrapIndex(i: number, n: number): number {
 }
 
 // The cues of WP28b that use the actor's stagger band (WORLD_REACT.staggerMs) instead of the latency band. A find's reaction of the Inspector
-// uses findDelayMs (he points 2-4 s after the spawn), not the stagger.
+// uses findDelayMs (he points 2-4 s after the spawn), not the stagger. They are the machine-event cues: reactGate lets them pre-empt an
+// interruptible reaction (WP28b AD4 F41a).
 const STAGGERED_CUES: readonly CueId[] = ['fault', 'faultClear', 'find', 'bigBuy', 'era', 'splice'];
 function reactBand(actor: BehaviourActor, id: CueId): readonly [number, number] {
   if (id === 'find' && actor === 'inspector') return WORLD_REACT.findDelayMs;
@@ -1262,14 +1263,28 @@ export function createBehaviourRunner(
     close(cutSeg(seg, tMs));
     cur = null;
   };
+  // WP28b F41b: the activity a due reaction of cue starts: def while its 'when' holds, else the first other reaction of the cue in the era
+  // list whose 'when' holds (the walker crossed a Find's x: point and lookFind, sniffFind and sniffHere, trade places). undefined: none holds.
+  const dueReaction = (def: Activity, cue: CueId | null, ctx: BehaviourCtx): Activity | undefined => {
+    if (whenHolds(def, ctx)) return def;
+    const list = WORLD_REPERTOIRE[actor][ctx.era];
+    if (list !== undefined && cue !== null) {
+      for (const a of list) {
+        if (a !== def && a.reaction?.includes(cue) === true && whenHolds(a, ctx)) return a;
+      }
+    }
+    return undefined;
+  };
   // WP28b: the gate of a due reaction at `at`, read by applyPending and by the F30 cut. 'drop': it may not start (its activity no longer
   // holds, the id would show twice, or the current segment is a reaction, the same id or not interruptible). 'wait': it walks while the walk
   // gate is set (it tries again after reactWaitMs). 'start': it starts now.
-  const reactGate = (def: Activity, ctx: BehaviourCtx, at: number): 'drop' | 'wait' | 'start' => {
+  const reactGate = (def: Activity, ctx: BehaviourCtx, at: number, cue: CueId | null): 'drop' | 'wait' | 'start' => {
     if (!whenHolds(def, ctx)) return 'drop';
     if (reactionRepeatsShown(mem, def, cur, at, 1000 / fpsOf(ctx.mode))) return 'drop';
-    // A cue reaction yields to a reaction, to the same activity and to a non-interruptible one.
-    if (cur !== null && (cur.react || cur.id === def.id || cur.def.interruptible === false)) return 'drop';
+    // A cue reaction yields to a reaction, to the same activity and to a non-interruptible one. WP28b F41a: a machine-event cue pre-empts an
+    // interruptible reaction or visit instead (the runner ends it as an interrupt does).
+    const machine = cue !== null && STAGGERED_CUES.includes(cue);
+    if (cur !== null && (cur.def.interruptible === false || cur.id === def.id || (cur.react && !machine))) return 'drop';
     // A reaction that walks obeys the walk gate like a pick (the gate frees within walkStaggerMs, since no walk starts while it is set).
     return def.travel !== undefined && ctx.walkBlocked ? 'wait' : 'start';
   };
@@ -1304,7 +1319,8 @@ export function createBehaviourRunner(
     const walkEnd = seg.startMs + seg.walkMs;
     if (p.due >= walkEnd || walkEnd - p.due <= WORLD_BEHAVIOUR.reactHaltMinLeftMs) return null;
     const end = seg.startMs + walkCutOf(seg, p.due, segFps).walkMs;
-    return reactGate(p.def, ctx, end) === 'start' ? end : null;
+    const def = dueReaction(p.def, p.cue, ctx);
+    return def !== undefined && reactGate(def, ctx, end, p.cue) === 'start' ? end : null;
   };
   // Applies one due event at its effective time `at`. A reaction replaces the current activity unless the gate drops it (reactGate). A wake
   // ends the current activity when it wakes on the cue, and the normal pick follows.
@@ -1316,14 +1332,17 @@ export function createBehaviourRunner(
       advanceOnce(ctx, false);
       return;
     }
-    const def = p.def;
-    if (def === null) return;
+    const picked = p.def;
+    if (picked === null) return;
+    // WP28b F41b: a due reaction starts its picked activity, or the cue's sibling when the picked one's 'when' no longer holds.
+    const def = p.kind === 'react' ? dueReaction(picked, p.cue, ctx) : picked;
+    if (def === undefined) return;
     if (p.kind === 'react') {
-      const gate = reactGate(def, ctx, at);
+      const gate = reactGate(def, ctx, at, p.cue);
       if (gate === 'drop') return;
       // WP28b: a reaction that walks waits reactWaitMs and tries again while the walk gate is set.
       if (gate === 'wait') {
-        pending.push({ ...p, due: tMs + WORLD_BEHAVIOUR.reactWaitMs });
+        pending.push({ ...p, due: tMs + WORLD_BEHAVIOUR.reactWaitMs, def });
         return;
       }
     } else if (!whenHolds(def, ctx)) {

@@ -366,8 +366,8 @@ off-stage for that stage and its lines wait.
 | III | damp, dripping (no gloss) | Found perched on the lamp (it moved there unseen). Drips. |
 | IV | 50 % | Hovers 2 px above the perch, wings still. Rises 1 px on each downbeat and resets. |
 | V | 70 % | Stutters in place above the lamp. Reversed caw. |
-| Finale | whole at 33.2 s | Glossy blue-black. Takes off at 37.0 s and climbs into the flock band. At 38.0 s it **leads the first flock**: one sprite handed to the `fx.bird` pool, drawn with its whole frames. Glides back to the lamp 47.5-49.3 s. Last look at 59.83 s. |
-| Postgame | an ordinary crow | KEEP +3 s: hops to the booth roof, **scratches mark 42** (3 pecks), hops back. Real caw sound only, no bubble: the mimic is gone. Perches between flocks. |
+| Finale | whole at 33.2 s | Glossy blue-black. Takes off at 37.0 s and climbs into the flock band. At 38.0 s it **leads the first flock**: one sprite handed to the `fx.bird` pool, drawn with its whole frames. Glides back to the end of the lamp arm (the kite's perch) 47.5-49.3 s. Last look at 59.83 s. |
+| Postgame | an ordinary crow | KEEP +3 s: hops from the kite's lamp arm to the weathervane on the booth apex, **scratches mark 42** (3 pecks), hops back. Real caw sound only, no bubble: the mimic is gone. Perches between flocks. |
 | Cycle 2+ | perched, tip try high | In eras I-II the rare tip try draws the **last postgame flight pose** (wings up, higher) for at most 1.8 s, then it is perched again. Eras III-V show no trace. |
 
 **WP24 (2026-10-26): the crow's activities.**
@@ -541,7 +541,7 @@ Prestige writes one SYS LOG line when at least one Splice was woken: "Lines cut:
 
 **Visits (WP28b).** A woken object draws a visit three to eight seconds after the wake. The Inspector visits the left-wing
 objects and the dog the right-wing ones, once the walker stands on a spot the visit can be reached from. The Inspector writes
-and the dog sniffs at the object; the visit lasts up to 20 s. Eras I-III and V only. The crow has no visit stand and no visit activity. Once per wake, when a hop is allowed and that perch is within a hop (160 px) of where the crow sits, it lands on the woken object's perch top where one exists: the bicycle seat, the sign top, the whistle top and the bell frame, and the vane top and the kite top, which take the booth roof and the lamp top. Never in era IV or under reduced motion.
+and the dog sniffs at the object; the visit lasts up to 20 s. Eras I-III and V only. The crow has no visit stand and no visit activity. Once per wake, when a hop is allowed, by one hop or two through a middle perch (each at most 160 px, never over the machine) when such a path exists (else it stays put), it lands on the woken object's perch top where one exists: the bicycle seat, the sign top, the whistle top and the bell frame, and the vane top and the kite top, which take the booth roof and the lamp top. Never in era IV or under reduced motion.
 
 ### 3.8 Poke reactions (WP28)
 
@@ -1158,7 +1158,7 @@ This puts figures turning whole with the ground under them.
 | 37.0 → 38.0 | The crow takes off and leads the first flock (handed to `fx.bird`). |
 | 41.0-42.0 baseL hold | Sensor 7 at the sky, the Inspector closing the clipboard, the lantern in the grass, the green sprout, the puddle with the restored sky. |
 | 45.0-46.0 baseR hold | Dog without its chain (one wag), clock sweeping, booth with the marks readable at zoom 1, empty lamp. |
-| 47.5-49.3 | The crow glides back to the lamp. |
+| 47.5-49.3 | The crow glides back to the end of the lamp arm (the kite's perch). |
 | 49.3 reveal | Everything holds still. |
 | 57.23 | `Observer count: 1.` starts typing. Nobody moves. |
 | **59.83** | **LAST LOOK.** `Operator identity: you.` starts typing. Every denizen on screen snaps to the camera on that frame. The girl appears at her restored window, facing the camera. The booth hood light blinks once. Sensor 7 swivels from the sky to the camera. |

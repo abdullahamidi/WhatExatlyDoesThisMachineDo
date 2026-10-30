@@ -4245,4 +4245,93 @@ Re-check for the next round, on fresh builds of the fixed tree:
 - F43: rerun `react2.mjs ONLY=s15` and `cast.mjs ONLY=s15`; the crow never lands under the chimes.
 - F46: rerun `hovergrid.mjs` at s13 / s15; every slab sits at least 8 px inside the viewport with its border whole.
 - F47: rerun `rapid.mjs`; the crow ruffles on each burst.
+- R6 (EM round 1 gate note): the e1 bicycle seat perch moved from G+70 to G+68 (`CROW_PERCHES.e1`, so the lamp top reaches it in two hops through the clock top, 47 + 159.4 px). The crow's feet may float 1 art px above the drawn seat. AD: wake the e1 bicycle (`react2.mjs` or `cast.mjs` at e1), let the crow land on the seat via the clock top, and crop the feet at 3x. If the 2 px float is rejected, fall back to R6 option (b): the seat back at G+70, the crow stays put, and `pokeRender.test.ts` and `pokes.test.ts` are re-pinned.
 - The EM re-measures the bundle rows; the lazy world total had about 0.5 KB of headroom.
+
+### AD4 - WP28b in-game audit, round 4 (Art Director, 2026-10-31; WP28b fix round 2)
+
+**Verdict: RELEASE-READY (B10).** F41, F42, F43, F45, F46 and F47 are fixed on fresh builds of the fixed tree. R6 passes. No new S1, S2 or S3 row. Four notes (N30-N33), no fix.
+- F45 (the round 3 S2 row) is fixed in every ending:
+  - the crow rests on the lamp-arm end through the choice phase and the postgame;
+  - the kite string stays clear of it;
+  - the KEEP beat lands on the vane finial with the mast below its feet.
+- Store 08 and 09 are re-approved at 1080 and 2160.
+- Round 3's passes still hold: roaming gaps, reach FX in every era, reduced motion, canon, F23 and F24.
+
+Build under audit.
+- `dist/` and `dist-demo/` were built at 2026-10-30 22:23 from the current tree (fe2aec7 plus the F41-F47 / R6 working-tree diff). No file under `src/`, `public/`, `vite.config.ts` or `index.html` is newer, so I did not rebuild.
+- The chunks carry the fixes: `crowRest:{dx:30,dy:26}`, `twoHopHoldMs:600`, `tipEdgePx:8` and `rapid:1`.
+- dist / dist-demo chunks:
+  - index 507.9 / 508.5;
+  - Director 280.000 / 280.005;
+  - WorldReach 48.299 / 48.304;
+  - shared 2.5 (`faultMarker` 1.1 + 1.0, `reachLevel` 0.4);
+  - FaultMarker 8.5 (unchanged);
+  - CSS 41.6 (demo +2.7 `demoEnd`).
+- Against the R5 caps: lazy world total 330.9 (cap 334), Director 280.0 (cap 284). The EM's `perf-budget.json` rows are measured + 1.
+- `vite preview` ran on :4174 (dist), twice, and on :4177 (dist-demo) for the demo pass. I killed each one after its runs; netstat shows both ports free and no node or headless browser is left.
+- One Playwright browser at a time; every run was sequential.
+
+Evidence root `<A4r4>` = `C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-st--WhatExatlyDoesThisMachineDo/7775e8fb-b1f6-4c83-880e-d18e41a0468f/scratchpad/WP28b/ad2/`.
+- Runs:
+  - F45: `keep/`, `keep-all/`, `store-1080/`, `store-2160/`, `post150/`;
+  - reactions: `react2/`, `react-era/`, `fault3/`, `fault3-s11/`, `point3/`, `react/`, `react2-s15/`, `rapid/`;
+  - R6: `crowR6/`, `crowR6b-a/`, `crowR6b-b/`, `crowR6c/`;
+  - hover: `hovergrid/`;
+  - spot checks: `cast/`, `cast150/`, `cast100-720/`, `reach/` (incl. `*-rm`), `f23/`;
+  - demo :4177: `demo/cast/`, `demo/crowR6c/`, `demo/fault3/`.
+- Logs are in `logs/`, boards in `crops/`.
+- Tools: the AD4 round 1 and 3 tools, plus `<A4r4>/tools/`:
+  - `fault3.mjs` (4 faults per stage, 31 s apart);
+  - `point3.mjs` (6 Finds, no early stop);
+  - `hovergrid2.mjs` (slab margins inside `#ui-root`);
+  - `crowR6.mjs`, `crowR6b.mjs`, `crowR6c.mjs` (the bicycle wake and the level-3 poke; extra big buys; the TECH INDEX unseen moment parks the crow on the lamp top);
+  - `keepcrow.py`, `pair.py` (boards).
+
+**1. Round 3 F-list re-check**
+
+| F | verdict | reading / evidence |
+|---|---|---|
+| F45 (S2) | PASS | KEEP, era I-II set and all 16:<br>- K-0.5 s (choice): the crow sits on the lamp-arm end, right of the dead kite (all 16: right of the woken kite's pole).<br>- K+3.3-3.9 s: three pecks on the vane finial; the mast is below its feet, and the crow never covers the vane rotor.<br>- K+6 to K+12 s: back on the arm end; the whole kite's string rises from the lamp top clear of the crow.<br>- Store 09 (1080, 2160): the feet stand on the arm's top row (`crops/F45-store09-crow-feet-arm-x10.png`).<br>- Store 08: arm end, with the tail over the dead kite's right edge (N24, as store 07).<br>- `post150`: at UI 150 the crow clears SYSTEM by about 40 px (1080) and 30 px (1280x800).<br>Boards: `crops/F45-store09-right-r3-vs-r4-x4.png`, `crops/F45-store08-right-r3-vs-r4-x4.png`, `crops/F45-keep-I-II-rest-peck-r4-x6.png`, `crops/F45-keep-all-crow-r4-x5.png`, `crops/F45-store2160-09-right-x2.png`, `crops/F45-post150-crow-vs-buttons.png` |
+| F41a | PASS | `fault3`, every fault got a bark and a startle:<br>- e1: 4 / 4, bark at 605-683 ms (1914 ms from sleep);<br>- s9: 4 / 4 (1755 ms from sleep);<br>- s11: 2 / 2 barks;<br>- demo e1: 2 / 2.<br>`react2` e1: the dog was in lookUp at the fault and barked at 632 ms (the round 3 F41a case); the Inspector left visitWrite and startled at 511 ms.<br>`react-era` s9 → s10: eraFront and eraHead start on the card close (round 3: skipped during a visit).<br>One s11 fault met the Inspector under his umbrella and got no startle (N32) |
+| F41b | PASS | `point3`, 6 Finds 38 s apart at e1: 6 / 6 got an Inspector answer at 2.9-4.1 s (5 lookFind, 1 point).<br>In try 2 he walked past the gust's x during the delay, and the point replaced the lookFind (the sibling swap). He points away from the machine toward the item (`crops/F41b-e1-point-gust-swap-x3.png`).<br>`react2`: e1 lookFind at 4.6 s (N26), s9 at 3.6 s |
+| F42 | PASS | The startle is 1.0 s startle, then 0.9 s lookUp, and it ends on lookUp, with no wrap:<br>- s11 wake (`react`): startle 1060 → lookUp 2074 → write 2959 ms;<br>- e1 / s9 faults: lookUp at about 1.0 s, a stand or walk from 1.9-2.0 s |
+| F43 | PASS | s15 (`react2-s15`, `cast` 60 s): the crow stands only on the vane top (3050, G-138) and the arm end (3134, G-86), plus its flights. No feet below G-86, so it never lands under the chimes |
+| F46 | PASS | `hovergrid2` at s13 and s15, 1080p and Deck, UI 100 and 150: 18 targets each, 0 hover misses.<br>- Every Splice slab sits 7.5-11.7 px inside `#ui-root` with its 2 px border whole.<br>- The kite at Deck UI 100: 7.5 px (round 3: 0.0-1.2 px past the edge).<br>- `crops/F46-tip-s15-kite-1280x800-r3-vs-r4-x3.png`. N31 |
+| F47 | PASS | `rapid` (24 clicks in 2.8-3.1 s): ruffleReact at 3968 / 4101 / 4000 ms at e1 / s9 / s11, 3 / 3 (round 3: 0 / 2) |
+
+**2. R6 (the crow's two-hop landing)**
+
+| check | verdict | reading / evidence |
+|---|---|---|
+| e1 bicycle wake from the lamp top | PASS | `crowR6c` (dist and dist-demo): the crow sits on the lamp top (2476, G-112).<br>- At 5.66 s it hops to the clock top (2516, G-88; 47 px).<br>- It holds 1.2 s, then hops at 7.37 s to the seat (2483, G+68; 159.4 px).<br>- It lands at 8.37 s (demo: 7.38 / 8.39 s).<br>Every x stays at 2476 or more; the e1 machine ends at 2316. `crops/R6-e1-two-hop-lamp-clock-seat-x2.png` |
+| from the booth roof or the clock top | PASS | `crowR6`, `crowR6b`: booth roof → clock top (97 px, the 30 % big-buy hop) → seat (159.4 px), or clock top → seat in one hop. Every wake (5 dist, 1 demo) ended on the seat. `crops/R6-e1-bicycle-wake-crow-path-x2.png` |
+| level-3 poke on the seat | PASS | `crowR6` run 0: 4 pokes (crowCaw, crowTurn, crowCaws, crowHopBeat). After the caw beat the crow hops from the seat to the clock top (159.4 px); the lamp top (180 px) and the booth roof (181 px) are skipped as out of reach |
+| the seat contact (G+68) | ACCEPTED (N30) | The feet stand 1 art px (3 screen px at e1 zoom 1) above the drawn saddle. Visible at 3x, a hairline at 1:1 on a dark saddle. Accepted for the R6 landing beat (R6 option a). `crops/R6-e1-crow-seat-1to1-x3.png`, `crops/R6-e1-crow-seat-feet-x8.png` |
+
+**3. Spot checks (round 3 passes)**
+
+| check | verdict | reading |
+|---|---|---|
+| roaming (60 s, 1080p, UI 100) | PASS | Longest action gap, Inspector / dog / crow:<br>- e1 6.3 / 8.1 / 8.6 s<br>- s9 5.8 / 10.7 / 7.5<br>- s11 6.3 / 5.7 / 7.6<br>- s15 7.7 / 11.8 / 8.8<br>- s13: the conductor switches every 9.7 s<br>0 facing errors, 0 feet in a Splice box, 0 Inspector or dog x in the machine x-range (N13: the s15 dog's front row is kept). The Inspector and the dog stay at least 868 px apart. Sensor 7's x is constant; the girl never moves |
+| UI 150 (1080p, 720p), 720p UI 100, demo | PASS | Gaps 5.7-11.5 s, 0 object hits.<br>One mid-walk `glance` frame faced the walk direction (e1, 720p, UI 100, one 250 ms sample; N25, the R7 watch item). Demo e1 / s9 gaps are 8.2 s at most |
+| reach FX | PASS | Every era shows its effect:<br>- ground pulse (+11) and wave (+3);<br>- base dust;<br>- pylon dots 2 / 2 / 4 / 6;<br>- arcs at s9;<br>- drift 4 at s11;<br>- hum at s13 (lamp 3102 ↔ 3106, booth 3052);<br>- debris 8 at s15.<br>`meanMs` 0.046-0.097 (cap 0.12). Reduced motion: every part 0, with the debris static. Photo mode: the part counters hold over 1 s, as in round 3 |
+| F23 | PASS | Reduced motion: the radio dot sits outside its box at s9 (16 px) and s15 (9 px). The sign dot shows at s9 in the beat frames, then hides behind the dog, as in round 3 |
+| F24 | PASS | Era I-II set and all 16:<br>- the dog fades at K+4.0-4.5 s;<br>- the objects re-place at K+4.74 s while hidden;<br>- the dog re-enters at K+6.95-8.0 s (543 → 732).<br>Same as round 3 |
+| store shots | PASS | 1080 and 2160 both `fail []`, `errors []`. Against round 3, 01-07 and 10 differ only in the machine's animation phase (`crops/store02-r3-vs-r4-half.png`) |
+| canon | PASS | - The girl never moves. Sensor 7 faces the camera.<br>- No denizen touches, overlaps or walks through the machine.<br>- Reactions follow effects, never the machine.<br>- The crow hops 160 px at most, never over the machine, and none in era IV; it is off-stage at s10.<br>- No WP28b blue or green pixel before the finale. No letters in the art. The clock keeps 4:41 |
+
+**4. F-list**: none.
+
+Notes (no fix):
+- N30 (R6): the e1 bicycle-seat perch at G+68 leaves the crow's feet 1 art px above the drawn saddle.
+  - Accepted: it buys the lamp-top two-hop landing, and the gap is a hairline at 1:1.
+  - If a later art pass wants it flush, raise the saddle 1 art px in `splices-a.png` cells 0-4 (the seat post grows by 1 px).
+  - That pass also moves `perchTop.dy` -26 → -28 and the s9 / s11 seats G+104 → G+102. One package, with its tests.
+- N31 (F46): the x clamp rounds the slab's left edge to whole px, so a fractional slab width leaves 7.5-8.5 px at the right edge (Deck, UI 100). The border is whole.
+- N32 (F41): the Inspector's umbrella hold (rain) is not interruptible, so a fault during it gets no startle (s11, 1 of 2). The dog and the crow still answer. It is the weather rule.
+- N33 (F45): on the vane finial the peck frames dip the beak into the air right of the finial. No mark is drawn, so no surface is needed; it reads as the crow bobbing. Watch it if mark 42 is ever drawn on the booth glass.
+- N27 widened: the e1 clock top → seat hop peaks 60 px above the clock top. `crowArcY` adds |dy| / 2 + apex, so steep hops rise above the 48 px apex. Not visible as a fault.
+- N13, N14 (R2), N15 (R3), N20, N21, N23, N24, N25 (R7 watch), N26, N28 and N29 hold.
+
+Re-check list: none for WP28b.

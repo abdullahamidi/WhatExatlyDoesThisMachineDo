@@ -396,7 +396,7 @@ Crow notes (AD3b):
   perch0 only, so the drop falls on the bob; tail tip on both); no gloss. whole: `gloss` (iron 3 on the crown and the
   folded wing's leading edge).
 - peck0 / peck1: body tipped forward with the tail up; peck0 head lowered, beak angled down-forward; peck1 the strike,
-  beak tip on the bottom row. With the KEEP hop (`hopDx` -54, `hopDy` 10) the toes land on the booth apex (51 art px;
+  beak tip on the bottom row. With the KEEP hop (crowRest (30, 26) plus `hopDx` -84, `hopDy` -52 = (-54, -26) from the lamp top) the toes land on the weathervane finial on the booth apex (AD4 F45;
   composite `z1-e1-corner-whole`); play them unflipped (facing right, away from the machine).
 - fly0 / fly1 / fly2: the frozen body (same head, beak, tail) with the legs tucked; wings level (shallow V) / down /
   UP (tall V). The body sits 2-4 px higher on the downstroke (fly1 rows 4-17, fly0 2-15, fly2 0-16), so the 8 fps

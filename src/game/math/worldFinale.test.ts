@@ -1,5 +1,6 @@
 // Tests for worldFinale (WP23b): restore times (the wipe formula, 21.3 s + 2 s lag, 120 px a second), LAST LOOK (59.83 s) and the choice
-// (62.6 s), the shield window (13-19.3 s), the girl's run (31.5-34 s), the crow's flight (37 / 38 / 47.5 / 49.3 s) and its reduced variant,
+// (62.6 s), the shield window (13-19.3 s), the girl's run (31.5-34 s), the crow's flight (37 / 38 / 47.5 / 49.3 s) from its lamp-arm
+// rest crowRest (AD4 F45) and its reduced variant,
 // the reduced whole state at 24.3 s, the LAST LOOK poses, the KEEP beats (1.5 s turn away, 3.0 s crow beat, the dog's fade at home and
 // re-entry), the postgame loop, props (the second hand continuous from the choice) and worldRow, every pose on its sheet (frame, row 0..5), the dog clear of the anchor boxes on every
 // KEEP and loop position, and a purity check (no Phaser, no DOM).
@@ -13,6 +14,8 @@ import type { CastScriptPose, ScriptCastId, WorldScriptFrame } from './worldScri
 import { FINALE_VIEWS } from '../../data/finale';
 import { MACHINE_ANCHOR, PIXEL_SCALE, VIEW } from '../../data/world';
 import { WORLD_ENDING } from '../../data/worldEnding';
+import { SPLICE_WORLD } from '../../data/spliceWorld';
+import { WORLD_ERA_ENV } from '../../data/worldEras';
 import { WORLD_FRAMES } from '../../data/livingWorld';
 import type { WorldSheetId } from '../../data/livingWorld';
 
@@ -191,20 +194,21 @@ describe('girl run', () => {
 });
 
 describe('crow flight', () => {
-  it('takes off at 37 s, climbs to the first flock at 38 s (dx 300, dy -380)', () => {
+  // AD4 F45: the crow starts from crowRest (30, 26), the kite's lamp-arm end, so every flight pose is re-pinned by that offset.
+  it('takes off at 37 s from crowRest, climbs to the first flock at 38 s (dx 300, dy -380)', () => {
     const start = film(37).cast.crow;
     expect(start.visible).toBe(true);
     expect(start.frame).toBe('fly0');
-    expect(start.dx).toBe(0);
-    expect(start.dy).toBe(0);
+    expect(start.dx).toBe(30);
+    expect(start.dy).toBe(26);
     expect(film(37).lead).toBeNull();
     const mid = film(37.5).cast.crow;
-    expect(mid.dx).toBeCloseTo(150, 6);
-    expect(mid.dy).toBeCloseTo(-190, 6);
+    expect(mid.dx).toBeCloseTo(180, 6);     // 30 + 150
+    expect(mid.dy).toBeCloseTo(-164, 6);    // 26 - 190
     const top = film(37.999).cast.crow;
     expect(top.visible).toBe(true);
-    expect(top.dx).toBeGreaterThan(299);
-    expect(top.dy).toBeLessThan(-379);
+    expect(top.dx).toBeGreaterThan(329);
+    expect(top.dy).toBeLessThan(-353);
   });
 
   it('is out of view from 38 s to 47.5 s while the flock leads', () => {
@@ -217,20 +221,20 @@ describe('crow flight', () => {
     expect(film(47.49).lead).not.toBeNull();
   });
 
-  it('glides back from (520, -380) to the perch from 47.5 s to 49.3 s', () => {
+  it('glides back from crowRest + (520, -380) = (550, -354) to crowRest from 47.5 s to 49.3 s', () => {
     const start = film(47.5).cast.crow;
     expect(start.visible).toBe(true);
-    expect(start.dx).toBe(520);
-    expect(start.dy).toBe(-380);
+    expect(start.dx).toBe(550);
+    expect(start.dy).toBe(-354);
     expect(film(47.5).lead).toBeNull();
     const mid = film(48.4).cast.crow;
-    expect(mid.dx).toBeCloseTo(260, 6);
-    expect(mid.dy).toBeCloseTo(-190, 6);
+    expect(mid.dx).toBeCloseTo(290, 6);     // 30 + 260
+    expect(mid.dy).toBeCloseTo(-164, 6);    // 26 - 190
     const home = film(49.3).cast.crow;
     expect(home.visible).toBe(true);
     expect(home.frame).toBe('perch0');
-    expect(home.dx).toBe(0);
-    expect(home.dy).toBe(0);
+    expect(home.dx).toBe(30);
+    expect(home.dy).toBe(26);
   });
 
   it('hands the lead to the first bird only for non-reduced 38 to 47.5 s', () => {
@@ -247,8 +251,8 @@ describe('reduced motion', () => {
     const before = film(37, true).cast.crow;
     expect(before.visible).toBe(true);
     expect(before.frame).toBe('perch0');
-    expect(before.dx).toBe(0);
-    expect(before.dy).toBe(0);
+    expect(before.dx).toBe(30);   // AD4 F45: crowRest, not the lamp top
+    expect(before.dy).toBe(26);
     for (const t of [38, 40, 47.5, 49.2]) expect(film(t, true).cast.crow.visible, `t ${t}`).toBe(false);
     const after = film(49.3, true).cast.crow;
     expect(after.visible).toBe(true);
@@ -307,7 +311,7 @@ describe('LAST LOOK poses', () => {
     expect(on.lastLook).toBe(true);
     expect(on.cast.inspector).toMatchObject({ visible: true, frame: 'front', row: 5, blendRow: null, flip: false, dx: 0, dy: 0 });
     expect(on.cast.dog).toMatchObject({ frame: 'head', row: 5, dx: 0 });
-    expect(on.cast.crow).toMatchObject({ frame: 'head', row: 5, dx: 0, dy: 0 });
+    expect(on.cast.crow).toMatchObject({ frame: 'head', row: 5, dx: 30, dy: 26 });   // AD4 F45: crowRest
     expect(on.cast.sensor7).toMatchObject({ frame: 'headC', row: 5 });
     expect(on.cast.girl.visible).toBe(false);
   });
@@ -397,20 +401,21 @@ describe('KEEP IT RUNNING and the postgame', () => {
     expect(turned.props.marksPlus).toBe(0);
   });
 
-  it('runs the crow beat from 3.0 s: hop, three pecks (peck0 / peck1), hop back, then the tally mark', () => {
-    expect(keep(3.0).cast.crow).toMatchObject({ frame: 'fly0', dx: 0, dy: 0 });
+  // AD4 F45: the hop runs from crowRest (30, 26) by (-84, -52) to the vane finial (-54, -26), so its midpoint is (-12, 0).
+  it('runs the crow beat from 3.0 s: hop from crowRest to the finial, three pecks (peck0 / peck1), hop back, then the tally mark', () => {
+    expect(keep(3.0).cast.crow).toMatchObject({ frame: 'fly0', dx: 30, dy: 26 });
     const hop = keep(3.1).cast.crow;
-    expect(hop.dx).toBeCloseTo(-27, 3);
-    expect(hop.dy).toBeCloseTo(5, 3);
-    expect(keep(3.25).cast.crow).toMatchObject({ frame: 'peck0', dx: -54, dy: 10 });
+    expect(hop.dx).toBeCloseTo(-12, 3);
+    expect(hop.dy).toBeCloseTo(0, 3);
+    expect(keep(3.25).cast.crow).toMatchObject({ frame: 'peck0', dx: -54, dy: -26 });
     expect(keep(3.55).cast.crow.frame).toBe('peck1');
     expect(keep(3.85).cast.crow.frame).toBe('peck0');
     expect(keep(4.05).props.marksPlus).toBe(0);
     const back = keep(4.2);
     expect(back.props.marksPlus).toBe(1);
-    expect(back.cast.crow.dx).toBeCloseTo(-27, 3);
-    expect(back.cast.crow.dy).toBeCloseTo(5, 3);
-    expect(keep(4.4).cast.crow).toMatchObject({ frame: 'perch0', dx: 0, dy: 0 });
+    expect(back.cast.crow.dx).toBeCloseTo(-12, 3);
+    expect(back.cast.crow.dy).toBeCloseTo(0, 3);
+    expect(keep(4.4).cast.crow).toMatchObject({ frame: 'perch0', dx: 30, dy: 26 });
   });
 
   it('fades the dog out at its home from 4 s (alpha 1 to 0 by 4.5 s), hidden to 7 s, walks back in from the left wing, sits at 732', () => {
@@ -554,6 +559,61 @@ describe('dog clear of the machine box', () => {
     const n = WORLD_ENDING.keep.dogEnter;
     const stride = WORLD_ENDING.dogStride.worldPxPerFrame * WORLD_ENDING.dogStride.fps;
     expect((WORLD_ENDING.postgameDogHomeX - n.fromX) / (n.toS - n.fromS)).toBeCloseTo(stride, 6);
+  });
+});
+
+// AD4 F45: every crow pose carries crowRest (the kite's lamp-arm end, not the lamp top); the KEEP pecks sit on the vane finial.
+describe('crow rest (AD4 F45)', () => {
+  const LIFT = WORLD_ERA_ENV.crowPerchLiftArtPx * PIXEL_SCALE;   // the crow's home feet line above the ground: 112
+  const hosted = (id: 'spliceVane' | 'spliceKite'): { dx: number; dy: number } => {
+    const e = SPLICE_WORLD[id];
+    const p = e?.placements.portrait;
+    if (e === undefined || e.perchTop === undefined || p === undefined || p === null || p.lane !== 'back') throw new Error(`no portrait perch for ${id}`);
+    return { dx: p.x + e.perchTop.dx - WORLD_ENDING.homeX.crow, dy: e.perchTop.dy + LIFT };
+  };
+  const KITE_ARM = hosted('spliceKite');   // (30, 26)
+  const FINIAL = hosted('spliceVane');     // (-54, -26)
+  it('derives the kite arm end (30, 26) and the vane finial (-54, -26) from the objects: crowRest is the kite arm', () => {
+    expect(KITE_ARM).toEqual({ dx: 30, dy: 26 });
+    expect(FINIAL).toEqual({ dx: -54, dy: -26 });
+    expect(WORLD_ENDING.crow.crowRest).toEqual(KITE_ARM);
+  });
+  it('every crow pose includes crowRest: perched poses sit on it, the pecks sit on the finial', () => {
+    const frames: WorldScriptFrame[] = [];
+    for (const t of GRID) frames.push(film(t), film(t, true));
+    frames.push(frame({ phase: 'choice', t: 70 }), frame({ phase: 'choice', t: 70, lastFrame: true }));
+    for (let i = 0; i <= 240; i++) frames.push(keep(i * 0.05));
+    for (let i = 0; i <= 900; i++) frames.push(keep(Infinity, { loopS: i * 0.1 }));
+    const crows = frames.map((f) => f.cast.crow).filter((p) => p.visible);
+    const perched = crows.filter((p) => !/^(fly|peck)/.test(p.frame));
+    expect(perched.length).toBeGreaterThan(300);
+    expect(perched.filter((p) => p.dx !== KITE_ARM.dx || p.dy !== KITE_ARM.dy).map((p) => `${p.frame} ${p.dx},${p.dy}`)).toEqual([]);
+    const pecks = crows.filter((p) => /^peck/.test(p.frame));
+    expect(pecks.length).toBeGreaterThan(0);
+    expect(pecks.filter((p) => p.dx !== FINIAL.dx || p.dy !== FINIAL.dy).map((p) => `${p.frame} ${p.dx},${p.dy}`)).toEqual([]);
+  });
+
+  it('hops from crowRest to the finial: mid-hop (-12, 0), pecks on the finial, the hop-out never overshoots it', () => {
+    const mid = keep(3.1).cast.crow;
+    expect(mid.dx).toBeCloseTo((KITE_ARM.dx + FINIAL.dx) / 2, 9);
+    expect(mid.dy).toBeCloseTo((KITE_ARM.dy + FINIAL.dy) / 2, 9);
+    expect(mid.dx).toBeCloseTo(-12, 6);
+    expect(mid.dy).toBeCloseTo(0, 6);
+    expect(keep(3.2).cast.crow).toMatchObject({ frame: 'peck0', dx: FINIAL.dx, dy: FINIAL.dy });
+    for (let i = 0; i <= 20; i++) {   // k 3.0 to 3.2 s
+      const k = 3 + i * 0.01;
+      const p = keep(k).cast.crow;
+      expect(p.dx, `k ${k}`).toBeGreaterThanOrEqual(FINIAL.dx - 1e-9);
+      expect(p.dy, `k ${k}`).toBeGreaterThanOrEqual(FINIAL.dy - 1e-9);
+    }
+  });
+
+  it('starts and ends the flights on crowRest: the takeoff, the glide home and the KEEP hop out and back', () => {
+    expect(film(37).cast.crow).toMatchObject({ dx: KITE_ARM.dx, dy: KITE_ARM.dy });
+    expect(film(49.3).cast.crow).toMatchObject({ dx: KITE_ARM.dx, dy: KITE_ARM.dy });
+    expect(keep(3.0).cast.crow).toMatchObject({ dx: KITE_ARM.dx, dy: KITE_ARM.dy });
+    expect(keep(4.35).cast.crow).toMatchObject({ frame: 'perch0', dx: KITE_ARM.dx, dy: KITE_ARM.dy });
+    expect(keep(3.2).cast.crow).toMatchObject({ frame: 'peck0', dx: FINIAL.dx, dy: FINIAL.dy });
   });
 });
 

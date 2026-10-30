@@ -438,7 +438,8 @@ describe('the crow perches and the hop (C3)', () => {
         if (height !== undefined) expect(p.y, `${p.id} feet`).toBe(GROUND_Y - height);
       }
     }
-    expect(CROW_PERCHES.s15?.map((p) => p.id)).toEqual(['lampTop', 'boothRoof', 'bicycleSeat']);
+    // AD4 F43 (WP28b round 3): s15 drops the bicycle seat (it sits under the chimes pendant); its lamp top and booth roof stay.
+    expect(CROW_PERCHES.s15?.map((p) => p.id)).toEqual(['lampTop', 'boothRoof']);
   });
 
   it('the ground perch by the dog: e1 36 px right of the dog (2400), s9 and s11 at 2924, none at s8, s8w, s10 and s15', () => {
@@ -461,7 +462,7 @@ describe('the crow perches and the hop (C3)', () => {
     expect(s11.find((p) => p.id === 'whistleTop')).toEqual({ id: 'whistleTop', x: 2970, y: GROUND_Y - 88, spliceTop: 'spliceWhistle' });
     expect(s11.find((p) => p.id === 'bellFrame')).toEqual({ id: 'bellFrame', x: 3150, y: GROUND_Y + 64, spliceTop: 'spliceBell' });
     expect(CROW_PERCHES.s10).toEqual([]);
-    expect(CROW_PERCHES.s15?.map((p) => p.id)).toEqual(['lampTop', 'boothRoof', 'bicycleSeat']);
+    expect(CROW_PERCHES.s15?.map((p) => p.id)).toEqual(['lampTop', 'boothRoof']);
     for (const perches of Object.values(CROW_PERCHES)) {
       for (const p of perches ?? []) {
         if (p.spliceTop !== undefined) expect(TECH_IDS, p.id).toContain(p.spliceTop);
@@ -509,12 +510,13 @@ describe('the crow perches and the hop (C3)', () => {
     expect(CROW_PERCHES.e1?.map((p) => p.id)).toEqual(['lampTop', 'boothRoof', 'clockTop', 'groundDog', 'bicycleSeat']);
     expect(CROW_PERCHES.s9?.map((p) => p.id)).toEqual(['lampTop', 'boothRoof', 'clockTop', 'dropWire', 'groundDog', 'bicycleSeat', 'signTop']);
     expect(CROW_PERCHES.s11?.map((p) => p.id)).toEqual(['lampTop', 'boothRoof', 'clockTop', 'groundDog', 'whistleTop', 'bellFrame', 'bicycleSeat', 'signTop']);
-    expect(CROW_PERCHES.e1?.find((p) => p.id === 'bicycleSeat')).toEqual({ id: 'bicycleSeat', x: 2483, y: GROUND_Y + 70, spliceTop: 'spliceBicycle' });
+    expect(CROW_PERCHES.e1?.find((p) => p.id === 'bicycleSeat')).toEqual({ id: 'bicycleSeat', x: 2483, y: GROUND_Y + 68, spliceTop: 'spliceBicycle' });
     expect(CROW_PERCHES.s9?.find((p) => p.id === 'bicycleSeat')).toEqual({ id: 'bicycleSeat', x: 2919, y: GROUND_Y + 104, spliceTop: 'spliceBicycle' });
     expect(CROW_PERCHES.s9?.find((p) => p.id === 'signTop')).toEqual({ id: 'signTop', x: 2972, y: GROUND_Y - 22, spliceTop: 'spliceSign' });
     expect(CROW_PERCHES.s11?.find((p) => p.id === 'bicycleSeat')).toEqual({ id: 'bicycleSeat', x: 2955, y: GROUND_Y + 104, spliceTop: 'spliceBicycle' });
     expect(CROW_PERCHES.s11?.find((p) => p.id === 'signTop')).toEqual({ id: 'signTop', x: 3078, y: GROUND_Y + 32, spliceTop: 'spliceSign' });
-    expect(CROW_PERCHES.s15?.find((p) => p.id === 'bicycleSeat')).toEqual({ id: 'bicycleSeat', x: 3145, y: GROUND_Y - 26, spliceTop: 'spliceBicycle' });
+    // AD4 F43: s15 has no bicycle seat (it sits under the chimes pendant), so the bicycle tops are five.
+    expect(CROW_PERCHES.s15?.find((p) => p.id === 'bicycleSeat')).toBeUndefined();
     // The bicycle and the sign tops only: each names a tech, sits outside the machine x-range and has another perch within a hop.
     const bicycleOrSign: readonly string[] = ['spliceBicycle', 'spliceSign'];
     let tops = 0;
@@ -528,7 +530,7 @@ describe('the crow perches and the hop (C3)', () => {
         expect(reach, `${framing} ${p.id} reach`).toBeLessThanOrEqual(CROW_HOP.maxDistPx);
       }
     }
-    expect(tops).toBe(6);
+    expect(tops).toBe(5);
   });
 });
 

@@ -1321,7 +1321,7 @@ async function caseJ(page) {
   const flightOk = c375?.visible === true && /^fly/.test(c375.frame) && c375.x > 3104 && c375.x < 3404
     && castOf(at40, 'crow')?.visible === false && at40.script?.lead?.row === 5 && /^fly/.test(at40.script?.lead?.frame ?? '')
     && c485?.visible === true && c485.x > 3104 && c485.x < 3624
-    && c498?.visible === true && /^perch/.test(c498.frame) && Math.abs(c498.x - 3104) < 0.5;
+    && c498?.visible === true && /^perch/.test(c498.frame) && Math.abs(c498.x - 3134) < 0.5;   // back on its lamp-arm perch: the lamp top 3104 + crowRest.dx 30 (AD4 F45)
   await check(page, 'J_crow_flight', flightOk, { takeoff: brief(c375), lead: at40.script?.lead ?? null, glide: brief(c485), back: brief(c498) }, true);
 
   // J_drawn: the entries livingWorld() draws (visible) at each seek, 350 ms after it. The girl leaves at 31.5 s, the lead flock flies

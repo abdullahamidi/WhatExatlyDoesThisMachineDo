@@ -41,6 +41,8 @@ export function crowArcY(fromY: number, toY: number, apexPx: number, p: number):
 // The machine's visible x-range (the arc may not cross it) and a box the arc may not dip into (the dog's head box: x0..x1, top = its top edge).
 export interface HopSpan { readonly left: number; readonly right: number }
 export interface HopBox { readonly x0: number; readonly x1: number; readonly top: number }
+// A perch's feet point or the crow's position (world px, y down).
+export interface HopPoint { readonly x: number; readonly y: number }
 export interface CrowHopSpec { readonly durMs: number; readonly apexPx: number }
 // Samples of the box test along the hop (structural).
 const ARC_SAMPLES = 32;
@@ -62,6 +64,27 @@ export function crowHopSpec(fromX: number, fromY: number, toX: number, toY: numb
     }
   }
   return { durMs: Math.max(CROW_HOP.minMs, (d / CROW_HOP.pxPerS) * 1000), apexPx };
+}
+
+// The middle perch of a two-hop landing (R6: a perch more than one hop from the crow): the index of the perch M, other than the target toIndex, that a
+// hop from `from` to M and a hop from M to the target both reach (crowHopSpec with no dog box; the director's box test runs on each hop). The M of
+// the smallest total distance wins (the first on a tie). -1 when the target is one hop from `from` (no middle is needed) or no perch M reaches it.
+export function middlePerch(perches: readonly HopPoint[], from: HopPoint, toIndex: number, machine: HopSpan): number {
+  const to = perches[toIndex];
+  if (to === undefined || crowHopSpec(from.x, from.y, to.x, to.y, machine, null) !== null) return -1;
+  let best = -1;
+  let bestPx = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < perches.length; i++) {
+    const m = perches[i];
+    if (m === undefined || crowHopSpec(from.x, from.y, m.x, m.y, machine, null) === null) continue;
+    if (crowHopSpec(m.x, m.y, to.x, to.y, machine, null) === null) continue;
+    const px = Math.hypot(m.x - from.x, m.y - from.y) + Math.hypot(to.x - m.x, to.y - m.y);
+    if (px < bestPx) {
+      best = i;
+      bestPx = px;
+    }
+  }
+  return best;
 }
 
 const FLY_FORWARD: readonly string[] = CROW_HOP.flyFrames;

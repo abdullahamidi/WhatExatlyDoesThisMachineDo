@@ -900,7 +900,7 @@ decides its facing, and no frame faces the machine (C1).
   (48 px before the object's end, clear of its sprite), era III the pipe alone, era IV a flat wire, era V the specks hang still.
 - **Visits.** A woken object draws a visit three to eight seconds after the wake. The Inspector (left-wing objects) writes
   (`write0`, `write1`), and the dog (right-wing objects) sniffs (`sniff0`, `sniff1`; era V `head` and `talk`). The visit lasts up
-  to 20 s. Eras I-III and V. The crow has no visit stand and no visit activity. Once per wake, when a hop is allowed and that perch is within a hop (160 px) of where the crow sits, it lands on the woken object's perch top where one exists (the bicycle seat, the sign top, the whistle top, the bell frame, and the vane and kite tops that take the booth roof and the lamp top). Never in era IV or under reduced motion.
+  to 20 s. Eras I-III and V. The crow has no visit stand and no visit activity. Once per wake, when a hop is allowed, by one hop or two through a middle perch (each at most 160 px, never over the machine) when such a path exists (else it stays put), it lands on the woken object's perch top where one exists (the bicycle seat, the sign top, the whistle top, the bell frame, and the vane and kite tops that take the booth roof and the lamp top). Never in era IV or under reduced motion.
 - **Finale and postgame.** Every object shows its whole frame, and the lines are hidden. The restored world needs no wire.
 - **Lines by era.** I: signal wire on pulley stakes. II: insulated cable, or the drop wire from the cable mast to the payphone
   hood. III: a pipe with collars. IV: a taut wire with a standing wave. V: lifted debris specks.

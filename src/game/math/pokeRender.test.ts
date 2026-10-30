@@ -2,9 +2,12 @@
 // the poke overlays, the crow hop arc (its duration, apex and box refusal) and the crow's flight and landing frames. Pure maths, no Phaser.
 // The moved functions had no tests in worldPlayback.test.ts, so these pin them as they stand.
 import { describe, it, expect } from 'vitest';
-import { clipIndexAt, crowArcY, crowFlightFrame, crowHopSpec, crowLandFrame, sensorHeadFromPointer } from './pokeRender';
+import { clipIndexAt, crowArcY, crowFlightFrame, crowHopSpec, crowLandFrame, middlePerch, sensorHeadFromPointer } from './pokeRender';
+import type { HopPoint, HopSpan } from './pokeRender';
 import { WORLD_ENV } from '../../data/livingWorld';
-import { CROW_HOP, POKE_RENDER } from '../../data/pokes';
+import type { FramingKey } from '../../data/livingWorld';
+import { CROW_HOP, CROW_MACHINE_X, CROW_PERCHES, POKE_RENDER } from '../../data/pokes';
+import type { CrowPerch } from '../../data/pokes';
 
 describe('sensorHeadFromPointer', () => {
   const tripodX = 1384;
@@ -144,5 +147,88 @@ describe('crowLandFrame', () => {
   it('reads a negative or non-finite time as the first slot', () => {
     expect(crowLandFrame(-5, false)).toBe(perch);
     expect(crowLandFrame(Number.NaN, false)).toBe(perch);
+  });
+});
+
+// The middle perch of a two-hop landing (R6): the real perch lists and machine spans, and a small synthetic path for the refusals.
+describe('middlePerch (R6)', () => {
+  const listOf = (f: FramingKey): readonly CrowPerch[] => CROW_PERCHES[f] ?? [];
+  const perch = (f: FramingKey, id: string): CrowPerch => {
+    const p = listOf(f).find((q) => q.id === id);
+    if (p === undefined) throw new Error(`no ${f} perch ${id}`);
+    return p;
+  };
+  const indexOf = (f: FramingKey, id: string): number => listOf(f).findIndex((q) => q.id === id);
+  const span = (f: FramingKey): HopSpan => {
+    const m = CROW_MACHINE_X[f];
+    if (m === undefined) throw new Error(`no ${f} machine span`);
+    return m;
+  };
+  // Both hops of the path from a to m and m to b are at most maxDistPx and clear the span (crowHopSpec with no box).
+  const pathOk = (a: HopPoint, m: HopPoint, b: HopPoint, machine: HopSpan): boolean =>
+    crowHopSpec(a.x, a.y, m.x, m.y, machine, null) !== null && crowHopSpec(m.x, m.y, b.x, b.y, machine, null) !== null;
+
+  it('the s9 and s11 bicycle seats (229 and 262 px from the lamp top) and the s11 bell frame (182 px) go through the sign top', () => {
+    for (const [f, id] of [['s9', 'bicycleSeat'], ['s11', 'bicycleSeat'], ['s11', 'bellFrame']] as const) {
+      const mid = middlePerch(listOf(f), perch(f, 'lampTop'), indexOf(f, id), span(f));
+      expect(listOf(f)[mid]?.id, `${f} ${id}`).toBe('signTop');
+      expect(pathOk(perch(f, 'lampTop'), perch(f, 'signTop'), perch(f, id), span(f)), `${f} ${id} path`).toBe(true);
+    }
+  });
+
+  it('the s9 groundDog (161 px, one px out of reach) goes through the sign top, the smallest total of the three middles (165 px)', () => {
+    expect(listOf('s9')[middlePerch(listOf('s9'), perch('s9', 'lampTop'), indexOf('s9', 'groundDog'), span('s9'))]?.id).toBe('signTop');
+  });
+
+  it('the e1 bicycle seat (180 px from the lamp top) goes through the clock top (47 + 159.4 px, R6)', () => {
+    const mid = middlePerch(listOf('e1'), perch('e1', 'lampTop'), indexOf('e1', 'bicycleSeat'), span('e1'));
+    expect(listOf('e1')[mid]?.id).toBe('clockTop');
+    expect(pathOk(perch('e1', 'lampTop'), perch('e1', 'clockTop'), perch('e1', 'bicycleSeat'), span('e1'))).toBe(true);
+  });
+
+  it('every Splice top in the real perch lists is one hop or two from the lamp top (R6)', () => {
+    for (const f of Object.keys(CROW_PERCHES) as FramingKey[]) {
+      const list = listOf(f);
+      const lamp = list.find((q) => q.id === 'lampTop');
+      if (lamp === undefined) continue;
+      list.forEach((p, index) => {
+        if (p.spliceTop === undefined) return;
+        expect(crowHopSpec(lamp.x, lamp.y, p.x, p.y, span(f), null) !== null || middlePerch(list, lamp, index, span(f)) >= 0, `${f} ${p.id}`).toBe(true);
+      });
+    }
+  });
+
+  it('a target one hop from the crow needs no middle perch: the e1 booth roof and clock top (57 and 47 px) return -1', () => {
+    expect(middlePerch(listOf('e1'), perch('e1', 'lampTop'), indexOf('e1', 'boothRoof'), span('e1'))).toBe(-1);
+    expect(middlePerch(listOf('e1'), perch('e1', 'lampTop'), indexOf('e1', 'clockTop'), span('e1'))).toBe(-1);
+  });
+
+  it('no path gives -1: no perch between the two, or the only one too far from either', () => {
+    const machine = { left: 1000, right: 1100 };
+    const from = { x: 0, y: 500 };
+    expect(middlePerch([from, { x: 300, y: 500 }], from, 1, machine)).toBe(-1);
+    expect(middlePerch([from, { x: 150, y: 300 }, { x: 300, y: 500 }], from, 2, machine)).toBe(-1);
+  });
+
+  it('never a path whose hop crosses the machine span: a middle perch under the span is refused, and the same perch clear of it is taken', () => {
+    const from = { x: 0, y: 500 };
+    const list = [from, { x: 150, y: 500 }, { x: 300, y: 500 }];
+    expect(middlePerch(list, from, 2, { left: 100, right: 200 })).toBe(-1);
+    expect(middlePerch(list, from, 2, { left: 400, right: 500 })).toBe(1);
+  });
+
+  it('every middle perch of the real lists is reached by two hops of at most maxDistPx that clear the machine span, and the direct hop is out of reach', () => {
+    for (const f of Object.keys(CROW_PERCHES) as FramingKey[]) {
+      const perches = listOf(f);
+      perches.forEach((from, i) => perches.forEach((to, j) => {
+        if (i === j) return;
+        const mid = middlePerch(perches, from, j, span(f));
+        if (mid < 0) return;
+        const m = perches[mid];
+        if (m === undefined) throw new Error(`${f} middle ${mid}`);
+        expect(pathOk(from, m, to, span(f)), `${f} ${from.x} to ${to.x}`).toBe(true);
+        expect(crowHopSpec(from.x, from.y, to.x, to.y, span(f), null), `${f} direct`).toBeNull();
+      }));
+    }
   });
 });

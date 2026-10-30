@@ -297,8 +297,8 @@ const perch = (id: string, x: number, rise: number): CrowPerch => ({ id, x, y: G
 export const CROW_PERCHES: Partial<Record<FramingKey, readonly CrowPerch[]>> = {
   e1: [
     perch(LAMP_TOP, 2476, 112), perch(BOOTH_ROOF, 2420, 102), perch(CLOCK_TOP, 2516, 88), { id: 'groundDog', x: E1_DOG_X + 36, y: GROUND_Y + 32 },
-    // The bicycle seat (WP28b FIX-C, AD3 O-f): a yard perch, reached from the ground perch (the lamp top is 182 px up, out of a hop).
-    { id: BICYCLE_SEAT, x: 2483, y: GROUND_Y + 70, spliceTop: SPLICE_BICYCLE },
+    // The bicycle seat (WP28b FIX-C, AD3 O-f): a yard perch. Its feet sit 1 art px above the drawn seat (G+70) so the lamp top reaches it in two hops through the clock top (47 + 159.4 px, each <= 160; R6). Do not change x or the other perches.
+    { id: BICYCLE_SEAT, x: 2483, y: GROUND_Y + 68, spliceTop: SPLICE_BICYCLE },
   ],
   s8: [perch(LAMP_TOP, 2656, 112), perch(BOOTH_ROOF, 2604, 102), perch(CLOCK_TOP, 2680, 88)],
   s8w: [perch(LAMP_TOP, 2720, 112), perch(BOOTH_ROOF, 2678, 102)],
@@ -318,11 +318,8 @@ export const CROW_PERCHES: Partial<Record<FramingKey, readonly CrowPerch[]>> = {
     // The bicycle seat and the sign top (WP28b FIX-C): the sign top is in reach of the lamp top, the booth roof and the bell frame.
     { id: BICYCLE_SEAT, x: 2955, y: GROUND_Y + 104, spliceTop: SPLICE_BICYCLE }, { id: SIGN_TOP, x: 3078, y: GROUND_Y + 32, spliceTop: SPLICE_SIGN },
   ],
-  s15: [
-    perch(LAMP_TOP, 3104, 112), perch(BOOTH_ROOF, 3050, 102),
-    // The bicycle seat (WP28b FIX-C): the lamp top is 95 px away.
-    { id: BICYCLE_SEAT, x: 3145, y: GROUND_Y - 26, spliceTop: SPLICE_BICYCLE },
-  ],
+  // s15 has no bicycle seat (AD4 F43: it sits under the chimes pendant).
+  s15: [perch(LAMP_TOP, 3104, 112), perch(BOOTH_ROOF, 3050, 102)],
 };
 
 // The crow's hop between perches (C3): one wing, at most maxDistPx long, the apex at most apexMaxPx above the higher end (apexPerDist of the
@@ -332,6 +329,8 @@ export const CROW_PERCHES: Partial<Record<FramingKey, readonly CrowPerch[]>> = {
 export const CROW_HOP = {
   pxPerS: 160, minMs: 450, maxDistPx: 160, apexMaxPx: 48, apexPerDist: 0.35, apexAddPx: 16, flyFrames: ['fly0', 'fly1', 'fly2'],
   fly0Ms: 100, flyFps: 12, landFrames: ['perch0', 'ruffle'], landMs: 300,
+  // R6: a two-hop landing polls every twoHopPollMs while its first hop flies, then holds twoHopHoldMs after the hop has landed.
+  twoHopHoldMs: 600, twoHopPollMs: 100,
 } as const;
 // The machine's visible x-range per framing (world px: the outer base feet on the object side, AD1 hand-off section d). A crow hop's arc never
 // crosses it (crowHopSpec).

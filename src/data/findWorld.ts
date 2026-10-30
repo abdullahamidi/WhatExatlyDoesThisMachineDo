@@ -152,6 +152,7 @@ export const POKE_LAYOUT = {
   violetFromEra: 5,
   flashColor: 0xffd27a,                // the ack flash frame (the crank pulse amber)
   tipGapPx: 8,                         // screen px between the object's box and the Splice tooltip
+  tipEdgePx: 8,                        // screen px the tooltip slab keeps inside #ui-root on each side (AD4 F46)
   tipRefreshMs: 250,                   // the tooltip's text and DOM geometry are read at this cadence
 } as const;
 /** WP28 Splice wake line (WorldReach chunk; the screen reader prefix is FIND_WORLD_TEXT.a11yPrefix). Plain words, US spelling. */

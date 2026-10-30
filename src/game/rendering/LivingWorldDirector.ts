@@ -13,7 +13,7 @@ import type { Vec2 } from '../../data/machineComponents';
 import { SYSTEM_LOG_CONFIG } from '../../data/systemLogs';
 import { CAMERA, GROUND_Y, MACHINE_ANCHOR, VIEW } from '../../data/world';
 import { FAULT_MARKER } from '../../data/faultMarker';
-import { CROW_MACHINE_X, CROW_PERCHES, POKES, POKE_BUBBLE, POKE_OBJECT_KEY, POKE_RENDER, POKE_TABLES } from '../../data/pokes';
+import { CROW_HOP, CROW_MACHINE_X, CROW_PERCHES, POKES, POKE_BUBBLE, POKE_OBJECT_KEY, POKE_RENDER, POKE_TABLES } from '../../data/pokes';
 import type { CrowPerch, PokeClip, PokeSoundId } from '../../data/pokes';
 import type { EraNumber } from '../../data/eras';
 import { FIND_PRODUCER_ACT } from '../../data/findProducer';
@@ -66,6 +66,7 @@ import { boundsToWorld, visibleMachineBounds } from '../math/machineBounds';
 import { reachLevel } from '../math/reachLevel';
 import { createPokeBubbleState, createPokeLadder, isUnavailable, notePokeBubble, pokeBubbleDue, pokeOn, reducedClip, resetLadder } from '../math/pokes';
 import type { PokeBubbleActor, PokeBubbleState, PokeLadder, PokeResult } from '../math/pokes';
+import { middlePerch } from '../math/pokeRender';
 import { clockTick, linePath, lineRouteAt, placementFeetY, spliceState, spliceTooltip } from '../math/spliceWorld';
 import type { Rect, SpeakerAnchor } from '../math/worldPlacement';
 import { worldFinaleFrame } from '../math/worldFinale';
@@ -2052,10 +2053,9 @@ export class LivingWorldDirector implements WorldFinalePort {
     return started;
   }
 
-  // Level 3 of the crow: the hop to the next perch of the list (wrapping), after the caw beat.
+  // Level 3 of the crow: the free hop to the next perch of the list that a hop reaches (crowHopNext), after the caw beat.
   private crowLeave(): void {
-    const n = this.perchesNow().length;
-    if (n > 1) this.crowHopTo((this.crowPerch + 1) % n);
+    this.crowHopNext();
   }
 
   // An unseen moment (WP28a T15b2): the TECH INDEX opens, the tab hides, the era card comes up, or the photo mode ends. The girl's pending pose
@@ -2390,15 +2390,35 @@ export class LivingWorldDirector implements WorldFinalePort {
 
   // WP28b (r2-FX3, Gathering at woken objects): the crow lands on a woken Splice's perch top when that top is in its list (spliceTop, or the vane
   // or kite top that took the booth roof or the lamp top). Once per wake, with or without a visit stand. Not when it sits there already, and only
-  // when a hop is allowed (hopAllowed) and the arc reaches the perch (crowHopTo).
+  // when a hop is allowed (hopAllowed). R6: a top out of one hop is reached through a middle perch (middlePerch): two hops, each at most 160 px.
   private crowLandOn(id: TechId): void {
-    if (!this.hopAllowed()) return;
-    for (let i = 0; i < this.perchList.length; i++) {
-      const p = this.perchList[i];
-      if (p === undefined || i === this.crowPerch || (p.spliceTop !== id && p.id !== id)) continue;
-      this.crowHopTo(i);
+    const applied = this.applied;
+    if (applied === null || !this.hopAllowed()) return;
+    const to = this.perchOf(id);
+    if (to < 0 || to === this.crowPerch || this.crowHopTo(to)) return;
+    const from = this.cast.crowPos() ?? CROW_PERCHES[applied.framing]?.[0];
+    const machine = CROW_MACHINE_X[applied.framing];
+    if (from === undefined || machine === undefined) return;
+    const mid = middlePerch(this.perchList, from, to, machine);
+    if (mid >= 0 && this.crowHopTo(mid)) this.crowLandNext(id);
+  }
+
+  // R6: the second hop of a two-hop landing. It polls every twoHopPollMs while the first hop flies (cast.hopBusy), then holds twoHopHoldMs and hops
+  // to the object's perch, if a hop is still allowed and the object still stands woken (the perch is read then).
+  private crowLandNext(id: TechId): void {
+    if (this.cast.hopBusy(this.visualNow())) {
+      this.later(this.nowMs + CROW_HOP.twoHopPollMs, () => this.crowLandNext(id), true);
       return;
     }
+    this.later(this.nowMs + CROW_HOP.twoHopHoldMs, () => {
+      const to = this.perchOf(id);
+      if (to >= 0 && this.session.state.techLevels[id] >= 1 && this.hopAllowed()) this.crowHopTo(to);
+    }, true);
+  }
+
+  // The index in the perch list of a woken object's top (its spliceTop, or the vane or kite top that took the booth roof or the lamp top); -1 if none.
+  private perchOf(id: TechId): number {
+    return this.perchList.findIndex((p) => p.spliceTop === id || p.id === id);
   }
 
   // WP28b F25: the visit starts when the walker stands on a spot the stand is clean from (visitFor): ctx.visitSpot takes the stand's spot for

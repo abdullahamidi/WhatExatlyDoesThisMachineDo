@@ -464,7 +464,8 @@ describe('cues (WORLD_REACT)', () => {
     expect(WORLD_REACT.findDelayMs[0]).toBeLessThanOrEqual(WORLD_REACT.findDelayMs[1]);
     expect(WORLD_REACT.staggerMs.inspector[1]).toBeLessThanOrEqual(WORLD_REACT.staggerMs.dog[0]);
     expect(WORLD_REACT.staggerMs.dog[1]).toBeLessThanOrEqual(WORLD_REACT.staggerMs.crow[0]);
-    expect(WORLD_REACT.chanceByCue).toEqual({ fault: 1, faultClear: 1, find: 1, bigBuy: 1, era: 1, splice: 1 });
+    // AD4 F47: rapid joins the chance-1 cues (a crank burst always ruffles the crow; the pair cooldown still holds).
+    expect(WORLD_REACT.chanceByCue).toEqual({ fault: 1, faultClear: 1, find: 1, bigBuy: 1, era: 1, splice: 1, rapid: 1 });
   });
 
   it('every route of a new cue names an activity that answers it, and every activity that answers it is routed', () => {
@@ -777,6 +778,16 @@ describe('visits, the new cue keys and the reaction gaps (WP28b F25, F30, reacti
     expect(WORLD_REACT.haltCues).toEqual(['fault', 'faultClear', 'find', 'bigBuy', 'era']);
     expect(WORLD_REACT.faultDimMs).toBe(1000);
     expect(WORLD_REACT.hopChanceByCue).toEqual({ bigBuy: 0.3 });
+  });
+
+  it('the startle holds 1.8 to 2.0 s with capMs 2000 in both rows (eras I-III and V): its 2-frame clip at 1 fps wraps above 2 s (AD4 F42)', () => {
+    const startles = ROWS.filter((r) => r.act.id === 'startle');
+    expect(startles.map((r) => r.era).sort((a, b) => a - b)).toEqual([1, 2, 3, 5]);
+    for (const { era, act } of startles) {
+      expect(act.holdMs, `era ${era} startle`).toEqual([1800, 2000]);
+      expect(act.capMs, `era ${era} startle capMs`).toBe(2000);
+      expect(act.holdMs[1], `era ${era} startle hold within capMs`).toBeLessThanOrEqual(act.capMs ?? 0);
+    }
   });
 
   it('every halt cue and hop cue names a known cue; the splice cue never cuts a walk (a visit walks, it does not cut)', () => {

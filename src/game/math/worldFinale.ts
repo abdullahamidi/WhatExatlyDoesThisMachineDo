@@ -3,7 +3,8 @@
 // frame. Every time derives from src/data/finale.ts and src/data/worldEnding.ts; the one derived constant is the second hand's
 // 360 / 60 degrees a second. Pure: no Phaser, no DOM, no random source.
 // Conventions: dx is world px from WORLD_ENDING.homeX of the member in every phase (the postgame dog carries
-// postgameDogHomeX - homeX.dog); dy is world px from the member's home feet line; the crow is relative to its perch.
+// postgameDogHomeX - homeX.dog); dy is world px from the member's home feet line; the crow's offsets start at its lamp-arm perch
+// (crowRest, AD4 F45), never at the lamp top.
 // worldRow is set only in the postgame (the dog always, the Inspector on its loop walk and pat); the film leaves it undefined.
 // Film phases (sequence, choice) read the finale clock t; the postgame reads the KEEP clock keepS, the loop clock loopS and the frozen film clock t (the second hand's start).
 import { FINALE_BEAM, FINALE_BIRDS, FINALE_DUST, FINALE_ECLIPSE, FINALE_REVEAL, FINALE_TRACKS, FINALE_WIPE } from '../../data/finale';
@@ -39,6 +40,7 @@ const HOME = WORLD_ENDING.homeX;
 const PG_DOG_DX = WORLD_ENDING.postgameDogHomeX - HOME.dog;   // the postgame spot, relative to the film home
 const K = WORLD_ENDING.keep;
 const CROW = WORLD_ENDING.crow;
+const REST = CROW.crowRest;                     // the lamp-arm perch every crow pose starts from (AD4 F45)
 const DOG_RUN: readonly string[] = ['chase0', 'chase1'];
 const FLOCK_S = FINALE_BIRDS.firstAtS;          // the crow's takeoff climbs to the first flock
 const LAST_LOOK_S = lastLookS();
@@ -108,31 +110,31 @@ function wholeFrameAt(m: ScriptCastId, t: number): string {
 }
 
 // A denizen in the film: the stare frame (the shield frame in the beam window) until its restore, then the whole frame.
-function filmPose(m: ScriptCastId, t: number, reduced: boolean): CastScriptPose {
+function filmPose(m: ScriptCastId, t: number, reduced: boolean, dx = 0, dy = 0): CastScriptPose {
   const restoreS = restoreAt(HOME[m], reduced);
   const restored = t >= restoreS;
   let frame = STARE[m];
   if (restored) frame = wholeFrameAt(m, t);
   else if (within(t, SHIELD_FROM_S, SHIELD_TO_S)) frame = SHIELD[m];
-  return pose(frame, rowAt(restoreS, t, reduced), 0, restored && WHOLE_FLIP[m]);
+  return pose(frame, rowAt(restoreS, t, reduced), dx, restored && WHOLE_FLIP[m], true, dy);
 }
 
-// The crow: perched; the takeoff climbs to the first flock (37-38 s); out of view while the flock flies (38-47.5 s); the glide back to
-// the lamp (47.5-49.3 s). Reduced motion: no takeoff and no glide, out of view from the flock to the glide's end.
+// The crow: perched at crowRest; the takeoff climbs from it to the first flock (37-38 s); out of view while the flock flies (38-47.5 s);
+// the glide back to crowRest (47.5-49.3 s). Reduced motion: no takeoff and no glide, out of view from the flock to the glide's end.
 function crowFilm(t: number, reduced: boolean): CastScriptPose {
-  const base = filmPose('crow', t, reduced);
+  const base = filmPose('crow', t, reduced, REST.dx, REST.dy);
   const gone = { ...base, visible: false, shadow: false };
   if (reduced) return within(t, FLOCK_S, CROW.returnToS) ? gone : base;
   if (within(t, CROW.takeoffS, FLOCK_S)) {
     const k = (t - CROW.takeoffS) / (FLOCK_S - CROW.takeoffS);
     const frame = frameOf(CROW.flyFrames, Math.floor((t - CROW.takeoffS) * CROW.fps));
-    return pose(frame, WHOLE, CROW.climbDx * k, false, true, CROW.climbDy * k);
+    return pose(frame, WHOLE, REST.dx + CROW.climbDx * k, false, true, REST.dy + CROW.climbDy * k);
   }
   if (within(t, FLOCK_S, CROW.returnFromS)) return gone;
   if (within(t, CROW.returnFromS, CROW.returnToS)) {
     const left = 1 - clamp01((t - CROW.returnFromS) / (CROW.returnToS - CROW.returnFromS));
     const frame = frameOf(CROW.flyFrames, Math.floor((t - CROW.returnFromS) * CROW.fps));
-    return pose(frame, WHOLE, CROW.returnStartDx * left, false, true, CROW.returnStartDy * left);
+    return pose(frame, WHOLE, REST.dx + CROW.returnStartDx * left, false, true, REST.dy + CROW.returnStartDy * left);
   }
   return base;
 }
@@ -173,21 +175,22 @@ function lastLookCast(dogDx: number): Record<ScriptCastId, CastScriptPose> {
   return {
     inspector: pose(STARE.inspector, WHOLE),
     dog: pose(STARE.dog, WHOLE, dogDx),
-    crow: pose(STARE.crow, WHOLE),
+    crow: pose(STARE.crow, WHOLE, REST.dx, false, true, REST.dy),
     girl: pose(STARE.girl, WHOLE, 0, false, false),
     sensor7: pose(STARE.sensor7, WHOLE),
   };
 }
 
-// The crow's KEEP beat (k seconds after KEEP): hop to the booth roof (hopDx, hopDy), peck `pecks` times (peck0 / peck1), hop back.
+// The crow's KEEP beat (k seconds after KEEP): hop from the lamp-arm perch (crowRest) by (hopDx, hopDy) to the vane finial, peck `pecks`
+// times (peck0 / peck1), hop back to the perch. hopDx / hopDy are offsets FROM crowRest: the pecks sit at crowRest + hop = (-54, -26) from the lamp top.
 function crowKeep(k: number): CastScriptPose {
-  if (k < K.scratchStartS || k >= HOP_BACK_END_S) return pose(WHOLE_FRAME.crow, WHOLE);
+  if (k < K.scratchStartS || k >= HOP_BACK_END_S) return pose(WHOLE_FRAME.crow, WHOLE, REST.dx, false, true, REST.dy);
   const fly = (f: number, fromS: number): CastScriptPose =>
-    pose(frameOf(CROW.flyFrames, Math.floor((k - fromS) * CROW.fps)), WHOLE, K.hopDx * f, false, true, K.hopDy * f);
+    pose(frameOf(CROW.flyFrames, Math.floor((k - fromS) * CROW.fps)), WHOLE, REST.dx + K.hopDx * f, false, true, REST.dy + K.hopDy * f);
   if (k < HOP_OUT_END_S) return fly((k - K.scratchStartS) / HOP_S, K.scratchStartS);
   if (k < PECKS_END_S) {
     const n = Math.floor((k - HOP_OUT_END_S) / PECK_S);
-    return pose(n % 2 === 0 ? 'peck0' : 'peck1', WHOLE, K.hopDx, false, true, K.hopDy);
+    return pose(n % 2 === 0 ? 'peck0' : 'peck1', WHOLE, REST.dx + K.hopDx, false, true, REST.dy + K.hopDy);
   }
   return fly(1 - (k - PECKS_END_S) / HOP_S, PECKS_END_S);
 }
@@ -223,7 +226,7 @@ function postgameCast(k: number, loopS: number, lastFrame: boolean, sensorTurn: 
   return {
     inspector: { ...pose(p.inspector.frame, WHOLE, p.inspector.dx, p.inspector.flip, true, p.inspector.dy), worldRow: p.inspector.row },
     dog: onFront(pose(p.dog.frame, WHOLE, PG_DOG_DX + p.dog.dx, p.dog.flip)),
-    crow: pose(p.crow.frame, WHOLE, p.crow.dx, p.crow.flip, true, p.crow.dy),
+    crow: pose(p.crow.frame, WHOLE, REST.dx + p.crow.dx, p.crow.flip, true, REST.dy + p.crow.dy),
     girl: girlGone,
     sensor7: sensor,
   };

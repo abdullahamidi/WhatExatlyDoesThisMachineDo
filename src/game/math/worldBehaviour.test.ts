@@ -3681,3 +3681,223 @@ describe('the cues reach the cast at their delays (WP28b AD4 C_wave, C_era)', ()
     }
   });
 });
+
+// ---- WP28b AD4 F41, F47: a machine-event cue pre-empts an interruptible reaction or visit (F41a), a due reaction whose 'when' fails re-picks
+// its cue's sibling (F41b), a rapid burst always ruffles the crow (F47, chance 1). Era IV is unchanged (R3); a non-machine cue still yields. ----
+describe('machine-event cues pre-empt busy actors and re-pick their sibling (WP28b AD4 F41, F47)', () => {
+  // A runner with a context per step (ctxAt) and the cues at their steps: the closed segments of the run.
+  const runSteps = (actor: BehaviourActor, seed: number, ctxAt: (i: number) => BehaviourCtx, cues: readonly CueAt[], totalMs: number):
+    BehaviourLogEntry[] => {
+    const log: BehaviourLogEntry[] = [];
+    const r = createBehaviourRunner(actor, seed, STUB_CONDUCTOR, (e) => log.push(e));
+    r.reset(seed, 0, ctxAt(0).homeX);
+    for (let i = 0; i < Math.round(totalMs / STEP); i++) {
+      const due = cues.filter((c) => c.step === i).map((c) => ({ id: c.id, index: c.index }));
+      r.step(STEP, { ...ctxAt(i), cues: due });
+    }
+    return log;
+  };
+  // The first chance-passing cue index from `from` on (the default chance gate).
+  const passingFrom = (seed: number, from: number): number => {
+    for (let j = from; ; j++) {
+      if (hash01(seed + WORLD_BEHAVIOUR.salts.react, j) < WORLD_REACT.chance) return j;
+    }
+  };
+  // The dog in era I on no travel: a crowMove cue at step 4 starts its lookUp reaction (the crowMove answer, an interruptible reaction).
+  const dogLookUp = (): { seed: number; ctx: BehaviourCtx; j: number; look: BehaviourLogEntry } | undefined => {
+    const seed = behaviourSeed(1, 'dog');
+    const ctx = ctxFor('dog', 1, 'fps8', HOME_R, { spots: [] });
+    const j = passingIndex(seed);
+    const look = playCued('dog', seed, ctx, STEP, 30 * MIN, [{ step: 4, id: 'crowMove', index: j }]).find((e) => e.reaction);
+    return look === undefined ? undefined : { seed, ctx, j, look };
+  };
+
+  it('a fault during an ambient reaction starts the bark: the dog in its crowMove lookUp is pre-empted (AD4 F41a, the e1 case)', () => {
+    const found = dogLookUp();
+    expect(found?.look.activity, 'the crowMove reaction is the lookUp').toBe('lookUp');
+    if (found === undefined) return;
+    const { seed, ctx, j, look } = found;
+    const fault: CueAt = { step: stepAt(look.atMs + 1000, STEP), id: 'fault', index: j + 1 };
+    const log = playCued('dog', seed, ctx, STEP, 30 * MIN, [{ step: 4, id: 'crowMove', index: j }, fault]);
+    const cueMs = (fault.step + 1) * STEP;
+    const bark = log.find((e) => e.reaction && e.activity === 'bark');
+    expect(bark, 'the bark starts').toBeDefined();
+    if (bark === undefined) return;
+    const [lo, hi] = WORLD_REACT.staggerMs.dog;
+    expect(bark.atMs - cueMs, 'the dog band').toBeGreaterThanOrEqual(lo - 1e-6);
+    expect(bark.atMs - cueMs, 'the dog band').toBeLessThanOrEqual(hi + STEP);
+    // The lookUp it pre-empts ends where the bark starts, as an interrupt ends it.
+    const cut = log.find((e) => e.reaction && e.activity === 'lookUp');
+    expect(cut !== undefined && Math.abs(cut.atMs + cut.durMs - bark.atMs) < 1e-6, 'the lookUp ends at the bark').toBe(true);
+  });
+
+  it('a non-machine cue still yields to the reaction: a ring during the crowMove lookUp starts nothing (only machine-event cues pre-empt)', () => {
+    const found = dogLookUp();
+    expect(found?.look.activity, 'the crowMove reaction is the lookUp').toBe('lookUp');
+    if (found === undefined) return;
+    const { seed, ctx, j, look } = found;
+    const ring: CueAt = { step: stepAt(look.atMs + 1000, STEP), id: 'ring', index: passingFrom(seed, j + 1) };
+    const log = playCued('dog', seed, ctx, STEP, 30 * MIN, [{ step: 4, id: 'crowMove', index: j }, ring]);
+    expect(log.filter((e) => e.reaction).map((e) => e.activity)).toEqual(['lookUp']);
+  });
+
+  it('a non-interruptible reaction still blocks a machine-event cue: the era cue during the startle is dropped (AD4 F41a)', () => {
+    const seed = behaviourSeed(1, 'inspector');
+    const ctx = ctxFor('inspector', 1, 'fps8', HOME_L, { spots: [] });
+    const log = playCued('inspector', seed, ctx, STEP, 30000, [{ step: 4, id: 'fault', index: 1 }, { step: 7, id: 'era', index: 2 }]);
+    expect(log.some((e) => e.reaction && e.activity === 'startle'), 'the fault starts the startle').toBe(true);
+    expect(log.some((e) => e.activity === 'eraFront'), 'the era cue is dropped under the startle').toBe(false);
+  });
+
+  it('an era cue during a visit starts eraFront: the Inspector on his Splice visit is pre-empted (AD4 F41a, the s10 case)', () => {
+    const seed = behaviourSeed(1, 'inspector');
+    const spots: SpotLike[] = [...INS3, { id: 'v1', x: 60 }];
+    const ctx = ctxFor('inspector', 1, 'fps8', 100, { spots, visitSpot: 'v1' });
+    const splice: CueAt = { step: 10, id: 'splice', index: 1 };
+    const visit = playCued('inspector', seed, ctx, STEP, 30000, [splice]).find((e) => e.reaction && e.activity === 'visitWrite');
+    expect(visit, 'the splice starts the visit').toBeDefined();
+    if (visit === undefined) return;
+    // The era card closes 1.5 s into the visit (its walk is done; the hold runs 4-8 s).
+    const era: CueAt = { step: stepAt(visit.atMs + 1500, STEP), id: 'era', index: 2 };
+    const log = playCued('inspector', seed, ctx, STEP, 30000, [splice, era]);
+    const eraMs = (era.step + 1) * STEP;
+    const front = log.find((e) => e.reaction && e.activity === 'eraFront' && e.atMs >= eraMs);
+    expect(front, 'eraFront starts during the visit').toBeDefined();
+    if (front === undefined) return;
+    const [lo, hi] = WORLD_REACT.staggerMs.inspector;
+    expect(front.atMs - eraMs, 'the inspector band').toBeGreaterThanOrEqual(lo - 1e-6);
+    expect(front.atMs - eraMs, 'the inspector band').toBeLessThanOrEqual(hi + STEP);
+    const cut = log.find((e) => e.reaction && e.activity === 'visitWrite' && e.atMs === visit.atMs);
+    expect(cut !== undefined && Math.abs(cut.atMs + cut.durMs - front.atMs) < 1e-6, 'the visit ends where eraFront starts').toBe(true);
+  });
+
+  // A context with a Find on one side of the actor (or on neither side) and the Find's x.
+  const sideCtx = (actor: BehaviourActor, home: number, side: 'findOuter' | 'findInner' | null): BehaviourCtx =>
+    ctxFor(actor, 1, 'fps8', home, { spots: [], findX: 1500, findOuter: side === 'findOuter', findInner: side === 'findInner' });
+
+  it('a Find the walker crosses before its due time: the sibling answer starts (AD4 F41b: point and lookFind, sniffFind and sniffHere)', () => {
+    const cases: readonly { actor: 'inspector' | 'dog'; home: number; was: 'findOuter' | 'findInner'; now: 'findOuter' | 'findInner';
+      first: string; second: string }[] = [
+      { actor: 'inspector', home: HOME_L, was: 'findOuter', now: 'findInner', first: 'point', second: 'lookFind' },
+      { actor: 'inspector', home: HOME_L, was: 'findInner', now: 'findOuter', first: 'lookFind', second: 'point' },
+      { actor: 'dog', home: HOME_R, was: 'findOuter', now: 'findInner', first: 'sniffFind', second: 'sniffHere' },
+      { actor: 'dog', home: HOME_R, was: 'findInner', now: 'findOuter', first: 'sniffHere', second: 'sniffFind' },
+    ];
+    for (const c of cases) {
+      const before = sideCtx(c.actor, c.home, c.was);
+      const after = sideCtx(c.actor, c.home, c.now);
+      // The cue lands at 1.1 s on the clock (step 10) and the walker crosses the Find's x at 1.2 s: before the dog's due time (0.4 s after
+      // the cue at the earliest) and the Inspector's (2 s after).
+      const log = runSteps(c.actor, behaviourSeed(1, c.actor), (i) => (i < 11 ? before : after), [{ step: 10, id: 'find', index: 1 }], 30000);
+      const reactions = log.filter((e) => e.reaction);
+      expect(reactions.map((e) => e.activity), `${c.actor} ${c.was} then ${c.now} (${c.first} before)`).toEqual([c.second]);
+      const [lo, hi] = c.actor === 'inspector' ? WORLD_REACT.findDelayMs : WORLD_REACT.staggerMs.dog;
+      const lag = (reactions[0]?.atMs ?? NaN) - 1100;
+      expect(lag, `${c.actor} sibling band`).toBeGreaterThanOrEqual(lo - 1e-6);
+      expect(lag, `${c.actor} sibling band`).toBeLessThanOrEqual(hi + STEP);
+    }
+  });
+
+  it('a Find on neither side at its due time is dropped: no sibling passes (AD4 F41b drops only when none passes)', () => {
+    const log = runSteps('inspector', behaviourSeed(1, 'inspector'), (i) => (i < 11 ? sideCtx('inspector', HOME_L, 'findOuter')
+      : sideCtx('inspector', HOME_L, null)), [{ step: 10, id: 'find', index: 1 }], 30000);
+    expect(log.some((e) => e.reaction)).toBe(false);
+  });
+
+  it('a rapid burst always ruffles the crow (AD4 F47, chance 1): every burst of five seeds starts ruffleReact in its band', () => {
+    for (let s = 1; s <= 5; s++) {
+      const log = playCued('crow', behaviourSeed(s, 'crow'), ctxFor('crow', 1, 'fps8', HOME_R, { spots: [] }), STEP, 20000,
+        [{ step: 60, id: 'rapid', index: 1 }]);
+      const ruffle = log.find((e) => e.reaction && e.activity === 'ruffleReact');
+      expect(ruffle, `seed ${s} ruffles`).toBeDefined();
+      if (ruffle === undefined) continue;
+      const [lo, hi] = WORLD_REACT.latencyMs.crow;
+      expect(ruffle.atMs - 6100, `seed ${s} band`).toBeGreaterThanOrEqual(lo - 1e-6);
+      expect(ruffle.atMs - 6100, `seed ${s} band`).toBeLessThanOrEqual(hi + STEP);
+    }
+  });
+});
+
+// ---- WP28b AD4 F42: the startle under the start gate. The Inspector's startle is 2 frames at 1 fps (holdMs 1.8-2.0 s), so a hold stretched past
+// 2 s wraps the clip. Its capMs 2000 keeps the start gate (guardHold) under 2 s. The scan runs the Inspector with the dog and the crow on one gate
+// and one clock, with a fault every 30 s over 12 min. ----
+const STARTLE_SEEDS = 50;
+const STARTLE_SCAN_MS = 12 * MIN;
+const STARTLE_DT = 50;
+const STARTLE_FAULT_MS = 30000;
+const STARTLE_CAST: readonly { actor: BehaviourActor; home: number }[] = [
+  { actor: 'inspector', home: HOME_L }, { actor: 'dog', home: HOME_R }, { actor: 'crow', home: HOME_R },
+];
+// The Inspector's startles in one era over `seeds` seeds, the three denizens of STARTLE_CAST on one start gate: the count, the longest and the
+// count at 2000 ms or more.
+function scanStartles(era: WorldEra, seeds: number): { n: number; maxDurMs: number; over: number } {
+  let n = 0;
+  let maxDurMs = 0;
+  let over = 0;
+  for (let s = 1; s <= seeds; s++) {
+    const gate = createStartGate();
+    const inspector: BehaviourLogEntry[] = [];
+    const runs = STARTLE_CAST.map(({ actor, home }) => {
+      const seed = behaviourSeed(s, actor);
+      const onLog = (e: BehaviourLogEntry): void => {
+        if (actor === 'inspector') inspector.push(e);
+      };
+      const r = createBehaviourRunner(actor, seed, STUB_CONDUCTOR, onLog);
+      r.reset(seed, 0, home);
+      return { r, ctx: ctxFor(actor, era, 'fps8', home, { startGate: gate }) };
+    });
+    let k = 0;
+    for (let i = 0; i < STARTLE_SCAN_MS / STARTLE_DT; i++) {
+      // The clock after step i is (i + 1) x dt; a fault lands on every 30 s mark.
+      const t = (i + 1) * STARTLE_DT;
+      let cues: BehaviourCtx['cues'] = [];
+      if (t % STARTLE_FAULT_MS === 0) {
+        k++;
+        cues = [{ id: 'fault', index: k }];
+      }
+      for (const { r, ctx } of runs) {
+        ctx.cues = cues;
+        r.step(STARTLE_DT, ctx);
+      }
+    }
+    for (const e of inspector) {
+      if (!e.reaction || e.activity !== 'startle') continue;
+      n++;
+      maxDurMs = Math.max(maxDurMs, e.durMs);
+      if (e.durMs >= 2000) over++;
+    }
+  }
+  return { n, maxDurMs, over };
+}
+
+describe('the startle under the start gate (WP28b AD4 F42)', () => {
+  it('no fault startle reaches 2000 ms under the shared start gate (eras 1, 3 and 5)', () => {
+    for (const era of [1, 3, 5] as const) {
+      const { n, maxDurMs, over } = scanStartles(era, STARTLE_SEEDS);
+      expect(n, `era ${era} startles`).toBeGreaterThan(100);
+      expect(over, `era ${era}: startles at 2000 ms or more`).toBe(0);
+      expect(maxDurMs, `era ${era}: longest startle`).toBeLessThan(2000);
+    }
+  });
+
+  it('without the cap the same scan stretches a startle past 2000 ms (the gate matters)', () => {
+    // The startle rows of the eras share one object, so each cap is saved in order and restored in reverse order.
+    const saved: { act: Activity; capMs: number | undefined }[] = [];
+    for (const era of [1, 2, 3, 5] as const) {
+      for (const act of WORLD_REPERTOIRE.inspector[era] ?? []) {
+        if (act.id !== 'startle') continue;
+        saved.push({ act, capMs: act.capMs });
+        delete act.capMs;
+      }
+    }
+    try {
+      expect(scanStartles(1, STARTLE_SEEDS).over).toBeGreaterThan(0);
+    } finally {
+      for (const { act, capMs } of saved.reverse()) {
+        if (capMs === undefined) delete act.capMs;
+        else act.capMs = capMs;
+      }
+    }
+    expect(WORLD_REPERTOIRE.inspector[1]?.find((a) => a.id === 'startle')?.capMs).toBe(2000);
+  });
+});
