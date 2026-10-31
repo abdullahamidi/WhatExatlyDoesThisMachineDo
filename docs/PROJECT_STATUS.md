@@ -2,6 +2,10 @@
 
 ## Current milestone
 **Steam demo program (2026-10-23)** — see docs/plan/STEAM_DEMO_PROGRAM.md (decisions D1–D8, two tracks).
+**v0.12.0 release-ready (2026-10-31)**: WP28 (user playtest 2026-10-28) merged: purchases about twice as often (pacing set REC),
+NEXT BUY + BUY MAX, 16 Splices (wake dead world objects), Finds + FIELD NOTES (G key), pokes, a roaming cast that reacts to the machine's
+effects, the machine's reach into the world per era; docs/STEAM_RELEASE.md section 15 §R-lite, all 15 rows PASS (GPU perf p95 16.8 ms,
+30 min soak, packaged exes, store-final5).
 **v0.11.0 release-ready (2026-10-28)**: WP27 (user playtest 2026-10-27) merged: click curve (cranking leads the first minutes, the machine
 takes over by era III), ME click parity, Machine Faults (clickable events, F key), wind-up click branch, era I-II crow perched, Sensor 7
 in era II; docs/STEAM_RELEASE.md section 15 §R-lite, all 15 rows PASS (GPU perf p95 16.8 ms, 30 min soak, packaged exes, store-final4).
@@ -47,7 +51,7 @@ Left for the user: Steam app/depot ids, capsule art, trailer, SteamPipe upload (
 | WP26 | Post-v0.10.0 follow-ups → v0.10.1: wind/rain audio from the world weather, slow era V sky fade-in, loop prune, girl off the scrap, servo arm rim, tech tree edges clear every node (AD §R N2) | ✅ done (v0.10.1; Opus review round 2 APPROVE, EM round 2 PASS, AD2 round 2 RELEASE-READY; §R-lite PASS) |
 | WP25b | Surge: click = very serious income (playtest reading R2), capped burst on top of WP25 | superseded by WP27 (the user's 2026-10-27 answer) |
 | WP27 | Playtest 2026-10-27: click curve (hand → hand + machine → machine), ME click parity, Machine Faults + wind-up click branch (5 new nodes), prestige re-tune, crow perched in eras I-II, Sensor 7 in era II | ✅ done (v0.11.0; Opus review round 3 APPROVE, EM round 3 PASS, AD round 3 RELEASE-READY; §R-lite all 15 rows PASS) |
-| WP28 | Playtest 2026-10-28: no dead waits, Splices (wake world objects), Finds, poke-able and roaming denizens, the machine's reach into the world | 🔄 WP28a done (REC pacing 17 split tracks, multi-buy + BUY MAX + NEXT BUY, 16 Splices era I-II, Finds + FIELD NOTES, pokes; es2022; 6471 tests; all smokes fail []; AD2 round 3 RELEASE-READY). WP28b running (roaming, machine reactions, ReachFx, era III-V Splices, poke bubbles, AD2 carry-overs F23/F24; then v0.12.0) |
+| WP28 | Playtest 2026-10-28: no dead waits, Splices (wake world objects), Finds, poke-able and roaming denizens, the machine's reach into the world | ✅ done (v0.12.0; WP28a AD2 round 3 and WP28b AD4 round 4 RELEASE-READY, Director rulings R1-R7; §R-lite all 15 rows PASS) |
 
 Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
 
@@ -197,18 +201,34 @@ Plans/assignments: `docs/plan/WP*.md`. Art direction: `docs/plan/ART_BRIEF.md`.
   - Sensor 7: s8 1470 / Inspector 1536 / clock 2680; new s8w framing key (capacitorBank or sparkGap before transformer: Sensor 7 1500,
     Inspector 1552, full cast); s10 / s11 spots; unit test "every framing with the Inspector places Sensor 7".
   - Budget: app 507.5 / 508.1 KB (demo) vs the 510 KB cap (raised from 500, Director Q5; plan soft 506 exceeded by 1.5 KB, accepted).
+- **WP28** playtest 2026-10-28 follow-ups → v0.12.0 (2026-10-31; WP28a 0db4856, WP28b d15b9dd; WP28b AD4 rounds 1-4, Director rulings R1-R7 in `docs/plan/WP28.md`):
+  - Pacing set REC: the 17 split techs cut into 2-3 steps at the same power and total time, unlock prices about 0.65; saves before `econ`
+    28 remapped once (`economyRemap.equivalence.test.ts`: output within 1 % in eras I-II, 3 % in III-V). A gaps p90 / max 0:42 / 1:40
+    (was 1:24 / 4:24), W5 (B) 1:02 / 2:33 (was 1:56 / 6:08); A PF 246:40, B / A 1.497, demo A substation 59:18.
+  - NEXT BUY line (next unaffordable buy, rough time at the passive rate); BUY MAX (Shift-click, Shift+Enter, detail button).
+  - Splices: 16 one-time buys (SPLICES tab or click the object in the world) that wake dead objects of the old world, partly wrong; lines
+    and pulses from the machine; cut by Prestige. Eras I-II in WP28a, III-V art in WP28b (`splices-a/b/c.png`).
+  - Finds: a glinting item near a denizen or in the wind; G key within about 25 s for 4 / 6 / 8 s of all output; every fifth is a field
+    note (15, RECORDS > FIELD NOTES; optional `world.relics` save field). Producers per era (crow drop, dog dig, gust, woken objects).
+  - Pokes: denizens, payphone, lamp, clock, Sensor 7 and woken objects answer clicks; escalation, then 20 s quiet; two rare bubbles.
+  - Roaming: the cast walks lanes across the wing and the yard, an action at least every 12 s; machine-event reactions (fault, find, big
+    buy ground wave, era change, splice visit; none in era IV); free crow hops ≤ 160 px, two-hop landing on woken objects (R6).
+  - The machine's reach (lazy `WorldReach` chunk): crank pulse, pylon pulses, dust, lamp wobble, one signature effect per era, flashes
+    ≤ 3/s, off under reduced motion. Build target ES2022.
+  - Budget caps (R5): app 525, Director 284, WorldReach 50, shared lazy 6, lazy world total 334, CSS 45; limits at measured + 1 KB.
 - **Art**: every sprite and background layer is PixelLab Pro in one locked palette from one style
   anchor, curated by an Opus reviewer; seams fixed; ground/pylons hazed for depth.
 
 ## Verification
-- `npm run typecheck` clean · `npm test` 5746 pass, 17 skipped (165 files; WP22–WP27 merged) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
+- `npm run typecheck` clean · `npm test` 7071 pass, 17 skipped (185 files; WP22–WP28 merged) · `npm run verify` (typecheck, test, build, bundle budget) · `npm run build` clean
   (app 82 KB, phaser chunk 1.48 MB, warning limit 1500 KB).
 - Playwright smokes (scripts/smoke): crank, tech tree, persistence/offline/corrupt/mute/reset,
   full machine → Generator Blueprint, unlock stages (scripts/smoke/stages.mjs). 0 console errors.
-- Balance (greedy 4 clicks/s, WP27): Worn Motor 0:18, Reinforced Crank 3:55, Piston Array 6:24, Fault Lamp 7:01,
-  Generator Blueprint 22:14.
+- Balance (greedy 4 clicks/s, WP28 REC): Generator Blueprint 21:37; purchase gaps p90 / max A 0:42 / 1:40, W5 1:02 / 2:33
+  (`pacing.sim.test.ts`).
 
 ## Balance (greedy harness, fast profile)
+WP28 (REC): A blueprint 21:37 · substation 59:18 · vessel 115:55 · convergence 167:56 · primaryFunction 246:40; B 252:30; C 338:30; W5 369:14 (W5/A 1.497); demo A/B/N/C/P1d 59:18/61:33/75:11/94:26/81:23.
 WP27 (F2hi): A blueprint 22:14 · substation 60:50 · vessel 110:29 · convergence 167:36 · primaryFunction 250:09; B 276:30; C 350:00; W5/A 1.448; demo A/B/N/C/P1d 60:50/74:07/77:45/98:09/81:52.
 Before WP27 (WP17 numbers): Era I: blueprint 22:06 · Era II: substation 60:23/72:52/148:28 · Era III (A/B/C): vessel 110:36/124:01/255:01 · Era IV (A/B/C): convergence 166:30/181:33/339:41 · Era V (A/B/C): primaryFunction 249:31/264:00/428:30 (WP17).
 Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era V spend share 99/100/90/81 %.
@@ -227,8 +247,10 @@ Energy continuity (A): dead time before PF me/ee/pr/rs 1.3/0.3/2.6/4.5 min; era 
   CPU (claude.exe BelowNormal, 6 of 12 cores, user active); WP23a read 0.12–0.16 ms quiet. Profile: per-frame director cost
   WP23b 0.45 vs WP23a 0.29 ms (new atmos layer, one more walker, cast logic), no single hot spot. Quiet PC 2026-10-26 (v0.10.0, case G
   with the era card closed): 0.179 / 0.186 / 0.173 ms, PASS (limit 0.3).
-- Lazy world chunk 206.2 KB after WP27 (limit 120 → 140 → 210, WP24 Revision 5; 3.8 KB headroom). App chunk 507.5 KB full / 508.1
-  KB demo against the 510 KB cap (raised from 500 in WP27; about 2 KB headroom). FaultMarker lazy chunk 11.0 / 12 KB. It loads with the World scene, off
+- Lazy world after WP28: Director chunk 280.0 KB (cap 284), WorldReach 48.3 (cap 50), shared 2.5 (cap 6), total 330.9 (cap 334);
+  ES2022 build target (WP28). App chunk 507.9 KB full / 508.5 KB demo (cap 525). FaultMarker lazy chunk 8.5 KB. Limits in
+  `scripts/smoke/perf-budget.json` sit at measured + 1 KB inside the caps (Director ruling 2026-10-30 R5), so any growth needs a ruling.
+- R7 watch item (WP28b): `pokes.mjs` demo case M_away can race under CPU load; it passed in the v0.12.0 run. Rerun alone if it fails. It loads with the World scene, off
   the boot path.
 - WP24 `G_cost` reads 0.27–0.297 ms on a quiet PC (limit 0.3; thin margin). The first full-matrix pass with a second browser live
   failed N_umbrella / N_flicker_reduced / demo G_cost on CPU contention; quiet reruns pass. Run timing smokes alone. §R 2026-10-27
@@ -272,9 +294,10 @@ User playtest 2026-10-27 (v0.10.1): era I crow frozen with spread wings; first p
 All four answered by WP27 (v0.11.0, merged, §R-lite all 15 rows 2026-10-28). WP25b Surge is superseded by WP27. Every ROADMAP_FULL row is done.
 User playtest 2026-10-28 (v0.11.0): the curve feels balanced; but waits for upgrades and milestones are boring once the player is tired of
 clicking; the world still feels dead (fixed in-place actions, nothing to interact with); the machine's effect on the world must be far more
-visible, with more things to do. → WP28 (in progress, branch claude/playtest-wp28 in the wedtmd-shell worktree).
-Open, user-owned: denizen size (postponed by the user). For the store upload, use the 2160 set of
-the v0.11.0 run `store-final4` (STEAM_RELEASE §15 row 14).
+visible, with more things to do. All three answered by WP28 (v0.12.0, merged, §R-lite all 15 rows 2026-10-31): purchases twice as often
+with NEXT BUY and BUY MAX, Splices, Finds, pokes, a roaming cast that reacts to the machine's effects, and the machine's reach per era.
+Next: the user's playtest of v0.12.0. Open, user-owned: denizen size (postponed by the user). For the store upload, use the 2160 set of
+the v0.12.0 run `store-final5` (STEAM_RELEASE §15 row 14).
 wp-exec2 (workflows/scripts) orders waves by depends_on, lets AD verify run (the EM marks the AD gate N/A) and only skips a task whose
 dependency landed no files. WP24 needed Director rounds after the 6 automated fix rounds (F1–F3, AD2 fixes).
 Still user-owned for the Steam upload: real app/depot ids, capsule art, trailer, SteamPipe upload (STEAM_RELEASE sections 4, 10, 12).

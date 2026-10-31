@@ -2,7 +2,7 @@
 
 Notable changes per release, newest first. Work packages are named WPn; plans are in `docs/plan/`.
 
-## 0.12.0 — Warm world — 2026-10-29
+## 0.12.0 — Warm world — 2026-10-31
 
 ### Added
 - **WP28a** Splices: 16 one-time purchases that wire the machine to a dead object of the old world. A spliced line wakes the object, partly wrong: the bicycle's back wheel turns backwards, the barrel organ plays three notes short, the payphone rings with nobody on the line. Buy an object by clicking it in the world (hover shows its name, cost and effect) or from the new SPLICES tab of the TECH INDEX. A woken object keeps a small live animation, and a line runs from the machine to it with pulses that grow with output. Eras I-II: bicycle, barrel organ, street clock, radio, payphone, bulb sign. Eras III-V: hand pump, factory whistle, hydrant, bell, gramophone, wind chimes, weathervane, kite, cairn, coin return.
@@ -44,6 +44,11 @@ Notable changes per release, newest first. Work packages are named WPn; plans ar
 - The T2 coverage floor is per state (Director ruling 2026-10-30 R4; `T2_COVER_FLOOR` in `worldBehaviourMetrics.test.ts`). The S7 Inspector (era I walks at 2-4 fps) is pinned at 61.5 %, its lowest 90 s window over seeds 1-5; every other row keeps 70 %.
 - The crow lands on the bicycle seat (e1, s9, s11) and the sign top (s9, s11) where those objects stand, each within 160 px of another perch. The other framings have none: s8 and s8w have no bicycle or sign on stage, e1 no sign, s15 neither (AD4 F43 drops its bicycle seat), and s10 no crow.
 - Director rulings 2026-10-30 R1-R7 are recorded in docs/plan/WP28.md.
+
+### Verification
+- §R-lite v0.12.0 (`docs/STEAM_RELEASE.md` section 15, all 15 rows): typecheck clean; 7071 tests pass, 17 skip; new `pacing.sim.test.ts` and `economyRemap.equivalence.test.ts`, new smokes `finds.mjs`, `splices.mjs`, `pokes.mjs` (full and demo) and `roam.mjs`.
+- Builds and bundle budgets pass inside the WP28 caps: app 508.5 / 525 KB (demo), Director chunk 280.0 / 284, WorldReach 48.3 / 50, lazy world total 330.9 / 334, CSS 44.3 / 45.
+- GPU perf median of 3: frame p95 16.8 ms (budget 17). 30 min soak flat. Packaged demo and full exes pass `desktop.mjs`. Store set re-shot (`store-final5`); Art Director RELEASE-READY.
 
 ## 0.11.0 — Click curve and Faults — 2026-10-28
 
