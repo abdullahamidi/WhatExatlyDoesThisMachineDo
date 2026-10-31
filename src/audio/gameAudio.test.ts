@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUDIO } from '../data/audio';
 import { FAULTS } from '../data/faults';
+import { FINDS } from '../data/finds';
 import { MUSIC } from '../data/music';
 import type { FinaleBeat } from '../data/finale';
 import type { MachineComponentId } from '../data/machineComponents';
+import { TECHNOLOGIES } from '../data/technologies';
 import { RESOURCE_IDS } from '../data/types';
 import type { GameState, PurchaseFailure, ResourceMap, TechId } from '../data/types';
 import type { GameFeedback, PartEvolvedEvent, PartTorquedEvent, WorldSound } from '../game/context';
@@ -58,6 +60,11 @@ function createFakeSynth() {
     playStamp: vi.fn(),
     playFaultSpawn: vi.fn(),
     playFaultClear: vi.fn(),
+    playFindSpawn: vi.fn(),
+    playFindCollect: vi.fn(),
+    playRelicCollect: vi.fn(),
+    playSpliceWake: vi.fn(),
+    playPoke: vi.fn(),
     playBlip: vi.fn(),
     playRing: vi.fn(),
     setDialTone: vi.fn(),
@@ -137,11 +144,12 @@ function createFakeWindow(): FakeWindow {
 }
 
 /** Start state with every resource funded and the given tech levels set on top of the initial ones. */
-function fundedState(techLevels: Partial<Record<TechId, number>>): GameState {
+/** `lifetimeToo` (WP28): the lifetime totals are funded as well, for the Splice requirements (they read lifetime). */
+function fundedState(techLevels: Partial<Record<TechId, number>>, lifetimeToo = false): GameState {
   const base = createInitialState(0);
   const funds: ResourceMap = emptyResourceMap();
   for (const id of RESOURCE_IDS) funds[id] = FUNDS;
-  return { ...base, res: funds, techLevels: { ...base.techLevels, ...techLevels } };
+  return { ...base, res: funds, lifetime: lifetimeToo ? { ...funds } : base.lifetime, techLevels: { ...base.techLevels, ...techLevels } };
 }
 
 function createFeedback(): GameFeedback {
@@ -169,8 +177,8 @@ let fake: FakeSynth;
 let warnSpy: { readonly mock: { readonly calls: unknown[][] }; mockRestore(): void };
 
 /** Session, feedback and controller on a fake window. Unlocks the controller unless told not to. */
-function buildRig(techLevels: Partial<Record<TechId, number>> = {}, unlock = true): Rig {
-  const session = new GameSession({ state: fundedState(techLevels), now: () => 0 });
+function buildRig(techLevels: Partial<Record<TechId, number>> = {}, unlock = true, lifetimeToo = false): Rig {
+  const session = new GameSession({ state: fundedState(techLevels, lifetimeToo), now: () => 0 });
   const fakeWindow = createFakeWindow();
   const feedback = createFeedback();
   const audio = createGameAudio(session, feedback, fakeWindow.win);
@@ -564,6 +572,219 @@ describe('gameAudio fault cues (WP27)', () => {
     clearSynthCalls();
     session.clearFault();
     expect(fake.playFaultClear).not.toHaveBeenCalled();
+  });
+});
+
+describe('gameAudio finds (WP28)', () => {
+  /** Spawns one Find now (the debug hook, then one eligible step) and returns what the spawn event reported. */
+  function spawnFind(session: GameSession): { serial: number; relic: boolean } {
+    const seen: Array<{ serial: number; relic: boolean }> = [];
+    const off = session.on('find', (e) => {
+      if (e.kind === 'spawn') seen.push({ serial: e.serial, relic: e.relic });
+    });
+    expect(session.debugForceFind()).toBe(true);
+    session.stepFinds(FINDS.maxStepS, true);
+    off();
+    const first = seen[0];
+    if (first === undefined) throw new Error('no Find spawned');
+    return first;
+  }
+
+  it('a spawn plays the chime and counts nothing', () => {
+    const { session, audio } = buildRig({ wornMotor: 1 });
+    clearSynthCalls();
+    spawnFind(session);
+    expect(fake.playFindSpawn).toHaveBeenCalledTimes(1);
+    expect(fake.playFindCollect).not.toHaveBeenCalled();
+    expect(fake.playRelicCollect).not.toHaveBeenCalled();
+    expect(audio.stats().finds).toBe(0);
+    expect(audio.stats().relics).toBe(0);
+  });
+
+  it('a pickup plays the clink and counts one find', () => {
+    const { session, audio } = buildRig({ wornMotor: 1 });
+    spawnFind(session);
+    clearSynthCalls();
+    expect(session.collectFind()).not.toBeNull();
+    expect(fake.playFindCollect).toHaveBeenCalledTimes(1);
+    expect(fake.playRelicCollect).not.toHaveBeenCalled();
+    expect(audio.stats().finds).toBe(1);
+    expect(audio.stats().relics).toBe(0);
+  });
+
+  it('a relic pickup plays the rustle and counts a find and a relic; the other pickups play the clink', () => {
+    const { session, audio } = buildRig({ wornMotor: 1 });
+    clearSynthCalls();
+    let relicPickups = 0;
+    // Five Finds in a row hold exactly one relic (serials 4, 9, ... by FINDS.relicEvery 5).
+    for (let i = 0; i < 5; i++) {
+      if (spawnFind(session).relic) relicPickups += 1;
+      expect(session.collectFind()).not.toBeNull();
+    }
+    expect(relicPickups).toBe(1);
+    expect(fake.playRelicCollect).toHaveBeenCalledTimes(1);
+    expect(fake.playFindCollect).toHaveBeenCalledTimes(4);
+    expect(audio.stats().finds).toBe(5);
+    expect(audio.stats().relics).toBe(1);
+  });
+
+  it('an expire plays no cue and counts nothing', () => {
+    const { session, audio } = buildRig({ wornMotor: 1 });
+    const kinds: string[] = [];
+    session.on('find', (e) => kinds.push(e.kind));
+    spawnFind(session);
+    clearSynthCalls();
+    for (let i = 0; i < 200 && !kinds.includes('expire'); i++) session.stepFinds(FINDS.maxStepS, true);
+    expect(kinds).toContain('expire');
+    expect(fake.playFindSpawn).not.toHaveBeenCalled();
+    expect(fake.playFindCollect).not.toHaveBeenCalled();
+    expect(fake.playRelicCollect).not.toHaveBeenCalled();
+    expect(audio.stats().finds).toBe(0);
+  });
+
+  it('muted: a spawn and a pickup play nothing and count nothing', () => {
+    const { session, audio } = buildRig({ wornMotor: 1 });
+    session.updateSettings({ muted: true });
+    clearSynthCalls();
+    spawnFind(session);
+    session.collectFind();
+    expect(fake.playFindSpawn).not.toHaveBeenCalled();
+    expect(fake.playFindCollect).not.toHaveBeenCalled();
+    expect(audio.stats().finds).toBe(0);
+    expect(audio.stats().relics).toBe(0);
+  });
+
+  it('before the first gesture nothing plays and the counters read 0', () => {
+    const { session, audio } = buildRig({ wornMotor: 1 }, false);
+    spawnFind(session);
+    session.collectFind();
+    expect(fake.playFindSpawn).not.toHaveBeenCalled();
+    expect(fake.playFindCollect).not.toHaveBeenCalled();
+    expect(audio.stats().finds).toBe(0);
+  });
+
+  it('dispose unsubscribes the find cues and resets the counters', () => {
+    const { session, audio } = buildRig({ wornMotor: 1 });
+    spawnFind(session);
+    session.collectFind();
+    expect(audio.stats().finds).toBe(1);
+    audio.dispose();
+    expect(audio.stats().finds).toBe(0);
+    expect(audio.stats().relics).toBe(0);
+    clearSynthCalls();
+    spawnFind(session);
+    expect(fake.playFindSpawn).not.toHaveBeenCalled();
+  });
+});
+
+describe('gameAudio splices and denies (WP28)', () => {
+  it('a Splice purchase plays its wake by its own era, not the purchase cue, and counts once', () => {
+    const { session, audio } = buildRig({ handCrank: 1, generator: 1 }, true, true);
+    clearSynthCalls();
+    expect(session.purchase('spliceBicycle').ok).toBe(true); // era I
+    expect(lastArgs(fake.playSpliceWake)).toEqual([1]);
+    expect(session.purchase('spliceRadio').ok).toBe(true); // era II, paid in ME
+    expect(lastArgs(fake.playSpliceWake)).toEqual([2]);
+    expect(fake.playSpliceWake).toHaveBeenCalledTimes(2);
+    expect(fake.playPurchase).not.toHaveBeenCalled();
+    expect(fake.playRelay).not.toHaveBeenCalled();
+    expect(audio.stats().splices).toBe(2);
+  });
+
+  it('a BUY MAX of a repeatable plays one purchase cue for the whole count and counts no Splice', () => {
+    const { session, audio } = buildRig({ generator: 1 });
+    clearSynthCalls();
+    const max = TECHNOLOGIES.copperWinding.maxLevel ?? 0;
+    expect(max).toBeGreaterThan(1);
+    const result = session.purchaseMax('copperWinding');
+    expect(result.ok).toBe(true);
+    expect(session.state.techLevels.copperWinding).toBe(max);
+    expect(fake.playRelay).toHaveBeenCalledTimes(1);
+    expect(fake.playPurchase).not.toHaveBeenCalled();
+    expect(fake.playSpliceWake).not.toHaveBeenCalled();
+    expect(audio.stats().splices).toBe(0);
+  });
+
+  it('muted: a Splice purchase plays and counts nothing', () => {
+    const { session, audio } = buildRig({ handCrank: 1 }, true, true);
+    session.updateSettings({ muted: true });
+    clearSynthCalls();
+    expect(session.purchase('spliceBicycle').ok).toBe(true);
+    expect(fake.playSpliceWake).not.toHaveBeenCalled();
+    expect(audio.stats().splices).toBe(0);
+  });
+
+  it('a refused purchase plays the existing deny cue and counts it; muted refusals count nothing', () => {
+    const { session, audio, feedback } = buildRig();
+    clearSynthCalls();
+    feedback.purchaseDenied.emit('locked');
+    expect(fake.playDeny).toHaveBeenCalledTimes(1);
+    expect(audio.stats().denies).toBe(1);
+    session.updateSettings({ muted: true });
+    feedback.purchaseDenied.emit('insufficient');
+    expect(fake.playDeny).toHaveBeenCalledTimes(1);
+    expect(audio.stats().denies).toBe(1);
+  });
+
+  it('before the first gesture a refusal counts nothing', () => {
+    const { audio, feedback } = buildRig({}, false);
+    feedback.purchaseDenied.emit('locked');
+    expect(fake.playDeny).not.toHaveBeenCalled();
+    expect(audio.stats().denies).toBe(0);
+  });
+});
+
+describe('gameAudio pokes (WP28)', () => {
+  it('a poke plays one poke cue with a variant and a pitch within 5 % of 1, and counts it', () => {
+    const { feedback, audio } = buildRig();
+    clearSynthCalls();
+    feedback.worldSound.emit({ kind: 'poke', id: 'tick' });
+    expect(fake.playPoke).toHaveBeenCalledTimes(1);
+    const [id, variant, scale] = lastArgs(fake.playPoke) ?? [];
+    expect(id).toBe('tick');
+    expect([0, 1]).toContain(variant);
+    expect(Number(scale)).toBeGreaterThanOrEqual(0.95);
+    expect(Number(scale)).toBeLessThanOrEqual(1.05);
+    expect(audio.stats().pokes).toBe(1);
+  });
+
+  it('pokes never repeat the same variant three times in a row, and both variants come up', () => {
+    const { feedback } = buildRig();
+    clearSynthCalls();
+    for (let i = 0; i < 300; i++) feedback.worldSound.emit({ kind: 'poke', id: 'tink' });
+    const variants = fake.playPoke.mock.calls.map((args) => Number(args[1]));
+    expect(variants).toHaveLength(300);
+    for (let i = 2; i < variants.length; i++) {
+      const a = variants[i - 2];
+      const b = variants[i - 1];
+      const c = variants[i];
+      expect(a === b && b === c, `pokes ${i - 2}..${i}`).toBe(false);
+    }
+    expect(new Set(variants).size).toBe(2);
+  });
+
+  it('muted pokes play nothing and count nothing', () => {
+    const { session, feedback, audio } = buildRig();
+    session.updateSettings({ muted: true });
+    clearSynthCalls();
+    feedback.worldSound.emit({ kind: 'poke', id: 'bell' });
+    expect(fake.playPoke).not.toHaveBeenCalled();
+    expect(audio.stats().pokes).toBe(0);
+  });
+
+  it('before the first gesture nothing plays and the count reads 0; dispose resets it', () => {
+    const { feedback, audio } = buildRig({}, false);
+    feedback.worldSound.emit({ kind: 'poke', id: 'buzz' });
+    expect(fake.playPoke).not.toHaveBeenCalled();
+    expect(audio.stats().pokes).toBe(0);
+  });
+
+  it('dispose resets the poke count', () => {
+    const { feedback, audio } = buildRig();
+    feedback.worldSound.emit({ kind: 'poke', id: 'caw' });
+    expect(audio.stats().pokes).toBe(1);
+    audio.dispose();
+    expect(audio.stats().pokes).toBe(0);
   });
 });
 

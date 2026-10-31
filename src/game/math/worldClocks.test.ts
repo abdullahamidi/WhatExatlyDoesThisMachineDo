@@ -27,14 +27,14 @@ const SAMPLED_KINDS = MICRO_KINDS.filter((kind): kind is Exclude<MicroKind, 'pag
 const rep = (id: string, n: number): string[] => Array.from({ length: n }, () => id);
 const S7 = ['wornMotor', 'gearRatio', 'gearRatio', 'gearRatio', 'reinforcedCrank', 'motorTuning', 'motorTuning', 'motorTuning',
   'motorTuning', 'motorTuning', 'flywheel', 'pistonArray', 'improvedPistons'];
-const S9 = [...S7, '@blueprint', 'generator', ...rep('motorRetrofit', 5), ...rep('copperWinding', 20), 'dynamoCrank',
-  'capacitorBank', 'sparkGap', ...rep('transformer', 3), 'powerLines'];
+const S9 = [...S7, '@blueprint', 'generator', ...rep('motorRetrofit', 10), ...rep('copperWinding', 40), 'dynamoCrank',
+  'capacitorBank', 'sparkGap', ...rep('transformer', 6), 'powerLines'];
 const S10 = [...S9, '@substationBlueprint', 'boiler'];
-const S11 = [...S10, ...rep('inductionHeater', 3), ...rep('firebox', 20), 'steamHammer', 'superheater', ...rep('condenser', 5), 'turbine',
-  'reliefValves', ...rep('bellowsDrive', 3), '@pressureVesselBlueprint'];
+const S11 = [...S10, ...rep('inductionHeater', 9), ...rep('firebox', 40), 'steamHammer', 'superheater', ...rep('condenser', 15), 'turbine',
+  'reliefValves', ...rep('bellowsDrive', 9), '@pressureVesselBlueprint'];
 const S12 = [...S11, 'resonatorSpire'];
-const S13 = [...S12, ...rep('crankServo', 3), ...rep('harmonicCoil', 25), ...rep('pressureResonator', 3), 'echoCrank', 'phaseLock',
-  ...rep('standingWave', 3), 'crystalLattice', ...rep('gridExciter', 5), '@harmonicConvergence'];
+const S13 = [...S12, ...rep('crankServo', 3), ...rep('harmonicCoil', 50), ...rep('pressureResonator', 6), 'echoCrank', 'phaseLock',
+  ...rep('standingWave', 6), 'crystalLattice', ...rep('gridExciter', 15), '@harmonicConvergence'];
 const S14 = [...S13, 'nullChamber'];
 // One buy list per era: era I to V with the valves (S11 is the era III front with vents).
 const ERA_BUYS: Record<WorldEra, readonly string[]> = { 1: S7, 2: S9, 3: S11, 4: S12, 5: S14 };

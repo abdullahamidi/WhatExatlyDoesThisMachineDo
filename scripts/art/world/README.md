@@ -15,7 +15,7 @@ Requirements: Python 3.12 + Pillow (numpy optional, unused). Always run with `py
 | `sheets.py` | frame tables (column order = `src/data/livingWorld.ts` `WORLD_FRAMES`), cell sizes, files, era rows, pins; per-sheet gate options `only` / `only_frames`, `grow`, `parts`, `overlays`, `airborne`, `restored_frames` (AD3c) and `vertical` (AD3c: frames stacked top to bottom, `bg.virga`; `cell_origin`) |
 | `erarecolor.py` | DENIZEN_ART App. A: sepia row I, per-row colour returns, row V violet rim, per-sheet pins |
 | `build_sheet.py` | master frames -> sheet PNG (exact column order, 6 era rows for era-row sheets) |
-| `check_sheet.py` | gate: dims == spec (and manifest when wired), RGBA 8-bit, alpha 0/255, palette-only, row I sepia-only, 1 silhouette component per cell on every sheet (WP23b; `parts=True` in `sheets.py` opts a sheet out), full ink ring, feet on the bottom row (stacked `overlays` exempt: Sensor 7 heads and glyphs; `airborne` frames exempt: the crow's flight cells, AD3b), `grow` frames only add pixels (hole; AD3c: puddle grey sizes, sprout stages), `only` codes per sheet widened per frame by `only_frames` (AD3b: girl window restored; AD3c: lamp glow warm), restored-world colours only in `restored_frames` cells (AD3c: puddle `whole`, sprout `bloom`); per-row colour stats |
+| `check_sheet.py` | gate (WP28b: + per-frame `parts_frames`, `violet_frames`): dims == spec (and manifest when wired), RGBA 8-bit, alpha 0/255, palette-only, row I sepia-only, 1 silhouette component per cell on every sheet (WP23b; `parts=True` in `sheets.py` opts a sheet out), full ink ring, feet on the bottom row (stacked `overlays` exempt: Sensor 7 heads and glyphs; `airborne` frames exempt: the crow's flight cells, AD3b), `grow` frames only add pixels (hole; AD3c: puddle grey sizes, sprout stages), `only` codes per sheet widened per frame by `only_frames` (AD3b: girl window restored; AD3c: lamp glow warm), restored-world colours only in `restored_frames` cells (AD3c: puddle `whole`, sprout `bloom`); per-row colour stats |
 | `composite.py` | pastes cells (and the lit windows) onto a 1080p store shot at a camera pose (e1 / s8 / s9; WP23b: s11 / s15 at zoom .5); bubble mock |
 | `contact.py` | review board: frames x rows (placeholders boxed), era ladder, readability 1x/1.5x/2x/3x, composite crops |
 | `masters/<sheet>/<sheet>.txt` | ASCII colour master (optionally `masters/<sheet>/<frame>.png` cell overrides) |
@@ -33,13 +33,13 @@ python -I scripts/art/world/composite.py <store shot 1080p> <out.png> --pose e1 
 python -I scripts/art/world/composite.py <shot> <out.png> --pose s9 --windows lit [--window-set proposed]
 ```
 
-Rebuild and gate everything (24 PNGs since WP23b AD3c: 22 under `world/` + `bg/window-lit.png` + `bg/virga.png`). Every
+Rebuild and gate everything (26 PNGs since WP28a AD1: 24 under `world/` + `bg/window-lit.png` + `bg/virga.png`). Every
 rebuild is pixel-identical to the shipped PNG (AD-d checked all 17, AD3a all 20, AD3c and AD3d all 24), so the masters are the
 source of truth:
 
 ```sh
 for s in inspector dog crow girl payphone receiver sensor7 girlWindow girlMini lamp lampGlow clock stakeChain hole scraps mote windowLit \
-         lantern redBall clipboardPages puddle sprout page virga; do
+         lantern redBall clipboardPages puddle sprout page virga splicesA finds splicesB splicesC; do
   python -I scripts/art/world/build_sheet.py $s && python -I scripts/art/world/check_sheet.py $s || break
 done
 npx vitest run src/assets/worldSheets.test.ts   # size, 8-bit RGBA, alpha 0/255, palette-only on every wired file (+ the
@@ -133,6 +133,10 @@ minimum on-screen sizes, and `src/assets/worldSheets.test.ts` once the manifest 
 | sprout | `world/sprout.png` 40x24 | 100.0 (AD3c) | 0 / 0, 2 info | CLEAN | 5 = 1 per cell, 0 holes; stages only grow (`grow`); `bloom` restored colours (`restored_frames`) |
 | page | `world/page.png` 6x4 | 100.0 (AD3c) | 0 / 0, 3 info | CLEAN | 1 per cell (lint: 1 on the sheet, the cells touch); every colour cluster >= 2 px |
 | virga | `bg/virga.png` 512x128 | 100.0 (AD3c) | 0 / 0, 2 info (1-2 px clusters = the deliberate dashes and beads) | CLEAN | `parts` (a strip of streaks: 1137 components), 0 isolated px (4-connected streaks), sky ramp only (`p q`, `only`) |
+| splicesA | `world/splices-a.png` 640x24 | 91.3 / 92.9 (WP28a AD1; halves of 320 px: cells 0-9 / 10-19) | 0 / 0, 4 info each | CLEAN | 20 = 1 per cell (bicycle cells 8-connected, `conn8`), full ink ring except the bicycle (`no_ring`); single row; objects bottom-centered in 32x24 cells |
+| finds | `world/finds.png` 88x8 | 94.9 (WP28a AD1) | 0 / 0, 2 info | CLEAN | 11 = 1 per cell; items and the relic note on the bottom row with a full ink ring; glint cells 8-10 one color, centered (`no_ring`, `overlays`) |
+| splicesB | `world/splices-b.png` 396x56 | 97.5 (WP28b AD3-OBJ) | 0 / 0, 3 info | CLEAN | 22 cells of 18x56; 1 per cell except `parts_frames` (drops, plume wisps, lifted stones); `no_ring` plume and kite cells; violetLight only in `violet_frames` (lifted stones); kite cells are `overlays` |
+| splicesC | `world/splices-c.png` 576x18 | 95.3 / 95.0 (halves of 288 px: cells 0-11 / 12-23) | 0 / 0, 4 info each | CLEAN | 24 cells of 24x18; mist cells `no_ring` + `parts_frames`; chimes, vane and coin flap are `overlays` |
 
 AD-d final re-run (2026-10-24, all 17 PNGs): every score and lint result above reproduced exactly (dog halves 99.3 / 99.4);
 check_sheet CLEAN on all 17; `worldSheets.test.ts` 20 / 20 pass with all 17 files wired.
@@ -150,8 +154,8 @@ Era-row sheets (6 rows I, II, III, IV, V, whole): inspector, dog, crow, girl, pa
 
 | sheet | id | file | cell | frames (columns) | status |
 |---|---|---|---|---|---|
-| inspector | world.inspector | world/inspector.png 440x240 | 20x40 | idleA, idleB, walk0, walk1, walk2, walk3, write0, write1, glance, front, talk, shield, pat0, pat1, wave, watch, umbrellaOpen, frontUmbrella, talkUmbrella, lookUp, crouch, umbrellaHalf | AD-a 11 + AD3a 8 + WP24 AD1b-1 3 (all 22 drawn) |
-| dog | world.dog | world/dog.png 644x120 | 28x20 | sit0, sit1, sniff0, sniff1, walk0, walk1, walk2, walk3, dig0, dig1, shake0, shake1, head, talk, flat, lie, sleep, chase0, chase1, wag, scratch0, scratch1, lookUp | AD-b 13 + AD3a 7 + WP24 AD1b-1 3 (all 23 drawn) |
+| inspector | world.inspector | world/inspector.png 480x240 | 20x40 | idleA, idleB, walk0, walk1, walk2, walk3, write0, write1, glance, front, talk, shield, pat0, pat1, wave, watch, umbrellaOpen, frontUmbrella, talkUmbrella, lookUp, crouch, umbrellaHalf, startle, point | AD-a 11 + AD3a 8 + WP24 AD1b-1 3 + WP28b AD3-CELLS 2 (all 24 drawn) |
+| dog | world.dog | world/dog.png 700x120 | 28x20 | sit0, sit1, sniff0, sniff1, walk0, walk1, walk2, walk3, dig0, dig1, shake0, shake1, head, talk, flat, lie, sleep, chase0, chase1, wag, scratch0, scratch1, lookUp, bark0, bark1 | AD-b 13 + AD3a 7 + WP24 AD1b-1 3 + WP28b AD3-CELLS 2 (all 25 drawn) |
 | crow | world.crow | world/crow.png 360x108 | 24x18 | frozen, perch0, perch1, head, talk, peck0, peck1, fly0, fly1, fly2, frozenTip, ruffle, perchTurn, perchHead, perchTalk | AD-c 3 + AD3b 7 + WP24 AD1b-2 2 + WP27 ADa 3 (all 15 drawn) |
 | girl | world.girl | world/girl.png 192x168 | 16x28 | stand0, stand1, palm, talk, shield, run0, run1, run2, run3, lanternDrop, lanternUp, tilt | AD-c 2 + AD3b 8 + WP24 AD1b-2 2 (all 12 drawn) |
 | payphone | world.payphone | world/payphone.png 168x312 | 28x52 | dark, lit, ring0, ring1, fog, restored | AD-c 4 + AD3b 2 (all 6 drawn) |
@@ -174,6 +178,10 @@ Era-row sheets (6 rows I, II, III, IV, V, whole): inspector, dog, crow, girl, pa
 | sprout | world.sprout | world/sprout.png 40x24 | 8x24 | stage1, stage2, stage3, stage4, bloom | AD3c (5 drawn) |
 | page | world.page | world/page.png 6x4 | 3x4 | flat, tilt | AD3c (2 drawn) |
 | virga | bg.virga | bg/virga.png 512x128 | 512x64, frames stacked (frame 0 on top) | fall, frozen | AD3c (2 drawn, generated) |
+| splicesA | world.splicesA | world/splices-a.png 640x24 | 32x24, objects bottom-centered | bicycleDead, bicycleSpin0, bicycleSpin1, bicycleSpin2, bicycleWhole, organDead, organCrank0, organCrank1, organCrank2, organCrank3, organWhole, radioDark, radioLitA, radioLitB, radioWhole, signDark, signHalfA, signHalfB, signWhole, clockLit | WP28a AD1 (20 drawn) |
+| finds | world.finds | world/finds.png 88x8 | 8x8 | bolt, tag, gear, tin, key, photo, token, note, glint0, glint1, glint2 | WP28a AD1 (11 drawn) |
+| splicesB | world.splicesB | world/splices-b.png 396x56 | 18x56, objects bottom-centered | pumpDead, pumpUp, pumpDown, pumpCough, pumpWhole, whistleDead, whistleBlow, whistleWhole, bellStill, bellSwingL, bellSwingR, bellWhole, kiteTangled, kiteFlutter0, kiteFlutter1, kiteWhole, cairnStack, cairnLift1, cairnLift2, cairnLift3, cairnLift4, cairnWhole | WP28b AD3-OBJ (22 drawn) |
+| splicesC | world.splicesC | world/splices-c.png 576x18 | 24x18, objects bottom-centered | hydrantDead, hydrantRattle, hydrantMistA, hydrantMistB, hydrantWhole, gramophoneStill, gramophoneSpin0, gramophoneSpin1, gramophoneSpin2, gramophoneSkip, gramophoneWhole, chimesStill, chimesSway0, chimesSway1, chimesWhole, vaneDir0, vaneDir1, vaneDir2, vaneDown, vaneWhole, coinClosed, coinRattle0, coinRattle1, coinWhole | WP28b AD3-OBJ (24 drawn) |
 
 `bg.windowLit`: lit = pane `#ad6236` with a 2x4 `#c98552` centre; breathe = the exhale (centre 2x2), era IV downbeat.
 The renderer crops each placement to its pane from the top-left (`WORLD_FAR_PLANES.windows`, AD2c): (306, 120) /
@@ -388,7 +396,7 @@ Crow notes (AD3b):
   perch0 only, so the drop falls on the bob; tail tip on both); no gloss. whole: `gloss` (iron 3 on the crown and the
   folded wing's leading edge).
 - peck0 / peck1: body tipped forward with the tail up; peck0 head lowered, beak angled down-forward; peck1 the strike,
-  beak tip on the bottom row. With the KEEP hop (`hopDx` -54, `hopDy` 10) the toes land on the booth apex (51 art px;
+  beak tip on the bottom row. With the KEEP hop (crowRest (30, 26) plus `hopDx` -84, `hopDy` -52 = (-54, -26) from the lamp top) the toes land on the weathervane finial on the booth apex (AD4 F45;
   composite `z1-e1-corner-whole`); play them unflipped (facing right, away from the machine).
 - fly0 / fly1 / fly2: the frozen body (same head, beak, tail) with the legs tucked; wings level (shallow V) / down /
   UP (tall V). The body sits 2-4 px higher on the downstroke (fly1 rows 4-17, fly0 2-15, fly2 0-16), so the 8 fps
@@ -917,3 +925,82 @@ their neighbours, 6x-16x), `view/clipboard-check.png`, `view/dog-B.png` / `dog-C
 `uploads.txt`, `workbench.txt`); `rebuild/`, `check/`, `frames/`; `before/` (PNGs, masters, README before AD1b-3);
 `draft/` (the scratch toolchain copy with the rejected dog drafts); `work/` (`gate_prep.py`, `storyboard.py`,
 `ad1b3_comp.py`, `clipcheck.py`, `view.py`, `dogview.py`, `mkscratch.py`, `apply.py`).
+
+## WP28a AD1 (Splice objects eras I-II and Finds, 2026-10-28)
+
+New sheets (single row, no era rows: street furniture like the lamp and the clock; DENIZEN_ART §11):
+- `world.splicesA` (`masters/splicesA/splicesA.txt`): ONE uniform-cell sheet, 20 cells of 32x24, every object bottom-centered
+  (pivot (0.5, 1) = its feet). Bicycle 26x15 (dead, spin 3, whole), barrel organ 27x24 (dead, crank 4, whole), valve radio
+  16x20 (dark, lit A, lit B, whole), bulb arrow sign 28x22 (dark, half A, half B, whole), and the street clock's lit face
+  12x12 (an overlay on `world.clock`, no hands). 60 KiB decoded; a split would save under 64 KiB, so no split.
+- `world.finds` (`masters/finds/finds.txt`): 11 cells of 8x8. Items 0-6 and the relic note 7 (iron / rust / sand, full ink
+  ring, no text), plus a one-color 5x5 glint in 3 frames (8-10, tinted per era at runtime).
+
+Gate options added to `check_sheet.py` (per frame, listed in `sheets.py`):
+- `no_ring`: no full ink ring on that cell. Used for the bicycle's 1 px tubes, spokes and stand, and for the glint sparkle.
+- `conn8`: the silhouette counts 8-connected, so the bicycle's diagonal 1 px tubes are one component.
+
+Palette rules for these sheets:
+- No green or blue, and no letters.
+- Before the finale, a lit part uses `#d9822b` on rust (the lamp's lit rule). `#f0a848` / `#ffd27a` appear only in the
+  `*Whole` (postgame) cells.
+
+The masters are the source of truth. They were first written from scratch drafts in the session scratchpad (`WP28/plan/ad1/tools/draft_*.py`), then
+hand-edited: the bicycle cells got 1 px bridges so the workbench lint finds no isolated pixel. Rebuilds are pixel-identical.
+PixelLab: 2 `create_image_pro` concept calls, 20 generations (bicycle and organ: proportion reference only, D9).
+Stage numbers (placements per framing, lines, Find spots, perches, glint and bracket colors, tooltip) are in the AD1
+hand-off, `WP28/plan/ad1-handoff.md` in the session scratchpad.
+
+## WP28b AD3-OBJ (Splice objects eras III-V, 2026-10-29)
+
+New sheets (single row, no era rows, like `splicesA`; DENIZEN_ART §12). One cell size for all ten objects (24x56, 46 cells) would
+cost 241.5 KiB decoded; two sheets cost 127.1 KiB, so the split saves 114 KiB:
+- `world.splicesB` (`masters/splicesB/splicesB.txt`), 22 cells of 18x56: hand pump (dead, up, down, cough, whole), factory
+  whistle on a post (dead, blow with the plume in the cell, whole), bell on a timber frame (still, swing L, swing R, whole),
+  kite on the lamp (tangled, flutter 0-1, whole), cairn (stack, lift 1-4, whole).
+- `world.splicesC` (`masters/splicesC/splicesC.txt`), 24 cells of 24x18: hydrant (dead, rattle, mist A, mist B, whole),
+  gramophone (still, spin 0-2, skip, whole), wind chimes with their lamp arm (still, sway 0-1, whole), weathervane (dir 0-2,
+  down, whole), coin-return flap (closed, rattle 0-1, whole).
+
+Gate options added to `check_sheet.py` (per frame, listed in `sheets.py`):
+- `parts_frames`: no one-component rule on that cell (the coughed drops, the plume wisps, the mist specks and the lifted cairn
+  stones float free by design).
+- `violet_frames`: VIOLET_LIGHT allowed on that cell of a single-row sheet (the era V rim on the lifted stones).
+
+Palette: no green, no blue, no letters; `#f0a848` / `#ffd27a` only in the `*Whole` cells, violetLight only on the lifted stones.
+Hand-pixelled from scratch drafts (`WP28b/ad3obj/tools/draw_b.py`, `draw_c.py`, `gen_masters.py` in the session scratchpad); the
+masters are the source of truth and rebuild pixel-identical. PixelLab: 0 generations (workbench gates only). Stage numbers
+(placements per framing, lines, Find spots, perches, checks) are in the AD3 hand-off, `WP28/plan/ad3-handoff.md`, sections O.
+
+## WP28b AD3-CELLS (reaction cells, 2026-10-29)
+
+Appended columns, every era row: inspector `startle` (22), `point` (23); dog `bark0` (23), `bark1` (24). Sheets grow to
+inspector 480x240 (24 frames per row) and dog 700x120 (25 per row). Every older column is pixel-identical (per-cell diff); no build
+prints a PLACEHOLDER line. Hand-pixelled colour masters (the appended blocks of `masters/inspector/inspector.txt` and
+`masters/dog/dog.txt`, with their `umbrella`, `pressed`, `eyes`, `collar` and `healthy` layers); era rows from `erarecolor.py` with no
+new pins. PixelLab: 0 generations (workbench gates only).
+
+| cell (column) | score | lint | silhouette | pivot / pop | check_sheet |
+|---|---|---|---|---|---|
+| inspector startle (22) | 92.3 | 0 / 0, info only | 1 per cell, 0 holes | legs and boots = idleA, rows 31-39, all 6 rows | CLEAN |
+| inspector point (23) | 96.0 | 0 / 0, info only | 1 per cell, 0 holes | legs and boots = idleA | CLEAN |
+| dog bark0 (23) | 99.7 | 0 / 0, info only | 1 per cell, 0 holes | feet = sit0 | CLEAN |
+| dog bark1 (24) | 100.0 | 0 / 0, info only | 1 per cell, 0 holes | bark0 <-> bark1 change only (16, 2)-(27, 11) | CLEAN |
+| sheets | inspector 95.8 (0 / 0; 124 components = 144 cells - 20 canopy touches); dog halves (cells 0-12, 364 px / 13-24, 336 px) 99.1 / 98.3 (0 / 0; 78 / 72) | | | | CLEAN |
+
+Scores are per column (the 6 era cells) and per sheet, `pixelart_workbench score` / `lint` on uploads of the built PNG. The dog
+sheet (700 wide) is linted as the two halves above (workbench limit 512).
+
+- startle: the flinch. The head and hat jerk back (peak up, face under the brim), the upper body leans back 1 px, and the near forearm
+  crosses the chest. That hand clutches the board upright (paper edge at the chin), the elbow sticks out behind, and the hem flares
+  back and front. Rows III-whole: the umbrella hangs from the clutching hand; whole: the creases.
+- point: write0's bowed head, the far hand holding the board under the chin, the near arm straight down and forward past the coat
+  edge, a 1 px finger on the diagonal to (18, 25). Rows III-whole: the umbrella hangs from the pointing wrist.
+- bark0: the sit body, the head up 1 and forward 1, the jaw dropped to the collar line with a 2 px dark mouth wedge. bark1: the head
+  up 1, the mouth nearly shut. The upright ear never drops.
+- startle and point carry no clipboard pages overlay (`WORLD_TRACES.clipboardOffsetArt` has no key for them). The board is upright
+  or under the chin.
+
+Evidence and tools: `WP28b/ad3cells/` in the session scratchpad. It holds `out/contact-*.png`, `comp/` (1080p store-shot mocks at 1:1
+and 3x), `gate/` (uploads), `drafts/` (the master blocks as appended), `tools/` (`prev.py`, `show.py`, `canvas.py`, `apply.py`,
+`contact.py`, `ringdbg.py`) and `geo/` (the spots v2 and visit-spot checkers of the AD3 hand-off, sections C).

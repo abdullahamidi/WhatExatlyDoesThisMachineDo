@@ -75,6 +75,9 @@ export class PylonLine {
   private camera: Phaser.Cameras.Scene2D.Camera | null = null; // camera of the last update; settleFade redraws at its scroll
   private lastKey: string | null = null;
   private pinned: PylonAnchorRef | null = null; // chosen on first light; cleared once the layer hides
+  // WP28b (D6 b): the points of the last draw of the cable (world px), kept so the pylon pulses can run along them with no allocation.
+  private readonly cablePts: Vec2[] = Array.from({ length: CABLE_SEGMENTS + 1 }, (): Vec2 => ({ x: 0, y: 0 }));
+  private cableCount = 0; // points of the last draw (0 while the cable is not drawn)
 
   constructor(
     scene: Phaser.Scene,
@@ -130,6 +133,26 @@ export class PylonLine {
     this.lastKey = null;
   }
 
+  /** WP28b (D6 b): copies the last drawn cable points (world px) into out, reusing its entries, and returns their count. 0 while the line is
+   * inactive or not fully lit (fade below 1): the pylon pulses run on a finished cable only. */
+  cablePoints(out: Vec2[]): number {
+    if (this.active === null || this.fade < 1) return 0;
+    const n = this.cableCount;
+    for (let i = 0; i < n; i++) {
+      const src = this.cablePts[i];
+      if (src === undefined) continue;
+      let dst = out[i];
+      if (dst === undefined) {
+        dst = { x: 0, y: 0 };
+        out[i] = dst;
+      }
+      dst.x = src.x;
+      dst.y = src.y;
+    }
+    if (out.length > n) out.length = n;
+    return n;
+  }
+
   /** Settle mode (C6): snaps the fade to its target (the gate and assembly rules of the last update) and redraws at once. */
   settleFade(): void {
     const active = this.active;
@@ -174,6 +197,7 @@ export class PylonLine {
 
   private draw(active: ActivePylonLine, scroll: Vec2, fade: number): void {
     this.drawLead(active, fade);
+    this.cableCount = 0;
     const { strip, start } = active;
     const style = MACHINE_LINK_STYLE.cable;
     const input: PylonAnchorInput = {
@@ -197,6 +221,7 @@ export class PylonLine {
     const points = cableParabola(start, anchor, distance * PYLON_LINE.sagFraction, CABLE_SEGMENTS);
     const [head, ...rest] = points;
     if (head === undefined) return;
+    this.cableCount = this.keepCable(points);
 
     this.graphics.setAlpha(fade * strip.def.alpha);
     this.graphics.lineStyle(PYLON_LINE.thicknessPx, style.core, 1);
@@ -207,5 +232,18 @@ export class PylonLine {
 
     this.graphics.fillStyle(style.hi, 1);
     for (const p of [start, anchor]) this.graphics.fillRect(p.x - 1, p.y - 1, 2, 2); // 2x2 end caps
+  }
+
+  // Keeps the drawn points in the preallocated entries (cablePoints reads them): the copy writes values, so a draw allocates nothing new.
+  private keepCable(points: readonly Vec2[]): number {
+    const n = Math.min(points.length, this.cablePts.length);
+    for (let i = 0; i < n; i++) {
+      const src = points[i];
+      const dst = this.cablePts[i];
+      if (src === undefined || dst === undefined) continue;
+      dst.x = src.x;
+      dst.y = src.y;
+    }
+    return n;
   }
 }

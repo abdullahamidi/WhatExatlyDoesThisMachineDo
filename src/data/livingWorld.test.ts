@@ -476,7 +476,7 @@ describe('trigger wiring', () => {
     const names = ['reliefValves', 'pressureVesselBlueprint', 'harmonicConvergence', 'horizonField', 'echoCrank', 'finalAlignment', 'skyAperture', 'generator'];
     const techIds = TECH_IDS as readonly string[];
     expect(names.filter((id) => !techIds.includes(id))).toEqual([]);
-    expect(byId('INS-12').trigger).toEqual({ kind: 'buy', techId: 'horizonField', minLevel: 5 });
+    expect(byId('INS-12').trigger).toEqual({ kind: 'buy', techId: 'horizonField', minLevel: 9 });
     expect(byId('CRW-07').trigger).toEqual({ kind: 'buy', techId: 'echoCrank' });
     expect(byId('GRL-11').trigger).toEqual({ kind: 'idle', owned: ['skyAperture'] });
     expect(byId('INS-09').trigger).toEqual({ kind: 'ms', techId: 'pressureVesselBlueprint' });
@@ -583,7 +583,7 @@ describe('sprite frames and loops (DENIZEN_ART §5.1)', () => {
 
 describe('save defaults and known ids (A5, D9)', () => {
   it('starts with an empty world save', () => {
-    expect(DEFAULT_WORLD_SAVE).toEqual({ seen: [], seenEver: [], eraMoments: [0, 0, 0, 0, 0], youEras: 0 });
+    expect(DEFAULT_WORLD_SAVE).toEqual({ seen: [], seenEver: [], eraMoments: [0, 0, 0, 0, 0], youEras: 0, relics: 0 });
   });
 
   it('keeps the three wordless beats (WP23b adds the sensor turn)', () => {

@@ -1100,15 +1100,15 @@ describe('WP23b: era entry, openers and postgame routing', () => {
 });
 
 describe('WP23b: buy level gate (Z4)', () => {
-  it('INS-12 (buy horizonField, minLevel 5): a purchase at level 4 does not queue it; at level 5 it queues and plays', () => {
+  it('INS-12 (buy horizonField, minLevel 9): a purchase at level 8 does not queue it; at level 9 it queues and plays', () => {
     const at = (level: number): WorldSchedulerCtx => makeCtx({ era: 5, levels: zeroLevels({ horizonField: level }) });
     const low = createWorldScheduler();
-    low.offer({ kind: 'buy', techId: 'horizonField' }, at(4));
+    low.offer({ kind: 'buy', techId: 'horizonField' }, at(8));
     expect(low.state().pending).toEqual([]);
     const high = createWorldScheduler();
-    high.offer({ kind: 'buy', techId: 'horizonField' }, at(5));
+    high.offer({ kind: 'buy', techId: 'horizonField' }, at(9));
     expect(high.state().pending.map((p) => p.id)).toEqual(['INS-12']);
-    expect(high.tick(at(5))).toEqual(cueFor('INS-12'));
+    expect(high.tick(at(9))).toEqual(cueFor('INS-12'));
   });
 
   it('a buy line with level 2 fires only at exactly level 2 (the equality half of the gate)', () => {

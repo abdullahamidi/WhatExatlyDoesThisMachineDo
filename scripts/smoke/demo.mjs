@@ -25,7 +25,7 @@ fs.mkdirSync(out, { recursive: true });
 
 // Copies of the stages.mjs lists. S7 is the first machine; S9 is the list that reaches the era II cap.
 const S7 = ['wornMotor', 'gearRatio', 'gearRatio', 'gearRatio', 'reinforcedCrank', 'motorTuning', 'motorTuning', 'motorTuning', 'motorTuning', 'motorTuning', 'flywheel', 'pistonArray', 'improvedPistons'];
-const S9 = [...S7, '@blueprint', 'generator', ...Array(5).fill('motorRetrofit'), ...Array(20).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(3).fill('transformer'), 'powerLines'];
+const S9 = [...S7, '@blueprint', 'generator', ...Array(10).fill('motorRetrofit'), ...Array(40).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(6).fill('transformer'), 'powerLines'];
 
 const VERSION_LINE = `v${APP_VERSION} · DEMO · SAVE v2`;
 // The cap caption keeps the function name masked: the teaser must not spoil the full game.
@@ -74,8 +74,8 @@ const focusInCard = (page) => page.evaluate(() => {
   return card !== null && card.contains(document.activeElement);
 });
 
-// Era tabs as the player sees them: label and disabled flag of each `.tech-tab`.
-const tabRow = (page) => page.$$eval('.tech-tab', (tabs) => tabs.map((t) => ({ text: (t.textContent || '').trim(), disabled: t.disabled === true })));
+// Era tabs as the player sees them: label and disabled flag of each era `.tech-tab` (the SPLICES tab, #tech-tab-splices, is not an era).
+const tabRow = (page) => page.$$eval('.tech-tab:not(#tech-tab-splices)', (tabs) => tabs.map((t) => ({ text: (t.textContent || '').trim(), disabled: t.disabled === true })));
 // The demo cap: five era tabs, era I open, eras III to V shown as FULL GAME and disabled.
 function demoTabsOk(tabs) {
   const [first] = tabs;

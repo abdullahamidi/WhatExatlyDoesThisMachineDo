@@ -1,16 +1,17 @@
 // Tests for the behaviour scheduler (WP24 T3a): the hash and seed helpers, the draw index start (k0), the stare map, looks (key, first,
 // last, static), visible change gaps, caps, hold clips, the 'when' conditions and the eligible lists, the pick rule over the real
 // repertoire (no A to A except a merge, no walk after a walk, cooldowns, travel filters, hold and static run caps, the crow's glitch
-// share and run, WP27 D5), the fallback chain with small pools, the spot travel (walk time, previous spot damp), startSeg, the follow and recency odds,
-// and determinism. Pure maths, fixed seeds. Structure and canon only: the numbers come from the data and are never pinned here. The timed runner (T3b): dt invariance, A to A, the per-step walk and facing rules, pause, rehome, pins, parking, clip frame timing, emits, the seam and reduced motion. T3c: cues and reactions (bands, chance, pair cooldown, walks, wakes), crank mode, the era change, the unison conductor, and the era IV runner path (join, accents, rises, perBeat, downbeats, the stare, walks, leaving).
+// share and run, WP27 D5), the fallback chain with small pools and the micro fallback (WP28b: no id twice in a row), the spot travel (walk
+// time, previous spot damp), startSeg, the follow and recency odds, and determinism. Pure maths, fixed seeds. Structure and canon only: the numbers come from the data and are never pinned here. The timed runner (T3b): dt invariance, A to A, the per-step walk and facing rules, pause, rehome, pins, parking, clip frame timing, emits, the seam and reduced motion. T3c: cues and reactions (bands, chance, pair cooldown, walks, wakes), crank mode, the era change, the unison conductor, and the era IV runner path (join, accents, rises, perBeat, downbeats, the stare, walks, leaving).
 import { describe, it, expect } from 'vitest';
 import {
-  activityLook, behaviourK0, behaviourSeed, capOf, condHolds, createBehaviourRunner, createUnisonConductor, eligible, frameHoldIndex,
-  frameHoldWalk, hash01, holdClip, cycleSeedOf, newHoldWalk, newMemory, pickNext, restFlip, startSeg, stareFrame, visibleChangeMs,
-  walkFrameOf,
+  activityLook, behaviourK0, behaviourSeed, capOf, condHolds, createBehaviourRunner, createUnisonConductor, createWalkGate, eligible,
+  findOuterOf, findSidesOf, frameHoldIndex, frameHoldWalk, hash01, holdClip, cycleSeedOf, newHoldWalk, newMemory, noteWalkFrame, pickNext,
+  createStartGate, reactionRepeatsShown, restFlip, startGuardTarget, startSeg, stareFrame, visibleChangeMs, visitFor,
+  walkBlockedFor, walkFrameOf,
 } from './worldBehaviour';
 import type {
-  BehaviourCtx, BehaviourFrame, BehaviourLogEntry, BehaviourRunner, Look, PickEnv, Seg, UnisonConductor,
+  BehaviourCtx, BehaviourFrame, BehaviourLogEntry, BehaviourRunner, Look, PickEnv, Seg, SpotLike, StartGate, UnisonConductor,
 } from './worldBehaviour';
 import type { WorldEra } from './worldState';
 import type { PlaybackMode } from './worldPlayback';
@@ -19,7 +20,7 @@ import { WORLD_FRAMES, WORLD_PLAYBACK } from '../../data/livingWorld';
 import { TIER_HEARTBEAT } from '../../data/machineTiers';
 import { WORLD_ERA_ENV } from '../../data/worldEras';
 import {
-  WORLD_BEHAVIOUR, WORLD_REACT, WORLD_REPERTOIRE, WORLD_STARE_SAFE, WORLD_UNISON, WORLD_WALK,
+  WORLD_BEHAVIOUR, WORLD_REACT, WORLD_REPERTOIRE, WORLD_SPOTS, WORLD_STARE_SAFE, WORLD_UNISON, WORLD_WALK,
 } from '../../data/worldBehaviour';
 import type { Activity, BehaviourActor, BehaviourCond, Clip, CueId, UnisonId } from '../../data/worldBehaviour';
 
@@ -35,7 +36,8 @@ function ctxOf(over: Partial<BehaviourCtx> = {}): BehaviourCtx {
   return {
     era: 1, mode: 'fps4', crankSteps: 0, reduced: false, stare: false, reverse: false, vents: false, holeDig: false, sensor: true,
     scraps: true, demoHold: false, paused: false, homeX: 100, girlStage: 'window', spots: INS3, cues: [],
-    beat: { downbeat: false, index: 0 }, ...over,
+    beat: { downbeat: false, index: 0 }, walkBlocked: false, hopOk: false, findOuter: false, findInner: false, findX: null, visitSpot: null,
+    ...over,
   };
 }
 
@@ -54,9 +56,11 @@ function burstAct(id: string, over: Partial<Activity> = {}): Activity {
 // An env for the Inspector in era 1 (fps 4, the S7 mode) and helpers around it.
 function envOf(actor: BehaviourActor, era: WorldEra, over: Partial<PickEnv> = {}): PickEnv {
   const spots = actor === 'inspector' ? INS3 : actor === 'dog' ? DOG3 : ONE;
-  return { actor, era, stare: false, spots, fps: 4, ...over };
+  return { actor, era, stare: false, spots, fps: 4, visitSpot: null, findX: null, ...over };
 }
 const INS_ENV: PickEnv = envOf('inspector', 1);
+// The girl on the ground (one spot, home only): the one actor whose current id may merge (WP28b keeps her merge).
+const GIRL_ENV: PickEnv = envOf('girl', 1);
 
 // One pick: the returned segment, and whether it merged into (extended) the current one.
 interface Pick { seg: Seg; merged: boolean }
@@ -83,11 +87,13 @@ function expectRules(picks: readonly Pick[], env: PickEnv): void {
   const staticCap = env.era === 5 ? WORLD_BEHAVIOUR.capMs.staticV : WORLD_BEHAVIOUR.capMs.staticEarly;
   let prev: Seg | null = null;
   for (const { seg, merged } of picks) {
-    expect(seg.def.weight).toBeGreaterThan(0);
+    // A micro activity (weight 0) is a fallback pick (WP28b); every other pick has weight above 0.
+    expect(seg.def.weight > 0 || seg.def.micro === true, seg.id).toBe(true);
     expect(seg.holdMs).toBeGreaterThan(0);
     expect(seg.holdMs).toBeLessThanOrEqual(capOf(seg.def, seg.look, env.era));
     if (seg.def.capMs === undefined && !seg.look.static) expect(seg.holdMs).toBeLessThanOrEqual(WORLD_BEHAVIOUR.capMs.hold);
-    if (seg.look.static && seg.def.capMs === undefined) expect(seg.endMs - seg.runStartMs).toBeLessThanOrEqual(staticCap);
+    // The timestamps are absolute: a run that ends exactly on its cap (the girl's 8 s stand) can read one float ulp above it.
+    if (seg.look.static && seg.def.capMs === undefined) expect(seg.endMs - seg.runStartMs).toBeLessThanOrEqual(staticCap + 1e-6);
     expect(seg.walkMs).toBeLessThanOrEqual(WORLD_WALK.maxWalkMs);
     if (seg.def.travel === 'spot' && seg.walkMs > 0) {
       expect(Math.abs(seg.toX - seg.fromX)).toBeGreaterThanOrEqual(WORLD_WALK.minTravelPx);
@@ -313,7 +319,7 @@ describe('pickNext over the real repertoire', () => {
           const picks = playPicks(pool, env, behaviourSeed(1, actor) + seed * 1000, { minutes: 60, homeSpot });
           expect(picks.length).toBeGreaterThan(10);
           expectRules(picks, env);
-          for (const p of picks) expect(pool.some((a) => a.id === p.seg.id && a.weight > 0)).toBe(true);
+          for (const p of picks) expect(pool.some((a) => a.id === p.seg.id && (a.weight > 0 || a.micro === true))).toBe(true);
         }
       });
     }
@@ -359,11 +365,15 @@ describe('pickNext over the real repertoire', () => {
     }
   });
 
-  it('merges a repeatable activity into the same segment (same start, longer hold)', () => {
-    const picks = playPicks(eligible('inspector', 1, ctxOf()), INS_ENV, 11, { minutes: 60, homeSpot: 1 });
+  it('the girl on the ground: her stand merges under her own 16 s static cap (WP28b D), never past it; every merge obeys the rule', () => {
+    // WP28b D: her static rest poses keep the v0.11.0 cap (16 s, capMs), so a stand run merges again (the 8 s roaming cap cut it to one length).
+    // The run (the stand chain from its first start) ends by the cap; the synthetic merge is checked below and in the cooldown tests.
+    const picks = playPicks(eligible('girl', 1, ctxOf({ girlStage: 'ground' })), GIRL_ENV, 11, { minutes: 60 });
     const merges = picks.filter((p) => p.merged);
-    expect(merges.length).toBeGreaterThan(0);
     for (const m of merges) expect(m.seg.def.repeatable === true || holdClip(m.seg.def, m.seg.look)).toBe(true);
+    const stands = merges.filter((m) => m.seg.id === 'stand');
+    expect(stands.length).toBeGreaterThan(0);
+    for (const m of stands) expect(m.seg.endMs - m.seg.runStartMs, 'a stand run ends by its cap').toBeLessThanOrEqual(16000);
   });
 });
 
@@ -471,9 +481,10 @@ describe('cooldowns, walks and the fallback chain', () => {
     for (let i = 1; i < ids.length; i++) expect(ids[i]).not.toBe(ids[i - 1]);
   });
 
-  it('keeps one repeatable static activity going to its run cap and restarts it after (one-activity pool)', () => {
-    const stand = staticAct('stand', { repeatable: true, holdMs: [4000, 6000] });
-    const picks = playPicks([stand], INS_ENV, 31, { count: 30, homeSpot: 1 });
+  it('keeps one repeatable static activity going to its run cap and restarts it after (one-activity pool, the girl)', () => {
+    // Holds of 1-2 s: a merge (its own minimum hold on top) fits the 8 s static cap (WP28b re-pin: 4-6 s holds never merge under it).
+    const stand = staticAct('stand', { repeatable: true, holdMs: [1000, 2000] });
+    const picks = playPicks([stand], GIRL_ENV, 31, { count: 30, homeSpot: 0 });
     expect(picks.every((p) => p.seg.id === 'stand')).toBe(true);
     expect(picks.some((p) => p.merged)).toBe(true);
     for (const p of picks) expect(p.seg.holdMs).toBeGreaterThanOrEqual(WORLD_BEHAVIOUR.minHoldMs);
@@ -484,9 +495,9 @@ describe('cooldowns, walks and the fallback chain', () => {
     }
   });
 
-  it('extends a one-activity hold clip below its cap, then restarts it', () => {
+  it('extends a one-activity hold clip below its cap, then restarts it (the girl; a roamer restarts instead)', () => {
     const slow = act('slow', { capMs: 10000, holdMs: [4000, 6000] });
-    const picks = playPicks([slow], INS_ENV, 41, { count: 20, homeSpot: 1 });
+    const picks = playPicks([slow], GIRL_ENV, 41, { count: 20, homeSpot: 0 });
     expect(picks.every((p) => p.seg.id === 'slow')).toBe(true);
     expect(picks.some((p) => p.merged)).toBe(true);
     for (const p of picks) expect(p.seg.holdMs).toBeLessThanOrEqual(10000);
@@ -510,6 +521,98 @@ describe('cooldowns, walks and the fallback chain', () => {
     expect(() => pickNext(newMemory(1, 0), null, [act('z', { weight: 0 })], INS_ENV, 0)).toThrow('no free activity');
     const env: PickEnv = { ...INS_ENV, spots: [{ id: 'mid', x: 100 }, { id: 'scrap', x: 124 }] };
     expect(() => pickNext(newMemory(1, 0), null, [act('lost', { travel: 'sensor' })], env, 0)).toThrow('no reachable');
+  });
+});
+
+// The roaming rules (WP28b, B-T1a) over the real repertoire: a roamer never starts its current id again, a roamer never extends its hold,
+// and a roamer with nothing else to start takes its micro activity. The girl keeps her merge. Eras I-III and V (the era IV conductor runs
+// the cast), seeds 1-5 (behaviourSeed), 3000 picks each.
+describe('roaming rules: no id twice in a row, the micro fallback (WP28b, B-T1a)', () => {
+  const ROAMERS: readonly BehaviourActor[] = ['inspector', 'dog', 'crow'];
+  const ROAM_ERAS: readonly WorldEra[] = [1, 2, 3, 5];
+  const ROAM_SEEDS = [1, 2, 3, 4, 5];
+  const ROAM_PICKS = 3000;
+
+  for (const actor of ROAMERS) {
+    for (const era of ROAM_ERAS) {
+      it(`${actor} era ${era}: ${ROAM_PICKS} picks per seed never start the id they were given as the current one`, () => {
+        const pool = eligible(actor, era, ctxOf({ era, stare: era === 5, vents: era === 3, holeDig: era === 2 }));
+        const env = envOf(actor, era, { stare: era === 5, fps: era === 1 ? 4 : 8 });
+        const homeSpot = actor === 'crow' ? 0 : 1;
+        let picked = 0;
+        let repeats = 0;
+        for (const seed of ROAM_SEEDS) {
+          let prev: Seg | null = null;
+          for (const { seg } of playPicks(pool, env, behaviourSeed(seed, actor), { count: ROAM_PICKS, homeSpot })) {
+            picked += 1;
+            if (prev !== null && seg.id === prev.id) repeats += 1;
+            prev = seg;
+          }
+        }
+        expect(picked).toBe(ROAM_PICKS * ROAM_SEEDS.length);
+        expect(repeats).toBe(0);
+      });
+    }
+  }
+
+  it('the fallback starts a micro activity when only the current id would pass', () => {
+    const env = envOf('inspector', 1);
+    const mem = newMemory(7, 0, 1);
+    const cur = startSeg(mem, act('stand'), env, 0);
+    const glance = act('glance', { weight: 0, micro: true, holdMs: [1200, 2200] });
+    const next = pickNext(mem, cur, [act('stand'), glance], env, cur.endMs);
+    expect(next.id).toBe('glance');
+    expect(next.def.micro).toBe(true);
+    expect(next.startMs).toBe(cur.endMs);
+    expect(next.walkMs).toBe(0);
+  });
+
+  it('a micro activity in cooldown is not started: with nothing else to start, the current id restarts', () => {
+    const env = envOf('inspector', 1);
+    const mem = newMemory(7, 0, 1);
+    const stand = act('stand');
+    const cur = startSeg(mem, stand, env, 0);
+    const glance = act('glance', { weight: 0, micro: true, holdMs: [1200, 2200], cooldownMs: 1e9 });
+    mem.lastEndMs.set('glance', 0);
+    const next = pickNext(mem, cur, [stand, glance], env, cur.endMs);
+    expect(next.id).toBe('stand');
+    expect(next.startMs).toBe(cur.endMs);
+  });
+
+  it('a roamer never extends its hold: a one-activity hold clip below its cap restarts (no merge)', () => {
+    const slow = act('slow', { capMs: 10000, holdMs: [4000, 6000] });
+    const picks = playPicks([slow], INS_ENV, 41, { count: 20, homeSpot: 1 });
+    expect(picks.every((p) => p.seg.id === 'slow' && !p.merged)).toBe(true);
+    let prev: Seg | null = null;
+    for (const p of picks) {
+      if (prev !== null) expect(p.seg.startMs).toBe(prev.endMs);
+      expect(p.seg.holdMs).toBeLessThanOrEqual(10000);
+      prev = p.seg;
+    }
+  });
+
+  it('the girl keeps her merge: her repeatable current id is the candidate that extends the hold (same start, longer hold)', () => {
+    const stand = staticAct('stand', { repeatable: true, holdMs: [1000, 1500] });
+    const mem = newMemory(3, 0);
+    const cur = startSeg(mem, stand, GIRL_ENV, 0);
+    const next = pickNext(mem, cur, [stand], GIRL_ENV, cur.endMs);
+    expect(next.id).toBe('stand');
+    expect(next.startMs).toBe(cur.startMs);
+    expect(next.holdMs).toBeGreaterThan(cur.holdMs);
+  });
+
+  it('replays the same 500 picks for each roamer over the real repertoire, and a new seed changes them', () => {
+    const sig = (ps: Pick[]): unknown[] => ps.map((p) => [p.seg.id, p.seg.startMs, p.seg.holdMs, p.seg.walkMs, p.seg.toSpot, p.merged]);
+    for (const actor of ROAMERS) {
+      const pool = eligible(actor, 3, ctxOf({ era: 3, vents: true }));
+      const env = envOf(actor, 3, { fps: 8 });
+      const homeSpot = actor === 'crow' ? 0 : 1;
+      const a = playPicks(pool, env, behaviourSeed(1, actor), { count: 500, homeSpot });
+      const b = playPicks(pool, env, behaviourSeed(1, actor), { count: 500, homeSpot });
+      expect(sig(b), actor).toEqual(sig(a));
+      const c = playPicks(pool, env, behaviourSeed(2, actor), { count: 500, homeSpot });
+      expect(sig(c), actor).not.toEqual(sig(a));
+    }
   });
 });
 
@@ -602,7 +705,8 @@ function ctxFor(actor: BehaviourActor, era: WorldEra, mode: PlaybackMode, homeX:
   return {
     era, mode, crankSteps: 0, reduced: false, stare: era === 5, reverse: false, vents: era === 3, holeDig: false, sensor: true,
     scraps: true, demoHold: false, paused: false, homeX, girlStage: era === 5 ? 'ground' : 'mini', spots: spotsFor(actor, homeX),
-    cues: [], beat: { downbeat: false, index: 0 }, ...over,
+    cues: [], beat: { downbeat: false, index: 0 }, walkBlocked: false, hopOk: false, findOuter: false, findInner: false, findX: null,
+    visitSpot: null, ...over,
   };
 }
 interface PlayOpts { k0?: number; visit?: (f: BehaviourFrame, r: BehaviourRunner) => void; afterFirst?: (r: BehaviourRunner) => void }
@@ -1326,7 +1430,8 @@ describe('crank mode (T3c)', () => {
     expect(r.snapshot().activity).toBe('write');
     let prevStep = 0;
     let prevSince = r.snapshot().sinceMs;
-    for (let c = 1; c <= 10; c++) {
+    // Six clicks (3 s) stay inside the write hold (4-9 s since WP28b): a longer run would end the write on its own.
+    for (let c = 1; c <= 6; c++) {
       const f = r.step(100, crankCtx({ crankSteps: 1 }));
       expect(f.activity).toBe('write');
       expect(f.frame).toBe(c % 2 === 0 ? 'write0' : 'write1');
@@ -1479,9 +1584,11 @@ describe('the crow glitch in crank playback and as a first pick (WP27 F5.1b)', (
 });
 
 describe('the era change (T3c)', () => {
-  it('a change to an era with the same free pool keeps the activity sequence (the segment in progress runs out)', () => {
+  // WP28b (B-T1c1): eras I and III have different stroll weights, so their free pools differ; the same-pool change is the vents flag of era III
+  // (the umbrella is a weight-0 reaction, not a free id). The era path itself is the next test.
+  it('a change of the context flags with the same free pool keeps the activity sequence (the segment in progress runs out)', () => {
     const seed = behaviourSeed(1, 'inspector');
-    const plain = ctxFor('inspector', 1, 'fps4', HOME_L);
+    const plain = ctxFor('inspector', 3, 'fps4', HOME_L, { vents: false });
     const vented = ctxFor('inspector', 3, 'fps4', HOME_L);
     const logA = playWith('inspector', seed, STEP, 20 * MIN, () => plain);
     const logB = playWith('inspector', seed, STEP, 20 * MIN, (i) => ((i + 1) * STEP < 5 * MIN ? plain : vented));
@@ -2304,5 +2411,1493 @@ describe('a re-home after the memo (WP24 r3-F1)', () => {
       expect(after.x).toBe(HOME_R);
       expect(after.walking).toBe(false);
     }
+  });
+});
+
+// ---- The poke interrupt (WP28a T15a, C11): interrupt starts a poke-only leave after its delay, after a walk in progress; era IV and an
+// unknown id refuse; the outer travel walks to the outer spot (the one farthest from the machine anchor on the actor's side). ----
+describe('interrupt and the outer travel (WP28a T15a, C11, A13 [R1])', () => {
+  const SEED = behaviourSeed(1, 'inspector');
+  const DT = 100;
+  const insCtx = (): BehaviourCtx => ctxFor('inspector', 1, 'fps8', HOME_L);
+
+  // Steps the Inspector until it walks (at most 60 000 steps); true when a walk was in progress at the last step.
+  function stepUntilWalking(r: BehaviourRunner, ctx: BehaviourCtx): boolean {
+    for (let i = 0; i < 60000; i++) {
+      r.step(DT, ctx);
+      if (r.snapshot().walking) return true;
+    }
+    return false;
+  }
+
+  it('a walk in progress finishes first: the leave starts at the arrival, as a reaction, right after the walk entry', () => {
+    const log: BehaviourLogEntry[] = [];
+    const ctx = insCtx();
+    const r = createBehaviourRunner('inspector', SEED, STUB_CONDUCTOR, (e) => log.push(e));
+    r.reset(SEED, 0, ctx.homeX);
+    expect(stepUntilWalking(r, ctx)).toBe(true);
+    expect(r.interrupt('leaveWrite', 0)).toBe(true);
+    for (let i = 0; i < 2000; i++) r.step(DT, ctx);
+    const idx = log.findIndex((e) => e.activity === 'leaveWrite');
+    expect(idx).toBeGreaterThan(0);
+    const leave = log[idx];
+    const walk = log[idx - 1];
+    expect(leave?.reaction).toBe(true);
+    expect(walk?.walked).toBe(true);
+    expect(leave?.atMs).toBe((walk?.atMs ?? NaN) + (walk?.durMs ?? NaN));
+  });
+
+  it('the leave waits out its delay of runner time before it starts', () => {
+    const log: BehaviourLogEntry[] = [];
+    const ctx = insCtx();
+    const r = createBehaviourRunner('inspector', SEED, STUB_CONDUCTOR, (e) => log.push(e));
+    r.reset(SEED, 0, ctx.homeX);
+    for (let i = 0; i < 20; i++) r.step(DT, ctx);
+    const t0 = r.snapshot().clockMs;
+    expect(r.interrupt('leaveWrite', 3000)).toBe(true);
+    for (let i = 0; i < 1500; i++) r.step(DT, ctx);
+    const leave = log.find((e) => e.activity === 'leaveWrite');
+    expect(leave).toBeDefined();
+    expect(leave?.atMs ?? -1).toBeGreaterThanOrEqual(t0 + 3000);
+  });
+
+  it('refuses a runner not stepped yet, an id outside the era repertoire, and era IV (joined to the conductor)', () => {
+    const ctx = insCtx();
+    const r = createBehaviourRunner('inspector', SEED, STUB_CONDUCTOR, () => undefined);
+    r.reset(SEED, 0, ctx.homeX);
+    expect(r.interrupt('leaveWrite', 0)).toBe(false);
+    r.step(DT, ctx);
+    expect(r.interrupt('nope', 0)).toBe(false);
+    expect(r.interrupt('leaveSit', 0)).toBe(false);
+    expect(r.interrupt('leaveWrite', 0)).toBe(true);
+
+    const ctx4 = ctxFor('inspector', 4, 'fps8', HOME_L);
+    const r4 = createBehaviourRunner('inspector', SEED, createUnisonConductor(cycleSeedOf(1)), () => undefined);
+    r4.reset(SEED, 0, ctx4.homeX);
+    for (let i = 0; i < 50; i++) r4.step(DT, ctx4);
+    expect(r4.interrupt('leaveWrite', 0)).toBe(false);
+  });
+
+  it('is deterministic: the same inputs give the same frames and log', () => {
+    const run = (): { frames: string[]; log: string[] } => {
+      const ctx = insCtx();
+      const log: string[] = [];
+      const r = createBehaviourRunner('inspector', SEED, STUB_CONDUCTOR, (e) => log.push(`${e.activity}@${e.atMs}+${e.durMs}${e.reaction ? 'R' : ''}`));
+      r.reset(SEED, 0, ctx.homeX);
+      const frames: string[] = [];
+      for (let i = 0; i < 1500; i++) {
+        if (i === 40) r.interrupt('leaveWrite', 1200);
+        const f = r.step(DT, ctx);
+        frames.push(`${f.activity}:${f.frame}:${f.x}`);
+      }
+      return { frames, log };
+    };
+    const first = run();
+    expect(first.frames.some((f) => f.startsWith('leaveWrite:'))).toBe(true);
+    expect(run()).toEqual(first);
+  });
+
+  it('the outer travel walks to the outer spot (the one farthest from the machine anchor), never to the current spot', () => {
+    const leave = activityOf('inspector', 1, 'leaveWrite');
+    expect(leave?.travel).toBe('outer');
+    if (leave === undefined) return;
+    // The spots of INS_ENV are all left of MACHINE_ANCHOR.x: the sensor spot (x 76) is the outer one.
+    const fromScrap = startSeg(newMemory(SEED, 0, 2), leave, INS_ENV, 0);
+    expect(fromScrap.toSpot).toBe(0);
+    expect(fromScrap.toX).toBe(76);
+    expect(fromScrap.walkMs).toBeGreaterThan(0);
+    const fromMid = startSeg(newMemory(SEED, 0, 1), leave, INS_ENV, 0);
+    expect(fromMid.toSpot).toBe(0);
+    expect(fromMid.toX).toBe(76);
+  });
+
+  it('a left-wing Inspector on the outer spot stays; on an inner spot it walks left', () => {
+    const leave = activityOf('inspector', 1, 'leaveWrite');
+    if (leave === undefined) throw new Error('no inspector leave');
+    const onOuter = startSeg(newMemory(SEED, 0, 0), leave, INS_ENV, 0);
+    expect(onOuter.toSpot).toBe(0);
+    expect(onOuter.walkMs).toBe(0);
+    expect(onOuter.fromX).toBe(76);
+    expect(onOuter.toX).toBe(76);
+  });
+
+  it('a right-wing dog walks right to its outer spot; on the outer spot it stays', () => {
+    const leave = activityOf('dog', 1, 'leaveSit');
+    if (leave === undefined) throw new Error('no dog leave');
+    // The e1 dog spots (stake 2340, home 2364, out 2388) are right of MACHINE_ANCHOR.x: the out spot is the outer one.
+    const dogE1: PickEnv['spots'] = [{ id: 'stake', x: 2340 }, { id: 'home', x: 2364 }, { id: 'out', x: 2388 }];
+    const env: PickEnv = { ...envOf('dog', 1), spots: dogE1 };
+    const fromStake = startSeg(newMemory(SEED, 0, 0), leave, env, 0);
+    expect(fromStake.toSpot).toBe(2);
+    expect(fromStake.toX).toBe(2388);
+    expect(fromStake.walkMs).toBeGreaterThan(0);
+    const fromHome = startSeg(newMemory(SEED, 0, 1), leave, env, 0);
+    expect(fromHome.toSpot).toBe(2);
+    const onOuter = startSeg(newMemory(SEED, 0, 2), leave, env, 0);
+    expect(onOuter.toSpot).toBe(2);
+    expect(onOuter.walkMs).toBe(0);
+  });
+
+  it('a poke leave from the outer spot starts in place: every frame of the leave stands at the outer x and the log has no walk', () => {
+    const log: BehaviourLogEntry[] = [];
+    const ctx = insCtx();
+    const r = createBehaviourRunner('inspector', SEED, STUB_CONDUCTOR, (e) => log.push(e));
+    r.reset(SEED, 0, ctx.homeX);
+    // The outer spot of the left-wing Inspector at HOME_L is the sensor spot (HOME_L - 24); the runner walks there and rests.
+    const outerX = HOME_L - 24;
+    let atOuter = false;
+    for (let i = 0; i < 60000 && !atOuter; i++) {
+      const f = r.step(DT, ctx);
+      atOuter = f.x === outerX && !f.walking;
+    }
+    expect(atOuter).toBe(true);
+    expect(r.interrupt('leaveWrite', 0)).toBe(true);
+    const leaveFrames: BehaviourFrame[] = [];
+    for (let i = 0; i < 400; i++) {
+      const f = r.step(DT, ctx);
+      // A copy: step returns the runner's one live frame, which the later steps overwrite (WP28b re-pin: the next pick now walks).
+      if (f.activity === 'leaveWrite') leaveFrames.push({ ...f });
+    }
+    expect(leaveFrames.length).toBeGreaterThan(0);
+    expect(leaveFrames.every((f) => f.x === outerX && !f.walking)).toBe(true);
+    expect(log.find((e) => e.activity === 'leaveWrite')?.walked).toBe(false);
+  });
+
+  it('never toward the machine: every outer walk ends farther from the anchor on the same side; the same inputs give the same walk', () => {
+    const leave = activityOf('inspector', 1, 'leaveWrite');
+    if (leave === undefined) throw new Error('no inspector leave');
+    const anchor = MACHINE_ANCHOR.x;
+    const layouts: PickEnv['spots'][] = [
+      INS_ENV.spots,
+      [1500, 1800, 1900, 1920, 2000, 2300].map((x) => ({ id: 'mid' as const, x })),
+      [2300, 2000, 1920, 1800, 1500].map((x) => ({ id: 'home' as const, x })),
+    ];
+    for (const spots of layouts) {
+      const env: PickEnv = { ...INS_ENV, spots };
+      spots.forEach((_, i) => {
+        const seg = startSeg(newMemory(SEED, 0, i), leave, env, 0);
+        const again = startSeg(newMemory(SEED, 0, i), leave, env, 0);
+        expect(again.toSpot).toBe(seg.toSpot);
+        if (seg.toSpot === i) {
+          expect(seg.walkMs).toBe(0);
+          return;
+        }
+        expect(seg.toX < anchor).toBe(seg.fromX < anchor);
+        expect(Math.abs(seg.toX - anchor)).toBeGreaterThan(Math.abs(seg.fromX - anchor));
+      });
+    }
+  });
+});
+
+// WP28b B-T1b: lanes (Spots v2), the Euclidean walk, the walk gate, the walkBlocked pool, halt and the visit spots. The spots are small and
+// explicit so the walk geometry is known; the data numbers (walkStaggerMs, haltMinLeftMs, minTravelPx) are read, never pinned.
+describe('spots with lanes: the Euclidean walk and the lane of a frame (WP28b, B-T1b)', () => {
+  const YARD_SPOTS: PickEnv['spots'] = [{ id: 'sensor', x: 100, lane: 0 }, { id: 'mid', x: 220, lane: 0 }, { id: 'y1', x: 160, lane: 64 }];
+
+  it('a walk is Euclidean: ceil(hypot(dx, dLane) / 8) drawn frames and the lane goes to the target lane', () => {
+    const env = envOf('inspector', 1, { spots: [{ id: 'sensor', x: 100, lane: 0 }, { id: 'y1', x: 160, lane: 64 }], fps: 4 });
+    const seg = startSeg(newMemory(3, 0, 0), act('toYard', { travel: 'spot' }), env, 0);
+    expect(seg.toSpot).toBe(1);
+    expect(seg.fromLane).toBe(0);
+    expect(seg.toLane).toBe(64);
+    // hypot(60, 64) = 87.7 world px: 11 drawn frames at 4 fps.
+    expect(seg.walkMs).toBe(Math.ceil(Math.hypot(60, 64) / WORLD_WALK.pxPerFrame) * (1000 / 4));
+    expect(seg.walkMs).toBe(11 * 250);
+    // A walk with no horizontal part is still a walk: one spot straight below the other.
+    const below = envOf('inspector', 1, { spots: [{ id: 'sensor', x: 100, lane: 0 }, { id: 'y1', x: 100, lane: 32 }], fps: 4 });
+    const down = startSeg(newMemory(3, 0, 0), act('down', { travel: 'spot' }), below, 0);
+    expect(down.toSpot).toBe(1);
+    expect(down.walkMs).toBe(Math.ceil(32 / WORLD_WALK.pxPerFrame) * 250);
+  });
+
+  it('plain spot travel counts the Euclidean distance: a spot 14 px away diagonally is no target, one 30 px below is', () => {
+    const near = envOf('inspector', 1, { spots: [{ id: 'sensor', x: 100, lane: 0 }, { id: 'y1', x: 110, lane: 10 }], fps: 4 });
+    expect(startSeg(newMemory(1, 0, 0), act('stroll', { travel: 'spot' }), near, 0).walkMs).toBe(0);
+    const far = envOf('inspector', 1, { spots: [{ id: 'sensor', x: 100, lane: 0 }, { id: 'y1', x: 100, lane: 30 }], fps: 4 });
+    expect(startSeg(newMemory(1, 0, 0), act('stroll', { travel: 'spot' }), far, 0).toSpot).toBe(1);
+  });
+
+  it('a diagonal walk leaves its point, every walk frame lies on the segment to its target, and a rest frame stands on its spot lane', () => {
+    const ctx = ctxFor('inspector', 1, 'fps8', 100, { spots: YARD_SPOTS });
+    let diagonals = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      const r = createBehaviourRunner('inspector', behaviourSeed(seed, 'inspector'), STUB_CONDUCTOR, () => undefined);
+      r.reset(seed, 0, ctx.homeX);
+      const frames: { walking: boolean; x: number; lane: number }[] = [];
+      for (let i = 0; i < 4000; i++) {
+        const f = r.step(100, ctx);
+        frames.push({ walking: f.walking, x: f.x, lane: f.lane });
+        // A rest frame stands on its spot: the lane 64 spot at x 160, the others on lane 0.
+        if (!f.walking) expect(f.lane, `seed ${seed} rest lane at x ${f.x}`).toBe(f.x === 160 ? 64 : 0);
+      }
+      for (let i = 1; i < frames.length; i++) {
+        const before = frames[i - 1];
+        const first = frames[i];
+        if (before === undefined || first === undefined || before.walking || !first.walking) continue;
+        let j = i;
+        while (j < frames.length && frames[j]?.walking === true) j++;
+        const target = frames[j];
+        if (target === undefined) break;
+        const dx = target.x - before.x;
+        const dl = target.lane - before.lane;
+        if (dx === 0 || dl === 0) continue;
+        diagonals++;
+        const walk = frames.slice(i, j);
+        // The first walk frame is one frame step (8 px) from the point it leaves, the last one within one step of the target.
+        const head = walk[0];
+        const tail = walk[walk.length - 1];
+        if (head === undefined || tail === undefined) continue;
+        expect(Math.hypot(head.x - before.x, head.lane - before.lane)).toBeLessThanOrEqual(WORLD_WALK.pxPerFrame + 1e-9);
+        expect(Math.hypot(target.x - tail.x, target.lane - tail.lane)).toBeLessThanOrEqual(WORLD_WALK.pxPerFrame + 1e-9);
+        for (const p of walk) {
+          // Collinear with the segment and between its ends (x and lane move together).
+          expect(Math.abs((p.x - before.x) * dl - (p.lane - before.lane) * dx)).toBeLessThan(1e-6);
+          expect(p.x >= Math.min(before.x, target.x) - 1e-9 && p.x <= Math.max(before.x, target.x) + 1e-9).toBe(true);
+          expect(p.lane >= Math.min(before.lane, target.lane) - 1e-9 && p.lane <= Math.max(before.lane, target.lane) + 1e-9).toBe(true);
+        }
+      }
+    }
+    expect(diagonals).toBeGreaterThan(0);
+  });
+
+  it('no plain spot travel ends on a visit spot (v), from either side; only the Director walks to one', () => {
+    const spots: PickEnv['spots'] = [{ id: 'sensor', x: 100 }, { id: 'mid', x: 160 }, { id: 'v1', x: 220 }];
+    const env = envOf('inspector', 1, { spots, fps: 4 });
+    const stroll = act('stroll', { travel: 'spot' });
+    for (let seed = 1; seed <= 20; seed++) {
+      expect(startSeg(newMemory(seed, 0, 0), stroll, env, 0).toSpot).toBe(1);
+      expect(startSeg(newMemory(seed, 0, 1), stroll, env, 0).toSpot).toBe(0);
+    }
+  });
+});
+
+describe('the walk gate (WP28b, B1)', () => {
+  it('blocks another actor for walkStaggerMs after a walk starts, never its own walk, and frees the others after', () => {
+    const gate = createWalkGate();
+    expect(walkBlockedFor(gate, 'dog', 0)).toBe(false);
+    noteWalkFrame(gate, 'inspector', true, 5000);
+    expect(walkBlockedFor(gate, 'dog', 5000)).toBe(true);
+    expect(walkBlockedFor(gate, 'dog', 5000 + WORLD_BEHAVIOUR.walkStaggerMs - 1)).toBe(true);
+    expect(walkBlockedFor(gate, 'dog', 5000 + WORLD_BEHAVIOUR.walkStaggerMs)).toBe(false);
+    expect(walkBlockedFor(gate, 'inspector', 5000)).toBe(false);
+    // Walking on is not a new start; a new rising edge is.
+    noteWalkFrame(gate, 'inspector', true, 5100);
+    expect(gate.startedAt.inspector).toBe(5000);
+    noteWalkFrame(gate, 'inspector', false, 5200);
+    noteWalkFrame(gate, 'inspector', true, 6000);
+    expect(gate.startedAt.inspector).toBe(6000);
+    expect(walkBlockedFor(gate, 'dog', 6000)).toBe(true);
+  });
+
+  it('a set walkBlocked drops every travel from the pool: no walk starts while the gate is set', () => {
+    const cases: [BehaviourActor, WorldEra][] = [['inspector', 1], ['dog', 2], ['inspector', 3], ['dog', 5]];
+    for (const [actor, era] of cases) {
+      const ctx = ctxFor(actor, era, 'fps8', HOME_L, { walkBlocked: true });
+      let walks = 0;
+      playRunner(actor, behaviourSeed(2, actor), ctx, 100, 6 * MIN, { visit: (f) => { if (f.walking) walks++; } });
+      expect(walks, `${actor} era ${era}`).toBe(0);
+    }
+  });
+});
+
+// WP28b (r2-FX4G): the test's stand-in for another denizen's latest start (the gate is the caller's; the runner writes its own starts into it).
+function setStart(gate: StartGate, actor: BehaviourActor, atMs: number): void {
+  gate.startedAt[actor] = atMs;
+}
+// WP28b (r2-FX4G, V5): one runner played with the gate in its ctx (the runner writes its own segment starts into the gate). onStep runs before
+// each step with the clock of the step (the test sets the other denizens' starts there).
+function playGated(actor: BehaviourActor, seed: number, ctx: BehaviourCtx, dtMs: number, totalMs: number, gate?: StartGate,
+  onStep?: (t: number) => void): BehaviourLogEntry[] {
+  const log: BehaviourLogEntry[] = [];
+  const r = createBehaviourRunner(actor, seed, STUB_CONDUCTOR, (e) => log.push(e));
+  r.reset(seed, 0, ctx.homeX);
+  const c: BehaviourCtx = gate === undefined ? ctx : { ...ctx, startGate: gate };
+  const steps = Math.round(totalMs / dtMs);
+  for (let i = 0; i < steps; i++) {
+    onStep?.((i + 1) * dtMs);
+    r.step(dtMs, c);
+  }
+  return log;
+}
+// WP28b (r2-FX4G): the Inspector in a framing's era with the unison beat of the shared clock (era IV: the conductor plays the cast). Every step
+// the dog's start is noted at the clock, so every boundary of the runner lies near another denizen's start.
+function playBeat(era: WorldEra, gate: StartGate | undefined, dtMs: number, totalMs: number): BehaviourLogEntry[] {
+  const seed = behaviourSeed(1, 'inspector');
+  const log: BehaviourLogEntry[] = [];
+  const r = createBehaviourRunner('inspector', seed, createUnisonConductor(cycleSeedOf(1)), (e) => log.push(e));
+  r.reset(seed, 0, HOME_L);
+  const beat = { downbeat: false, index: -1 };
+  const base = ctxFor('inspector', era, 'fps8', HOME_L, { beat });
+  const ctx: BehaviourCtx = gate === undefined ? base : { ...base, startGate: gate };
+  const steps = Math.round(totalMs / dtMs);
+  for (let i = 0; i < steps; i++) {
+    const t = (i + 1) * dtMs;
+    const index = Math.floor(t / BEAT);
+    beat.downbeat = index !== beat.index;
+    beat.index = index;
+    if (gate !== undefined) setStart(gate, 'dog', t);
+    r.step(dtMs, ctx);
+  }
+  return log;
+}
+
+describe('the start gate (WP28b, r2-FX4G, V5): a boundary near another denizen\'s start moves to startGuardMs from it', () => {
+  const G = WORLD_BEHAVIOUR.startGuardMs;
+  // WP28b (r2-FX4T): cycle 2 (was 1): the first pick of cycle 1 is a fast scratch, a clip the gate never stretches (V7), so its boundary cannot move.
+  const DOG_SEED = behaviourSeed(2, 'dog');
+  const DOG_CTX = (): BehaviourCtx => ctxFor('dog', 2, 'fps8', HOME_R);
+
+  it('startGuardTarget: the latest start + startGuardMs among the other denizens\' starts within startGuardMs; none near: the boundary stays', () => {
+    const gate = createStartGate();
+    expect(startGuardTarget(gate, 'dog', 1000)).toBe(1000);
+    setStart(gate, 'dog', 1000);
+    expect(startGuardTarget(gate, 'dog', 1000)).toBe(1000);
+    setStart(gate, 'inspector', 1040);
+    expect(startGuardTarget(gate, 'dog', 1000)).toBe(1040 + G);
+    setStart(gate, 'crow', 1000 - 40);
+    expect(startGuardTarget(gate, 'dog', 1000)).toBe(1040 + G);
+    expect(startGuardTarget(gate, 'dog', 1040 + G)).toBe(1040 + G);
+    expect(startGuardTarget(gate, 'girl', 1000 + 2 * G)).toBe(1000 + 2 * G);
+  });
+
+  it('two runners whose boundaries are 40 ms apart end up at least startGuardMs apart (either order)', () => {
+    const base = playGated('dog', DOG_SEED, DOG_CTX(), 100, 2 * MIN);
+    const b1 = (base[0]?.atMs ?? 0) + (base[0]?.durMs ?? 0);
+    for (const other of [b1 - 40, b1 + 40]) {
+      const gate = createStartGate();
+      setStart(gate, 'inspector', other);
+      const gated = playGated('dog', DOG_SEED, DOG_CTX(), 100, 2 * MIN, gate);
+      const second = gated[1]?.atMs ?? NaN;
+      expect(Math.abs(second - other), `other start ${other}`).toBeGreaterThanOrEqual(G);
+      expect(second - b1, `other start ${other}`).toBeLessThanOrEqual(WORLD_BEHAVIOUR.startGuardExtMax * G);
+    }
+  });
+
+  it('the extension of one boundary is bounded (startGuardExtMax x startGuardMs), and the gated start never moves back', () => {
+    const base = playGated('dog', DOG_SEED, DOG_CTX(), 100, 2 * MIN);
+    const b1 = (base[0]?.atMs ?? 0) + (base[0]?.durMs ?? 0);
+    for (let d = -3 * G; d <= 3 * G; d += 10) {
+      const gate = createStartGate();
+      setStart(gate, 'inspector', b1 + d);
+      const second = playGated('dog', DOG_SEED, DOG_CTX(), 100, 2 * MIN, gate)[1]?.atMs ?? NaN;
+      expect(second, `offset ${d}`).toBeGreaterThanOrEqual(b1);
+      expect(second - b1, `offset ${d}`).toBeLessThanOrEqual(WORLD_BEHAVIOUR.startGuardExtMax * G);
+      expect(Math.abs(second - (b1 + d)), `offset ${d}`).toBeGreaterThanOrEqual(G);
+    }
+  });
+
+  it('a runner far from every other start is unchanged: its log is the ungated log', () => {
+    const base = playGated('dog', DOG_SEED, DOG_CTX(), 100, 4 * MIN);
+    const b1 = (base[0]?.atMs ?? 0) + (base[0]?.durMs ?? 0);
+    const gate = createStartGate();
+    setStart(gate, 'inspector', b1 - 10 * G);
+    expect(playGated('dog', DOG_SEED, DOG_CTX(), 100, 4 * MIN, gate)).toEqual(base);
+  });
+
+  it('era IV takes no gate (the conductor plays the cast), while era III with the same stimulus is held', () => {
+    const iv = playBeat(4, undefined, 100, 4 * MIN);
+    expect(iv.length).toBeGreaterThan(0);
+    expect(playBeat(4, createStartGate(), 100, 4 * MIN)).toEqual(iv);
+    const iii = playBeat(3, undefined, 100, 4 * MIN);
+    expect(playBeat(3, createStartGate(), 100, 4 * MIN)).not.toEqual(iii);
+  });
+
+  it('a hop (a fast clip) keeps its length under the gate: a stretched flight would show more changes a second (V7)', () => {
+    const seed = behaviourSeed(1, 'crow');
+    const gate = createStartGate();
+    const ctx = ctxFor('crow', 1, 'fps8', HOME_R, { hopOk: true });
+    const log = playGated('crow', seed, ctx, 100, 20 * MIN, gate, (t) => setStart(gate, 'inspector', t));
+    const hops = log.filter((e) => e.activity === 'hopFree');
+    expect(hops.length).toBeGreaterThan(0);
+    for (const e of hops) expect(e.durMs).toBeCloseTo(600, 6);
+  });
+
+  it('the deterministic gate: the same seed and step give the same gated log', () => {
+    const run = (): BehaviourLogEntry[] => {
+      const gate = createStartGate();
+      return playGated('dog', DOG_SEED, DOG_CTX(), 100, 6 * MIN, gate, (t) => { if (t % 1000 === 0) setStart(gate, 'inspector', t - 40); });
+    };
+    expect(run()).toEqual(run());
+  });
+
+  it('the runner writes its segment starts into the gate it reads: the gate holds the open segment\'s start, on the runner clock', () => {
+    const gate = createStartGate();
+    const log = playGated('dog', DOG_SEED, DOG_CTX(), 100, 6 * MIN, gate);
+    expect(log.length).toBeGreaterThan(0);
+    expect(gate.startedAt.dog).toBeGreaterThan(log[log.length - 1]?.atMs ?? Infinity);
+    expect(gate.startedAt.inspector).toBe(-Infinity);
+  });
+});
+
+// WP28b (r2-FX4G, V5 fix): the Director's stepping on one clock. The runners share one gate and step on the same dt; after each step the shared
+// clock (the step's end) minus the runner's clock is its clockOffsetMs, unless withOffset is false. paused holds one actor for the shared
+// times (from, to]. Returns the starts the gate records per actor (read after each step), on the shared clock.
+interface SharedOpts { withOffset: boolean; paused?: { actor: BehaviourActor; from: number; to: number } }
+function playShared(actors: readonly BehaviourActor[], dtMs: number, totalMs: number, opts: SharedOpts): Record<BehaviourActor, number[]> {
+  const gate = createStartGate();
+  const starts: Record<BehaviourActor, number[]> = { inspector: [], dog: [], crow: [], girl: [] };
+  const seen: Record<BehaviourActor, number> = { inspector: -Infinity, dog: -Infinity, crow: -Infinity, girl: -Infinity };
+  const pause = opts.paused;
+  const runs = actors.map((actor) => {
+    const seed = behaviourSeed(1, actor);
+    const r = createBehaviourRunner(actor, seed, STUB_CONDUCTOR);
+    r.reset(seed, 0, IV_HOME[actor]);
+    return { actor, r, ctx: ctxFor(actor, 1, 'fps8', IV_HOME[actor], { startGate: gate }) };
+  });
+  const steps = Math.round(totalMs / dtMs);
+  for (let i = 0; i < steps; i++) {
+    const shared = (i + 1) * dtMs;
+    for (const { actor, r, ctx } of runs) {
+      ctx.paused = pause !== undefined && pause.actor === actor && shared > pause.from && shared <= pause.to;
+      if (opts.withOffset) ctx.clockOffsetMs = shared - (r.clockMs() + dtMs);
+      r.step(dtMs, ctx);
+    }
+    for (const actor of actors) {
+      const at = gate.startedAt[actor];
+      if (at !== seen[actor]) {
+        starts[actor].push(at);
+        seen[actor] = at;
+      }
+    }
+  }
+  return starts;
+}
+// The gaps of the pairs of starts of different actors closer than startGuardMs (the gate's own times, on the shared clock).
+function closeGaps(starts: Record<BehaviourActor, number[]>): number[] {
+  const gaps: number[] = [];
+  for (const a of ACTORS) {
+    for (const b of ACTORS) {
+      if (a >= b) continue;
+      for (const s of starts[a]) {
+        for (const t of starts[b]) {
+          if (Math.abs(s - t) < WORLD_BEHAVIOUR.startGuardMs - 1e-6) gaps.push(Math.abs(s - t));
+        }
+      }
+    }
+  }
+  return gaps;
+}
+
+describe('the start gate on one clock (WP28b, r2-FX4G, V5 fix): a runner\'s clockOffsetMs maps its clock onto the shared clock', () => {
+  const ACTORS3: readonly BehaviourActor[] = ['inspector', 'dog', 'crow'];
+  const DT = 100;
+  const TOTAL = 3 * MIN;
+  // The dog is held for 1.5 s mid-run: its clock stops, the shared clock and the others run on.
+  const PAUSE: NonNullable<SharedOpts['paused']> = { actor: 'dog', from: 40000, to: 41500 };
+
+  it('a runner paused for 1.5 s: no two starts of different runners lie closer than startGuardMs on the shared clock', () => {
+    const starts = playShared(ACTORS3, DT, TOTAL, { withOffset: true, paused: PAUSE });
+    expect(starts.inspector.length + starts.dog.length).toBeGreaterThan(10);
+    expect(closeGaps(starts)).toEqual([]);
+  });
+
+  it('the same scenario without clockOffsetMs (the old clocks: the paused runner lags) lets starts fall closer than startGuardMs', () => {
+    const starts = playShared(ACTORS3, DT, TOTAL, { withOffset: false, paused: PAUSE });
+    expect(closeGaps(starts).length).toBeGreaterThan(0);
+  });
+
+  it('the gate holds each start on the shared clock: with an offset O the starts are the offset-free starts plus O', () => {
+    const O = 5000;
+    const run = (offset: number | undefined): number[] => {
+      const seed = behaviourSeed(2, 'dog');
+      const gate = createStartGate();
+      const r = createBehaviourRunner('dog', seed, STUB_CONDUCTOR);
+      r.reset(seed, 0, HOME_R);
+      const ctx = ctxFor('dog', 2, 'fps8', HOME_R, { startGate: gate });
+      if (offset !== undefined) ctx.clockOffsetMs = offset;
+      const out: number[] = [];
+      let last = -Infinity;
+      for (let i = 0; i < TOTAL / DT; i++) {
+        r.step(DT, ctx);
+        if (gate.startedAt.dog !== last) {
+          last = gate.startedAt.dog;
+          out.push(last);
+        }
+      }
+      return out;
+    };
+    const plain = run(undefined);
+    expect(plain.length).toBeGreaterThan(3);
+    expect(run(O)).toEqual(plain.map((t) => t + O));
+  });
+});
+
+describe('halt (WP28b, C11): a walk is cut at its last drawn tick when more than haltMinLeftMs is left', () => {
+  const SPOTS: PickEnv['spots'] = [{ id: 'sensor', x: 100, lane: 0 }, { id: 'mid', x: 220, lane: 0 }, { id: 'y1', x: 160, lane: 64 }];
+  const SHORT: PickEnv['spots'] = [{ id: 'sensor', x: 100, lane: 0 }, { id: 'mid', x: 124, lane: 0 }];
+
+  it('cuts at the point of the last drawn tick: the hold starts there, and every frame until then stands on that point', () => {
+    const ctx = ctxFor('inspector', 1, 'fps8', 100, { spots: SPOTS });
+    let cuts = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const r = createBehaviourRunner('inspector', behaviourSeed(seed, 'inspector'), STUB_CONDUCTOR, () => undefined);
+      r.reset(seed, 0, ctx.homeX);
+      for (let i = 0; i < 20000; i++) {
+        const f = r.step(100, ctx);
+        if (!f.walking) continue;
+        const at = { x: f.x, lane: f.lane, activity: f.activity };
+        if (!r.halt()) continue;
+        cuts++;
+        // The walk now ends on the cut point: its frames and the hold that follows stand on it, on the same activity.
+        let held = false;
+        for (let k = 0; k < 4000 && !held; k++) {
+          const g = r.step(100, ctx);
+          if (g.activity !== at.activity) break;
+          expect(g.x).toBeCloseTo(at.x, 6);
+          expect(g.lane).toBeCloseTo(at.lane, 6);
+          held = !g.walking;
+        }
+        expect(held, `seed ${seed}`).toBe(true);
+        break;
+      }
+    }
+    expect(cuts).toBeGreaterThan(0);
+  });
+
+  it('never cuts with haltMinLeftMs or less left: a walk of at most three frames at 8 fps is never cut', () => {
+    const ctx = ctxFor('inspector', 1, 'fps8', 100, { spots: SHORT });
+    let walking = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const r = createBehaviourRunner('inspector', behaviourSeed(seed, 'inspector'), STUB_CONDUCTOR, () => undefined);
+      r.reset(seed, 0, ctx.homeX);
+      for (let i = 0; i < 6000; i++) {
+        const f = r.step(100, ctx);
+        if (f.walking) {
+          walking++;
+          expect(r.halt(), `seed ${seed} step ${i}`).toBe(false);
+        }
+      }
+    }
+    expect(walking).toBeGreaterThan(0);
+  });
+
+  it('is deterministic, and the walker goes on from the cut point: a walk after the cut starts one frame step from the held point', () => {
+    const run = (): { frames: string[]; cut: boolean; walksAfter: number } => {
+      const ctx = ctxFor('inspector', 1, 'fps8', 100, { spots: SPOTS });
+      const r = createBehaviourRunner('inspector', behaviourSeed(4, 'inspector'), STUB_CONDUCTOR, () => undefined);
+      r.reset(4, 0, ctx.homeX);
+      const frames: string[] = [];
+      let cut = false;
+      let walksAfter = 0;
+      let prev: { x: number; lane: number; walking: boolean } | null = null;
+      for (let i = 0; i < 20000 && walksAfter < 2; i++) {
+        const f = r.step(100, ctx);
+        if (!cut && f.walking && r.halt()) cut = true;
+        frames.push(`${f.activity}:${f.frame}:${f.x}:${f.lane}`);
+        if (cut && prev !== null && !prev.walking && f.walking) {
+          walksAfter++;
+          expect(Math.hypot(f.x - prev.x, f.lane - prev.lane)).toBeLessThanOrEqual(WORLD_WALK.pxPerFrame + 1e-9);
+        }
+        prev = { x: f.x, lane: f.lane, walking: f.walking };
+      }
+      return { frames, cut, walksAfter };
+    };
+    const first = run();
+    expect(first.cut).toBe(true);
+    expect(first.walksAfter).toBeGreaterThan(0);
+    expect(run()).toEqual(first);
+  });
+
+  it('refuses in era IV (joined to the conductor) and before the first step', () => {
+    const r0 = createBehaviourRunner('inspector', behaviourSeed(1, 'inspector'), STUB_CONDUCTOR, () => undefined);
+    expect(r0.halt()).toBe(false);
+    const ctx4 = ctxFor('inspector', 4, 'fps8', HOME_L, { spots: SPOTS });
+    const r4 = createBehaviourRunner('inspector', behaviourSeed(1, 'inspector'), createUnisonConductor(cycleSeedOf(1)), () => undefined);
+    r4.reset(1, 0, ctx4.homeX);
+    for (let i = 0; i < 3000; i++) {
+      r4.step(100, ctx4);
+      expect(r4.halt()).toBe(false);
+    }
+  });
+});
+
+// WP28b B-T3a: the machine-event reactions (cue bands, per-actor delays, the Find sides, the pair cooldown), the gathering at woken objects
+// (visit walks), the free hop (hopOk), the travel kinds inner, visit and find, the walk gate for reaction walks, and era IV (no reactions).
+describe('reactions, visits, the free hop and the travel kinds (WP28b, B-T3a)', () => {
+  const NEW_CUE_STEP = 50;
+  const CUE_GAP_MS = 60000;
+  // One cue per actor and era with the activity that answers it and the flags it needs (a Find on one side, a woken Splice to visit).
+  interface Case { actor: BehaviourActor; era: WorldEra; cue: CueId; id: string; over: Partial<BehaviourCtx> }
+  const BAND_CASES: Case[] = [
+    { actor: 'inspector', era: 1, cue: 'fault', id: 'startle', over: {} },
+    { actor: 'dog', era: 1, cue: 'fault', id: 'bark', over: {} },
+    { actor: 'crow', era: 1, cue: 'fault', id: 'ruffleReact', over: {} },
+    { actor: 'inspector', era: 1, cue: 'faultClear', id: 'writeTick', over: {} },
+    { actor: 'dog', era: 2, cue: 'faultClear', id: 'wag', over: {} },
+    { actor: 'inspector', era: 1, cue: 'bigBuy', id: 'startle', over: {} },
+    { actor: 'dog', era: 1, cue: 'bigBuy', id: 'lookBig', over: {} },
+    { actor: 'crow', era: 1, cue: 'bigBuy', id: 'ruffleReact', over: {} },
+    { actor: 'inspector', era: 1, cue: 'era', id: 'eraFront', over: {} },
+    { actor: 'dog', era: 1, cue: 'era', id: 'eraHead', over: {} },
+    { actor: 'crow', era: 1, cue: 'era', id: 'eraPerchHead', over: {} },
+    { actor: 'inspector', era: 1, cue: 'find', id: 'point', over: { findOuter: true, findX: 1500 } },
+    { actor: 'dog', era: 1, cue: 'find', id: 'sniffHere', over: { findInner: true, findX: 1500 } },
+    { actor: 'crow', era: 1, cue: 'find', id: 'glanceDown', over: { findOuter: true, findX: 1500 } },
+    { actor: 'inspector', era: 1, cue: 'splice', id: 'visitWrite', over: { visitSpot: 'v1' } },
+    { actor: 'dog', era: 1, cue: 'splice', id: 'visitSniff', over: { visitSpot: 'v1' } },
+  ];
+  // The band of a cue for an actor: the Inspector's find waits findDelayMs, the other new cues the actor's stagger.
+  const bandOf = (actor: BehaviourActor, cue: CueId): readonly [number, number] =>
+    cue === 'find' && actor === 'inspector' ? WORLD_REACT.findDelayMs : WORLD_REACT.staggerMs[actor];
+
+  it('each new cue starts its reaction inside the actor band (Inspector 200-400 ms, dog 400-600, crow 600-900; the find 2-4 s), within one step', () => {
+    for (const c of BAND_CASES) {
+      const seed = behaviourSeed(1, c.actor);
+      const ctx = ctxFor(c.actor, c.era, 'fps8', c.actor === 'inspector' ? HOME_L : HOME_R, { spots: [], ...c.over });
+      // A reaction to the id the actor already shows is dropped, so a few cue steps are tried (the first that reacts is measured).
+      let found: BehaviourLogEntry | undefined;
+      let cueMs = 0;
+      for (const cueStep of [4, 24, 44, 64, 84]) {
+        cueMs = (cueStep + 1) * NEW_CUE_STEP;
+        found = playCued(c.actor, seed, ctx, NEW_CUE_STEP, 30000, [{ step: cueStep, id: c.cue, index: 1 }]).find((x) => x.reaction && x.atMs >= cueMs);
+        if (found !== undefined) break;
+      }
+      expect(found?.activity, `${c.actor} ${c.cue}`).toBe(c.id);
+      const [lo, hi] = bandOf(c.actor, c.cue);
+      const lag = (found?.atMs ?? NaN) - cueMs;
+      expect(lag, `${c.actor} ${c.cue} lag`).toBeGreaterThanOrEqual(lo - NEW_CUE_STEP);
+      expect(lag, `${c.actor} ${c.cue} lag`).toBeLessThanOrEqual(hi + NEW_CUE_STEP);
+    }
+  });
+
+  it('a per-actor delayMs of a cue replaces the band: the reaction starts exactly that long after the cue', () => {
+    const seed = behaviourSeed(1, 'inspector');
+    const ctx = ctxFor('inspector', 1, 'fps8', HOME_L, { spots: [] });
+    const log: BehaviourLogEntry[] = [];
+    const r = createBehaviourRunner('inspector', seed, STUB_CONDUCTOR, (e) => log.push(e));
+    r.reset(seed, 0, HOME_L);
+    const cueStep = 4;
+    for (let i = 0; i < 200; i++) {
+      const cues = i === cueStep ? [{ id: 'fault' as CueId, index: 1, delayMs: { inspector: 1234 } }] : [];
+      r.step(NEW_CUE_STEP, { ...ctx, cues });
+    }
+    const reaction = log.find((e) => e.reaction);
+    expect(reaction?.activity).toBe('startle');
+    expect(reaction?.atMs).toBe((cueStep + 1) * NEW_CUE_STEP + 1234);
+  });
+
+  it('each actor and cue reacts at most once per pairCooldownMs (a Find cue every 2 s: reactions at least the cooldown minus the band apart)', () => {
+    const seed = behaviourSeed(1, 'inspector');
+    const ctx = ctxFor('inspector', 1, 'fps8', HOME_L, { spots: [], findOuter: true, findX: 1500 });
+    const cues: CueAt[] = [];
+    for (let k = 1; k <= 60; k++) cues.push({ step: stepAt(k * 2000, STEP), id: 'find', index: k });
+    const starts = playCued('inspector', seed, ctx, STEP, 120000 + CUE_GAP_MS, cues).filter((e) => e.reaction).map((e) => e.atMs);
+    expect(starts.length).toBeGreaterThan(1);
+    const band = WORLD_REACT.findDelayMs[1] - WORLD_REACT.findDelayMs[0];
+    for (let i = 1; i < starts.length; i++) {
+      expect((starts[i] ?? 0) - (starts[i - 1] ?? 0)).toBeGreaterThanOrEqual(WORLD_REACT.pairCooldownMs - band);
+    }
+  });
+
+  it('point answers a Find only on the outer side and lookFind only on the inner side (both ways); a Find on neither side gets no reaction', () => {
+    const cueStream = (): CueAt[] => Array.from({ length: 6 }, (_, k) => ({ step: stepAt((k + 1) * CUE_GAP_MS, STEP), id: 'find' as CueId, index: k + 1 }));
+    const namesOf = (actor: BehaviourActor, home: number, over: Partial<BehaviourCtx>): string[] => playCued(actor, behaviourSeed(1, actor),
+      ctxFor(actor, 1, 'fps8', home, { spots: [], ...over }), STEP, 7 * CUE_GAP_MS, cueStream())
+      .filter((e) => e.reaction).map((e) => e.activity);
+    expect(namesOf('inspector', HOME_L, { findOuter: true, findX: 1500 })).toEqual(Array(6).fill('point'));
+    expect(namesOf('inspector', HOME_L, { findInner: true, findX: 1500 })).toEqual(Array(6).fill('lookFind'));
+    expect(namesOf('inspector', HOME_L, {})).toEqual([]);
+    expect(namesOf('dog', HOME_R, { findInner: true, findX: 1500 })).toEqual(Array(6).fill('sniffHere'));
+    expect(namesOf('dog', HOME_R, { findOuter: true, findX: 1500 })).toEqual(Array(6).fill('sniffFind'));
+  });
+
+  it('sniffFind walks only outward toward the Find; sniffHere stays in place; a dog on its outermost spot sniffs in place', () => {
+    const def = activityOf('dog', 1, 'sniffFind');
+    if (def === undefined) throw new Error('no dog sniffFind');
+    // The dog's right-wing spots (x above MACHINE_ANCHOR.x): the outermost is the last one.
+    const spots: PickEnv['spots'] = [{ id: 'home', x: 2400 }, { id: 'out', x: 2424 }, { id: 'b9', x: 2460 }];
+    const env: PickEnv = { ...envOf('dog', 1), spots, fps: 8, findX: 2600 };
+    const fromHome = startSeg(newMemory(1, 0, 0), def, env, 0, { react: true });
+    expect(fromHome.toSpot).toBe(2);
+    expect(fromHome.toX).toBeGreaterThan(fromHome.fromX);
+    const fromFar = startSeg(newMemory(1, 0, 2), def, env, 0, { react: true });
+    expect(fromFar.toSpot).toBe(2);
+    expect(fromFar.walkMs).toBe(0);
+    const here = activityOf('dog', 1, 'sniffHere');
+    if (here === undefined) throw new Error('no dog sniffHere');
+    const stays = startSeg(newMemory(1, 0, 0), here, env, 0, { react: true });
+    expect(stays.walkMs).toBe(0);
+    expect(stays.toSpot).toBe(0);
+  });
+
+  it('a find walk needs a Find and stays within the walk limit (a spot too far to walk at the mode fps is no target)', () => {
+    const def = activityOf('dog', 1, 'sniffFind');
+    if (def === undefined) throw new Error('no dog sniffFind');
+    // At 2 fps a walk of 8 px per tick covers 16 px a second: the far spot (maxWalkMs x 16 px) is just beyond the limit.
+    const farX = 2400 + (WORLD_WALK.maxWalkMs / 1000) * 2 * WORLD_WALK.pxPerFrame + 8;
+    const spots: PickEnv['spots'] = [{ id: 'home', x: 2400 }, { id: 'b9', x: farX }];
+    const env: PickEnv = { ...envOf('dog', 1), spots, fps: 2, findX: 9000 };
+    expect(startSeg(newMemory(1, 0, 0), def, env, 0, { react: true }).walkMs, 'too far to walk').toBe(0);
+    const near: PickEnv['spots'] = [{ id: 'home', x: 2400 }, { id: 'out', x: 2424 }];
+    expect(startSeg(newMemory(1, 0, 0), def, { ...envOf('dog', 1), spots: near, fps: 2, findX: null }, 0, { react: true }).walkMs,
+      'no Find, no walk').toBe(0);
+  });
+
+  it('inner walks to the spot nearest the anchor on the actor side, never past the walker; from the innermost spot it stays', () => {
+    const def = activityOf('inspector', 1, 'eraFront');
+    if (def === undefined) throw new Error('no inspector eraFront');
+    // Left wing: sensor 76 (outermost), mid 100, scrap 124 (innermost).
+    const env = envOf('inspector', 1);
+    expect(startSeg(newMemory(1, 0, 0), def, env, 0, { react: true }).toX).toBe(124);
+    expect(startSeg(newMemory(1, 0, 1), def, env, 0, { react: true }).toX).toBe(124);
+    const innermost = startSeg(newMemory(1, 0, 2), def, env, 0, { react: true });
+    expect(innermost.walkMs).toBe(0);
+    expect(innermost.toX).toBe(124);
+    // The dog's right wing: the innermost spot is the one nearest the anchor (the smallest x).
+    const head = activityOf('dog', 1, 'eraHead');
+    if (head === undefined) throw new Error('no dog eraHead');
+    const right: PickEnv['spots'] = [{ id: 'stake', x: 2376 }, { id: 'home', x: 2400 }, { id: 'out', x: 2424 }];
+    expect(startSeg(newMemory(1, 0, 2), head, { ...envOf('dog', 1), spots: right }, 0, { react: true }).toX).toBe(2376);
+  });
+
+  it('an era reaction ends on the innermost spot of the actor side: the runner walks there and holds', () => {
+    const seed = behaviourSeed(1, 'inspector');
+    const ctx = ctxFor('inspector', 1, 'fps8', 100, { spots: INS3 });
+    const xs: number[] = [];
+    playCued('inspector', seed, ctx, NEW_CUE_STEP, 30000, [{ step: 10, id: 'era', index: 1 }], (f) => {
+      if (f.activity === 'eraFront' && !f.walking) xs.push(f.x);
+    });
+    expect(xs.length).toBeGreaterThan(0);
+    expect(new Set(xs)).toEqual(new Set([124]));
+  });
+
+  it('a visit walks to the Director visit spot, and the walker holds on it for the visit', () => {
+    const seed = behaviourSeed(1, 'inspector');
+    const spots: SpotLike[] = [...INS3, { id: 'v1', x: 60 }];
+    const ctx = ctxFor('inspector', 1, 'fps8', 100, { spots, visitSpot: 'v1' });
+    const xs: number[] = [];
+    playCued('inspector', seed, ctx, NEW_CUE_STEP, 30000, [{ step: 10, id: 'splice', index: 1 }], (f) => {
+      if (f.activity === 'visitWrite' && !f.walking) xs.push(f.x);
+    });
+    expect(xs.length).toBeGreaterThan(0);
+    expect(new Set(xs)).toEqual(new Set([60]));
+  });
+
+  it('visits: a missing visit spot or the one the walker stands on gives no walk; a plain spot pick never ends on a visit spot', () => {
+    const def = activityOf('inspector', 1, 'visitWrite');
+    if (def === undefined) throw new Error('no inspector visitWrite');
+    const spots: SpotLike[] = [...INS3, { id: 'v1', x: 60 }];
+    const env = envOf('inspector', 1, { spots, visitSpot: 'v8' });
+    expect(startSeg(newMemory(1, 0, 1), def, env, 0).walkMs).toBe(0);
+    const here = startSeg(newMemory(1, 0, 3), def, { ...env, visitSpot: 'v1' }, 0);
+    expect(here.toSpot, 'the walker stands on the visit spot').toBe(3);
+    expect(here.walkMs).toBe(0);
+    const stroll = act('stroll', { travel: 'spot' });
+    for (let seed = 1; seed <= 20; seed++) expect(startSeg(newMemory(seed, 0, 0), stroll, { ...env, spots }, 0).toSpot).not.toBe(3);
+  });
+
+  it('the free hop is never picked with hopOk off, and is picked over a long sim with it on (eras I-III and V)', () => {
+    for (const era of [1, 2, 3, 5] as const) {
+      const seed = behaviourSeed(1, 'crow');
+      const off = playRunner('crow', seed, ctxFor('crow', era, 'fps8', HOME_R), 100, 20 * MIN);
+      expect(off.some((e) => e.activity === 'hopFree'), `era ${era} off`).toBe(false);
+      const on = playRunner('crow', seed, ctxFor('crow', era, 'fps8', HOME_R, { hopOk: true }), 100, 20 * MIN);
+      expect(on.some((e) => e.activity === 'hopFree'), `era ${era} on`).toBe(true);
+    }
+  });
+
+  it('the eligible pool follows hopOk, the Find sides and the visit flag: a runner whose hopOk turns on hops only after it turns on', () => {
+    const seed = behaviourSeed(1, 'crow');
+    const switchMs = 10 * MIN;
+    const log = playWith('crow', seed, 100, 20 * MIN, (i) => ctxFor('crow', 2, 'fps8', HOME_R, { hopOk: (i + 1) * 100 > switchMs }));
+    const hops = log.filter((e) => e.activity === 'hopFree');
+    expect(hops.length).toBeGreaterThan(0);
+    expect(hops.every((e) => e.atMs >= switchMs - 100)).toBe(true);
+    const ids = (actor: BehaviourActor, era: WorldEra, over: Partial<BehaviourCtx>): string[] => eligible(actor, era, ctxOf(over)).map((a) => a.id);
+    expect(ids('crow', 2, { hopOk: true })).toContain('hopFree');
+    expect(ids('crow', 2, { hopOk: false })).not.toContain('hopFree');
+    expect(ids('inspector', 1, { findOuter: true })).toContain('point');
+    expect(ids('inspector', 1, { findOuter: false })).not.toContain('point');
+    expect(ids('inspector', 1, { visitSpot: 'v1' })).toContain('visitWrite');
+    expect(ids('inspector', 1, { visitSpot: null })).not.toContain('visitWrite');
+  });
+
+  it('every non-walk frame of the new activities faces restFlip: profile frames away from the machine, camera-facing frames never flip', () => {
+    const ids: CueId[] = ['fault', 'faultClear', 'find', 'bigBuy', 'era', 'splice', 'rapid'];
+    for (const actor of ['inspector', 'dog', 'crow'] as const) {
+      for (const era of [1, 2, 3, 5] as const) {
+        const home = actor === 'inspector' ? HOME_L : HOME_R;
+        const cues: CueAt[] = [];
+        for (let k = 1; k <= 40; k++) cues.push({ step: stepAt(k * 30000, STEP), id: ids[k % ids.length] ?? 'fault', index: k });
+        const v = actor === 'inspector' ? 1700 : 2600;
+        const ctx = ctxFor(actor, era, 'fps8', home, {
+          hopOk: actor === 'crow', findOuter: true, findX: v, visitSpot: 'v1', spots: [...spotsFor(actor, home), { id: 'v1', x: v }],
+        });
+        playCued(actor, behaviourSeed(1, actor), ctx, STEP, 20 * MIN, cues, (f) => {
+          if (f.walking) return;
+          expect(f.flip, `${actor} era ${era} ${f.activity} ${f.frame}`).toBe(restFlip(actor, f.frame, ctx.stare, ctx.homeX));
+        });
+      }
+    }
+  });
+
+  it('era IV ignores every new cue: no reaction, no free hop and no visit, with the conductor running the cast', () => {
+    for (const actor of ACTORS) {
+      const log: BehaviourLogEntry[] = [];
+      const conductor = createUnisonConductor(cycleSeedOf(1));
+      const r = createBehaviourRunner(actor, behaviourSeed(1, actor), conductor, (e) => log.push(e));
+      r.reset(behaviourSeed(1, actor), 0, IV_HOME[actor]);
+      const beat = beatsOf(STEP);
+      const ids: CueId[] = ['fault', 'faultClear', 'find', 'bigBuy', 'era', 'splice'];
+      for (let i = 0; i < (20 * MIN) / STEP; i++) {
+        const cues = i % 30 === 0 && i > 0 ? [{ id: ids[(i / 30) % ids.length] ?? 'fault', index: i }] : [];
+        r.step(STEP, { ...ctxFor(actor, 4, 'fps8', IV_HOME[actor], { hopOk: true, visitSpot: 'v1', findOuter: true, cues }), beat: beat(i) });
+      }
+      expect(log.some((e) => e.reaction), actor).toBe(false);
+      expect(log.some((e) => e.activity === 'hopFree' || e.activity === 'visitWrite' || e.activity === 'visitSniff'), actor).toBe(false);
+    }
+  });
+
+  it('a reaction walk obeys the walk gate: no walk starts while walkBlocked, and the reaction walks once the gate frees', () => {
+    const seed = behaviourSeed(1, 'inspector');
+    const cueStep = 4;
+    const gateMs = 3000;
+    const log: BehaviourLogEntry[] = [];
+    const r = createBehaviourRunner('inspector', seed, STUB_CONDUCTOR, (e) => log.push(e));
+    r.reset(seed, 0, 100);
+    const walkStarts: number[] = [];
+    let wasWalking = false;
+    for (let i = 0; i < 600; i++) {
+      const t = (i + 1) * NEW_CUE_STEP;
+      const cues = i === cueStep ? [{ id: 'era' as CueId, index: 1 }] : [];
+      const f = r.step(NEW_CUE_STEP, ctxFor('inspector', 1, 'fps8', 100, { spots: INS3, walkBlocked: t < gateMs, cues }));
+      if (f.walking && !wasWalking) walkStarts.push(t);
+      wasWalking = f.walking;
+    }
+    const era = log.find((e) => e.reaction);
+    expect(era?.activity).toBe('eraFront');
+    expect(era?.walked, 'the reaction walked').toBe(true);
+    expect(walkStarts.length).toBeGreaterThan(0);
+    expect(walkStarts.every((t) => t >= gateMs), 'no walk while the gate is set').toBe(true);
+  });
+});
+
+// WP28b (B1): a reaction that would cut a segment before one frame of it was drawn, and start the id shown before it, shows that id twice in a row.
+describe('reactionRepeatsShown (WP28b, B1): a reaction never restarts the id on screen across a cut segment that was never drawn', () => {
+  // The dog's activity of an id in its era I repertoire (the rounds and the dig's neighbours).
+  const dogAct = (id: string): Activity => {
+    const a = WORLD_REPERTOIRE.dog[1]?.find((x) => x.id === id);
+    if (a === undefined) throw new Error(`no dog activity ${id}`);
+    return a;
+  };
+  const segOf = (def: Activity, startMs: number): Seg => ({
+    id: def.id, def, startMs, walkMs: 0, holdMs: 4000, endMs: startMs + 4000, react: false,
+    look: { key: def.id, first: '', last: '', static: false }, runStartMs: startMs, fromX: 0, toX: 0, toSpot: 0, fromLane: 0, toLane: 0,
+  });
+  it('is true only for a young segment whose previous started id is the reaction id', () => {
+    const lookUp = dogAct('lookUp');
+    const sniff = dogAct('sniff');
+    const mem = newMemory(1, 0, 0);
+    mem.hist.push('lookUp', 'sniff');
+    const cur = segOf(sniff, 1000);
+    const drawn = 125;
+    expect(reactionRepeatsShown(mem, lookUp, cur, 1010, drawn), 'a 10 ms cut of sniff before lookUp').toBe(true);
+    expect(reactionRepeatsShown(mem, lookUp, cur, 1000 + drawn, drawn), 'sniff has been drawn for one tick').toBe(false);
+    expect(reactionRepeatsShown(mem, sniff, cur, 1010, drawn), 'the reaction id is the current id').toBe(false);
+    expect(reactionRepeatsShown(mem, dogAct('scratch'), cur, 1010, drawn), 'a different id').toBe(false);
+    expect(reactionRepeatsShown(mem, lookUp, null, 1010, drawn), 'nothing running').toBe(false);
+  });
+});
+
+// ---- WP28b AD4 F25, F29, F30: the visit stands, the Find sides, and the machine-event cut of a walk (the runner side) ----
+// One walk tick at the 8 fps of an era I-III timed walk (125 ms): the cut of a due reaction lands within one tick of its due time.
+const TICK_125 = 1000 / WORLD_PLAYBACK.fps.fps8;
+// Two spots 320 px apart on each actor's side (41 drawn ticks at 8 fps, about 5 s): a walk long enough to cut half way.
+const FAR_SPOTS: Record<'inspector' | 'dog', readonly SpotLike[]> = {
+  inspector: [{ id: 'sensor', x: 1500 }, { id: 'y1', x: 1180, lane: 64 }],
+  dog: [{ id: 'home', x: 2400, lane: 32 }, { id: 'out', x: 2720, lane: 32 }],
+};
+// A copy of one drawn frame (the runner reuses its frame object, so a test keeps the fields it reads).
+interface Frm { atMs: number; activity: string; x: number; lane: number; walking: boolean; frame: string; flip: boolean }
+interface Presented { log: BehaviourLogEntry[]; cueMs: number; frames: Frm[] }
+// Plays one runner for totalMs and presents one cue on the step after a free activity starts a walk (walking true: the walk's first frame, a
+// rising edge after step 0, so the walk has its full length ahead; the start shift of the first segment is skipped) or draws a rest frame
+// (false), plus afterMs. cueMs is the clock when the runner sees the cue. Null: no such frame within totalMs.
+function presentCue(actor: BehaviourActor, era: WorldEra, ctx: BehaviourCtx, cue: CueId, delayMs: number, walking: boolean, dtMs: number,
+  totalMs: number, afterMs = 0): Presented | null {
+  const seed = behaviourSeed(1, actor);
+  const log: BehaviourLogEntry[] = [];
+  const r = createBehaviourRunner(actor, seed, STUB_CONDUCTOR, (e) => log.push(e));
+  r.reset(seed, 0, ctx.homeX);
+  const free = new Set(repertoire(actor, era).filter((a) => a.weight > 0).map((a) => a.id));
+  const delay: Partial<Record<BehaviourActor, number>> = {};
+  delay[actor] = delayMs;
+  const frames: Frm[] = [];
+  let cueStep = -1;
+  let prevWalking = false;
+  const steps = Math.round(totalMs / dtMs);
+  for (let i = 0; i < steps; i++) {
+    const cues = i === cueStep ? [{ id: cue, index: 1, delayMs: delay }] : [];
+    const f = r.step(dtMs, { ...ctx, cues });
+    frames.push({ atMs: (i + 1) * dtMs, activity: f.activity, x: f.x, lane: f.lane, walking: f.walking, frame: f.frame, flip: f.flip });
+    const edge = walking ? f.walking && !prevWalking : !f.walking;
+    if (cueStep < 0 && i > 0 && edge && free.has(f.activity)) cueStep = i + 1 + Math.round(afterMs / dtMs);
+    prevWalking = f.walking;
+  }
+  return cueStep < 0 || cueStep >= steps ? null : { log, cueMs: (cueStep + 1) * dtMs, frames };
+}
+// The first reaction of an activity that starts at or after the cue.
+function reactionOf(p: Presented | null, id: string): BehaviourLogEntry | undefined {
+  return p?.log.find((e) => e.reaction && e.activity === id && e.atMs >= p.cueMs);
+}
+
+// WP28b F30 (AD4): a machine-event reaction due in a walk cuts the walk at its next drawn tick and starts there; the cut walker rests on the
+// cut point and the next walk starts from it. Steps of 16.7 and 100 ms: the cut is analytic, so both steps cut at the same point.
+describe('machine-event reactions cut a walk in progress (WP28b F30)', () => {
+  const DTS: readonly number[] = [1000 / 60, 100];
+  const TOTAL_MS = 40000;
+  interface Case { actor: 'inspector' | 'dog'; cue: CueId; id: string; delayMs: number; over: Partial<BehaviourCtx> }
+  const CASES: readonly Case[] = [
+    { actor: 'inspector', cue: 'fault', id: 'startle', delayMs: 300, over: {} },
+    { actor: 'dog', cue: 'fault', id: 'bark', delayMs: 500, over: {} },
+    { actor: 'inspector', cue: 'bigBuy', id: 'startle', delayMs: 800, over: {} },
+    { actor: 'dog', cue: 'bigBuy', id: 'lookBig', delayMs: 1500, over: {} },
+    { actor: 'inspector', cue: 'find', id: 'point', delayMs: 2500, over: { findOuter: true, findX: 1000 } },
+    { actor: 'dog', cue: 'find', id: 'sniffFind', delayMs: 1200, over: { findOuter: true, findX: 2900 } },
+    { actor: 'inspector', cue: 'era', id: 'eraFront', delayMs: 400, over: {} },
+    { actor: 'dog', cue: 'era', id: 'eraHead', delayMs: 600, over: {} },
+  ];
+  for (const c of CASES) {
+    for (const dt of DTS) {
+      it(`${c.actor} ${c.cue} (${c.id}) mid-walk at ${dt.toFixed(1)} ms: starts within one tick of its due time, cuts the walk, no frame jumps`, () => {
+        const homeX = c.actor === 'inspector' ? 1500 : 2400;
+        const ctx = ctxFor(c.actor, 1, 'fps8', homeX, { spots: FAR_SPOTS[c.actor], ...c.over });
+        const run = presentCue(c.actor, 1, ctx, c.cue, c.delayMs, true, dt, TOTAL_MS);
+        expect(run, 'a free walk in progress to cut').not.toBeNull();
+        if (run === null) return;
+        const { log, cueMs, frames } = run;
+        const due = cueMs + c.delayMs;
+        const reaction = reactionOf(run, c.id);
+        expect(reaction, `${c.id} reacts`).toBeDefined();
+        if (reaction === undefined) return;
+        expect(reaction.atMs, 'not before its due time').toBeGreaterThanOrEqual(due - 1e-6);
+        expect(reaction.atMs - due, 'within one walk tick of its due time (the cut)').toBeLessThanOrEqual(TICK_125 + 1e-6);
+        expect(reaction.atMs, 'within delay + 1.0 s of the cause').toBeLessThanOrEqual(cueMs + c.delayMs + 1000);
+        // The walk the cue cut ends where the reaction starts, and is shorter than its full length (about 5 s).
+        const cut = log.find((e) => e.walked && !e.reaction && Math.abs(e.atMs + e.durMs - reaction.atMs) < 1e-6);
+        expect(cut, 'the walk the cue cut ends where the reaction starts').toBeDefined();
+        expect(cut?.durMs ?? Infinity, 'the cut walk is shorter than the full walk').toBeLessThan(4000);
+        // No jump: consecutive frames from just before the cue to the end of the reaction's hold move at most one walk tick.
+        const window = frames.filter((fr) => fr.atMs >= cueMs - 2 * dt && fr.atMs <= reaction.atMs + 2000);
+        for (let k = 1; k < window.length; k++) {
+          const a = window[k - 1];
+          const b = window[k];
+          if (a === undefined || b === undefined) continue;
+          expect(Math.hypot(b.x - a.x, b.lane - a.lane), `${c.id} jump at ${b.atMs}`).toBeLessThanOrEqual(WORLD_WALK.pxPerFrame + 1e-6);
+        }
+        // The reaction's rest frames face away from the machine (the profile-away rule holds through the cut).
+        for (const fr of frames) {
+          if (fr.activity === c.id && !fr.walking) {
+            expect(fr.flip, `${c.id} ${fr.frame} at ${fr.atMs}`).toBe(restFlip(c.actor, fr.frame, false, homeX));
+          }
+        }
+        // The walker goes on from the point it rests on: the first walk after the reaction's last rest frame starts within one tick of it.
+        const last = [...frames].reverse().find((fr) => fr.activity === c.id && !fr.walking);
+        const next = frames.find((fr) => last !== undefined && fr.atMs > last.atMs && fr.walking);
+        if (last !== undefined && next !== undefined) {
+          expect(Math.hypot(next.x - last.x, next.lane - last.lane), `${c.id} next walk`).toBeLessThanOrEqual(WORLD_WALK.pxPerFrame + 1e-6);
+        }
+      });
+    }
+  }
+
+  // WP28b B3 (r2-FX1): a machine-event cue cuts a walk with more than reactHaltMinLeftMs (250 ms) left at its due time. The walk here is about
+  // 5.1 s (41 drawn ticks at 8 fps); a cue lands 4.2 s in, so 0.6 s is left at the due time (0.3 s delay): the walk is cut.
+  it('a cue with 600 ms of walk left at its due time cuts the walk: the reaction starts within one walk tick of its due time', () => {
+    for (const dt of DTS) {
+      const ctx = ctxFor('inspector', 1, 'fps8', 1500, { spots: FAR_SPOTS.inspector });
+      const run = presentCue('inspector', 1, ctx, 'fault', 300, true, dt, TOTAL_MS, 4200);
+      expect(run, 'a walk in progress at the cue').not.toBeNull();
+      if (run === null) continue;
+      const due = run.cueMs + 300;
+      const reaction = reactionOf(run, 'startle');
+      expect(reaction, 'startle reacts').toBeDefined();
+      if (reaction === undefined) continue;
+      expect(reaction.atMs - due, 'not before its due time').toBeGreaterThanOrEqual(-1e-6);
+      expect(reaction.atMs - due, 'within one walk tick of its due time (the cut)').toBeLessThanOrEqual(TICK_125 + 1e-6);
+      const cut = run.log.find((e) => e.walked && !e.reaction && Math.abs(e.atMs + e.durMs - reaction.atMs) < 1e-6);
+      expect(cut, 'the walk the cue cut ends where the reaction starts').toBeDefined();
+      expect(cut?.durMs ?? Infinity, 'the cut walk is shorter than the full walk (41 drawn ticks)').toBeLessThan(41 * TICK_125);
+    }
+  });
+
+  // The same walk with 4.6 s to its cue: 250 ms or less is left at the due time (dt 16.7 and 100 ms), so the walk is not cut.
+  it('a cue with 250 ms or less of walk left at its due time is not cut: the reaction starts at the arrival, the walk runs its full length', () => {
+    for (const dt of DTS) {
+      const ctx = ctxFor('inspector', 1, 'fps8', 1500, { spots: FAR_SPOTS.inspector });
+      const run = presentCue('inspector', 1, ctx, 'fault', 300, true, dt, TOTAL_MS, 4600);
+      expect(run, 'a walk in progress at the cue').not.toBeNull();
+      if (run === null) continue;
+      const walk = run.log.find((e) => e.walked && !e.reaction && e.atMs <= run.cueMs && e.atMs + e.durMs > run.cueMs);
+      const reaction = reactionOf(run, 'startle');
+      expect(walk, 'the walk in progress at the cue').toBeDefined();
+      expect(reaction, 'startle reacts').toBeDefined();
+      if (walk === undefined || reaction === undefined) continue;
+      expect(walk.durMs, 'the walk is not cut').toBeGreaterThan(4000);
+      expect(Math.abs(reaction.atMs - (walk.atMs + walk.durMs)), 'the reaction waits for the arrival').toBeLessThan(1e-6);
+      expect(reaction.atMs - (run.cueMs + 300), 'the arrival is at most 250 ms after the due time').toBeLessThanOrEqual(250 + 1e-6);
+    }
+  });
+
+  // WP28b B3 at fps2 (the 500 ms tick): a cue due with more than reactHaltMinLeftMs of walk left cuts the walk at its next drawn tick, so the
+  // reaction starts within one tick of its due time. The walk is about 20 s here (41 drawn ticks); the cue lands 4.2 s in.
+  it('at fps2 a cue with 600 ms of walk left cuts the walk at its next drawn tick: the reaction starts within one 500 ms tick of its due time', () => {
+    const TICK_500 = 1000 / WORLD_PLAYBACK.fps.fps2;
+    for (const dt of DTS) {
+      const ctx = ctxFor('inspector', 1, 'fps2', 1500, { spots: FAR_SPOTS.inspector });
+      const run = presentCue('inspector', 1, ctx, 'fault', 300, true, dt, 2 * TOTAL_MS, 4200);
+      expect(run, 'a walk in progress at the cue').not.toBeNull();
+      if (run === null) continue;
+      const due = run.cueMs + 300;
+      const reaction = reactionOf(run, 'startle');
+      expect(reaction, 'startle reacts').toBeDefined();
+      if (reaction === undefined) continue;
+      expect(reaction.atMs - due, 'not before its due time').toBeGreaterThanOrEqual(-1e-6);
+      expect(reaction.atMs - due, 'within one 500 ms tick of its due time (the cut)').toBeLessThanOrEqual(TICK_500 + 1e-6);
+      const cut = run.log.find((e) => e.walked && !e.reaction && Math.abs(e.atMs + e.durMs - reaction.atMs) < 1e-6);
+      expect(cut, 'the walk the cue cut ends where the reaction starts').toBeDefined();
+      if (cut === undefined) continue;
+      const ticks = (reaction.atMs - cut.atMs) / TICK_500;
+      expect(Math.abs(ticks - Math.round(ticks)), 'the cut lands on a drawn tick of the walk').toBeLessThan(1e-6);
+      expect(cut.durMs, 'the cut walk is shorter than the full walk (41 drawn ticks)').toBeLessThan(41 * TICK_500);
+    }
+  });
+
+  // The bound a machine-event reaction keeps: the stagger band's top plus the larger of the 250 ms cut threshold and one drawn tick (a cut lands
+  // on the next tick; a cue that is not cut starts at the arrival, at most 250 ms later). Looped over the playback fps (WP28b B3, r2-FX1). The
+  // Inspector's find uses findDelayMs (he points 2-4 s after the spawn), so it is exempt. Walkers: the Inspector and the dog (the crow and the
+  // girl never walk).
+  it('the cut bound (stagger max + max(250 ms, one drawn tick)) is within 1.0 s for each walker and each halt cue, the Inspector find excepted', () => {
+    for (const mode of ['fps2', 'fps4', 'fps8'] as const) {
+      const tick = 1000 / WORLD_PLAYBACK.fps[mode];
+      for (const actor of ['inspector', 'dog'] as const) {
+        for (const cue of WORLD_REACT.haltCues) {
+          if (actor === 'inspector' && cue === 'find') continue;
+          const bound = WORLD_REACT.staggerMs[actor][1] + Math.max(WORLD_BEHAVIOUR.reactHaltMinLeftMs, tick);
+          // A documented exception (CHANGELOG 0.12.0 deviations): at fps2 the dog's 500 ms tick puts its bound at 1.1 s, not 1.0 s.
+          if (mode === 'fps2' && actor === 'dog') expect(bound, `${mode} ${actor} ${cue}`).toBe(1100);
+          else expect(bound, `${mode} ${actor} ${cue}`).toBeLessThanOrEqual(1000);
+        }
+      }
+    }
+  });
+});
+
+describe('findSidesOf and visitFor (WP28b F25, F29)', () => {
+  const A = MACHINE_ANCHOR.x;
+  it('a Find on the actor side and farther from the anchor is outer, never inner', () => {
+    expect(findSidesOf(HOME_L, 1000, A)).toEqual({ outer: true, inner: false });
+    expect(findSidesOf(HOME_R, 3000, A)).toEqual({ outer: true, inner: false });
+  });
+  it('a Find on the actor side and nearer the anchor is inner, not outer', () => {
+    expect(findSidesOf(1000, 1500, A)).toEqual({ outer: false, inner: true });
+    expect(findSidesOf(3000, 2400, A)).toEqual({ outer: false, inner: true });
+  });
+  it('a Find on the far wing is inner, not outer: the Inspector looks, the dog sniffs in place', () => {
+    expect(findSidesOf(HOME_L, 2600, A)).toEqual({ outer: false, inner: true });
+    expect(findSidesOf(HOME_R, 1000, A)).toEqual({ outer: false, inner: true });
+  });
+  it('no Find: neither side', () => {
+    expect(findSidesOf(HOME_L, null, A)).toEqual({ outer: false, inner: false });
+  });
+  it('findOuterOf is the outer test of findSidesOf on its own (WP28b r2-FX1: the Director calls it per frame)', () => {
+    for (let actorX = 600; actorX <= 3200; actorX += 80) {
+      for (let findX = 600; findX <= 3200; findX += 110) {
+        expect(findOuterOf(actorX, findX, A), `actor ${actorX} find ${findX}`).toBe(findSidesOf(actorX, findX, A).outer);
+      }
+    }
+    expect(findOuterOf(HOME_L, 1000, A)).toBe(true);
+    expect(findOuterOf(HOME_L, 2600, A), 'the far wing is never outer').toBe(false);
+    expect(findOuterOf(1800, 1800, A), 'an equal distance is not farther').toBe(false);
+    expect(findOuterOf(1800, 2040, A), 'an equal distance on the far wing is not farther').toBe(false);
+  });
+  it('a Find at the actor distance from the anchor is inner (equal is not farther), on his side or on the far wing', () => {
+    expect(findSidesOf(1800, 1800, A)).toEqual({ outer: false, inner: true });
+    expect(findSidesOf(1800, 2040, A)).toEqual({ outer: false, inner: true });
+  });
+  it('a Find on the far wing reaches the Inspector as lookFind and the dog as sniffHere, never as point or sniffFind', () => {
+    const cueStream = (): CueAt[] => Array.from({ length: 6 }, (_, k) => ({ step: stepAt((k + 1) * CUE_EVERY_MS, STEP), id: 'find' as CueId, index: k + 1 }));
+    const namesOf = (actor: BehaviourActor, home: number, findX: number): string[] => {
+      const sides = findSidesOf(home, findX, A);
+      return playCued(actor, behaviourSeed(1, actor), ctxFor(actor, 1, 'fps8', home, { spots: [], findX, findOuter: sides.outer, findInner: sides.inner }),
+        STEP, 7 * CUE_EVERY_MS, cueStream()).filter((e) => e.reaction).map((e) => e.activity);
+    };
+    expect(namesOf('inspector', HOME_L, 2600)).toEqual(Array(6).fill('lookFind'));
+    expect(namesOf('dog', HOME_R, 1000)).toEqual(Array(6).fill('sniffHere'));
+  });
+  it('a woken Splice has its stand: the Inspector on left-wing objects, the dog on right-wing ones, from the listed spots', () => {
+    expect(visitFor('e1', 'spliceOrgan', 1, 'mid')).toEqual({ actor: 'inspector', spot: 'v1' });
+    expect(visitFor('e1', 'spliceBicycle', 1, 'home')).toEqual({ actor: 'dog', spot: 'v1' });
+    expect(visitFor('e1', 'spliceClock', 1, 'stake')).toEqual({ actor: 'dog', spot: 'v2' });
+    expect(visitFor('s15', 'spliceRadio', 5, 'y2')).toEqual({ actor: 'inspector', spot: 'v2' });
+    expect(visitFor('s15', 'spliceRadio', 5, 'y1'), 'the walk from y1 would cross the gramophone base (WP28b A14)').toBeNull();
+  });
+  it('the s11 radio has no stand: the far girl mini blocks every x its 24-48 px offset allows (WP28b B)', () => {
+    expect(visitFor('s11', 'spliceRadio', 3, 'mid')).toBeNull();
+  });
+  it('no stand from a spot the walk is not clean from (a visit would cross the object base), and none without a walker spot', () => {
+    expect(visitFor('e1', 'spliceBicycle', 1, 'sensor')).toBeNull();
+    expect(visitFor('e1', 'spliceBicycle', 1, null)).toBeNull();
+    expect(visitFor('s8', 'splicePayphone', 2, 'y1')).toBeNull();
+  });
+  it('no stand for an exempt object, and none outside the stand era range (the s11 gramophone has none: era IV plays no visit; the cairn is era V)', () => {
+    expect(visitFor('s9', 'spliceBicycle', 2, 'home')).toBeNull();
+    expect(visitFor('s15', 'spliceChimes', 5, 'home')).toBeNull();
+    expect(visitFor('s11', 'spliceGramophone', 4, 'y1')).toBeNull();
+    expect(visitFor('s11', 'spliceGramophone', 5, 'y1')).toBeNull();
+    expect(visitFor('s15', 'spliceGramophone', 5, 'y1')).toEqual({ actor: 'inspector', spot: 'v3' });
+    expect(visitFor('s11', 'spliceCairn', 4, 'y1')).toBeNull();
+    expect(visitFor('s11', 'spliceCairn', 5, 'y1')).toEqual({ actor: 'inspector', spot: 'v2' });
+  });
+  it('with the visit spot named (e1, both actors) the walker walks to v1 and runs its visit within 15 s', () => {
+    for (const actor of ['inspector', 'dog'] as const) {
+      const spots: readonly SpotLike[] = WORLD_SPOTS.e1?.[actor] ?? [];
+      const v1 = spots.find((s) => s.id === 'v1');
+      expect(v1, `${actor} v1`).toBeDefined();
+      if (v1 === undefined) continue;
+      const home = actor === 'inspector' ? 1440 : 2364;
+      const visit = actor === 'inspector' ? 'visitWrite' : 'visitSniff';
+      const seed = behaviourSeed(1, actor);
+      const ctx = ctxFor(actor, 1, 'fps8', home, { spots, visitSpot: 'v1' });
+      const r = createBehaviourRunner(actor, seed, STUB_CONDUCTOR, () => undefined);
+      r.reset(seed, 0, home);
+      let arrivedMs = -1;
+      for (let i = 0; i < 150; i++) {
+        const delay: Partial<Record<BehaviourActor, number>> = {};
+        delay[actor] = 3000;
+        const cues = i === 4 ? [{ id: 'splice' as CueId, index: 1, delayMs: delay }] : [];
+        const f = r.step(100, { ...ctx, cues });
+        if (arrivedMs < 0 && f.activity === visit && !f.walking && f.x === v1.x && f.lane === (v1.lane ?? 0)) arrivedMs = (i + 1) * 100;
+      }
+      expect(arrivedMs, `${actor} visits v1 within 15 s`).toBeGreaterThan(0);
+      expect(arrivedMs, `${actor} visit time`).toBeLessThanOrEqual(15000);
+    }
+  });
+  it('plain travel never rests on a visit spot: 20 min of both walkers with no visit named', () => {
+    for (const actor of ['inspector', 'dog'] as const) {
+      const spots: readonly SpotLike[] = WORLD_SPOTS.e1?.[actor] ?? [];
+      const visitAt = new Set(spots.filter((s) => s.id.startsWith('v')).map((s) => `${s.x}@${s.lane ?? 0}`));
+      const home = actor === 'inspector' ? 1440 : 2364;
+      const seen: string[] = [];
+      playRunner(actor, behaviourSeed(1, actor), ctxFor(actor, 1, 'fps8', home, { spots }), 100, 20 * MIN, {
+        visit: (f) => {
+          if (!f.walking && visitAt.has(`${f.x}@${f.lane}`)) seen.push(`${f.activity} ${f.x}@${f.lane}`);
+        },
+      });
+      expect(seen, actor).toEqual([]);
+    }
+  });
+});
+
+// WP28b AD4 C_wave and C_era: a bigBuy, an era card and a fault reach the cast at their delays (from rest and from a walk), each cue at most
+// once per pairCooldownMs per actor. Steps of 16.7 and 100 ms.
+describe('the cues reach the cast at their delays (WP28b AD4 C_wave, C_era)', () => {
+  const DTS: readonly number[] = [1000 / 60, 100];
+  const TOTAL_MS = 40000;
+  // The dog's right-wing spots of the inner test (stake, home, out) and the Inspector's left-wing ones (sensor, mid, scrap).
+  const DOG_RIGHT: readonly SpotLike[] = [{ id: 'stake', x: 2376 }, { id: 'home', x: 2400 }, { id: 'out', x: 2424 }];
+  const INS_LEFT: readonly SpotLike[] = [{ id: 'sensor', x: 76 }, { id: 'mid', x: 100 }, { id: 'scrap', x: 124 }];
+  for (const dt of DTS) {
+    it(`bigBuy at ${dt.toFixed(1)} ms: the Inspector startles at 800 ms and the dog looks big at 1500 ms, from rest and from a walk; the crow ruffles`, () => {
+      const rest: { p: Presented | null; id: string; delay: number }[] = [
+        { p: presentCue('inspector', 1, ctxFor('inspector', 1, 'fps8', HOME_L, { spots: [] }), 'bigBuy', 800, false, dt, TOTAL_MS), id: 'startle', delay: 800 },
+        { p: presentCue('dog', 1, ctxFor('dog', 1, 'fps8', HOME_R, { spots: [] }), 'bigBuy', 1500, false, dt, TOTAL_MS), id: 'lookBig', delay: 1500 },
+        { p: presentCue('crow', 1, ctxFor('crow', 1, 'fps8', HOME_R, { spots: [] }), 'bigBuy', 900, false, dt, TOTAL_MS), id: 'ruffleReact', delay: 900 },
+      ];
+      const walk: { p: Presented | null; id: string; delay: number }[] = [
+        { p: presentCue('inspector', 1, ctxFor('inspector', 1, 'fps8', 1500, { spots: FAR_SPOTS.inspector }), 'bigBuy', 800, true, dt, TOTAL_MS), id: 'startle', delay: 800 },
+        { p: presentCue('dog', 1, ctxFor('dog', 1, 'fps8', 2400, { spots: FAR_SPOTS.dog }), 'bigBuy', 1500, true, dt, TOTAL_MS), id: 'lookBig', delay: 1500 },
+      ];
+      for (const { p, id, delay } of [...rest, ...walk]) {
+        const e = reactionOf(p, id);
+        expect(e, `${id} reacts`).toBeDefined();
+        if (p === null || e === undefined) continue;
+        expect(e.atMs - p.cueMs, `${id} at its delay`).toBeGreaterThanOrEqual(delay - 1e-6);
+        expect(e.atMs - p.cueMs, `${id} within delay + 1.0 s`).toBeLessThanOrEqual(delay + 1000);
+      }
+      // At rest the reaction starts at its delay, or one walk tick later when a walk is cut at the due time.
+      for (const { p, id, delay } of rest) {
+        const e = reactionOf(p, id);
+        if (p !== null && e !== undefined) expect(e.atMs - p.cueMs, `${id} at rest`).toBeLessThanOrEqual(delay + TICK_125 + 1e-6);
+      }
+    });
+  }
+
+  it('an era card at rest: the Inspector walks to his inner-most spot and holds front-on; the dog walks to its inner-most spot and holds head-on', () => {
+    for (const dt of DTS) {
+      const ins = presentCue('inspector', 1, ctxFor('inspector', 1, 'fps8', 100, { spots: INS_LEFT }), 'era', 400, false, dt, TOTAL_MS);
+      const dog = presentCue('dog', 1, ctxFor('dog', 1, 'fps8', 2400, { spots: DOG_RIGHT }), 'era', 600, false, dt, TOTAL_MS);
+      const cases: { p: Presented | null; actor: 'inspector' | 'dog'; id: string; frame: string; inner: number; home: number }[] = [
+        { p: ins, actor: 'inspector', id: 'eraFront', frame: 'front', inner: 124, home: 100 },
+        { p: dog, actor: 'dog', id: 'eraHead', frame: 'head', inner: 2376, home: 2400 },
+      ];
+      for (const { p, actor, id, frame, inner, home } of cases) {
+        expect(p, `${actor} era`).not.toBeNull();
+        if (p === null) continue;
+        expect(reactionOf(p, id), `${actor} ${id}`).toBeDefined();
+        const holds = p.frames.filter((fr) => fr.activity === id && !fr.walking);
+        expect(holds.length, `${actor} holds`).toBeGreaterThan(0);
+        expect(new Set(holds.map((fr) => fr.x)), `${actor} inner-most spot`).toEqual(new Set([inner]));
+        expect(new Set(holds.map((fr) => fr.frame)), `${actor} front-on frame`).toEqual(new Set([frame]));
+        expect(holds.every((fr) => fr.flip === restFlip(actor, frame, false, home)), `${actor} faces away`).toBe(true);
+      }
+    }
+  });
+
+  it('a fault at rest: the Inspector startles at 300 ms, the dog barks at 500 ms and the crow ruffles at 900 ms', () => {
+    for (const dt of DTS) {
+      const ins = presentCue('inspector', 1, ctxFor('inspector', 1, 'fps8', HOME_L, { spots: [] }), 'fault', 300, false, dt, TOTAL_MS);
+      const dog = presentCue('dog', 1, ctxFor('dog', 1, 'fps8', HOME_R, { spots: [] }), 'fault', 500, false, dt, TOTAL_MS);
+      const crow = presentCue('crow', 1, ctxFor('crow', 1, 'fps8', HOME_R, { spots: [] }), 'fault', 900, false, dt, TOTAL_MS);
+      const lag = (p: Presented | null, id: string): number => (reactionOf(p, id)?.atMs ?? NaN) - (p?.cueMs ?? NaN);
+      expect(lag(ins, 'startle'), 'startle at its delay').toBeGreaterThanOrEqual(300 - 1e-6);
+      expect(lag(ins, 'startle'), 'startle within a tick').toBeLessThanOrEqual(300 + TICK_125 + 1e-6);
+      expect(lag(dog, 'bark'), 'bark at its delay').toBeGreaterThanOrEqual(500 - 1e-6);
+      expect(lag(dog, 'bark'), 'bark within a tick').toBeLessThanOrEqual(500 + TICK_125 + 1e-6);
+      expect(lag(crow, 'ruffleReact'), 'ruffle at its delay').toBeGreaterThanOrEqual(900 - 1e-6);
+      expect(lag(crow, 'ruffleReact'), 'ruffle within a tick').toBeLessThanOrEqual(900 + TICK_125 + 1e-6);
+    }
+  });
+
+  it('each cue reacts at most once per pairCooldownMs per actor: a cue every 2 s for 60 s gives at most two reactions, 30 s apart', () => {
+    const COMBOS: readonly { actor: BehaviourActor; cue: CueId; id: string }[] = [
+      { actor: 'inspector', cue: 'fault', id: 'startle' }, { actor: 'dog', cue: 'fault', id: 'bark' },
+      { actor: 'crow', cue: 'fault', id: 'ruffleReact' }, { actor: 'inspector', cue: 'bigBuy', id: 'startle' },
+      { actor: 'dog', cue: 'bigBuy', id: 'lookBig' }, { actor: 'crow', cue: 'bigBuy', id: 'ruffleReact' },
+      { actor: 'inspector', cue: 'era', id: 'eraFront' }, { actor: 'dog', cue: 'era', id: 'eraHead' },
+    ];
+    for (const c of COMBOS) {
+      const ctx = ctxFor(c.actor, 1, 'fps8', c.actor === 'inspector' ? HOME_L : HOME_R, { spots: [] });
+      const cues: CueAt[] = [];
+      for (let k = 1; k <= 30; k++) cues.push({ step: stepAt(k * 2000, STEP), id: c.cue, index: k });
+      const starts = playCued(c.actor, behaviourSeed(1, c.actor), ctx, STEP, 62000, cues)
+        .filter((e) => e.reaction && e.activity === c.id).map((e) => e.atMs);
+      const band = WORLD_REACT.staggerMs[c.actor][1] - WORLD_REACT.staggerMs[c.actor][0];
+      expect(starts.length, `${c.actor} ${c.cue} starts`).toBeGreaterThan(0);
+      expect(starts.length, `${c.actor} ${c.cue} at most two`).toBeLessThanOrEqual(2);
+      for (let i = 1; i < starts.length; i++) {
+        expect((starts[i] ?? 0) - (starts[i - 1] ?? 0), `${c.actor} ${c.cue} gap`).toBeGreaterThanOrEqual(WORLD_REACT.pairCooldownMs - band);
+      }
+    }
+  });
+});
+
+// ---- WP28b AD4 F41, F47: a machine-event cue pre-empts an interruptible reaction or visit (F41a), a due reaction whose 'when' fails re-picks
+// its cue's sibling (F41b), a rapid burst always ruffles the crow (F47, chance 1). Era IV is unchanged (R3); a non-machine cue still yields. ----
+describe('machine-event cues pre-empt busy actors and re-pick their sibling (WP28b AD4 F41, F47)', () => {
+  // A runner with a context per step (ctxAt) and the cues at their steps: the closed segments of the run.
+  const runSteps = (actor: BehaviourActor, seed: number, ctxAt: (i: number) => BehaviourCtx, cues: readonly CueAt[], totalMs: number):
+    BehaviourLogEntry[] => {
+    const log: BehaviourLogEntry[] = [];
+    const r = createBehaviourRunner(actor, seed, STUB_CONDUCTOR, (e) => log.push(e));
+    r.reset(seed, 0, ctxAt(0).homeX);
+    for (let i = 0; i < Math.round(totalMs / STEP); i++) {
+      const due = cues.filter((c) => c.step === i).map((c) => ({ id: c.id, index: c.index }));
+      r.step(STEP, { ...ctxAt(i), cues: due });
+    }
+    return log;
+  };
+  // The first chance-passing cue index from `from` on (the default chance gate).
+  const passingFrom = (seed: number, from: number): number => {
+    for (let j = from; ; j++) {
+      if (hash01(seed + WORLD_BEHAVIOUR.salts.react, j) < WORLD_REACT.chance) return j;
+    }
+  };
+  // The dog in era I on no travel: a crowMove cue at step 4 starts its lookUp reaction (the crowMove answer, an interruptible reaction).
+  const dogLookUp = (): { seed: number; ctx: BehaviourCtx; j: number; look: BehaviourLogEntry } | undefined => {
+    const seed = behaviourSeed(1, 'dog');
+    const ctx = ctxFor('dog', 1, 'fps8', HOME_R, { spots: [] });
+    const j = passingIndex(seed);
+    const look = playCued('dog', seed, ctx, STEP, 30 * MIN, [{ step: 4, id: 'crowMove', index: j }]).find((e) => e.reaction);
+    return look === undefined ? undefined : { seed, ctx, j, look };
+  };
+
+  it('a fault during an ambient reaction starts the bark: the dog in its crowMove lookUp is pre-empted (AD4 F41a, the e1 case)', () => {
+    const found = dogLookUp();
+    expect(found?.look.activity, 'the crowMove reaction is the lookUp').toBe('lookUp');
+    if (found === undefined) return;
+    const { seed, ctx, j, look } = found;
+    const fault: CueAt = { step: stepAt(look.atMs + 1000, STEP), id: 'fault', index: j + 1 };
+    const log = playCued('dog', seed, ctx, STEP, 30 * MIN, [{ step: 4, id: 'crowMove', index: j }, fault]);
+    const cueMs = (fault.step + 1) * STEP;
+    const bark = log.find((e) => e.reaction && e.activity === 'bark');
+    expect(bark, 'the bark starts').toBeDefined();
+    if (bark === undefined) return;
+    const [lo, hi] = WORLD_REACT.staggerMs.dog;
+    expect(bark.atMs - cueMs, 'the dog band').toBeGreaterThanOrEqual(lo - 1e-6);
+    expect(bark.atMs - cueMs, 'the dog band').toBeLessThanOrEqual(hi + STEP);
+    // The lookUp it pre-empts ends where the bark starts, as an interrupt ends it.
+    const cut = log.find((e) => e.reaction && e.activity === 'lookUp');
+    expect(cut !== undefined && Math.abs(cut.atMs + cut.durMs - bark.atMs) < 1e-6, 'the lookUp ends at the bark').toBe(true);
+  });
+
+  it('a non-machine cue still yields to the reaction: a ring during the crowMove lookUp starts nothing (only machine-event cues pre-empt)', () => {
+    const found = dogLookUp();
+    expect(found?.look.activity, 'the crowMove reaction is the lookUp').toBe('lookUp');
+    if (found === undefined) return;
+    const { seed, ctx, j, look } = found;
+    const ring: CueAt = { step: stepAt(look.atMs + 1000, STEP), id: 'ring', index: passingFrom(seed, j + 1) };
+    const log = playCued('dog', seed, ctx, STEP, 30 * MIN, [{ step: 4, id: 'crowMove', index: j }, ring]);
+    expect(log.filter((e) => e.reaction).map((e) => e.activity)).toEqual(['lookUp']);
+  });
+
+  it('a non-interruptible reaction still blocks a machine-event cue: the era cue during the startle is dropped (AD4 F41a)', () => {
+    const seed = behaviourSeed(1, 'inspector');
+    const ctx = ctxFor('inspector', 1, 'fps8', HOME_L, { spots: [] });
+    const log = playCued('inspector', seed, ctx, STEP, 30000, [{ step: 4, id: 'fault', index: 1 }, { step: 7, id: 'era', index: 2 }]);
+    expect(log.some((e) => e.reaction && e.activity === 'startle'), 'the fault starts the startle').toBe(true);
+    expect(log.some((e) => e.activity === 'eraFront'), 'the era cue is dropped under the startle').toBe(false);
+  });
+
+  it('an era cue during a visit starts eraFront: the Inspector on his Splice visit is pre-empted (AD4 F41a, the s10 case)', () => {
+    const seed = behaviourSeed(1, 'inspector');
+    const spots: SpotLike[] = [...INS3, { id: 'v1', x: 60 }];
+    const ctx = ctxFor('inspector', 1, 'fps8', 100, { spots, visitSpot: 'v1' });
+    const splice: CueAt = { step: 10, id: 'splice', index: 1 };
+    const visit = playCued('inspector', seed, ctx, STEP, 30000, [splice]).find((e) => e.reaction && e.activity === 'visitWrite');
+    expect(visit, 'the splice starts the visit').toBeDefined();
+    if (visit === undefined) return;
+    // The era card closes 1.5 s into the visit (its walk is done; the hold runs 4-8 s).
+    const era: CueAt = { step: stepAt(visit.atMs + 1500, STEP), id: 'era', index: 2 };
+    const log = playCued('inspector', seed, ctx, STEP, 30000, [splice, era]);
+    const eraMs = (era.step + 1) * STEP;
+    const front = log.find((e) => e.reaction && e.activity === 'eraFront' && e.atMs >= eraMs);
+    expect(front, 'eraFront starts during the visit').toBeDefined();
+    if (front === undefined) return;
+    const [lo, hi] = WORLD_REACT.staggerMs.inspector;
+    expect(front.atMs - eraMs, 'the inspector band').toBeGreaterThanOrEqual(lo - 1e-6);
+    expect(front.atMs - eraMs, 'the inspector band').toBeLessThanOrEqual(hi + STEP);
+    const cut = log.find((e) => e.reaction && e.activity === 'visitWrite' && e.atMs === visit.atMs);
+    expect(cut !== undefined && Math.abs(cut.atMs + cut.durMs - front.atMs) < 1e-6, 'the visit ends where eraFront starts').toBe(true);
+  });
+
+  // A context with a Find on one side of the actor (or on neither side) and the Find's x.
+  const sideCtx = (actor: BehaviourActor, home: number, side: 'findOuter' | 'findInner' | null): BehaviourCtx =>
+    ctxFor(actor, 1, 'fps8', home, { spots: [], findX: 1500, findOuter: side === 'findOuter', findInner: side === 'findInner' });
+
+  it('a Find the walker crosses before its due time: the sibling answer starts (AD4 F41b: point and lookFind, sniffFind and sniffHere)', () => {
+    const cases: readonly { actor: 'inspector' | 'dog'; home: number; was: 'findOuter' | 'findInner'; now: 'findOuter' | 'findInner';
+      first: string; second: string }[] = [
+      { actor: 'inspector', home: HOME_L, was: 'findOuter', now: 'findInner', first: 'point', second: 'lookFind' },
+      { actor: 'inspector', home: HOME_L, was: 'findInner', now: 'findOuter', first: 'lookFind', second: 'point' },
+      { actor: 'dog', home: HOME_R, was: 'findOuter', now: 'findInner', first: 'sniffFind', second: 'sniffHere' },
+      { actor: 'dog', home: HOME_R, was: 'findInner', now: 'findOuter', first: 'sniffHere', second: 'sniffFind' },
+    ];
+    for (const c of cases) {
+      const before = sideCtx(c.actor, c.home, c.was);
+      const after = sideCtx(c.actor, c.home, c.now);
+      // The cue lands at 1.1 s on the clock (step 10) and the walker crosses the Find's x at 1.2 s: before the dog's due time (0.4 s after
+      // the cue at the earliest) and the Inspector's (2 s after).
+      const log = runSteps(c.actor, behaviourSeed(1, c.actor), (i) => (i < 11 ? before : after), [{ step: 10, id: 'find', index: 1 }], 30000);
+      const reactions = log.filter((e) => e.reaction);
+      expect(reactions.map((e) => e.activity), `${c.actor} ${c.was} then ${c.now} (${c.first} before)`).toEqual([c.second]);
+      const [lo, hi] = c.actor === 'inspector' ? WORLD_REACT.findDelayMs : WORLD_REACT.staggerMs.dog;
+      const lag = (reactions[0]?.atMs ?? NaN) - 1100;
+      expect(lag, `${c.actor} sibling band`).toBeGreaterThanOrEqual(lo - 1e-6);
+      expect(lag, `${c.actor} sibling band`).toBeLessThanOrEqual(hi + STEP);
+    }
+  });
+
+  it('a Find on neither side at its due time is dropped: no sibling passes (AD4 F41b drops only when none passes)', () => {
+    const log = runSteps('inspector', behaviourSeed(1, 'inspector'), (i) => (i < 11 ? sideCtx('inspector', HOME_L, 'findOuter')
+      : sideCtx('inspector', HOME_L, null)), [{ step: 10, id: 'find', index: 1 }], 30000);
+    expect(log.some((e) => e.reaction)).toBe(false);
+  });
+
+  it('a rapid burst always ruffles the crow (AD4 F47, chance 1): every burst of five seeds starts ruffleReact in its band', () => {
+    for (let s = 1; s <= 5; s++) {
+      const log = playCued('crow', behaviourSeed(s, 'crow'), ctxFor('crow', 1, 'fps8', HOME_R, { spots: [] }), STEP, 20000,
+        [{ step: 60, id: 'rapid', index: 1 }]);
+      const ruffle = log.find((e) => e.reaction && e.activity === 'ruffleReact');
+      expect(ruffle, `seed ${s} ruffles`).toBeDefined();
+      if (ruffle === undefined) continue;
+      const [lo, hi] = WORLD_REACT.latencyMs.crow;
+      expect(ruffle.atMs - 6100, `seed ${s} band`).toBeGreaterThanOrEqual(lo - 1e-6);
+      expect(ruffle.atMs - 6100, `seed ${s} band`).toBeLessThanOrEqual(hi + STEP);
+    }
+  });
+});
+
+// ---- WP28b AD4 F42: the startle under the start gate. The Inspector's startle is 2 frames at 1 fps (holdMs 1.8-2.0 s), so a hold stretched past
+// 2 s wraps the clip. Its capMs 2000 keeps the start gate (guardHold) under 2 s. The scan runs the Inspector with the dog and the crow on one gate
+// and one clock, with a fault every 30 s over 12 min. ----
+const STARTLE_SEEDS = 50;
+const STARTLE_SCAN_MS = 12 * MIN;
+const STARTLE_DT = 50;
+const STARTLE_FAULT_MS = 30000;
+const STARTLE_CAST: readonly { actor: BehaviourActor; home: number }[] = [
+  { actor: 'inspector', home: HOME_L }, { actor: 'dog', home: HOME_R }, { actor: 'crow', home: HOME_R },
+];
+// The Inspector's startles in one era over `seeds` seeds, the three denizens of STARTLE_CAST on one start gate: the count, the longest and the
+// count at 2000 ms or more.
+function scanStartles(era: WorldEra, seeds: number): { n: number; maxDurMs: number; over: number } {
+  let n = 0;
+  let maxDurMs = 0;
+  let over = 0;
+  for (let s = 1; s <= seeds; s++) {
+    const gate = createStartGate();
+    const inspector: BehaviourLogEntry[] = [];
+    const runs = STARTLE_CAST.map(({ actor, home }) => {
+      const seed = behaviourSeed(s, actor);
+      const onLog = (e: BehaviourLogEntry): void => {
+        if (actor === 'inspector') inspector.push(e);
+      };
+      const r = createBehaviourRunner(actor, seed, STUB_CONDUCTOR, onLog);
+      r.reset(seed, 0, home);
+      return { r, ctx: ctxFor(actor, era, 'fps8', home, { startGate: gate }) };
+    });
+    let k = 0;
+    for (let i = 0; i < STARTLE_SCAN_MS / STARTLE_DT; i++) {
+      // The clock after step i is (i + 1) x dt; a fault lands on every 30 s mark.
+      const t = (i + 1) * STARTLE_DT;
+      let cues: BehaviourCtx['cues'] = [];
+      if (t % STARTLE_FAULT_MS === 0) {
+        k++;
+        cues = [{ id: 'fault', index: k }];
+      }
+      for (const { r, ctx } of runs) {
+        ctx.cues = cues;
+        r.step(STARTLE_DT, ctx);
+      }
+    }
+    for (const e of inspector) {
+      if (!e.reaction || e.activity !== 'startle') continue;
+      n++;
+      maxDurMs = Math.max(maxDurMs, e.durMs);
+      if (e.durMs >= 2000) over++;
+    }
+  }
+  return { n, maxDurMs, over };
+}
+
+describe('the startle under the start gate (WP28b AD4 F42)', () => {
+  it('no fault startle reaches 2000 ms under the shared start gate (eras 1, 3 and 5)', () => {
+    for (const era of [1, 3, 5] as const) {
+      const { n, maxDurMs, over } = scanStartles(era, STARTLE_SEEDS);
+      expect(n, `era ${era} startles`).toBeGreaterThan(100);
+      expect(over, `era ${era}: startles at 2000 ms or more`).toBe(0);
+      expect(maxDurMs, `era ${era}: longest startle`).toBeLessThan(2000);
+    }
+  });
+
+  it('without the cap the same scan stretches a startle past 2000 ms (the gate matters)', () => {
+    // The startle rows of the eras share one object, so each cap is saved in order and restored in reverse order.
+    const saved: { act: Activity; capMs: number | undefined }[] = [];
+    for (const era of [1, 2, 3, 5] as const) {
+      for (const act of WORLD_REPERTOIRE.inspector[era] ?? []) {
+        if (act.id !== 'startle') continue;
+        saved.push({ act, capMs: act.capMs });
+        delete act.capMs;
+      }
+    }
+    try {
+      expect(scanStartles(1, STARTLE_SEEDS).over).toBeGreaterThan(0);
+    } finally {
+      for (const { act, capMs } of saved.reverse()) {
+        if (capMs === undefined) delete act.capMs;
+        else act.capMs = capMs;
+      }
+    }
+    expect(WORLD_REPERTOIRE.inspector[1]?.find((a) => a.id === 'startle')?.capMs).toBe(2000);
   });
 });

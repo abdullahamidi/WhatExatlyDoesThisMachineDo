@@ -38,6 +38,11 @@ export function getTechStatus(
   return requirementsMet(state, def) ? 'available' : 'locked';
 }
 
+/** A Splice (WP28): one-time unlock wired to a dead world object. */
+export function isSplice(def: TechDefinition): boolean {
+  return def.branch === 'splice';
+}
+
 /** Formats a number for effect text: at most two decimals, no trailing zeros. */
 function fmt(x: number): string {
   return String(Number(x.toFixed(2)));
@@ -70,7 +75,8 @@ export function describeEffect(effect: Effect, n: number): string {
       // WP20: show the real rate, amount * (source rate)^convExp, instead of a bare multiplier.
       const def = RESOURCES[effect.res];
       const src = def.source === null ? '?' : RESOURCES[def.source].short;
-      const amt = fmt(effect.amount * n);
+      // WP28: rates under 0.1 keep their third decimal (0.034 must not print as 0.03).
+      const amt = effect.amount < 0.1 ? fmtFine(effect.amount * n) : fmt(effect.amount * n);
       const exp = def.convExp;
       const input = exp === 0.5 ? `√(${src}/s)` : exp === 1 ? `${src}/s` : `(${src}/s)^${fmt(exp)}`;
       return `Converts ${input} × ${amt} into ${def.short}/s`;
@@ -96,6 +102,10 @@ export function describeEffect(effect: Effect, n: number): string {
     case 'overdrive':
       // Overdrive never stacks, so one clear gives the same factor and length at any level.
       return `Cleared faults: ×${fmt(effect.factor)} output for ${fmt(effect.seconds)}s`;
+    case 'findSeconds':
+      return `Finds pay +${fmt(effect.seconds * n)}s`;
+    case 'findRate':
+      return `Finds come ${Math.round((1 - effect.factor ** n) * 100)}% sooner`;
     case 'ending':
       return 'Engages the primary function';
     case 'none':

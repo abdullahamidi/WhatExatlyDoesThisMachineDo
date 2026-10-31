@@ -84,6 +84,11 @@ const PLACEMENT_NOTES: Partial<Record<AssetId, string>> = {
   'bg.windowLit': 'living world, far window plane (6 skyline windows)',
   'bg.virga': 'living world, sf 0.15 strip at depth -89.5 (sky ramp)',
   'fx.fault': 'fault marker (FaultMarker, FAULT_MARKER.art): above the machine, below the floating text',
+  // WP28a / WP28b Splice objects and Finds (the WP28a texts are the rows already in the guide)
+  'world.splicesA': 'living world, Splice objects: back row or yard lanes (SPLICE_WORLD, Director chunk)',
+  'world.finds': 'living world, Find marker (FindMarker, WorldReach chunk): yard lane of the spot',
+  'world.splicesB': 'living world, Splice objects III-V: back row or yard lanes; the kite hangs on the lamp (SPLICE_WORLD, Director chunk)',
+  'world.splicesC': 'living world, Splice objects III-V: yard lanes; chimes on the lamp, vane and coin flap on the booth (SPLICE_WORLD, Director chunk)',
 };
 
 function readGuideOrNull(): string | null {

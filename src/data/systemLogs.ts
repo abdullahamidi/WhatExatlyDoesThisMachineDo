@@ -45,3 +45,6 @@ export const SYSTEM_LOGS: readonly SystemLogEntry[] = [
 export const SYSTEM_LOG_CONFIG = { minGapMs: 120000, checkIntervalMs: 5000, durationMs: 5000 } as const;
 
 export const SYSTEM_LOG_TITLE = 'SYS LOG';
+
+// WP28 prestige line: queued on the cycle event when Splices were woken; {n} is replaced by the count of Splices cut.
+export const SYSTEM_LOG_CUT = { id: 'splice-cut', text: 'Lines cut: {n}. Objects dark again.' } as const;

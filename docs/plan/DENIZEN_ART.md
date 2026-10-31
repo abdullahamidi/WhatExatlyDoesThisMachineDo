@@ -193,6 +193,12 @@ Frame sizes are art px. The pivot is (0.5, 1): feet on the bottom row, body cent
   - 20 `crouch`: kneels on the far knee with the board on the near knee; 26 px tall. The crouch travels to the Sensor 7 spot. The AD1b-1 hand-off that stopped it short of the scrap is superseded by WP24 Revision 6.
   - 21 `umbrellaHalf`: umbrellaOpen with the canopy half open. The vent reaction runs half, open, half.
 
+**WP28b (2026-10-29, AD3-CELLS): two reaction cells** (frames 22–23; sheet 480 × 240, 24 frames per row). Both are profile cells: `restFlip` turns them away from the machine, like `glance`. They react to the machine's effects, never to the machine (C1).
+- 22 `startle`: the flinch when the ground wave passes his x, or a fault appears. The head and hat jerk back (the peak rises and the face shows under the brim), the upper body leans back 1 px, and the near forearm pulls across the chest. That hand clutches the board upright against the chest. The elbow sticks out behind, and the coat hem flares at the back and the front. The legs and boots match `idleA` pixel for pixel, so the feet never pop.
+- 23 `point`: points at a Find on the ground ahead, only when the Find lies on his outer side. The head is bowed (as in `write0`) and the far hand holds the board high under the chin. The near arm runs straight from the shoulder, down and forward past the coat edge. A 1 px index finger ends 16–20 world px past his feet.
+- Neither cell carries the clipboard pages overlay: the board is upright or under the chin. In rows III to whole the closed umbrella hangs from the clutching hand (`startle`) or from the pointing wrist (`point`); the whole row adds the pressed creases.
+- Gates: `check_sheet.py` CLEAN; workbench `startle` 92.3, `point` 96.0, lint 0 / 0, 1 silhouette component per cell.
+
 ### 2.2 The Dog `world.dog`
 
 - **Size:** frame 28×20, body 24×16. A low wedge with one upright ear, one torn ear and a curled tail. The coat is
@@ -230,6 +236,12 @@ Frame sizes are art px. The pivot is (0.5, 1): feet on the bottom row, body cent
 - 20 `scratch0` and 21 `scratch1`: the sit body with the near hind leg lifted from the haunch to a paw behind the ear (paw rows 6–8, then 7–9, on a 6 fps stroke). The far hind foot stays on the ground. Used by the scratch round, eras I–III.
 - 22 `lookUp`: the sit body with the head tilted back to the sky, muzzle up; the upright ear stays upright. Used by the lookUp round (eras I–III, after a crow move or a ring) and by the era IV `look` beat.
 - Frames 16 (`sleep`) and 19 (`wag`) are reused before the finale. No new cell.
+
+**WP28b (2026-10-29, AD3-CELLS): the bark** (frames 23–24; sheet 700 × 120, 25 frames per row). These are profile cells, flipped by `restFlip` like the sit, so they face away from the machine (C1). They play on a fault (eras I-III).
+- 23 `bark0`: the "woof". The sit body with the head thrust up 1 px and forward 1 px. The lower jaw drops to the collar line and shows a 2 px dark mouth wedge. The upright ear stays upright.
+- 24 `bark1`: between barks. The head is up 1 px and the mouth is nearly shut (one dark corner pixel).
+- `bark0` and `bark1` alternate. Only the head changes (cell (16, 2)–(27, 11)): the feet, haunch and tail are the sit's, so there is no pop from the sit. Rows III and up carry the eye and collar layers; the whole row adds the healthy sheen.
+- Gates: `check_sheet.py` CLEAN; workbench `bark0` 99.7, `bark1` 100.0, lint 0 / 0, 1 silhouette component per cell.
 
 ### 2.3 The Crow `world.crow`
 
@@ -739,6 +751,175 @@ Folder: `C:/Users/sanan/AppData/Local/Temp/claude/C--Users-sanan-OneDrive-Masa-s
    - D4: a paper bubble instead of `#1d1f21`.
 9. **The `ART_BRIEF.md` style anchor URL has expired.** Re-anchor PixelLab calls on a base64 of `flywheel.png`, and
    update the brief.
+
+---
+
+## 11. Splice objects and Finds (WP28a, AD1, 2026-10-28)
+
+Splices wire the machine to dead objects of the old world (WP28 plan, "Splices"); Finds are small items that glint in the
+yard for about 25 s ("Finds"). Stage numbers (placements per framing, lines, Find spots, crow perches, colors, tooltip) are
+in the AD1 hand-off (`<O>/plan/ad1-handoff.md`, `<O>` = the session scratchpad `WP28/`) and become data in
+`src/data/spliceWorld.ts`, `src/data/findWorld.ts` and `src/data/pokes.ts`.
+
+### 11.1 Sheets
+
+| sheet | id | file | cell | cells | rows |
+|---|---|---|---|---|---|
+| splicesA | `world.splicesA` | `world/splices-a.png` 640 x 24 | 32 x 24, objects bottom-centered, pivot (0.5, 1) = the feet | 20 | 1 |
+| finds | `world.finds` | `world/finds.png` 88 x 8 | 8 x 8, items on the bottom row; glint centered on cell pixel (4, 4) | 11 | 1 |
+
+- **No era rows.** The objects are street furniture of the old world, like the lamp and the clock (§2.5): single row, the
+  machine's iron plus weathered wood. Era I cohesion comes from a muted ramp: dark varnish (`#4e2a1a` / `#6e3a22`), gilt
+  faded to sand (`#a8957a` / `#c9b28a`), dark rust paint. The six rows would cost 6 x 60 KiB decoded for objects that stand
+  from their own era on.
+- **Palette.** The 25 colors only. No green or blue. No letters or readable marks. Before the finale, a lit part uses
+  `#d9822b` on rust (the lamp's lit rule, §2.5). Only the `*Whole` cells (postgame, restored world) use `#f0a848` and
+  `#ffd27a`.
+- **Outline.** Full 1 px ink ring on every cell except the bicycle and the glint. The bicycle has 1 px tubes, spokes and a
+  stand. The glint is a light sparkle. `scripts/art/world/sheets.py` lists them as `no_ring`. The bicycle's silhouette counts
+  8-connected (`conn8`).
+- **Hand-pixelled** (D9). PixelLab `create_image_pro` concepts (bicycle, organ: 2 calls, 20 generations, flywheel style
+  anchor, palette lock) were proportion reference only.
+
+### 11.2 Objects (art px; frame order = cell index)
+
+| object | size | cells | look |
+|---|---|---|---|
+| bicycle | 26 x 15 | 0 dead, 1-3 spin, 4 whole | Child's roadster on a rear stand. The rear wheel is 1 px off the ground, so it can spin. Woken, it turns BACKWARDS (counter-clockwise): 4 half-spokes step 30 deg per frame, and the pedals follow at 60 deg (the 2:1 chain ratio, so the 3-frame loop is seamless). Dead: the chain is off and hangs. Bell = a 2 px dome on the bar. |
+| barrel organ | 27 x 24 | 5 dead, 6-9 crank, 10 whole | A barrow organ. Five tin pipes, the tallest in the middle, in an arched wood front, with a crest and a faded gilt cornice. The handles point out (left wing). The crank on the right end turns clockwise: up, right, down, left. Dead: one pipe missing, crank down. Whole: bright gilt. |
+| valve radio | 16 x 20 | 11 dark, 12-13 lit A / B, 14 whole | A cathedral cabinet with a fretted grille, on a pine crate. Lit: the dial glows `#d9822b` / `#c98552`, the needle drifts left / right, and the grille cloth catches the light. |
+| bulb arrow sign | 28 x 22 | 15 dark, 16-17 half A / B, 18 whole | A sheet-metal arrow on two iron legs, bent down at the left, its head pointing at the ground. 17 bulb sockets; half A and half B light alternate halves (a chase). No letters (C10). |
+| clock lit face | 12 x 12 | 19 | Overlay on `world.clock`: the face lit from inside (dial `#c98552`, rim `#ad6236`, ticks `#8c4a2a`, the crack kept). NO hands. Pivot = clock foot - 60 world px. Draw it above the clock sprite and below the 1 px hands. |
+| payphone | existing | `world.payphone`, `world.receiver` | No new art in WP28a. The Coin Return flap is AD3's. |
+
+### 11.3 Finds (8 x 8 cells, iron / rust / sand only, no text)
+
+0 a hex nut on a bolt end, 1 a blank brass tag with a punched hole, 2 a small cog, 3 a dented tin with a rust patch, 4 a
+skeleton key, 5 a photo (white border, a sepia smudge, no face), 6 a payphone token, 7 the relic: a folded note (crease,
+faded ink dashes, no letters). 8-10 glint: a one-color 5 x 5 cross sparkle (`#ddc9a3`), played 8 9 10 9.
+Color per era: eras III-IV `setTintFill(0xffd27a)`; the other eras draw the art as is. The era accent goes to the ground
+ring: I `#ddc9a3`, II `#c98552`, III-IV `#f0a848`, V `#9a6ad0` (C8).
+
+### 11.4 Hover and tooltip
+
+- **Hover brackets.** 4 corner brackets: 3 art px arms, 1 art px stroke, 2 art px outside the opaque bbox. `#ddc9a3` at
+  alpha 0.9 (violetLight `#9a6ad0` in era V).
+- **Tooltip.** The machine's voice, a dark slab: `#1d1f21`, 2 px `#8c4a2a` border, 2 px ink ring, 12 px / 16 px uppercase
+  monospace, 4 lines. It sits above the object, or below when that would cover the crank keep-out circle. It never covers
+  the crank hub (hand-off h).
+- **Lines.** Era I is a signal wire on pulley stakes; era II is an insulated cable, or the payphone drop wire from the
+  cable mast (world.md §6.2).
+
+---
+
+## 12. Splice objects, eras III-V (WP28b, AD3-OBJ, 2026-10-29)
+
+Ten more dead objects of the old world that the machine wires up in eras III-V (WP28 plan, "Eras III-V Splice objects"). Stage
+numbers (cells, frames, boxes, placements per framing, lines, Find spots, perches, checks) are in the AD3 hand-off
+(`<O>/plan/ad3-handoff.md`, sections O) and become data in `src/data/spliceWorld.ts`, `src/data/findWorld.ts` and
+`src/data/pokes.ts`.
+
+### 12.1 Sheets
+
+| sheet | id | file | cell | cells | rows |
+|---|---|---|---|---|---|
+| splicesB | `world.splicesB` | `world/splices-b.png` 396 x 56 | 18 x 56, objects bottom-centered, pivot (0.5, 1) = the feet | 22 | 1 |
+| splicesC | `world.splicesC` | `world/splices-c.png` 576 x 18 | 24 x 18, objects bottom-centered, pivot (0.5, 1) = the feet | 24 | 1 |
+
+- **Two sheets.** One cell size for all ten objects would be 24 x 56: 241.5 KiB decoded. The tall set (B) and the small set (C)
+  cost 127.1 KiB together.
+- **No era rows**, as §11.1: street furniture of the old world in the machine's iron, weathered wood and faded paint.
+- **Palette.** The 25 colors only; no green or blue; no letters (the vane's compass cross has none). Before the finale the
+  wrong colors are rust, sand and violet: `#f0a848` / `#ffd27a` only in the whole (postgame) cells, violetLight `#9a6ad0` only on
+  the lifted cairn stones (era V).
+- **Outline.** Full 1 px ink ring, except the soft FX (the whistle plume, the hydrant mist) and the kite's 1 px string, tail and
+  bows (`no_ring`). The coughed drops, the plume wisps, the mist specks and the lifted stones float free (`parts_frames`).
+- **Hosted overlays.** The chimes and the kite hang on the street lamp, the vane stands on the booth apex and the coin flap
+  lies on the booth's phone unit: each draws at its host's placement feet + `offsetWorld` (hand-off O-b), one depth step over
+  the host. The chimes bring the lamp arm they hang from (it continues the lamp's ladder bar); while the kite stands, the crow
+  perches on the arm's free end instead of the lamp top, and on the vane's finial instead of the booth roof.
+- **Hand-pixelled**, scored with the workbench (B 97.5; C 95.3 / 95.0; every object 92.1-100; lint 0 / 0). PixelLab: no
+  generations.
+
+### 12.2 Objects (art px; frame order = cell index)
+
+| object | sheet, size | cells | look |
+|---|---|---|---|
+| hand pump | B, 17 x 30 | 0 dead, 1 up, 2 down, 3 cough, 4 whole | A village pitcher pump on a stone well cap. Handle on the left on a pivot bracket, spout on the right. The stroke lifts the plunger rod out of the cap; the cough drops two drops and a splash from the spout mouth (feet + 14-16 world px) onto the puddle rim. Dead: the handle hangs, rust. Whole: clean iron, brass spout. |
+| factory whistle | B, 11 x 44 (+ plume 17 x 56) | 5 dead, 6 blow, 7 whole | A domed brass steam whistle over its bowl on a timber post, a lever with a pull chain, the steam pipe up the post. Blow: the lever is pulled and steam leaves the slot between bell and bowl, billowing up past the bell (the plume is in the cell). |
+| hydrant | C, 12 x 14 (+ mist to 18 wide) | 0 dead, 1 rattle, 2 mist A, 3 mist B, 4 whole | A dry-barrel hydrant in faded red paint (the rust ramp), operating nut, two side caps. Rattle: the outer cap rides up 1 px on its thread. Mist: a side fan out of that cap that thins to specks and never lands. Whole: fresh amber paint. |
+| bell | B, 18 x 28 | 8 still, 9 swing L, 10 swing R, 11 whole | A bronze bell on a braced timber gallows. The swing turns it 1 px at the waist and the lip about its headstock axle; the clapper lags. Never all the way. |
+| gramophone | C, 18 x 18 | 5 still, 6-8 spin, 9 skip, 10 whole | A wood case with a winding crank, the disc on the lid and a flared brass horn facing outward. Spin: a glint runs round the disc. Skip: the tonearm jumps 1 px. Still: the arm is parked. |
+| wind chimes | C, 15 x 18 | 11 still, 12-13 sway, 14 whole | The lamp arm (a bracket with a scroll brace) with a hook, a top disc, three tubes and a wind sail. Sway: the tubes' lower half and the sail move 1 px, with no wind. |
+| weathervane | C, 16 x 18 | 15 dir 0 (dead), 16 dir 1, 17 dir 2, 18 down, 19 whole | A finial ball, a spindle, an arrow with a tail plate and a compass cross without letters. It turns (end on, then the other way) and stops with the head pointing down at the roof, once. |
+| kite | B, 18 x 53 (with string) | 12 tangled, 13-14 flutter, 15 whole | A quartered diamond kite. Tangled: upside down on its snagged string against the lamp hood. Woken: it rises 20 then 40 art px on a string pulled straight down to the finial, the tail floating up, and hangs (gravity wrong). Whole: flying in a breeze, amber paper. |
+| cairn | B, 16 x 32 (16 x 16 stacked) | 16 stack, 17-20 lift 1-4, 21 whole | A bedrock slab and four stones. The top stone lifts first; each hangs 16, 12, 8, 4 art px above its rest with a violetLight top and never falls back. Whole: settled, a pebble on top. |
+| coin-return flap | C, 4 x 4 | 20 closed, 21-22 rattle, 23 whole | A brass flap on the booth's phone unit (booth cols 24-27, rows 25-28). Rattle: it swings out and back; nothing comes out. |
+
+### 12.3 Where they stand (hand-off O-c)
+
+- Era III (s11): pump 946 back, its spout over the puddle (s15 and the finale too: 946, inner gap); whistle 2970 back between
+  the clock and the booth; hydrant 3100, lane 150. s10 has no room (52 px wings): documented exemptions.
+- Era IV (s11): bell 3150, lane 120; gramophone 960, lane 150 (s15: 760, lane 112; postgame 958, lane 112); chimes on the lamp.
+- Era V (s11 from the null chamber, s15): vane on the booth, kite on the lamp, coin flap on the booth; cairn 880, lane 170
+  (s15, finale and postgame: 1014, lane 104, inner gap).
+- The right yard at s15 is under the UI 150 buttons, so the whistle, hydrant and bell stand at s11 only; the restored whistle
+  returns in the postgame at 3166 back.
+
+---
+
+## 13. Where the WP28b cells, objects and items show (prose, B-T10, 2026-10-29)
+
+The art rows are in §2.1, §2.2 (the four reaction cells), §11.3 (the Find items) and §12 (the ten era III-V objects). This
+section says where each one shows in the game. Every cell here is a profile cell or a camera-facing frame, so `restFlip`
+decides its facing, and no frame faces the machine (C1).
+
+### 13.1 Reaction cells
+
+- **`startle` (Inspector, frame 22).** Used on a fault, and on a big purchase when the ground wave reaches his x. A fault starts
+  it within 0.4 s of the cause; a walk in progress is cut at its next walk frame. Eras I-III only: era V startles with its front
+  and talk frames (the stare set), and era IV has no machine-event reactions (the conductor runs the cast; C11).
+- **`point` (Inspector, frame 23).** Used 2 to 4 s after a Find spawns, and only when the Find lies on his outer side, farther from
+  the machine than his feet. Otherwise he looks up (`lookUp`). Eras I-III only; era V points with its front frame. The finger ends
+  16 to 20 world px past his feet, on the Find's side. It never points at the machine.
+- **`bark0` and `bark1` (dog, frames 23 and 24).** The dog's fault reaction in eras I-III: the two frames alternate, and the
+  profile faces away from the machine. Era V barks with its head and talk frames. The dog's sniff toward a Find is a separate
+  action, used only on the outer side; on the inner side the sniff stays in place.
+- None of the four carries the clipboard pages overlay. The board stands upright or sits under the chin.
+
+### 13.2 Splice objects in play (street furniture)
+
+- The six era I-II objects (the clock and the payphone are the existing props) and the ten era III-V objects stand in the yard
+  lanes or the wings, clear of the machine, the crank circle and the HUD buttons at UI 150. Each has a dead frame and, once
+  bought, a woken loop (at most 8 fps; no flash above 3 Hz).
+- **Dead.** The object stands still in its dead frame and invites the click. Hover (at least 56 screen px) shows the hand cursor,
+  the corner brackets and the tooltip (§11.4).
+- **Woken.** The object switches to its loop. Its line draws from the machine's outer base foot to the object's foot. The wake
+  beat runs one pulse along the line in 0.6 s, then the object starts.
+- **Reduced motion.** The object holds one static woken frame. The line keeps its era's still look: eras I-II one steady lit dot
+  (48 px before the object's end, clear of its sprite), era III the pipe alone, era IV a flat wire, era V the specks hang still.
+- **Visits.** A woken object draws a visit three to eight seconds after the wake. The Inspector (left-wing objects) writes
+  (`write0`, `write1`), and the dog (right-wing objects) sniffs (`sniff0`, `sniff1`; era V `head` and `talk`). The visit lasts up
+  to 20 s. Eras I-III and V. The crow has no visit stand and no visit activity. Once per wake, when a hop is allowed, by one hop or two through a middle perch (each at most 160 px, never over the machine) when such a path exists (else it stays put), it lands on the woken object's perch top where one exists (the bicycle seat, the sign top, the whistle top, the bell frame, and the vane and kite tops that take the booth roof and the lamp top). Never in era IV or under reduced motion.
+- **Finale and postgame.** Every object shows its whole frame, and the lines are hidden. The restored world needs no wire.
+- **Lines by era.** I: signal wire on pulley stakes. II: insulated cable, or the drop wire from the cable mast to the payphone
+  hood. III: a pipe with collars. IV: a taut wire with a standing wave. V: lifted debris specks.
+- **Hosted objects.** The chimes hang from the lamp arm, the kite stands on the lamp, the weathervane stands on the booth apex and
+  the coin-return flap lies on the booth's phone unit. Each draws at its host's feet, one depth step over the host.
+
+### 13.3 Find items and producers
+
+- **Items.** One of seven items per Find (cells 0 to 6), chosen by the Find's serial number. A relic shows cell 7, the folded note.
+  The glint (cells 8 to 10, played 8 9 10 9) runs at 2 Hz or less.
+- **Producers.** The producer's action starts 0 to 0.5 s before the item shows.
+  - Eras I-II: the dog digs at a yard spot, only when its feet are within 24 px of the spot. The crow's item drops from its perch.
+    A gust flips a scrap. The yard item rises out of the dirt. A woken organ, radio or payphone coin return twitches as its item
+    rises.
+  - Era III: a puddle rim rings, a vent puffs, or a woken pump twitches as its item rises.
+  - Era IV: the Chladni rings walk the item to the nearest node over 1.5 s.
+  - Era V: the item lifts 12 to 16 px, hangs, and bobs 1 px.
+- **Pick-up.** The item hops 6 px and the glint flashes once; a gain block shows the payout. A relic shows no gain block: its
+  field note is announced instead.
 
 ---
 

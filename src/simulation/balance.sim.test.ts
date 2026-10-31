@@ -23,9 +23,10 @@ function eraOneOptions(buyIntervalSeconds: number) {
 
 // Profiles. A = main greedy run; B = slow buyer; C = casual clicker (no offline progress).
 // `faults` = the Machine Faults catch model of each player (WP27): chance to catch a fault, seconds to react.
-const PROFILE_A = { ...eraOneOptions(1), faults: { catchProb: 1, reactionSeconds: 2 } };
-const PROFILE_B = { seconds: 18000, clicksPerSecond: CLICKS_PER_SECOND, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 1, reactionSeconds: 3 } };
-const PROFILE_C = { seconds: 28800, clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 0.5, reactionSeconds: 4 } };
+// `finds` = the Finds catch model of each player (WP28): chance to pick up a Find, seconds from spawn to pick-up.
+const PROFILE_A = { ...eraOneOptions(1), faults: { catchProb: 1, reactionSeconds: 2 }, finds: { catchProb: 0.85, reactionSeconds: 4 } };
+const PROFILE_B = { seconds: 18000, clicksPerSecond: CLICKS_PER_SECOND, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 1, reactionSeconds: 3 }, finds: { catchProb: 0.85, reactionSeconds: 5 } };
+const PROFILE_C = { seconds: 28800, clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 0.5, reactionSeconds: 4 }, finds: { catchProb: 0.4, reactionSeconds: 6 } };
 
 // States recorded at the first ownership of the era IV convergence and the era V finale (WP17 D1).
 const SNAPSHOT_IDS: readonly TechId[] = ['harmonicConvergence', 'primaryFunction'];
@@ -168,17 +169,19 @@ describe('greedy balance simulation (WP5 pacing targets)', () => {
     expect(a.firstAt.generatorBlueprint).toBeLessThanOrEqual(1800);
   });
 
-  // re-pinned for WP27 (hand-led era I; replaces the WP25 pins 4/18/23/205/297/730/761/1327). The plan harness gives the same seconds.
+  // re-pinned once for WP28: Finds payouts and the era I Splices add ME, so era I comes earlier. Replaces the WP27 pins
+  // 4/18/28/235/502/384/403/1334 (seconds, in the order below). The audit harness gives 4/18/28/232/505/394/413/1294 (its
+  // Finds pay the mean 6 s without the Q6 spread); the repo run differs by 1 s and 3 s, both within 1 % of the harness.
   it('era I exact first-purchase times (EXACT: era I must not drift)', () => {
     expect(a.firstAt.handCrank).toBe(0);
     expect(a.firstAt.gearRatio).toBe(4);
     expect(a.firstAt.wornMotor).toBe(18);
     expect(a.firstAt.motorTuning).toBe(28);
-    expect(a.firstAt.reinforcedCrank).toBe(235);
-    expect(a.firstAt.flywheel).toBe(502);
-    expect(a.firstAt.pistonArray).toBe(384);
-    expect(a.firstAt.improvedPistons).toBe(403);
-    expect(a.firstAt.generatorBlueprint).toBe(1334);
+    expect(a.firstAt.reinforcedCrank).toBe(232);
+    expect(a.firstAt.flywheel).toBe(504);
+    expect(a.firstAt.pistonArray).toBe(394);
+    expect(a.firstAt.improvedPistons).toBe(413);
+    expect(a.firstAt.generatorBlueprint).toBe(1297);
   });
 
   it('maxValue is finite and below the design ceiling', () => {

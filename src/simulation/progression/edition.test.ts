@@ -201,9 +201,9 @@ describe('getTechView with an era cap', () => {
 });
 
 describe('evaluateMilestones with an era cap', () => {
-  // Vessel Blueprint (era III) requires Relief Valves Lv 1, Condenser Lv 5 and 6M lifetime PR.
+  // Vessel Blueprint (era III) requires Relief Valves Lv 1, Condenser Lv 15 and 6M lifetime PR (WP28 REC: 5 x 3 parts).
   const vesselReady = (): GameState => {
-    const s = withLevels({ reliefValves: 1, condenser: 5 });
+    const s = withLevels({ reliefValves: 1, condenser: 15 });
     return { ...s, lifetime: { ...s.lifetime, pr: 6_000_000 } };
   };
 

@@ -4,6 +4,8 @@
 // App js gzip is report-only since WP15R (program D7: raw sizes only): printed with status 'report', never a breach.
 // The lazy living-world chunk (LivingWorldDirector-*.js) is gated by bundle.lazyWorldKb (WP23a: the app chunk stays under appRawKb because the director loads lazily).
 // The lazy fault marker chunk (FaultMarker-*.js) is gated by bundle.lazyFaultKb when that key exists (WP27; sum 0 when the chunk is absent).
+// WP28: the lazy WorldReach chunk (WorldReach-*.js) is gated by bundle.lazyReachKb; every other lazy *.js (shared data and maths chunks) by bundle.lazySharedKb;
+// the lazy world total (Director + WorldReach + shared) by bundle.lazyWorldTotalKb (fixed ceiling, plan WP28 D8).
 // Prints a table; exit 1 on any breach.
 import { readdirSync, readFileSync, statSync, existsSync } from 'fs';
 import { gzipSync } from 'zlib';
@@ -41,6 +43,8 @@ const phaserJs = files.filter((f) => /^phaser-.*\.js$/.test(f));
 const css = files.filter((f) => f.endsWith('.css'));
 const lazyWorld = files.filter((f) => /^LivingWorldDirector-.*.js$/.test(f));
 const lazyFault = files.filter((f) => /^FaultMarker-.*\.js$/.test(f));
+const lazyReach = files.filter((f) => /^WorldReach-.*\.js$/.test(f));
+const lazyShared = files.filter((f) => f.endsWith('.js') && !/^(index|phaser|LivingWorldDirector|FaultMarker|WorldReach|demoEnd)-/.test(f));
 
 if (appJs.length === 0) {
   console.error('bundle-budget: no index-*.js app chunk in ' + assetsDir);
@@ -62,6 +66,11 @@ row('app js gzip (index-*.js)', sum(appJs, gzOf) / KB, undefined, 'KB', true);
 row('phaser js raw (phaser-*.js)', sum(phaserJs, rawOf) / KB, budget.phaserKb, 'KB');
 if (budget.lazyWorldKb !== undefined) row('lazy world js raw (Director-*.js)', sum(lazyWorld, rawOf) / KB, budget.lazyWorldKb, 'KB');
 if (budget.lazyFaultKb !== undefined) row('lazy fault marker js raw (FaultMarker-*.js)', sum(lazyFault, rawOf) / KB, budget.lazyFaultKb, 'KB');
+if (budget.lazyReachKb !== undefined) row('lazy reach js raw (WorldReach-*.js)', sum(lazyReach, rawOf) / KB, budget.lazyReachKb, 'KB');
+if (budget.lazySharedKb !== undefined) row('lazy shared js raw (other lazy *.js)', sum(lazyShared, rawOf) / KB, budget.lazySharedKb, 'KB');
+if (budget.lazyWorldTotalKb !== undefined) {
+  row('lazy world total (Director+Reach+shared)', (sum(lazyWorld, rawOf) + sum(lazyReach, rawOf) + sum(lazyShared, rawOf)) / KB, budget.lazyWorldTotalKb, 'KB');
+}
 row('css raw (*.css)', sum(css, rawOf) / KB, budget.cssKb, 'KB');
 const publicDir = join(root, 'public', 'assets');
 const publicKb = existsSync(publicDir) ? dirBytes(publicDir) / KB : 0;

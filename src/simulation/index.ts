@@ -28,3 +28,5 @@ export { windupParams, refillWindup, releaseWindup } from './production/windup';
 export type { WindupParams } from './production/windup';
 export { faultParams, createFaultClock, nextUnit, stepFaultClock, clearFault, consumeOverdrive } from './faults';
 export type { FaultParams, FaultAlive, FaultClock } from './faults';
+export { findParams, createFindClock, isRelicSerial, stepFindClock, collectFind } from './finds';
+export type { FindParams, FindAlive, FindClock } from './finds';

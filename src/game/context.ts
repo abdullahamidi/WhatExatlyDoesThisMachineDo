@@ -7,7 +7,7 @@ import type { FinaleBeat } from '../data/finale';
 import type { NewCycleHook } from './newCycle';
 import type { TechId } from '../data/types';
 
-export interface GameCommands { refocus: Signal<void>; openTechTree: Signal<void>; openSystemMenu: Signal<void>; crank: Signal<void>; clearFault: Signal<void> }
+export interface GameCommands { refocus: Signal<void>; openTechTree: Signal<void>; openSystemMenu: Signal<void>; crank: Signal<void>; clearFault: Signal<void>; collectFind: Signal<void> }
 /** WP22: a part track crossed a visual tier (one per played beat or staged change). */
 export interface PartEvolvedEvent { techId: TechId; fromTier: number; toTier: number; topTier: number; hosts: readonly MachineComponentId[] }
 /** WP22: a level bought between two tiers (small torque spark + tick). */
@@ -16,11 +16,13 @@ export interface PartTorquedEvent { techId: TechId; host: MachineComponentId; st
  * WP23a: one living-world audio cue. blip = a speech blip from a speaker (count, reversed for the reply);
  * ring = the payphone ring; dialTone = the payphone dial tone switching on or off.
  * Speaker ids are spelled out here (no import from data/livingWorld) so this file stays a leaf.
+ * WP28: poke = a click on a denizen or object; id is its sound family (data/audio PokeSoundId, spelled out here too).
  */
 export type WorldSound =
   | { kind: 'blip'; speaker: 'inspector' | 'dog' | 'crow' | 'girl' | 'payphone'; count: number; reversed: boolean }
   | { kind: 'ring' }
-  | { kind: 'dialTone'; on: boolean };
+  | { kind: 'dialTone'; on: boolean }
+  | { kind: 'poke'; id: 'tick' | 'pencil' | 'woof' | 'caw' | 'beep' | 'ring' | 'tink' | 'note' | 'organ' | 'bell' | 'crackle' | 'buzz' };
 /** WP26: the weather the living world shows this frame. A plain mutable readout (not a Signal): only LivingWorldDirector writes it, only gameAudio reads it. */
 export interface WorldWeather { live: boolean; wind: number; virgaAlpha: number; virgaSpeed: number }
 export interface GameFeedback {

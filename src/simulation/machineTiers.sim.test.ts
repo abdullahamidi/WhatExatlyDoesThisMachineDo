@@ -20,10 +20,10 @@ const SETUP_TIMEOUT_MS = 60000;
 
 // A = 4 clicks/s, buys every second. B = 4 clicks/s, buys every 30 s. C = 1 click/s, buys every 30 s, no offline.
 // `faults` = the Machine Faults catch model of each player (WP27), as signoff.sim.test.ts: the tier numbers were measured with it.
-type Profile = Pick<GreedyOptions, 'seconds' | 'clicksPerSecond' | 'stepSeconds' | 'buyIntervalSeconds' | 'faults'>;
-const PROFILE_A: Profile = { seconds: 17400, clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 1, faults: { catchProb: 1, reactionSeconds: 2 } };
-const PROFILE_B: Profile = { seconds: 18000, clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 1, reactionSeconds: 3 } };
-const PROFILE_C: Profile = { seconds: 28800, clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 0.5, reactionSeconds: 4 } };
+type Profile = Pick<GreedyOptions, 'seconds' | 'clicksPerSecond' | 'stepSeconds' | 'buyIntervalSeconds' | 'faults' | 'finds'>;
+const PROFILE_A: Profile = { seconds: 17400, clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 1, faults: { catchProb: 1, reactionSeconds: 2 }, finds: { catchProb: 0.85, reactionSeconds: 4 } };
+const PROFILE_B: Profile = { seconds: 18000, clicksPerSecond: 4, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 1, reactionSeconds: 3 }, finds: { catchProb: 0.85, reactionSeconds: 5 } };
+const PROFILE_C: Profile = { seconds: 28800, clicksPerSecond: 1, stepSeconds: 1, buyIntervalSeconds: 30, faults: { catchProb: 0.5, reactionSeconds: 4 }, finds: { catchProb: 0.4, reactionSeconds: 6 } };
 
 const DEMO_A_SECONDS = 5500;
 const DEMO_B_SECONDS = 6200;

@@ -183,6 +183,29 @@ export function windAllowed(phase: EndingPhase): boolean {
   return phase === 'none' || phase === 'sequence';
 }
 
+/**
+ * Poke variant pick (WP28): one index in 0..count-1 that is not among the last AUDIO.poke.avoidRecent picks (`recent`, oldest first)
+ * when another is free, so one variant never comes three times in a row. `unit` in [0, 1] picks among the free ones. Pure: `recent` is not changed.
+ */
+export function pokeVariant(recent: readonly number[], count: number, unit: number): number {
+  if (!(count > 0)) return 0;
+  const avoid = recent.slice(-AUDIO.poke.avoidRecent);
+  const free: number[] = [];
+  for (let i = 0; i < count; i++) {
+    if (!avoid.includes(i)) free.push(i);
+  }
+  const pool = free.length > 0 ? free : Array.from({ length: count }, (_, i) => i);
+  const u = Number.isFinite(unit) ? clampRange(unit, 0, 0.999999) : 0;
+  return pool[Math.floor(u * pool.length)] ?? 0;
+}
+
+/** Poke pitch scale (WP28): 1 +- AUDIO.poke.pitchSpread for unit in [0, 1] (0 = low end, 1 = high end); non-finite unit -> 1. */
+export function pokePitchScale(unit: number): number {
+  if (!Number.isFinite(unit)) return 1;
+  const u = clampRange(unit, 0, 1);
+  return 1 + (2 * u - 1) * AUDIO.poke.pitchSpread;
+}
+
 /** Bus gain from a volume percent: clamped to the volume range, then divided by its max; non-finite -> 1 (unity). */
 export function busGain(volumePct: number): number {
   if (!Number.isFinite(volumePct)) return 1;

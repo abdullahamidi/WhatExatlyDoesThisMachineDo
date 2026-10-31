@@ -1,3 +1,4 @@
+import { FIND_TEXT, RELIC_NOTES } from '../data/finds';
 import { TECHNOLOGIES } from '../data/technologies';
 import { ACHIEVEMENTS } from '../data/achievements';
 import type { AchievementDefinition, AchievementId } from '../data/achievements';
@@ -10,7 +11,7 @@ import {
   WELCOME_MIN_ELAPSED_SECONDS,
   WELCOME_TEXT,
 } from '../data/notifications';
-import type { ToastMessage } from '../data/notifications';
+import type { ToastMessage, ToastTone } from '../data/notifications';
 import { PRESTIGE_TEXT } from '../data/prestige';
 import { RESOURCE_IDS } from '../data/types';
 import type { OfflineReport, TechId } from '../data/types';
@@ -29,49 +30,34 @@ export type NotificationEvent =
   | { type: 'unlock'; id: TechId }
   | { type: 'milestone'; id: TechId };
 
+/** One toast message; the duration defaults to the standard toast timing. */
+export function toastOf(
+  key: string,
+  title: string,
+  body: string | null,
+  tone: ToastTone,
+  durationMs: number = TOAST_CONFIG.durationMs,
+): ToastMessage {
+  return { key, title, body, tone, durationMs };
+}
+
 // Returns the toast for an event, or null when the event should stay silent.
 export function messageFor(event: NotificationEvent): ToastMessage | null {
   switch (event.type) {
     case 'click':
       // Only the very first click announces itself.
       if (event.totalClicks !== 1) return null;
-      return {
-        key: 'first-click',
-        title: FIRST_CLICK_MESSAGE,
-        body: null,
-        tone: 'system',
-        durationMs: TOAST_CONFIG.durationMs,
-      };
-    case 'purchase': {
+      return toastOf('first-click', FIRST_CLICK_MESSAGE, null, 'system');
+    case 'purchase':
       // Level 1 is announced by the unlock event; only later levels toast here.
       if (event.level <= 1) return null;
-      return {
-        key: 'purchase:' + event.id,
-        title: `${nameOf(event.id)} — LV ${event.level}`,
-        body: null,
-        tone: 'info',
-        durationMs: TOAST_CONFIG.durationMs,
-      };
-    }
-    case 'unlock': {
+      return toastOf('purchase:' + event.id, `${nameOf(event.id)} — LV ${event.level}`, null, 'info');
+    case 'unlock':
       // Milestones are announced by the milestone event instead.
       if (TECHNOLOGIES[event.id].kind === 'milestone') return null;
-      return {
-        key: 'unlock:' + event.id,
-        title: `INSTALLED: ${nameOf(event.id)}`,
-        body: INSTALL_LINES[event.id],
-        tone: 'info',
-        durationMs: TOAST_CONFIG.durationMs,
-      };
-    }
+      return toastOf('unlock:' + event.id, `INSTALLED: ${nameOf(event.id)}`, INSTALL_LINES[event.id], 'info');
     case 'milestone':
-      return {
-        key: 'milestone:' + event.id,
-        title: `MILESTONE: ${nameOf(event.id)}`,
-        body: INSTALL_LINES[event.id],
-        tone: 'milestone',
-        durationMs: TOAST_CONFIG.milestoneDurationMs,
-      };
+      return toastOf('milestone:' + event.id, `MILESTONE: ${nameOf(event.id)}`, INSTALL_LINES[event.id], 'milestone', TOAST_CONFIG.milestoneDurationMs);
   }
 }
 
@@ -90,24 +76,12 @@ export function welcomeBackMessage(r: OfflineReport): ToastMessage | null {
   if (r.elapsedSeconds > r.cappedSeconds) {
     body += ` Buffer capped at ${formatDuration(r.cappedSeconds)}.`;
   }
-  return {
-    key: 'welcome-back',
-    title: WELCOME_TEXT.title,
-    body,
-    tone: 'system',
-    durationMs: TOAST_CONFIG.welcomeDurationMs,
-  };
+  return toastOf('welcome-back', WELCOME_TEXT.title, body, 'system', TOAST_CONFIG.welcomeDurationMs);
 }
 
 // Toast shown when the stored save was unreadable and a fresh state was started.
 export function recoveredMessage(): ToastMessage {
-  return {
-    key: 'save-recovered',
-    title: RECOVERED_TEXT.title,
-    body: RECOVERED_TEXT.body,
-    tone: 'system',
-    durationMs: TOAST_CONFIG.welcomeDurationMs,
-  };
+  return toastOf('save-recovered', RECOVERED_TEXT.title, RECOVERED_TEXT.body, 'system', TOAST_CONFIG.welcomeDurationMs);
 }
 
 // Coalesced achievement toast (WP12 D5): one message for the ids unlocked in one evaluation.
@@ -130,26 +104,14 @@ export function achievementMessage(
   const body = names.length === 1
     ? first
     : `${first}${ACHIEVEMENT_TEXT.nameSeparator}${second}${ACHIEVEMENT_TEXT.ellipsis}`;
-  return {
-    key: ACHIEVEMENT_TEXT.key,
-    title,
-    body,
-    tone: 'system',
-    durationMs: TOAST_CONFIG.durationMs,
-  };
+  return toastOf(ACHIEVEMENT_TEXT.key, title, body, 'system');
 }
 
 // New-cycle toast (WP14 T8a): `CYCLE 0043` / `+3 ECHOES (+42% ALL/S)`. The bonus is the all-rate multiplier after the
 // gain (counts earned Echoes only, so perks do not change it). Shown after the reset, so it survives the toast clear.
 export function cycleMessage(event: SessionEvents['cycle']): ToastMessage {
   const bonusPct = Math.round((echoMultiplier({ cycle: event.cycle, echoesEarned: event.echoesEarned, perks: [] }) - 1) * 100);
-  return {
-    key: 'cycle',
-    title: cycleLabel(event.cycle),
-    body: `+${event.echoesGained} ${PRESTIGE_TEXT.echoes} (+${bonusPct}% ${PRESTIGE_TEXT.allPerSecond})`,
-    tone: 'system',
-    durationMs: TOAST_CONFIG.durationMs,
-  };
+  return toastOf('cycle', cycleLabel(event.cycle), `+${event.echoesGained} ${PRESTIGE_TEXT.echoes} (+${bonusPct}% ${PRESTIGE_TEXT.allPerSecond})`, 'system');
 }
 
 // WP20 T6: consecutive purchases of one tech within windowMs join one burst, so a quick buy spree reads as one toast.
@@ -183,13 +145,15 @@ export function purchaseBurstMessage(b: PurchaseBurst): ToastMessage {
   const span = b.toLevel - b.fromLevel <= 1
     ? `LV ${b.toLevel}`
     : `LV ${b.fromLevel} ${TOAST_BURST.arrow} ${b.toLevel}`;
-  return {
-    key: 'purchase:' + b.id,
-    title: `${nameOf(b.id)} — ${span}${tierToastSuffix(b.id, b.fromLevel, b.toLevel) ?? ''}`,
-    body: null,
-    tone: 'info',
-    durationMs: TOAST_CONFIG.durationMs,
-  };
+  return toastOf('purchase:' + b.id, `${nameOf(b.id)} — ${span}${tierToastSuffix(b.id, b.fromLevel, b.toLevel) ?? ''}`, null, 'info');
+}
+
+// FIELD NOTE toast (WP28 D3): a relic shows its note as `FIELD NOTE n/total` with the note text. `noteIndex` is the
+// 0-based note taken (null, or past the list, is a blank page). The relic pays nothing, so there is no payout line.
+export function relicMessage(noteIndex: number | null, total: number): ToastMessage {
+  const note = noteIndex === null ? undefined : RELIC_NOTES[noteIndex];
+  if (noteIndex === null || note === undefined) return toastOf('relic', FIND_TEXT.blankTitle, FIND_TEXT.blankPage, 'system');
+  return toastOf('relic', FIND_TEXT.relicTitle.replace('{n}', String(noteIndex + 1)).replace('{total}', String(total)), note.text, 'system');
 }
 
 // Upper-case display name of a technology.

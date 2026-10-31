@@ -11,6 +11,7 @@ export interface HotkeyDeps {
   crank(): void;
   toggleTechTree(): void;
   clearFault(): void;
+  collectFind(): void;
   openMenu(): void;
   now?(): number;
 }
@@ -85,6 +86,8 @@ export function bindHotkeys(target: Window, deps: HotkeyDeps): () => void {
       deps.toggleTechTree();
     } else if (action === 'fault') {
       deps.clearFault();
+    } else if (action === 'find') {
+      deps.collectFind();
     } else {
       deps.openMenu();
     }

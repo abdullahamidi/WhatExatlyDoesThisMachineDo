@@ -91,6 +91,7 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
   void import('./rendering/LivingWorldDirector').catch(() => undefined);
   // WP27: the fault marker is a lazy chunk as well; warmed here so it is ready when WorldScene builds it (WorldScene reports a failure).
   void import('./rendering/FaultMarker').catch(() => undefined);
+  void import('./rendering/WorldReach').catch(() => undefined);
   const search = opts.search ?? window.location.search;
   const edition = opts.edition ?? EDITIONS.full;
   const host = getHost(window);
@@ -149,7 +150,7 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
 
   const ctx: GameContext = {
     session,
-    commands: { refocus: createSignal(), openTechTree: createSignal(), openSystemMenu: createSignal(), crank: createSignal(), clearFault: createSignal() },
+    commands: { refocus: createSignal(), openTechTree: createSignal(), openSystemMenu: createSignal(), crank: createSignal(), clearFault: createSignal(), collectFind: createSignal() },
     feedback: {
       purchaseDenied: createSignal<PurchaseFailure>(), partLanded: createSignal<MachineComponentId>(), finaleBeat: createSignal<FinaleBeat>(),
       partEvolved: createSignal<PartEvolvedEvent>(), partTorqued: createSignal<PartTorquedEvent>(),
@@ -259,8 +260,9 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
       label: MENU_TABS.records.label,
       mount: (host) => createAchievementsPanel(host, {
         getUnlocked: () => session.achievements,
-        subscribe: (fn) => joinUnsubscribes(session.on('achievement', fn), session.on('reset', fn)),
+        subscribe: (fn) => joinUnsubscribes(session.on('achievement', fn), session.on('reset', fn), session.on('find', fn)),
         defs: editionAchievements(edition.maxEra),
+        fieldNotes: { relics: () => session.finds.relics, maxEra: edition.maxEra },
       }),
     },
     {
@@ -337,12 +339,13 @@ export function bootstrap(opts: BootOptions = {}): Phaser.Game {
     },
   });
 
-  // Global keys (T, Space / Enter crank, Escape opens the menu). Editable fields keep their keys.
+  // Global keys (T, F, G, Space / Enter crank, Escape opens the menu). Editable fields keep their keys.
   // The tech tree and the menu stay shut while the finale runs (sequence / choice).
   bindHotkeys(window, {
     modals,
     crank: () => ctx.commands.crank.emit(),
     clearFault: () => ctx.commands.clearFault.emit(),
+    collectFind: () => ctx.commands.collectFind.emit(),
     toggleTechTree: () => {
       if (isFinaleLocked(session.state.ending) || newCycleHoldsKeys() || shellHoldsKeys() || demoEnd?.isBusy() === true) return;
       if (techTree.isOpen()) techTree.close();

@@ -86,7 +86,8 @@
 }
 
 .tech-close-btn,
-#tech-buy {
+#tech-buy,
+#tech-buy-max {
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
@@ -105,7 +106,9 @@
 
 .tech-close-btn:focus-visible,
 #tech-buy:focus-visible,
-.tech-node:focus-visible {
+#tech-buy-max:focus-visible,
+.tech-node:focus-visible,
+.tech-splice-row:focus-visible {
   outline: 2px solid var(--amber);
   outline-offset: 2px;
 }
@@ -118,7 +121,8 @@
   gap: 8px;
 }
 
-.tech-tab {
+.tech-tab,
+.tech-splice-row {
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
@@ -168,7 +172,8 @@
 
 /* ---- graph ---- */
 
-#tech-graph {
+#tech-graph,
+#tech-splices {
   position: relative;
   flex: 0 1 auto;
   min-height: 0;
@@ -179,6 +184,20 @@
   /* if an era is wider than the panel, the overflow shows as a thin terminal scrollbar, not a browser-white bar */
   scrollbar-width: thin;
   scrollbar-color: var(--rust) rgba(0, 0, 0, .35);
+}
+
+/* WP28 C9 SPLICES tab: the list sits in the graph's box; a row is a tab-styled button with five columns (name, state, cost, effect, progress). */
+#tech-splices {
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+}
+
+.tech-splice-row {
+  display: grid;
+  grid-template-columns: 1.2fr 7.5em 6.5em 2fr 1.4fr;
+  gap: 12px;
+  text-align: left;
 }
 
 /* techTree.ts sets an inline CSS zoom on this element when the graph viewport is narrower than the era canvas (WP20 fit). WP16b-2: centred when the era canvas is narrower than the graph; the WP20 fit zoom fills the width otherwise. */
@@ -251,11 +270,13 @@
   border-style: dashed;
 }
 
-.tech-node.is-available {
+.tech-node.is-available,
+.tech-splice-row.is-available {
   border-color: var(--amber);
 }
 
-.tech-node.is-purchased {
+.tech-node.is-purchased,
+.tech-splice-row.is-purchased {
   background: var(--rust-dark);
   color: var(--haze);
 }
@@ -266,12 +287,14 @@
   color: var(--sand);
 }
 
-.tech-node.is-affordable {
+.tech-node.is-affordable,
+.tech-splice-row.is-affordable {
   border-color: var(--amber);
   box-shadow: 0 0 12px rgba(217, 130, 43, .75);
 }
 
-.tech-node.is-selected {
+.tech-node.is-selected,
+.tech-splice-row.is-selected {
   outline: 2px solid var(--haze);
   outline-offset: 2px;
 }
@@ -436,6 +459,12 @@
   grid-row: 1;
   align-self: start;
   margin: 0;
+}
+
+/* WP28 C9: BUY MAX takes the row under PURCHASE (shown only for an affordable repeatable). */
+#tech-buy-max {
+  grid-column: 1;
+  grid-row: 2;
 }
 
 #tech-buy[disabled] {

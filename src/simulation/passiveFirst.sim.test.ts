@@ -83,6 +83,7 @@ const clicksP1e = (s: Readonly<GameState>): number => (s.techLevels.motorTuning 
 // 0.5 cps, buy 1 s, stops at the Generator Blueprint. The demo variants of P1e and Q add the edition era cap.
 // WP27: A, B, C and R15 also run the Machine Faults process (`faults`: catch chance, reaction seconds). P1, P2, P0, Q
 // and P1e run none: a missed fault costs them nothing, so they stay as they were.
+// WP28: A, R15, B and C also pick up Finds (`finds`: 0.85 / 4 s for A and R15, 0.85 / 5 s for B, 0.4 / 6 s for C).
 const A_OPTIONS: GreedyOptions = {
   seconds: RUN_SECONDS,
   clicksPerSecond: 4,
@@ -92,6 +93,7 @@ const A_OPTIONS: GreedyOptions = {
   trackIncome: true,
   snapshotAt: A_SNAPSHOTS,
   faults: { catchProb: 1, reactionSeconds: 2 },
+  finds: { catchProb: 0.85, reactionSeconds: 4 },
 };
 const P1_OPTIONS: GreedyOptions = {
   seconds: RUN_SECONDS,
@@ -133,6 +135,7 @@ const R15_OPTIONS: GreedyOptions = {
   buyIntervalSeconds: 1,
   stopAt: 'primaryFunction',
   faults: { catchProb: 1, reactionSeconds: 2 },
+  finds: { catchProb: 0.85, reactionSeconds: 4 },
 };
 const P1E_OPTIONS: GreedyOptions = {
   seconds: RUN_SECONDS,
@@ -150,6 +153,7 @@ const B_OPTIONS: GreedyOptions = {
   stopAt: 'substationBlueprint',
   snapshotAt: ['substationBlueprint'],
   faults: { catchProb: 1, reactionSeconds: 3 },
+  finds: { catchProb: 0.85, reactionSeconds: 5 },
 };
 const C_OPTIONS: GreedyOptions = {
   seconds: RUN_SECONDS,
@@ -159,6 +163,7 @@ const C_OPTIONS: GreedyOptions = {
   stopAt: 'substationBlueprint',
   snapshotAt: ['substationBlueprint'],
   faults: { catchProb: 0.5, reactionSeconds: 4 },
+  finds: { catchProb: 0.4, reactionSeconds: 6 },
 };
 
 /** Demo era cap from the edition data (never retyped here). A null cap would mean the edition is not the demo. */
@@ -360,7 +365,7 @@ beforeAll(() => {
   );
   console.info(
     mdTable(
-      'Manual share of A income by era (manual / (manual + passive), frontier energy)',
+      'Manual share of A income by era (manual / (manual + passive + fault + find), frontier energy)',
       ['era', 'frontier', 'manual share', 'asserted', 'check'],
       ERAS.map((era) => {
         const res = eraResource(era);

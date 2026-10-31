@@ -268,7 +268,7 @@ async function firstRun(s) {
     // The demo caps the tech tree at era II: five tabs, the last three read FULL GAME and stay disabled.
     await page.keyboard.press('t');
     await sleep(400);
-    const tabs = await page.$$eval('.tech-tab', (els) => els.map((el) => ({
+    const tabs = await page.$$eval('.tech-tab:not(#tech-tab-splices)', (els) => els.map((el) => ({
       text: (el.textContent || '').trim(),
       disabled: el instanceof HTMLButtonElement && el.disabled,
     })));

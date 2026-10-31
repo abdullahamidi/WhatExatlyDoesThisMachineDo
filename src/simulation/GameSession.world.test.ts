@@ -3,7 +3,7 @@
 // Why: the block is optional save data, so the session must normalize it and never share its arrays.
 // Pure: no persistence and no Phaser imports (the save format is tested in src/persistence).
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_WORLD_SAVE } from '../data/livingWorld';
+import { DEFAULT_WORLD_SAVE, RELICS_MAX } from '../data/livingWorld';
 import type { WorldSaveState } from '../data/livingWorld';
 import { GameSession } from './GameSession';
 import { clampLoadToEra } from './progression/edition';
@@ -70,7 +70,7 @@ describe('GameSession living-world block (WP23a)', () => {
     session.recordWorld(input);
     input.seen.push('INS-01');
 
-    expect(session.world).toEqual({ seen: ['DOG-01'], seenEver: ['DOG-01'], eraMoments: [99, 0, 4, 0, 0], youEras: 31 });
+    expect(session.world).toEqual({ seen: ['DOG-01'], seenEver: ['DOG-01'], eraMoments: [99, 0, 4, 0, 0], youEras: 31, relics: 0 });
     expect(session.worldRevision).toBe(1);
     expect(session.revision).toBe(revision);
     expect(session.state).toBe(state);
@@ -89,7 +89,7 @@ describe('GameSession living-world block (WP23a)', () => {
     const revision = session.worldRevision;
 
     expect(session.beginNewCycle(0)).toBe(true);
-    expect(session.world).toEqual({ seen: [], seenEver: SAMPLE.seenEver, eraMoments: [0, 0, 0, 0, 0], youEras: 0 });
+    expect(session.world).toEqual({ seen: [], seenEver: SAMPLE.seenEver, eraMoments: [0, 0, 0, 0, 0], youEras: 0, relics: 0 });
     expect(session.world.seenEver).not.toBe(SAMPLE.seenEver);
     expect(session.worldRevision).toBeGreaterThan(revision);
   });
@@ -107,6 +107,24 @@ describe('GameSession living-world block (WP23a)', () => {
     session.reset(0);
     expect(session.world).toEqual(DEFAULT_WORLD_SAVE);
     expect(session.worldRevision).toBeGreaterThan(revision);
+  });
+
+  it('normalizes the relic count: missing, 3, 99 -> 15, -1 -> 0, text -> 0, 2.9 -> 2 (WP28)', () => {
+    expect(RELICS_MAX).toBe(15);
+    expect(normalizeWorld(SAMPLE).relics).toBe(0);
+    expect(normalizeWorld({ ...SAMPLE, relics: 3 }).relics).toBe(3);
+    expect(normalizeWorld({ ...SAMPLE, relics: 99 }).relics).toBe(15);
+    expect(normalizeWorld({ ...SAMPLE, relics: -1 }).relics).toBe(0);
+    expect(normalizeWorld({ ...SAMPLE, relics: '7' }).relics).toBe(0);
+    expect(normalizeWorld({ ...SAMPLE, relics: 2.9 }).relics).toBe(2);
+  });
+
+  it('the default block and a fresh session carry relics 0 (WP28)', () => {
+    expect(DEFAULT_WORLD_SAVE.relics).toBe(0);
+    expect(normalizeWorld(undefined).relics).toBe(0);
+    expect(new GameSession({ state: createInitialState(0), now: () => 0 }).world.relics).toBe(0);
+    const given = new GameSession({ state: createInitialState(0), now: () => 0, world: { ...SAMPLE, relics: 4 } });
+    expect(given.world.relics).toBe(4);
   });
 
   it('a demo-capped session keeps the block that the era clamp leaves alone', () => {

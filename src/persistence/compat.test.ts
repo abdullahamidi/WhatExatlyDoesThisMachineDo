@@ -15,12 +15,13 @@ import type {
 import { DESIGN_MAX_VALUE, SAVE_BACKUP_KEY, SAVE_KEY } from '../data/balance';
 import { TECHNOLOGIES } from '../data/technologies';
 import { DEFAULT_SETTINGS_VALUES } from '../data/settings';
+import { ECON_REVISION, SPLIT_PARTS } from '../data/pacing';
 import { DEFAULT_WORLD_SAVE } from '../data/livingWorld';
 import type { WorldSaveState } from '../data/livingWorld';
 import type { HostStorageBridge, WedtmdHost } from '../platform/host';
 import { echoesForCycle, ENDING_PHASES, normalizePrestige, normalizeSettings, normalizeWorld } from '../simulation';
 import { deserialize, serialize } from './codec';
-import { parseImport } from './exchange';
+import { encodeSave, parseImport } from './exchange';
 import { pickStorage } from './hostStorage';
 import type { TimeoutPort } from './hostStorage';
 import { MemoryStorage, SaveManager } from './saveManager';
@@ -93,7 +94,8 @@ const ROWS: readonly CompatRow[] = [
     phase: 'none',
     prestige: { cycle: 1, echoesEarned: 0, perks: [] },
     settings: { musicVolume: 70, confirmNewCycle: true, notation: 'suffix' },
-    levels: { generator: 1, copperWinding: 8, sparkGap: 0, boiler: 0, bellowsDrive: 0 },
+    // WP28 econ remap (old -> new): copperWinding 8 -> 16, motorRetrofit 4 -> 8.
+    levels: { generator: 1, copperWinding: 16, sparkGap: 0, boiler: 0, bellowsDrive: 0 },
     res: { ee: 1800.5 },
     cycles: 1,
     noAchievements: true,
@@ -142,7 +144,8 @@ const ROWS: readonly CompatRow[] = [
     phase: 'none',
     prestige: { cycle: 1, echoesEarned: 0, perks: [] },
     settings: { musicVolume: 55 },
-    levels: { nullChamber: 1, containmentRing: 10, bellowsDrive: 0, gridExciter: 0, mainsBackfeed: 0, steamLance: 0 },
+    // WP28 econ remap (old -> new): containmentRing 10 -> 20, resonantSiphon 4 -> 12, graviticAnchor 2 -> 4.
+    levels: { nullChamber: 1, containmentRing: 20, bellowsDrive: 0, gridExciter: 0, mainsBackfeed: 0, steamLance: 0 },
     legacyAvailable: true,
   },
   {
@@ -152,7 +155,8 @@ const ROWS: readonly CompatRow[] = [
     phase: 'postgame',
     prestige: { cycle: 3, echoesEarned: 6, perks: ['muscleMemory', 'residualCharge', 'longSilence'] },
     settings: { musicVolume: 40, uiScale: 150, notation: 'engineering', screenShake: false, confirmNewCycle: false },
-    levels: { bellowsDrive: 37, gridExciter: 12, mainsBackfeed: 5, steamLance: 6 },
+    // WP28 econ remap (old -> new): bellowsDrive 37 -> 111, gridExciter 12 -> 36, mainsBackfeed 5 -> 15, steamLance 6 -> 18.
+    levels: { bellowsDrive: 111, gridExciter: 36, mainsBackfeed: 15, steamLance: 18 },
     lossless: true,
     newCycle: true,
   },
@@ -163,8 +167,9 @@ const ROWS: readonly CompatRow[] = [
     phase: 'postgame',
     prestige: { cycle: 3, echoesEarned: 6, perks: ['muscleMemory', 'residualCharge', 'longSilence'] },
     settings: { musicVolume: 40, uiScale: 150, notation: 'engineering', screenShake: false, confirmNewCycle: false, worldVoices: 'rare' },
-    levels: { bellowsDrive: 37, gridExciter: 12, mainsBackfeed: 5, steamLance: 6 },
-    world: { seen: ['INS-01', 'CRW-01'], seenEver: ['INS-01', 'CRW-01', 'beat.tapeFreeze'], eraMoments: [2, 0, 0, 0, 0], youEras: 1 },
+    // WP28 econ remap (old -> new): bellowsDrive 37 -> 111, gridExciter 12 -> 36, mainsBackfeed 5 -> 15, steamLance 6 -> 18.
+    levels: { bellowsDrive: 111, gridExciter: 36, mainsBackfeed: 15, steamLance: 18 },
+    world: { seen: ['INS-01', 'CRW-01'], seenEver: ['INS-01', 'CRW-01', 'beat.tapeFreeze'], eraMoments: [2, 0, 0, 0, 0], youEras: 1, relics: 0 },
     lossless: true,
     newCycle: true,
   },
@@ -182,7 +187,8 @@ const ROWS: readonly CompatRow[] = [
       sfxVolume: 0,
       reducedMotion: false,
     },
-    levels: { handCrank: 1, gearRatio: 15, crankServo: 10, boiler: 1, generator: 0, bellowsDrive: 500, steamLance: 7 },
+    // WP28 econ remap (old -> new): bellowsDrive 500 -> 1500, steamLance 7.9 (read as 7) -> 23.7 (read as 23).
+    levels: { handCrank: 1, gearRatio: 15, crankServo: 10, boiler: 1, generator: 0, bellowsDrive: 1500, steamLance: 23 },
     absentLevels: ['quantumFoo'],
     totalClicks: 77,
     lifetime: { me: 5000 },
@@ -357,7 +363,19 @@ describe.each(ROWS)('$file', (row) => {
       if (out.settings['worldVoices'] === 'on') delete out.settings['worldVoices'];
       // WP23a: old fixtures have no world block; the default block is not written back for them.
       if (JSON.stringify(out.world) === JSON.stringify(DEFAULT_WORLD_SAVE)) delete out.world;
-      expect(out).toEqual(JSON.parse(row.raw));
+      // WP28 econ remap: the re-save is written at econ 28 with the split levels on the new scale; a fixture world block gains relics 0.
+      const expected = JSON.parse(row.raw) as {
+        econ?: number;
+        state: { techLevels: Record<string, number> };
+        world?: Record<string, unknown>;
+      };
+      expected.econ = ECON_REVISION;
+      for (const [id, parts] of Object.entries(SPLIT_PARTS)) {
+        const level = expected.state.techLevels[id];
+        if (level !== undefined) expected.state.techLevels[id] = level * parts;
+      }
+      if (expected.world !== undefined && expected.world['relics'] === undefined) expected.world['relics'] = 0;
+      expect(out).toEqual(expected);
     }
   });
 
@@ -444,5 +462,73 @@ describe.each(ROWS)('$file', (row) => {
       expect(view.status, id).toBe('available');
       expect(view.nextCost, id).toBe(TECHNOLOGIES[id].baseCost);
     }
+  });
+});
+
+// WP28 econ remap (C3): a save without econ 28 is remapped once on load (boot and import); an econ 28 save keeps its levels.
+describe('WP28 econ remap', () => {
+  const copperMax = TECHNOLOGIES.copperWinding.maxLevel as number;
+  const motorMax = TECHNOLOGIES.motorRetrofit.maxLevel as number;
+  const resaveOf = (r: LoadResult): string =>
+    serialize(r.state, r.settings, NOW, { stats: r.stats, achievements: r.achievements, prestige: r.prestige });
+
+  it('an old save (no econ) loads with its split levels multiplied by their parts', () => {
+    // WP28 econ remap (old -> new): copperWinding 8 -> 16, motorRetrofit 4 -> 8.
+    const r = deserialize(wp8Raw, NOW);
+    expect(r.status).toBe('loaded');
+    expect(r.state.techLevels.copperWinding).toBe(16);
+    expect(r.state.techLevels.motorRetrofit).toBe(8);
+  });
+
+  it('a save with econ 28 is NOT remapped', () => {
+    const parsed = JSON.parse(wp8Raw) as Record<string, unknown>;
+    const r = deserialize(JSON.stringify({ ...parsed, econ: ECON_REVISION }), NOW);
+    expect(r.status).toBe('loaded');
+    expect(r.state.techLevels.copperWinding).toBe(8);
+    expect(r.state.techLevels.motorRetrofit).toBe(4);
+  });
+
+  it('a remapped level is clamped to the new maximum', () => {
+    const raw = JSON.stringify({
+      version: 2,
+      savedAt: 1,
+      state: { techLevels: { copperWinding: copperMax, motorRetrofit: 100000 } },
+    });
+    const r = deserialize(raw, NOW);
+    expect(r.status).toBe('loaded');
+    expect(r.state.techLevels.copperWinding).toBe(copperMax);
+    expect(r.state.techLevels.motorRetrofit).toBe(motorMax);
+  });
+
+  it('serialize writes econ 28 in both envelope forms', () => {
+    const r = deserialize(wp8Raw, NOW);
+    expect((JSON.parse(serialize(r.state, r.settings, NOW)) as Record<string, unknown>)['econ']).toBe(ECON_REVISION);
+    expect((JSON.parse(resaveOf(r)) as Record<string, unknown>)['econ']).toBe(ECON_REVISION);
+  });
+
+  it('an exported string imports back with the same levels and is not remapped again', () => {
+    const r = deserialize(wp8Raw, NOW);
+    const back = parseImport(encodeSave(resaveOf(r)), NOW);
+    expect(back).toMatchObject({ ok: true, migrated: false });
+    if (!back.ok) return;
+    expect(back.envelope.state).toEqual(r.state);
+    expect(back.envelope.state.techLevels.copperWinding).toBe(16);
+  });
+
+  it('loading, saving and loading again never remaps twice', () => {
+    const first = deserialize(wp8Raw, NOW);
+    const second = deserialize(resaveOf(first), NOW);
+    const third = deserialize(resaveOf(second), NOW);
+    expect(second.state.techLevels.copperWinding).toBe(16);
+    expect(second.state.techLevels).toEqual(first.state.techLevels);
+    expect(third.state.techLevels).toEqual(first.state.techLevels);
+  });
+
+  it('a migrated v1 save with split levels is remapped too', () => {
+    const v1 = JSON.parse(v1Raw) as { state: { techLevels?: Record<string, number> } };
+    v1.state.techLevels = { ...v1.state.techLevels, copperWinding: 5 };
+    const r = deserialize(JSON.stringify(v1), NOW);
+    expect(r.status).toBe('migrated');
+    expect(r.state.techLevels.copperWinding).toBe(10);
   });
 });

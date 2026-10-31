@@ -8,6 +8,7 @@ import { resolveAttachment } from '../game/math/machineLayout';
 import { diffTiers } from '../game/math/partTiers';
 import { MACHINE_BOUNDS, MACHINE_COMPONENTS, MACHINE_COMPONENT_IDS } from './machineComponents';
 import { TECHNOLOGIES } from './technologies';
+import { SPLIT_PARTS } from './pacing';
 import type { TechId } from './types';
 import {
   PART_TIERS,
@@ -31,37 +32,37 @@ const ORDER: readonly TechId[] = [
   'standingWave', 'gridExciter', 'containmentRing', 'resonantSiphon', 'graviticAnchor', 'mainsBackfeed', 'steamLance',
 ];
 
-// PART_TIERS §1.2 reach column: the level every profile holds at primaryFunction (minimum over A, B, C).
+// PART_TIERS §1.2 reach column: the level every profile holds at primaryFunction (minimum over A, B, C). WP28 REC: split tracks by P7 (parts x (v0.11.0 reach - 1) + 1); the REC gate checks every track at its top tier by PF.
 const REACH: Partial<Record<TechId, number>> = {
-  gearRatio: 15, flywheel: 10, motorTuning: 25, improvedPistons: 25, copperWinding: 25, motorRetrofit: 19,
-  transformer: 20, firebox: 25, inductionHeater: 20, condenser: 20, bellowsDrive: 4, harmonicCoil: 25,
-  pressureResonator: 19, crankServo: 7, standingWave: 20, gridExciter: 15, containmentRing: 25,
-  resonantSiphon: 11, graviticAnchor: 3, mainsBackfeed: 8, steamLance: 13,
+  gearRatio: 15, flywheel: 10, motorTuning: 25, improvedPistons: 25, copperWinding: 49, motorRetrofit: 37,
+  transformer: 39, firebox: 49, inductionHeater: 58, condenser: 58, bellowsDrive: 10, harmonicCoil: 49,
+  pressureResonator: 37, crankServo: 7, standingWave: 39, gridExciter: 43, containmentRing: 49,
+  resonantSiphon: 31, graviticAnchor: 5, mainsBackfeed: 22, steamLance: 37,
 };
 
-// PART_TIERS §1.2 MK levels: tier k starts at entry k - 1.
+// PART_TIERS §1.2 MK levels: tier k starts at entry k - 1. WP28 REC (P7): the 16 split tracks use parts x (v0.11.0 level - 1) + 1; the v0.11.0 lists are the literal table in src/data/pacing.test.ts.
 const LEVELS: Partial<Record<TechId, readonly number[]>> = {
   gearRatio: [1, 6, 15],
   flywheel: [1, 4, 10],
   motorTuning: [1, 5, 10, 20, 25],
   improvedPistons: [1, 5, 10, 20, 25],
-  copperWinding: [1, 5, 10, 20, 25],
-  motorRetrofit: [1, 4, 8, 13, 18],
-  transformer: [1, 4, 8, 13, 20],
-  firebox: [1, 5, 10, 20, 25],
-  inductionHeater: [1, 4, 8, 13, 20],
-  condenser: [1, 4, 8, 13, 20],
-  bellowsDrive: [1, 2, 3],
-  harmonicCoil: [1, 4, 8, 16, 25],
-  pressureResonator: [1, 4, 8, 13, 18],
+  copperWinding: [1, 9, 19, 39, 49],
+  motorRetrofit: [1, 7, 15, 25, 35],
+  transformer: [1, 7, 15, 25, 39],
+  firebox: [1, 9, 19, 39, 49],
+  inductionHeater: [1, 10, 22, 37, 58],
+  condenser: [1, 10, 22, 37, 58],
+  bellowsDrive: [1, 4, 7],
+  harmonicCoil: [1, 7, 15, 31, 49],
+  pressureResonator: [1, 7, 15, 25, 35],
   crankServo: [1, 4, 7],
-  standingWave: [1, 4, 8, 13, 20],
-  gridExciter: [1, 7, 14],
-  containmentRing: [1, 4, 8, 16, 25],
-  resonantSiphon: [1, 5, 10],
-  graviticAnchor: [1, 2, 3],
-  mainsBackfeed: [1, 4, 7],
-  steamLance: [1, 7, 12],
+  standingWave: [1, 7, 15, 25, 39],
+  gridExciter: [1, 19, 40],
+  containmentRing: [1, 7, 15, 31, 49],
+  resonantSiphon: [1, 13, 28],
+  graviticAnchor: [1, 3, 5],
+  mainsBackfeed: [1, 10, 19],
+  steamLance: [1, 19, 34],
 };
 
 // Tracks with a heartbeat (PART_TIERS §2.3 lamps and pulse frames), track order.
@@ -84,6 +85,12 @@ function trackOf(id: TechId): PartTierTrack {
   const found = PART_TIERS.find((t) => t.techId === id);
   if (found === undefined) throw new Error(`no track for ${id}`);
   return found;
+}
+
+/** The cap from which a track has 5 tiers: 18 v0.11.0 levels, which P7 maps to parts x 17 + 1 on a split track. */
+function fiveTierCap(id: TechId): number {
+  const parts = (SPLIT_PARTS as Partial<Record<TechId, number>>)[id] ?? 1;
+  return parts * 17 + 1;
 }
 
 function topLevel(t: PartTierTrack): number {
@@ -122,14 +129,14 @@ describe('tier levels (WP22 A1)', () => {
     }
   });
 
-  it('uses 5 tiers iff cap = min(maxLevel, reach) >= 18, else 3, and tops out within the cap', () => {
+  it('uses 5 tiers iff cap = min(maxLevel, reach) reaches fiveTierCap (18; parts x 17 + 1 on a split track), else 3, and tops out within the cap', () => {
     expect(Object.keys(REACH)).toHaveLength(21);
     for (const t of PART_TIERS) {
       const reach = REACH[t.techId];
       expect(reach, t.techId).toBeDefined();
       const max = TECHNOLOGIES[t.techId].maxLevel ?? Number.POSITIVE_INFINITY;
       const cap = Math.min(max, reach ?? 0);
-      expect(t.levels.length, t.techId).toBe(cap >= 18 ? 5 : 3);
+      expect(t.levels.length, t.techId).toBe(cap >= fiveTierCap(t.techId) ? 5 : 3);
       expect(topLevel(t), t.techId).toBeLessThanOrEqual(cap);
     }
   });

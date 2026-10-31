@@ -1,9 +1,10 @@
-import { SYSTEM_LOGS, SYSTEM_LOG_CONFIG, SYSTEM_LOG_TITLE } from '../data/systemLogs';
+import { SYSTEM_LOGS, SYSTEM_LOG_CONFIG, SYSTEM_LOG_CUT, SYSTEM_LOG_TITLE } from '../data/systemLogs';
 import type { SystemLogEntry, SystemLogTrigger } from '../data/systemLogs';
 import type { ToastMessage } from '../data/notifications';
 import type { ResourceMap } from '../data/types';
 import { CYCLE_LABEL } from '../data/prestige';
 import { cycleLabel } from '../simulation/prestige';
+import { toastOf } from './notificationRules';
 
 // Pure scheduler for rare system-log toasts (WP4). No DOM, no Phaser, no mutation of inputs.
 
@@ -52,14 +53,23 @@ export function nextSystemLog(
   return null;
 }
 
+// True when the minimum gap has passed since the last shown line (the rule nextSystemLog applies).
+export function gapOpen(t: SystemLogTracker, nowMs: number, minGapMs: number = SYSTEM_LOG_CONFIG.minGapMs): boolean {
+  return nowMs - t.lastShownAt >= minGapMs;
+}
+
+// Tracker after a line that is not a table entry (the Splice cut) was shown: only lastShownAt moves, like a table line.
+export function markShown(t: SystemLogTracker, nowMs: number): SystemLogTracker {
+  return { shown: t.shown, lastShownAt: nowMs };
+}
+
+// WP28 prestige line: the SYS LOG one-shot for the Splices a new cycle cut. {n} is the count of Splices woken before the reset.
+export function cutLogMessage(n: number): ToastMessage {
+  return toastOf(`log:${SYSTEM_LOG_CUT.id}`, SYSTEM_LOG_TITLE, SYSTEM_LOG_CUT.text.replaceAll('{n}', String(n)), 'system', SYSTEM_LOG_CONFIG.durationMs);
+}
+
 // Toast for one system log line. {cycle} becomes the live cycle digits (WP20), e.g. 0042.
 export function systemLogMessage(e: SystemLogEntry, cycle: number = 1): ToastMessage {
   const digits = cycleLabel(cycle).slice(CYCLE_LABEL.prefix.length);
-  return {
-    key: `log:${e.id}`,
-    title: SYSTEM_LOG_TITLE,
-    body: e.text.replaceAll('{cycle}', digits),
-    tone: 'system',
-    durationMs: SYSTEM_LOG_CONFIG.durationMs,
-  };
+  return toastOf(`log:${e.id}`, SYSTEM_LOG_TITLE, e.text.replaceAll('{cycle}', digits), 'system', SYSTEM_LOG_CONFIG.durationMs);
 }

@@ -20,17 +20,19 @@ export const WORLD_ENDING = {
   girlRun: { startS: 31.5, endS: 34, dxWorldPx: -420, frames: ['run0', 'run1', 'run2', 'run3'], fps: 8, dropFrame: 'lanternDrop', dropMs: 200 },
   inspectorBaseL: { fromS: 41, toS: 43, frame: 'idleB' },
   dogWag: { fromS: 45.2, toS: 45.8, frame: 'wag' },
-  // Crow: takes off at 37 s and leads the first flock (fx.bird pool, 38 s); glides back to the lamp from 47.5 s to 49.3 s.
+  // Crow: takes off at 37 s and leads the first flock (fx.bird pool, 38 s); glides back to its lamp-arm perch from 47.5 s to 49.3 s.
   crow: {
     takeoffS: 37, returnFromS: 47.5, returnToS: 49.3, flyFrames: ['fly0', 'fly1', 'fly2'], fps: 8,
     climbDx: 300, climbDy: -380, returnStartDx: 520, returnStartDy: -380,
+    crowRest: { dx: 30, dy: 26 },   // the end of the kite's lamp-arm perch (AD4 F45): every crow pose starts from it, never the lamp top
   },
   lastLookBlinkMs: 250,
-  // KEEP IT RUNNING beats, seconds after KEEP: turn away, the crow's three pecks at mark 42, the dog fades out at its home in the
+  // KEEP IT RUNNING beats, seconds after KEEP: turn away, the crow hops from its lamp-arm perch to the vane finial and pecks three
+  // times at mark 42 (hopDx / hopDy are offsets from crowRest), the dog fades out at its home in the
   // right gap (4-4.5 s; the crow beat holds the eye meanwhile), hidden 4.5-7 s, re-entry from the left wing (7-8 s, from x 540),
   // sat at its left wing home from 8 s; dogSettleS / loopStartS (9 s) hand over to the postgame loop.
   keep: {
-    turnAwayS: 1.5, scratchStartS: 3, hopMs: 200, pecks: 3, peckMs: 300, hopDx: -54, hopDy: 10,
+    turnAwayS: 1.5, scratchStartS: 3, hopMs: 200, pecks: 3, peckMs: 300, hopDx: -84, hopDy: -52,   // offsets from crowRest: crowRest + hop = (-54, -26) from the lamp top = the vane finial (3050, G-138) (AD4 F45)
     dogFade: { fromS: 4, toS: 4.5 }, dogEnter: { fromS: 7, toS: 8, fromX: 540 }, dogSettleS: 9, loopStartS: 9,
   },
   // Walk speeds in world px a frame. KEEP re-entry: 16 px at 12 fps (192 px/s). Postgame: a moving segment lasts

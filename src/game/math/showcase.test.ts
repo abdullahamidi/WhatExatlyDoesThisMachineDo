@@ -21,13 +21,13 @@ import type { LevelFloor } from './showcase';
  * finalAlignment and primaryFunction (no part gate) are absent.
  */
 const VISUAL_MAX_SNAPSHOT: Partial<Record<TechId, number>> = {
-  handCrank: 1, gearRatio: 15, wornMotor: 1, flywheel: 10, reinforcedCrank: 1, pistonArray: 1, generator: 1, copperWinding: 25,
-  motorRetrofit: 18, dynamoCrank: 1, capacitorBank: 1, sparkGap: 1, transformer: 20, powerLines: 1, boiler: 1, firebox: 25,
-  inductionHeater: 20, superheater: 1, reliefValves: 1, steamHammer: 1, condenser: 20, turbine: 1, resonatorSpire: 1, standingWave: 20,
-  harmonicCoil: 25, pressureResonator: 18, crankServo: 7, echoCrank: 1, phaseLock: 1, crystalLattice: 1, containmentRing: 25,
-  nullChamber: 1, resonantSiphon: 10, graviticAnchor: 3, inversionCrank: 1, lensArray: 1, skyAperture: 1,
+  handCrank: 1, gearRatio: 15, wornMotor: 1, flywheel: 10, reinforcedCrank: 1, pistonArray: 1, generator: 1, copperWinding: 49,
+  motorRetrofit: 35, dynamoCrank: 1, capacitorBank: 1, sparkGap: 1, transformer: 39, powerLines: 1, boiler: 1, firebox: 49,
+  inductionHeater: 58, superheater: 1, reliefValves: 1, steamHammer: 1, condenser: 58, turbine: 1, resonatorSpire: 1, standingWave: 39,
+  harmonicCoil: 49, pressureResonator: 35, crankServo: 7, echoCrank: 1, phaseLock: 1, crystalLattice: 1, containmentRing: 49,
+  nullChamber: 1, resonantSiphon: 28, graviticAnchor: 5, inversionCrank: 1, lensArray: 1, skyAperture: 1,
   generatorBlueprint: 1, substationBlueprint: 1, pressureVesselBlueprint: 1, harmonicConvergence: 1,
-  motorTuning: 25, improvedPistons: 25, bellowsDrive: 3, gridExciter: 14, mainsBackfeed: 7, steamLance: 12,
+  motorTuning: 25, improvedPistons: 25, bellowsDrive: 7, gridExciter: 40, mainsBackfeed: 19, steamLance: 34,
 };
 const ABSENT_FROM_VISUAL_MAX: TechId[] = ['horizonField', 'finalAlignment', 'primaryFunction'];
 
@@ -89,29 +89,29 @@ describe('visualMaxForEra', () => {
     expect(Object.isFrozen(visualMaxForEra(0))).toBe(true);
   });
 
-  it('era 3: copper 25, firebox 25, bellows drive 3, no era IV or V tech', () => {
+  it('era 3: copper 49, firebox 49, bellows drive 7, no era IV or V tech', () => {
     const e3 = visualMaxForEra(3);
-    expect(e3.copperWinding).toBe(25);
-    expect(e3.firebox).toBe(25);
-    expect(e3.bellowsDrive).toBe(3);
+    expect(e3.copperWinding).toBe(49);
+    expect(e3.firebox).toBe(49);
+    expect(e3.bellowsDrive).toBe(7);
     expect(e3.harmonicCoil).toBeUndefined();
     expect(e3.gridExciter).toBeUndefined();
   });
 
-  it('era 4 adds harmonic coil 25 and grid exciter 14, no era V tech', () => {
+  it('era 4 adds harmonic coil 49 and grid exciter 40, no era V tech', () => {
     const e4 = visualMaxForEra(4);
-    expect(e4.harmonicCoil).toBe(25);
-    expect(e4.gridExciter).toBe(14);
+    expect(e4.harmonicCoil).toBe(49);
+    expect(e4.gridExciter).toBe(40);
     expect(e4.nullChamber).toBeUndefined();
     expect(e4.skyAperture).toBeUndefined();
   });
 
-  it('era 2 raises only era I-II tracks: motor tuning 25, gear ratio 15, copper 25, transformer 20', () => {
+  it('era 2 raises only era I-II tracks: motor tuning 25, gear ratio 15, copper 49, transformer 39', () => {
     const e2 = visualMaxForEra(2);
     expect(e2.motorTuning).toBe(25);
     expect(e2.gearRatio).toBe(15);
-    expect(e2.copperWinding).toBe(25);
-    expect(e2.transformer).toBe(20);
+    expect(e2.copperWinding).toBe(49);
+    expect(e2.transformer).toBe(39);
     expect(e2.firebox).toBeUndefined();
     expect(e2.harmonicCoil).toBeUndefined();
     expect(e2.bellowsDrive).toBeUndefined();
@@ -149,8 +149,8 @@ describe('visualMaxForEra', () => {
 });
 
 describe('sceneMaxForEra', () => {
-  it('era 5 raises horizon field to 20 from the horizon glow stages', () => {
-    expect(sceneMaxForEra(5).horizonField).toBe(20);
+  it('era 5 raises horizon field to 39 from the horizon glow stages', () => {
+    expect(sceneMaxForEra(5).horizonField).toBe(39);
   });
 
   it('era 5 is a superset of visualMaxLevels (every key at least as high)', () => {
@@ -180,13 +180,13 @@ function levelsAll(v: number): Record<TechId, number> {
 }
 
 describe('mergeDisplayLevels', () => {
-  const real: Record<TechId, number> = { ...createInitialState(0).techLevels, copperWinding: 3, firebox: 30 };
+  const real: Record<TechId, number> = { ...createInitialState(0).techLevels, copperWinding: 3, firebox: 50 };
 
   it('never lowers a level', () => {
     const merged = mergeDisplayLevels(real, visualMaxForEra(5));
     for (const id of TECH_IDS) expect(merged[id]).toBeGreaterThanOrEqual(real[id]);
-    expect(merged.firebox).toBe(30);
-    expect(merged.copperWinding).toBe(25);
+    expect(merged.firebox).toBe(50);
+    expect(merged.copperWinding).toBe(49);
   });
 
   it('null floor returns the same reference', () => {
@@ -211,12 +211,12 @@ describe('mergeDisplayLevels', () => {
 describe('greedy-end fixture', () => {
   const L: Record<TechId, number> = { ...createInitialState(0).techLevels };
   for (const id of keysOf(visualMaxLevels())) L[id] = 1;
-  L.copperWinding = 10;
-  L.firebox = 10;
-  L.harmonicCoil = 16;
-  L.containmentRing = 16;
-  L.resonantSiphon = 11;
-  L.graviticAnchor = 4;
+  L.copperWinding = 19;
+  L.firebox = 19;
+  L.harmonicCoil = 31;
+  L.containmentRing = 31;
+  L.resonantSiphon = 31;
+  L.graviticAnchor = 7;
   L.mainsBackfeed = 0;
   L.steamLance = 0;
 
@@ -226,7 +226,7 @@ describe('greedy-end fixture', () => {
     expect(visible.has('steamLance')).toBe(false);
   });
 
-  it('the top siphon stage is visible before the merge (resonant siphon 11 >= 10)', () => {
+  it('the top siphon stage is visible before the merge (resonant siphon 31 >= 28)', () => {
     expect(visibleComponentIds(L).has('siphonTube3L')).toBe(true);
   });
 

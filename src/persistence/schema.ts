@@ -22,6 +22,7 @@ import { deriveStats } from '../simulation/stats';
 import { normalizePrestige } from '../simulation/prestige';
 import { DEFAULT_ENDING, ENDING_PHASES, normalizeEnding } from '../simulation/progression/ending';
 import { normalizeWorld } from '../simulation/worldSave';
+import { needsEconRemap, remapSplitLevels } from '../simulation/economyMigration';
 import type { WorldSaveState } from '../data/livingWorld';
 
 /** Current save schema version. v2 stores per-resource maps (`state.res`, `state.lifetime`). */
@@ -309,6 +310,20 @@ export function readWorld(input: unknown): WorldSaveState {
 }
 
 /**
+ * WP28 save remap (C3): a save without `econ >= ECON_REVISION` gets its split-track levels multiplied by their parts,
+ * before readTechLevels clamps them. Returns the input itself when nothing applies; otherwise a shallow copy whose
+ * state.techLevels is remapped. Never mutates the input. Boot load and import both reach it through validateEnvelope.
+ */
+function applyEconRemap(input: Plain): Plain {
+  if (!needsEconRemap(input)) return input;
+  const state = input['state'];
+  if (!isPlainObject(state)) return input;
+  const techLevels = state['techLevels'];
+  if (!isPlainObject(techLevels)) return input;
+  return { ...input, state: { ...state, techLevels: remapSplitLevels(techLevels) } };
+}
+
+/**
  * Lenient normaliser for a (migrated) save envelope. Missing optional fields take defaults;
  * present core fields (version, savedAt, state) of the wrong type are errors. Settings, stats,
  * achievements and prestige never fail a save. The result contains only known fields and always has all of them.
@@ -325,7 +340,7 @@ export function validateEnvelope(
   }
   const savedAt = readNumber(input, 'savedAt', nowMs);
   if (!savedAt.ok) return savedAt;
-  const state = readState(input['state'], nowMs, techs);
+  const state = readState(applyEconRemap(input)['state'], nowMs, techs);
   if (!state.ok) return state;
   const settings = readSettings(input['settings']);
   const stats = readStats(input['stats'], state.value, nowMs);

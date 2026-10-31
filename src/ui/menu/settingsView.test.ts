@@ -206,14 +206,20 @@ describe('confirm new cycle row visibility', () => {
 });
 
 describe('hotkeyHelpLines', () => {
-  it('lists crank, tech index, clear fault, menu and fullscreen keys in that order', () => {
+  it('lists crank, tech index, clear fault, pick up find, menu and fullscreen keys in that order', () => {
     expect(hotkeyHelpLines()).toEqual([
       'SPACE / ENTER  CRANK',
       'T  TECH INDEX',
       'F  CLEAR FAULT',
+      'G  PICK UP FIND',
       'ESC  MENU',
       'F11 / ALT+ENTER  FULLSCREEN',
     ]);
+  });
+
+  it('the G line sits right after F  CLEAR FAULT', () => {
+    const lines = hotkeyHelpLines();
+    expect(lines.indexOf('G  PICK UP FIND')).toBe(lines.indexOf('F  CLEAR FAULT') + 1);
   });
 
   it('no settings label still says TECH TREE', () => {

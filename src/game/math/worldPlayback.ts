@@ -1,7 +1,8 @@
 // World playback maths (WP23a): the playback ladder per era (mode, fps, cast alpha, shadow scale), the tape clock that steps the
 // loops (crank or fps, with freeze), loop frame (seam, reverse) and sheet column lookups, the window flicker hold, the Sensor 7
-// head and downbeat edge, and the tally marks on the booth pane. Why: the renderers draw these; the tape
+// head and downbeat edge and the tally marks on the booth pane. Why: the renderers draw these; the tape
 // grammar is one tested rule (bible §3.0, DENIZEN_ART §1.6 and §5), and every number comes from src/data/livingWorld.ts.
+// The poke maths (the Sensor 7 pointer head, the clip clock, the crow hop arc and its frames) moved to pokeRender.ts (WP28a r1-FixA).
 // Pure: no Phaser, no DOM. Art px unless a name says world px.
 import type { TechId } from '../../data/types';
 import { WORLD_ENV, WORLD_ERA_ROW, WORLD_ERA_ROW_SHEETS, WORLD_FRAMES, WORLD_MARKS, WORLD_PLAYBACK } from '../../data/livingWorld';
@@ -184,3 +185,6 @@ export function tallyRects(count: number): Rect[] {
   }
   return out;
 }
+
+// Sensor 7 head (WP28 Sensor 7 follows the cursor): the head shown is one of the three.
+export type SensorHead = 'headL' | 'headC' | 'headR';

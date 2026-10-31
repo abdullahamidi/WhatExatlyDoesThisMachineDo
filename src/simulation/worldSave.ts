@@ -1,7 +1,7 @@
 // Living world save block (WP23a): lenient normaliser for the optional `world` block of save v2.
 // Why: an old, hand-edited or future save must never fail a load, and the session must never share arrays with the caller.
 // Pure: no Phaser, no DOM, no persistence imports. The id list and defaults come from src/data/livingWorld.ts.
-import { DEFAULT_WORLD_SAVE, WORLD_KNOWN_IDS } from '../data/livingWorld';
+import { DEFAULT_WORLD_SAVE, RELICS_MAX, WORLD_KNOWN_IDS } from '../data/livingWorld';
 import type { WorldSaveState } from '../data/livingWorld';
 
 // Format limits of the save block (not balance numbers): list length, moments per era, bitmask width.
@@ -21,6 +21,7 @@ function defaultWorld(): WorldSaveState {
     seenEver: [...DEFAULT_WORLD_SAVE.seenEver],
     eraMoments: [a, b, c, d, e],
     youEras: DEFAULT_WORLD_SAVE.youEras,
+    relics: DEFAULT_WORLD_SAVE.relics ?? 0,
   };
 }
 
@@ -58,11 +59,16 @@ function readYouEras(raw: unknown): number {
   return typeof raw === 'number' && Number.isInteger(raw) ? Math.min(MAX_YOU_ERAS, Math.max(0, raw)) : 0;
 }
 
+/** Relic count (WP28): a finite number is floored and clamped to 0..RELICS_MAX; anything else (missing, text, non-finite) is 0. */
+function readRelics(raw: unknown): number {
+  return typeof raw === 'number' && Number.isFinite(raw) ? Math.min(RELICS_MAX, Math.max(0, Math.floor(raw))) : 0;
+}
+
 /**
  * Lenient normaliser for the living-world block. Never throws and never returns its input.
  * A missing or non-object value gives a fresh copy of DEFAULT_WORLD_SAVE. `seen` keeps known ids (first kept,
  * capped); `seenEver` is the union of its own known ids and every id of `seen`, capped; `eraMoments` and
- * `youEras` are clamped (see the helpers above).
+ * `youEras` are clamped (see the helpers above); `relics` is always a whole count in 0..RELICS_MAX (0 when missing).
  */
 export function normalizeWorld(raw: unknown): WorldSaveState {
   if (!isPlainObject(raw)) return defaultWorld();
@@ -73,5 +79,6 @@ export function normalizeWorld(raw: unknown): WorldSaveState {
     seenEver,
     eraMoments: readMoments(raw['eraMoments']),
     youEras: readYouEras(raw['youEras']),
+    relics: readRelics(raw['relics']),
   };
 }

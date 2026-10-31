@@ -253,7 +253,7 @@ describe('WP11 sky layers (C3)', () => {
   it('skyViolet is a screen-fixed full-view layer at background + 1 with the four violet stages', () => {
     expect(layer('skyViolet')).toEqual({
       id: 'skyViolet', assetId: 'bg.skyViolet', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 1, alpha: 1, underfill: null, fadeInMs: ERA5_SKY_FADE_IN_MS,
-      alphaStages: [{ techId: 'nullChamber', minLevel: 1, alpha: 0.25 }, { techId: 'lensArray', minLevel: 1, alpha: 0.5 }, { techId: 'horizonField', minLevel: 5, alpha: 0.75 }, { techId: 'skyAperture', minLevel: 1, alpha: 1 }],
+      alphaStages: [{ techId: 'nullChamber', minLevel: 1, alpha: 0.25 }, { techId: 'lensArray', minLevel: 1, alpha: 0.5 }, { techId: 'horizonField', minLevel: 9, alpha: 0.75 }, { techId: 'skyAperture', minLevel: 1, alpha: 1 }],
       finale: { track: 'sky', dir: 'out' },
     });
   });
@@ -261,7 +261,7 @@ describe('WP11 sky layers (C3)', () => {
   it('horizonGlow is a screen-fixed full-view layer at background + 3 with the three horizon stages', () => {
     expect(layer('horizonGlow')).toEqual({
       id: 'horizonGlow', assetId: 'bg.horizonGlow', scrollFactor: 0, bottomY: VIEW.height, depth: DEPTH.background + 3, alpha: 1, underfill: null, fadeInMs: ERA5_SKY_FADE_IN_MS,
-      alphaStages: [{ techId: 'horizonField', minLevel: 1, alpha: 0.35 }, { techId: 'horizonField', minLevel: 10, alpha: 0.55 }, { techId: 'horizonField', minLevel: 20, alpha: 0.75 }],
+      alphaStages: [{ techId: 'horizonField', minLevel: 1, alpha: 0.35 }, { techId: 'horizonField', minLevel: 19, alpha: 0.55 }, { techId: 'horizonField', minLevel: 39, alpha: 0.75 }],
       finale: { track: 'glow', dir: 'out' },
     });
   });
@@ -291,7 +291,7 @@ describe('WP11 sky layers (C3)', () => {
     expect(ECLIPSE.stages).toEqual([
       { techId: 'nullChamber', minLevel: 1, frame: 1 },
       { techId: 'lensArray', minLevel: 1, frame: 2 },
-      { techId: 'horizonField', minLevel: 5, frame: 3 },
+      { techId: 'horizonField', minLevel: 9, frame: 3 },
       { techId: 'skyAperture', minLevel: 1, frame: 5 },
     ]);
     expect(ECLIPSE.diamond).toEqual({ techId: 'skyAperture', frame: 4, ms: 1200 });

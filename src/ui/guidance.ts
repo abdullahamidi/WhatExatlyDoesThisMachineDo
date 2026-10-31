@@ -3,7 +3,7 @@ import { HUD_BUMP, NEXT_GOAL, ONBOARDING } from '../data/ux';
 import type { GameSession } from '../simulation';
 import { affordableTechIds } from '../simulation/progression/affordable';
 import { motionPolicy } from '../simulation/settings';
-import { activePrompt, affordableBadge, anyPurchased, nextGoal } from './guidanceView';
+import { activePrompt, affordableBadge, anyPurchased, nextBuy, nextGoal } from './guidanceView';
 import type { TechTree } from './techTree';
 
 // WP20 HUD guidance (DOM only, no Phaser). Decorates the existing HUD: the next-goal line, the TECH INDEX
@@ -46,7 +46,12 @@ export function createGuidance(root: HTMLElement, deps: GuidanceDeps): Guidance 
   goalTitle.className = 'hud-goal-title';
   const goalDetail = document.createElement('div');
   goalDetail.className = 'hud-goal-detail';
-  goalEl.append(goalTitle, goalDetail);
+  // NEXT BUY (WP28): a third line under the goal, written with it. Not a live region.
+  const buyEl = document.createElement('div');
+  buyEl.id = 'hud-goal-buy';
+  buyEl.className = 'hud-goal-buy';
+  buyEl.hidden = true;
+  goalEl.append(goalTitle, goalDetail, buyEl);
   panel.appendChild(goalEl);
 
   // Hint callout above the button row. Role status, so assistive tech announces it when it appears.
@@ -75,6 +80,8 @@ export function createGuidance(root: HTMLElement, deps: GuidanceDeps): Guidance 
   const setGoalTitle = cachedWrite<string>('', (text) => { goalTitle.textContent = text; });
   const setGoalDetail = cachedWrite<string>('', (text) => { goalDetail.textContent = text; });
   const setGoalReady = cachedWrite<string>('false', (value) => { goalEl.setAttribute('data-ready', value); });
+  const setBuyOn = cachedWrite<boolean>(false, (on) => { buyEl.hidden = !on; });
+  const setBuyText = cachedWrite<string>('', (text) => { buyEl.textContent = text; });
 
   function refresh(): void {
     if (destroyed) return;
@@ -95,10 +102,17 @@ export function createGuidance(root: HTMLElement, deps: GuidanceDeps): Guidance 
     setHint(prompt === 'hint');
     const goal = prompt === 'goal' ? nextGoal(s, deps.session.rates, techs, maxEra) : null;
     setGoalOn(goal !== null);
-    if (goal === null) return;
+    if (goal === null) {
+      setBuyOn(false);
+      return;
+    }
     setGoalTitle(goal.title);
     setGoalDetail(goal.detail);
     setGoalReady(goal.ready ? 'true' : 'false');
+    // NEXT BUY (WP28): shown with the goal line whenever a purchase is ahead.
+    const buy = nextBuy(s, deps.session.rates, techs, maxEra);
+    setBuyOn(buy !== null);
+    if (buy !== null) setBuyText(buy.text);
   }
 
   // Frontier counter bump on click: scales up and settles back. Skipped when flashes are off (reduced motion).
@@ -129,6 +143,7 @@ export function createGuidance(root: HTMLElement, deps: GuidanceDeps): Guidance 
       window.clearInterval(timer);
       for (const unsubscribe of unsubscribes) unsubscribe();
       goalEl.remove();
+      buyEl.remove();
       hintEl.remove();
       techButton.removeAttribute('data-affordable');
       techButton.removeAttribute('aria-label');

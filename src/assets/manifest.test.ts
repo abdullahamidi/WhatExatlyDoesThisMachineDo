@@ -551,7 +551,7 @@ const WP13_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; he
 
 describe('WP13 restored world, finale fx and UI assets', () => {
   it('appends the 14 WP13 ids after the era V ids, in contract order (ids 98..111; WP17 ids follow)', () => {
-    expect(ASSET_IDS.length).toBe(146);
+    expect(ASSET_IDS.length).toBe(150);
     expect(ASSET_IDS.slice(98, 112)).toEqual(WP13_ENTRIES.map((e) => e.id));
     expect(ASSET_IDS.slice(112, 117)).toEqual(WP17_ENTRIES.map((e) => e.id));
   });
@@ -722,7 +722,7 @@ const WP17_ENTRIES: ReadonlyArray<{ id: AssetId; file: string; width: number; he
 
 describe('WP17 legacy feed assets', () => {
   it('appends the 5 WP17 ids after the WP13 ids, in contract order (ids 112..116; the WP22 decal ids and the WP23a ids follow)', () => {
-    expect(ASSET_IDS.length).toBe(146);
+    expect(ASSET_IDS.length).toBe(150);
     expect(ASSET_IDS.slice(112, 117)).toEqual(WP17_ENTRIES.map((e) => e.id));
   });
 
@@ -1096,9 +1096,10 @@ describe('part evolution tiers (WP22)', () => {
 /** WP23a living-world assets (DENIZEN_ART 5.1): id, size, origin, tileable, frame and era rows. file is null until the Art Director delivers the PNGs. */
 const WP23A_ENTRIES: ReadonlyArray<{ id: AssetId; width: number; height: number; origin: { x: number; y: number };
   tileable: 'none' | 'x' | 'xy'; frame?: { width: number; height: number; count: number }; eraRows?: number }> = [
-  { id: 'world.inspector', width: 440, height: 240, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 20, height: 40, count: 132 }, eraRows: 6 },
+  // WP28b AD3-CELLS: inspector + startle, point (22 -> 24 columns), dog + bark0, bark1 (23 -> 25 columns), appended.
+  { id: 'world.inspector', width: 480, height: 240, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 20, height: 40, count: 144 }, eraRows: 6 },
   { id: 'world.clipboardPages', width: 18, height: 3, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 6, height: 3, count: 3 } },
-  { id: 'world.dog', width: 644, height: 120, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 28, height: 20, count: 138 }, eraRows: 6 },
+  { id: 'world.dog', width: 700, height: 120, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 28, height: 20, count: 150 }, eraRows: 6 },
   { id: 'world.stakeChain', width: 20, height: 6, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 10, height: 6, count: 2 } },
   { id: 'world.hole', width: 64, height: 6, origin: { x: 0.5, y: 1 }, tileable: 'none', frame: { width: 16, height: 6, count: 4 } },
   { id: 'world.redBall', width: 3, height: 3, origin: { x: 0.5, y: 1 }, tileable: 'none' },
@@ -1125,7 +1126,7 @@ const WP23A_ENTRIES: ReadonlyArray<{ id: AssetId; width: number; height: number;
 
 describe('WP23a world assets', () => {
   it('appends the 25 WP23a ids after the WP22 decal ids, in contract order (ids 120..144; the WP27 fx.fault id 145 follows)', () => {
-    expect(ASSET_IDS.length).toBe(146);
+    expect(ASSET_IDS.length).toBe(150);
     expect(ASSET_IDS.slice(120, 145)).toEqual(WP23A_ENTRIES.map((e) => e.id));
   });
 

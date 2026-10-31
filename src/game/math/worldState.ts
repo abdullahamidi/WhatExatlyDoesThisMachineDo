@@ -44,7 +44,7 @@ export interface WorldVisualState {
   era: WorldEra;
   eraRow: number;               // WORLD_ERA_ROW[era]
   alpha: number;
-  shadows: boolean;             // false in era V once horizonField >= 5
+  shadows: boolean;             // false in era V once horizonField >= 9
   shadowScale: number;          // 0 when !shadows, else 0.5 in era I, 1 after
   mode: PlaybackMode;
   seam: boolean;                // eras I-II only

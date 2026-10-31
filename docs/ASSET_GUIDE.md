@@ -57,9 +57,9 @@ Machine-local depths are relative to the machine container, which sits at world 
 
 | id | file (under `public/assets/`) | width x height | origin (pivot) | tileable | frames | layer + depth | description |
 |---|---|---|---|---|---|---|---|
-| `world.inspector` | `world/inspector.png` | 440 x 240 | 0.5, 1 | none | 132 (20 x 40); 6 era rows | living world, back row; era rows I-V and whole | Inspector sheet, 19 frames per era row (dome hat, long coat, clipboard at the chest, umbrella) in rows I, II, III, IV, V, whole; file world/inspector.png. |
+| `world.inspector` | `world/inspector.png` | 480 x 240 | 0.5, 1 | none | 144 (20 x 40); 6 era rows | living world, back row; era rows I-V and whole | Inspector sheet, 24 frames x 6 era rows (I-V, whole): dome hat, long coat, clipboard, umbrella. |
 | `world.clipboardPages` | `world/clipboard-pages.png` | 18 x 3 | 0.5, 1 | none | 3 (6 x 3) | living world, back row +0.1 (on the Inspector) | Cycle trace on the Inspector clipboard, 3 frames of 6x3; file world/clipboard-pages.png. |
-| `world.dog` | `world/dog.png` | 644 x 120 | 0.5, 1 | none | 138 (28 x 20); 6 era rows | living world, front row | Dog sheet, 20 frames per era row (low wedge, one upright ear, curled tail) in rows I, II, III, IV, V, whole; file world/dog.png. |
+| `world.dog` | `world/dog.png` | 700 x 120 | 0.5, 1 | none | 150 (28 x 20); 6 era rows | living world, front row | Dog sheet, 25 frames x 6 era rows (I-V, whole): low wedge, one upright ear, curled tail. |
 | `world.stakeChain` | `world/stake-chain.png` | 20 x 6 | 0.5, 1 | none | 2 (10 x 6) | living world, front row | Stake with its cut chain on the ground, 2 frames (chained, fallen); file world/stake-chain.png. |
 | `world.hole` | `world/hole.png` | 64 x 6 | 0.5, 1 | none | 4 (16 x 6) | living world, front row -0.1 | Dig hole in the ground, 4 frames (dig stages 1-4, they only grow); file world/hole.png. |
 | `world.redBall` | `world/red-ball.png` | 3 x 3 | 0.5, 1 | none | none | living world, front row (postgame) | Red ball prop, one 3x3 frame: mutedOrange ball with a glint and a shadow (cycle 2+ trace by the dog, postgame); file world/red-ball.png. |
@@ -80,6 +80,10 @@ Machine-local depths are relative to the machine container, which sits at world 
 | `world.mote` | `world/mote.png` | 4 x 2 | 0.5, 0.5 | none | 2 (2 x 2) | living world, dust depth (1 emitter, pool 5) | Ash mote and white moth speck, 2 frames (ash, moth); one emitter with a pool of 5; file world/mote.png. |
 | `world.page` | `world/page.png` | 6 x 4 | 0.5, 0.5 | none | 2 (3 x 4) | living world, dust depth | Paper page that lifts from the clipboard about every 40 s in era IV, 2 frames (flat, tilt); file world/page.png. |
 | `world.shadow` | none (procedural) | 26 x 3 | 0.5, 0.5 | none | none | living world, row -0.01 (procedural Graphics, baked once) | Procedural shadow ellipse baked once in game; this 26x3 texture is a fallback only and never gets a file. |
+| `world.splicesA` | `world/splices-a.png` | 640 x 24 | 0.5, 1 | none | 20 (32 x 24) | living world, Splice objects: back row or yard lanes (SPLICE_WORLD, Director chunk) | Era I-II Splice objects: bicycle, barrel organ, valve radio, bulb arrow sign, lit clock face. |
+| `world.finds` | `world/finds.png` | 88 x 8 | 0.5, 1 | none | 11 (8 x 8) | living world, Find marker (FindMarker, WorldReach chunk): yard lane of the spot | Finds: items 0-6, relic note 7, one-color glint 8-10 (tinted per era). |
+| `world.splicesB` | `world/splices-b.png` | 396 x 56 | 0.5, 1 | none | 22 (18 x 56) | living world, Splice objects III-V: back row or yard lanes; the kite hangs on the lamp (SPLICE_WORLD, Director chunk) | Era III-V Splice objects, tall set: hand pump, factory whistle, bell on a frame, kite, cairn. |
+| `world.splicesC` | `world/splices-c.png` | 576 x 18 | 0.5, 1 | none | 24 (24 x 18) | living world, Splice objects III-V: yard lanes; chimes on the lamp, vane and coin flap on the booth (SPLICE_WORLD, Director chunk) | Era III-V Splice objects, small set: hydrant, gramophone, chimes, weathervane, coin flap. |
 
 ### Machine — Era I
 

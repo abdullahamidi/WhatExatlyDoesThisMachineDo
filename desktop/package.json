@@ -1,7 +1,7 @@
 {
   "name": "what-exactly-does-this-machine-do",
   "productName": "What Exactly Does This Machine Do",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "What Exactly Does This Machine Do? - an incremental machine game",
   "main": "main.cjs",
   "author": "abdullahamidi",

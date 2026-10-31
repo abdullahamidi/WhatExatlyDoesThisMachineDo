@@ -1,10 +1,12 @@
 import './techTree.css';
-import type { TechId, TechView } from '../data/types';
+import type { PurchaseFailure, TechId, TechView } from '../data/types';
 import { UI_ART } from '../data/achievements';
+import { BUY_MAX, SPLICE_TAB } from '../data/ux';
 import type { GameContext } from '../game/context';
 import type { GameSession } from '../simulation';
-import { buildEraTabs, buildTechTreeView, defaultSelection, graphFitScale, priorityTech, purchaseFailureText, purchaseFeedbackText, reachedEras, revealScroll, TECH_TREE_FIT } from './techTreeView';
-import type { EraTabView, TechDetailView, TechNodeView, TechTreeView } from './techTreeView';
+import { isSplice } from '../simulation/progression/status';
+import { buildEraTabs, buildSpliceDetail, buildSpliceRows, buildSpliceTab, buildTechTreeView, defaultSelection, defaultSpliceSelection, eraHeaderText, graphFitScale, priorityTech, purchaseFailureText, purchaseFeedbackText, reachedEras, revealScroll, TECH_TREE_FIT } from './techTreeView';
+import type { EraTabView, SpliceDetailView, SpliceRowView, SpliceTabView, TechDetailView, TechNodeView, TechTreeView } from './techTreeView';
 import { trapFocus } from './hotkeys';
 
 // TECH INDEX overlay (DOM). Built once; update() patches only what changed. No Phaser.
@@ -20,6 +22,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 interface ElementOptions { id?: string; className?: string; text?: string }
 
 interface NodeRefs { button: HTMLButtonElement; name: HTMLSpanElement; level: HTMLSpanElement; cost: HTMLSpanElement }
+interface SpliceRowRefs { button: HTMLButtonElement; fields: HTMLSpanElement[] }
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -77,22 +80,15 @@ function nodeClassOf(node: TechNodeView): string {
   return classes.join(' ');
 }
 
-/** Cheap change key: equal strings mean nothing the overlay shows has changed. */
-function stampOf(view: TechTreeView, tabs: readonly EraTabView[]): string {
-  const eras = tabs.map((t) => `${t.era}:${t.label}:${t.reached ? 1 : 0}:${t.selected ? 1 : 0}:${t.affordable}`).join(';');
-  // costText / ariaLabel carry the resource short labels (WP13 D4 reveal): they must be in the key too.
-  const nodes = view.nodes
-    .map((n) => `${n.id}:${n.status}:${n.levelText}:${n.affordable}:${n.selected}:${n.costText ?? ''}:${n.ariaLabel}`)
-    .join(';');
-  const edges = view.edges.map((e) => `${e.key}:${e.met}`).join(';');
-  const d = view.detail;
-  const detail = d === null
-    ? ''
-    : [
-      d.id, d.buyState, d.shortfallText ?? '', d.costText ?? '', d.levelText, d.statusLabel,
-      d.currentEffect, d.nextEffect ?? '', d.requirements.map((r) => (r.met ? '1' : '0')).join(','),
-    ].join('|');
-  return [view.headerText, eras, nodes, edges, detail].join('#');
+/** What the overlay shows in one pass: the era graph (null in SPLICES mode) or the Splice rows with their detail, and the tabs. */
+interface Shown {
+  headerText: string; tabs: EraTabView[]; spliceTab: SpliceTabView | null; graph: TechTreeView | null;
+  rows: SpliceRowView[]; spliceDetail: SpliceDetailView | null;
+}
+
+/** Change key: the JSON of everything the overlay shows (labels, resource short names and ARIA names included). Equal strings mean nothing changed. */
+function stampOf(s: Shown): string {
+  return JSON.stringify(s);
 }
 
 export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
@@ -119,6 +115,13 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   const tabList = createElement('div', { id: 'tech-tabs', className: 'tech-tabs' });
   tabList.setAttribute('role', 'tablist');
   tabList.setAttribute('aria-label', 'Eras');
+  // WP28 C9: the SPLICES tab follows the era tabs (ensureTab inserts before it); hidden until a Splice is not locked.
+  const spliceTab = createElement('button', { className: 'tech-tab', id: 'tech-tab-splices' });
+  spliceTab.type = 'button';
+  spliceTab.setAttribute('role', 'tab');
+  spliceTab.setAttribute('aria-controls', 'tech-splices');
+  spliceTab.hidden = true;
+  tabList.appendChild(spliceTab);
 
   const graph = createElement('div', { id: 'tech-graph' });
   graph.setAttribute('role', 'tabpanel');
@@ -128,6 +131,11 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   svg.setAttribute('aria-hidden', 'true');
   inner.appendChild(svg);
   graph.appendChild(inner);
+  // WP28 C9: the Splice rows take the graph's place (same box) while SPLICES is selected.
+  const spliceList = createElement('div', { id: 'tech-splices' });
+  spliceList.setAttribute('role', 'tabpanel');
+  spliceList.setAttribute('aria-labelledby', 'tech-tab-splices');
+  spliceList.hidden = true;
 
   const detailEl = createElement('div', { id: 'tech-detail' });
   const main = createElement('div', { className: 'tech-detail-main' });
@@ -147,18 +155,23 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   const shortfallEl = createElement('div', { id: 'tech-shortfall' });
   const buyButton = createElement('button', { id: 'tech-buy' });
   buyButton.type = 'button';
+  // WP28 C9: BUY MAX (one purchaseMax per press) is shown only for an affordable repeatable.
+  const buyMaxButton = createElement('button', { id: 'tech-buy-max', text: BUY_MAX.label });
+  buyMaxButton.type = 'button';
+  buyMaxButton.hidden = true;
   const feedbackEl = createElement('div', { id: 'tech-feedback' });
   feedbackEl.setAttribute('aria-live', 'polite');
-  side.append(levelEl, effectCurrentEl, effectNextEl, costEl, shortfallEl, buyButton, feedbackEl);
+  side.append(levelEl, effectCurrentEl, effectNextEl, costEl, shortfallEl, buyButton, buyMaxButton, feedbackEl);
   detailEl.append(main, side);
 
-  panel.append(header, tabList, graph, detailEl);
+  panel.append(header, tabList, graph, spliceList, detailEl);
   overlay.appendChild(panel);
   root.appendChild(overlay);
 
   // ---- keyed element caches ----
   const tabRefs = new Map<number, HTMLButtonElement>();
   const nodeRefs = new Map<TechId, NodeRefs>();
+  const spliceRowRefs = new Map<TechId, SpliceRowRefs>();
   const edgeRefs = new Map<string, SVGPathElement>();
   const reqItems: HTMLLIElement[] = [];
 
@@ -167,6 +180,8 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   let destroyed = false;
   let selected: TechId | null = null;
   let selectedEra = 1;
+  // WP28 C9: true while the SPLICES tab shows the Splice rows (the era graph and its tabs are then not selected).
+  let spliceMode = false;
   let dirty = true;
   let lastStamp = '';
   let returnFocus: HTMLElement | null = null;
@@ -188,6 +203,14 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
 
   const setFeedback = (text: string): void => {
     patch.text(feedbackEl, text);
+  };
+
+  /** Selects one tech (a node or a Splice row; null for none) and redraws. */
+  const select = (id: TechId | null): void => {
+    selected = id;
+    setFeedback('');
+    dirty = true;
+    update();
   };
 
   const flashDenied = (): void => {
@@ -219,17 +242,18 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     button.setAttribute('role', 'tab');
     button.setAttribute('data-era', String(era));
     button.setAttribute('aria-controls', 'tech-graph');
-    tabList.appendChild(button);
+    tabList.insertBefore(button, spliceTab);
     tabRefs.set(era, button);
     return button;
   };
 
-  /** Tabs in era order that the player can currently open. */
+  /** Tabs in era order, then SPLICES, that the player can currently open. */
   const enabledTabs = (): HTMLButtonElement[] =>
     [...tabRefs.entries()]
       .sort(([a], [b]) => a - b)
       .map(([, button]) => button)
-      .filter((button) => !button.disabled);
+      .concat(spliceTab)
+      .filter((button) => !button.disabled && !button.hidden);
 
   const ensureNode = (id: TechId): NodeRefs => {
     const existing = nodeRefs.get(id);
@@ -257,18 +281,56 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     return path;
   };
 
+  /** One tab button (the era tabs and SPLICES): label, selection, the affordable chip (WP20) and the screen-reader name with the count. */
+  const paintTab = (button: HTMLButtonElement, tab: EraTabView | SpliceTabView): void => {
+    patch.text(button, tab.label);
+    patch.attr(button, 'aria-selected', tab.selected ? 'true' : 'false');
+    patch.attr(button, 'tabindex', tab.selected ? '0' : '-1');
+    patch.attr(button, 'data-affordable', String(tab.affordable));
+    patch.attr(button, 'aria-label', tab.ariaLabel);
+  };
+
   const renderTabs = (tabs: readonly EraTabView[]): void => {
     for (const tab of tabs) {
       const button = ensureTab(tab.era);
-      patch.text(button, tab.label);
-      patch.attr(button, 'aria-selected', tab.selected ? 'true' : 'false');
-      patch.attr(button, 'tabindex', tab.selected ? '0' : '-1');
+      paintTab(button, tab);
       patch.disabled(button, !tab.reached);
-      // WP20: the affordable chip (CSS ::after) and the screen-reader name with the count.
-      patch.attr(button, 'data-affordable', String(tab.affordable));
-      patch.attr(button, 'aria-label', tab.ariaLabel);
     }
     patch.attr(graph, 'aria-labelledby', `tech-tab-${selectedEra}`);
+  };
+
+  const renderSpliceTab = (tab: SpliceTabView | null): void => {
+    patch.hidden(spliceTab, tab === null);
+    if (tab !== null) paintTab(spliceTab, tab);
+  };
+
+  const ensureSpliceRow = (id: TechId): SpliceRowRefs => {
+    const existing = spliceRowRefs.get(id);
+    if (existing !== undefined) return existing;
+    const button = createElement('button', { className: 'tech-splice-row' });
+    button.type = 'button';
+    button.setAttribute('data-tech', id);
+    // Five columns: name, state, cost, effect, progress (the grid in techTree.css).
+    const fields = Array.from({ length: 5 }, () => createElement('span'));
+    button.append(...fields);
+    spliceList.appendChild(button);
+    const refs: SpliceRowRefs = { button, fields };
+    spliceRowRefs.set(id, refs);
+    return refs;
+  };
+
+  /** One button per Splice in table order. A bought or reachable row reuses the node colours; DARK rows keep the plain tab frame (readable, not dimmed). */
+  const renderSpliceRows = (rows: readonly SpliceRowView[]): void => {
+    for (const row of rows) {
+      const refs = ensureSpliceRow(row.id);
+      const kind = row.state === SPLICE_TAB.spliced ? ' is-purchased' : row.state === SPLICE_TAB.inReach ? ' is-available' : '';
+      const isSelected = row.id === selected;
+      const values = [row.name, row.state, row.costText, row.effectText, row.progressText];
+      refs.fields.forEach((field, i) => patch.text(field, values[i] ?? ''));
+      patch.attr(refs.button, 'class', `tech-splice-row${kind}${row.affordable ? ' is-affordable' : ''}${isSelected ? ' is-selected' : ''}`);
+      patch.attr(refs.button, 'aria-label', row.ariaLabel);
+      patch.attr(refs.button, 'aria-current', isSelected ? 'true' : 'false');
+    }
   };
 
   const renderEdges = (view: TechTreeView): void => {
@@ -339,19 +401,51 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     patch.text(effectNextEl, d.nextEffect === null ? '' : `NEXT: ${d.nextEffect}`);
     patch.text(costEl, d.costText ?? '');
     patch.text(shortfallEl, d.shortfallText ?? '');
-    patch.text(buyButton, d.buyLabel);
-    patch.disabled(buyButton, !d.buyEnabled);
-    patch.attr(buyButton, 'data-buy-state', d.buyState);
+    renderBuy(d.buyState, d.buyLabel, d.buyEnabled, d.buyMax);
   };
 
-  const render = (view: TechTreeView, tabs: readonly EraTabView[]): void => {
-    lastView = view;
-    const buyState = view.detail?.buyState ?? null;
+  const renderBuy = (state: TechDetailView['buyState'], label: string, enabled: boolean, buyMax: boolean): void => {
+    patch.text(buyButton, label);
+    patch.disabled(buyButton, !enabled);
+    patch.attr(buyButton, 'data-buy-state', state);
+    patch.hidden(buyMaxButton, !buyMax);
+  };
+
+  /** The selected Splice (C9) in the same panel: the world tooltip's title, cost, effect and state lines, then the buy. */
+  const renderSpliceDetail = (d: SpliceDetailView | null): void => {
+    patch.hidden(detailEl, d === null);
+    if (d === null) return;
+    patch.text(nameEl, d.title);
+    patch.text(kindEl, d.costText);
+    patch.text(statusEl, d.stateText);
+    patch.text(descEl, d.description);
+    patch.hidden(flavorEl, true);
+    renderRequirements(d.requirements);
+    patch.text(levelEl, d.effectText);
+    patch.text(effectCurrentEl, '');
+    patch.hidden(effectNextEl, true);
+    patch.text(costEl, '');
+    patch.text(shortfallEl, '');
+    renderBuy(d.buyState, d.buyLabel, d.buyEnabled, false);
+  };
+
+  const render = (s: Shown): void => {
+    lastView = s.graph;
+    const buyState = s.graph?.detail?.buyState ?? s.spliceDetail?.buyState ?? null;
     if (selected !== renderedSelected || buyState !== renderedBuyState) setFeedback('');
     renderedSelected = selected;
     renderedBuyState = buyState;
-    renderTabs(tabs);
-    patch.text(meEl, view.headerText);
+    renderTabs(s.tabs);
+    renderSpliceTab(s.spliceTab);
+    patch.text(meEl, s.headerText);
+    patch.hidden(graph, s.graph === null);
+    patch.hidden(spliceList, s.graph !== null);
+    if (s.graph === null) {
+      renderSpliceRows(s.rows);
+      renderSpliceDetail(s.spliceDetail);
+      return;
+    }
+    const view = s.graph;
     patch.px(inner, 'width', view.width);
     patch.px(inner, 'height', view.height);
     patch.attr(svg, 'width', String(view.width));
@@ -361,11 +455,24 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     renderDetail(view.detail);
   };
 
-  const buildView = (): { view: TechTreeView; tabs: EraTabView[] } => {
+  /** Everything the overlay shows: the era graph, or in SPLICES mode the Splice rows and the selected Splice. */
+  const buildView = (): Shown => {
     const all = session.getAllTechViews();
-    const tabs = buildEraTabs(all, session.state.res, selectedEra);
-    const view = buildTechTreeView(viewsOfEra(selectedEra), session.state.res, selected, selectedEra);
-    return { view, tabs };
+    const tabs = buildEraTabs(all, session.state.res, spliceMode ? 0 : selectedEra);
+    const spliceTabView = buildSpliceTab(all, spliceMode);
+    if (!spliceMode) {
+      const view = buildTechTreeView(viewsOfEra(selectedEra), session.state.res, selected, selectedEra);
+      return { headerText: view.headerText, tabs, spliceTab: spliceTabView, graph: view, rows: [], spliceDetail: null };
+    }
+    const chosen = selected === null ? undefined : all.find((view) => view.id === selected);
+    return {
+      headerText: eraHeaderText(viewsOfEra(selectedEra), session.state.res, selectedEra),
+      tabs,
+      spliceTab: spliceTabView,
+      graph: null,
+      rows: buildSpliceRows(all, session.state.lifetime),
+      spliceDetail: chosen === undefined ? null : buildSpliceDetail(chosen, session.state),
+    };
   };
 
   function update(): void {
@@ -378,14 +485,14 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
       || selectedEra !== builtEra
       || now - builtAt >= REBUILD_INTERVAL_MS;
     if (!due) return;
-    const { view, tabs } = buildView();
+    const shown = buildView();
     builtLevels = levels;
     builtSelected = selected;
     builtEra = selectedEra;
     builtAt = now;
-    const stamp = stampOf(view, tabs);
+    const stamp = stampOf(shown);
     if (!dirty && stamp === lastStamp) return;
-    render(view, tabs);
+    render(shown);
     dirty = false;
     lastStamp = stamp;
   }
@@ -417,13 +524,14 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     returnFocus = active instanceof HTMLElement ? active : null;
     const all = session.getAllTechViews();
     selectedEra = Math.max(...reachedEras(all));
+    spliceMode = false;
     const eraViews = viewsOfEra(selectedEra);
-    // WP20: an open keystone overrides a remembered selection; otherwise keep it while it is in this era.
+    // WP20: an open keystone overrides a remembered selection; otherwise keep it while it is in this era (a Splice never is).
     const priority = priorityTech(eraViews);
     const selectedView = selected === null ? undefined : all.find((view) => view.id === selected);
     if (priority !== null) {
       selected = priority;
-    } else if (selectedView === undefined || selectedView.def.era !== selectedEra) {
+    } else if (selectedView === undefined || isSplice(selectedView.def) || selectedView.def.era !== selectedEra) {
       selected = defaultSelection(eraViews);
     }
     isOpenFlag = true;
@@ -483,11 +591,17 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   /** Opens an era tab (ignored while the era is still signal-locked). */
   const selectEra = (era: number): void => {
     if (!reachedEras(session.getAllTechViews()).includes(era)) return;
+    spliceMode = false;
     selectedEra = era;
-    selected = defaultSelection(viewsOfEra(era));
-    setFeedback('');
-    dirty = true;
-    update();
+    select(defaultSelection(viewsOfEra(era)));
+    layoutGraph();
+  };
+
+  /** Opens the SPLICES tab (C9): the first affordable Splice, else the first reachable one, is selected. */
+  const selectSplices = (): void => {
+    if (spliceTab.hidden) return;
+    spliceMode = true;
+    select(defaultSpliceSelection(session.getAllTechViews()));
     layoutGraph();
   };
 
@@ -497,9 +611,8 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     if (!(target instanceof Element)) return;
     const tab = target.closest('.tech-tab');
     if (tab === null) return;
-    for (const [era, button] of tabRefs) {
-      if (button === tab) selectEra(era);
-    }
+    if (tab === spliceTab) selectSplices();
+    else selectEra(Number(tab.getAttribute('data-era')));
   };
 
   /** Roving focus over the enabled tabs: arrows wrap, Home/End jump. Enter/Space are native clicks. */
@@ -529,40 +642,77 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     if (!(target instanceof Element)) return;
     const node = target.closest('.tech-node');
     if (node === null) return;
-    for (const [id, refs] of nodeRefs) {
-      if (refs.button !== node) continue;
-      // WP20: Space/Enter (native click, detail 0) on the already selected node buys it; a mouse click only selects.
-      const keyboard = event instanceof MouseEvent && event.detail === 0;
-      if (keyboard && id === selected) {
-        onBuy();
-        return;
-      }
-      selected = id;
-      setFeedback('');
-      dirty = true;
-      update();
-      layoutGraph();
+    const id = node.getAttribute('data-tech') as TechId;
+    // WP28 C9 BUY MAX: Shift+click on a repeatable node selects it and buys its levels in one purchaseMax; Shift on an unlock is ignored.
+    if (event instanceof MouseEvent && event.shiftKey && session.getTechView(id).def.kind === 'repeatable') {
+      select(id);
+      buyMaxOf(id);
       return;
     }
+    // WP20: Space/Enter (native click, detail 0) on the already selected node buys it; a mouse click only selects.
+    const keyboard = event instanceof MouseEvent && event.detail === 0;
+    if (keyboard && id === selected) {
+      onBuy();
+      return;
+    }
+    select(id);
+    layoutGraph();
+  };
+
+  /** A refused buy (WP20, C9): the reason as feedback, the button shakes, and feedback.purchaseDenied carries the reason. */
+  const denyBuy = (id: TechId, reason: PurchaseFailure): void => {
+    const view = session.getTechView(id);
+    const costRes = view.def.costRes;
+    const shortfall = Math.max(0, (view.nextCost ?? 0) - session.state.res[costRes]);
+    setFeedback(purchaseFailureText(reason, shortfall, costRes));
+    flashDenied();
+    feedback.purchaseDenied.emit(reason);
+  };
+
+  /** A bought buy: render first (the purchase changes buyState, and render clears feedback on that change), then the install or level line. */
+  const bought = (id: TechId, newLevel: number): void => {
+    dirty = true;
+    update();
+    setFeedback(purchaseFeedbackText(id, newLevel));
   };
 
   const onBuy = (): void => {
     if (selected === null) return;
     const id = selected;
-    const before = session.getTechView(id);
     const result = session.purchase(id);
-    if (!result.ok) {
-      const costRes = before.def.costRes;
-      const shortfall = Math.max(0, (before.nextCost ?? 0) - session.state.res[costRes]);
-      setFeedback(purchaseFailureText(result.reason, shortfall, costRes));
-      flashDenied();
-      feedback.purchaseDenied.emit(result.reason);
-      return;
-    }
-    // Render first: the purchase changes buyState, and render clears feedback on that change.
-    dirty = true;
-    update();
-    setFeedback(purchaseFeedbackText(id, result.newLevel));
+    if (result.ok) bought(id, result.newLevel);
+    else denyBuy(id, result.reason);
+  };
+
+  /** BUY MAX (C9): one session.purchaseMax per call; when nothing was bought the first failure is denied as a buy. */
+  const buyMaxOf = (id: TechId): void => {
+    const result = session.purchaseMax(id);
+    if (result.ok) bought(id, result.newLevel);
+    else denyBuy(id, result.reason);
+  };
+
+  const onBuyMaxClick = (): void => {
+    if (selected !== null) buyMaxOf(selected);
+  };
+
+  /** A click on a Splice row (C9) selects it; buying is the detail's BUY (Enter on the row only selects). */
+  const onSpliceClick = (event: Event): void => {
+    if (!isOpenFlag || !spliceMode) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const row = target.closest('.tech-splice-row');
+    if (row !== null) select(row.getAttribute('data-tech') as TechId);
+  };
+
+  /** Shift+Enter on the selected repeatable node is BUY MAX (C9). Its default (the click that buys once) is suppressed; unlocks keep Enter. */
+  const onGraphKeydown = (event: KeyboardEvent): void => {
+    if (!isOpenFlag || selected === null || event.key !== 'Enter' || !event.shiftKey) return;
+    const target = event.target;
+    const refs = nodeRefs.get(selected);
+    if (!(target instanceof Element) || refs === undefined || refs.button !== target.closest('.tech-node')) return;
+    if (session.getTechView(selected).def.kind !== 'repeatable') return;
+    event.preventDefault();
+    buyMaxOf(selected);
   };
 
   const unsubscribes: Array<() => void> = [
@@ -578,6 +728,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     session.on('prestige', () => { dirty = true; }),
     session.on('cycle', () => { dirty = true; }),
     session.on('reset', () => {
+      spliceMode = false;
       selectedEra = 1;
       selected = isOpenFlag ? defaultSelection(viewsOfEra(1)) : null;
       setFeedback('');
@@ -591,7 +742,10 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
   tabList.addEventListener('click', onTabClick);
   tabList.addEventListener('keydown', onTabKeydown);
   graph.addEventListener('click', onGraphClick);
+  graph.addEventListener('keydown', onGraphKeydown);
+  spliceList.addEventListener('click', onSpliceClick);
   buyButton.addEventListener('click', onBuy);
+  buyMaxButton.addEventListener('click', onBuyMaxClick);
   // WP20: the fit zoom and the reveal depend on the viewport size.
   const onResize = (): void => { if (isOpenFlag) layoutGraph(); };
   window.addEventListener('resize', onResize);
@@ -617,7 +771,10 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     tabList.removeEventListener('click', onTabClick);
     tabList.removeEventListener('keydown', onTabKeydown);
     graph.removeEventListener('click', onGraphClick);
+    graph.removeEventListener('keydown', onGraphKeydown);
+    spliceList.removeEventListener('click', onSpliceClick);
     buyButton.removeEventListener('click', onBuy);
+    buyMaxButton.removeEventListener('click', onBuyMaxClick);
     window.removeEventListener('resize', onResize);
     if (deniedTimer !== null) {
       window.clearTimeout(deniedTimer);
@@ -626,6 +783,7 @@ export function createTechTree(root: HTMLElement, ctx: GameContext): TechTree {
     overlay.remove();
     tabRefs.clear();
     nodeRefs.clear();
+    spliceRowRefs.clear();
     edgeRefs.clear();
     reqItems.length = 0;
   }

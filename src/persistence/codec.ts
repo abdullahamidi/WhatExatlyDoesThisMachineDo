@@ -1,5 +1,6 @@
 import type { AchievementsState, GameState, LoadResult, PrestigeState, SaveEnvelope, SettingsState, StatsState } from '../data/types';
 import type { WorldSaveState } from '../data/livingWorld';
+import { ECON_REVISION } from '../data/pacing';
 import { createInitialState, DEFAULT_SETTINGS } from '../simulation/state';
 import { emptyStats } from '../simulation/stats';
 import { DEFAULT_PRESTIGE } from '../simulation/prestige';
@@ -25,9 +26,10 @@ export interface SaveMeta {
 export function serialize(state: GameState, settings: SettingsState, nowMs: number, meta?: SaveMeta): string {
   const envelope =
     meta === undefined
-      ? { version: SAVE_VERSION, savedAt: nowMs, state, settings }
+      ? { version: SAVE_VERSION, econ: ECON_REVISION, savedAt: nowMs, state, settings }
       : {
           version: SAVE_VERSION,
+          econ: ECON_REVISION,
           savedAt: nowMs,
           state,
           settings,

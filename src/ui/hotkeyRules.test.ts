@@ -161,6 +161,58 @@ describe('resolveHotkey fault (f)', () => {
   });
 });
 
+describe('resolveHotkey find (g)', () => {
+  it.each(['g', 'G'])('picks up a Find on %j in a plain state', (key) => {
+    expect(resolveHotkey(ev({ key }), FIRST, NOW)).toBe('find');
+    expect(resolveHotkey(ev({ key, targetKind: 'other' }), FIRST, NOW)).toBe('find');
+  });
+
+  it('works on an interactive target such as a focused button, like f', () => {
+    expect(resolveHotkey(ev({ key: 'g', targetKind: 'interactive' }), FIRST, NOW)).toBe('find');
+    expect(resolveHotkey(ev({ key: 'G', targetKind: 'interactive' }), FIRST, NOW)).toBe('find');
+  });
+
+  it.each([
+    ['ctrl', { ctrl: true }],
+    ['meta', { meta: true }],
+    ['alt', { alt: true }],
+  ])('ignores g with %s held', (_name, mods) => {
+    expect(resolveHotkey(ev({ key: 'g', ...mods }), FIRST, NOW)).toBeNull();
+    expect(resolveHotkey(ev({ key: 'G', ...mods }), FIRST, NOW)).toBeNull();
+  });
+
+  it('ignores held-key repeat', () => {
+    expect(resolveHotkey(ev({ key: 'g', repeat: true }), FIRST, NOW)).toBeNull();
+    expect(resolveHotkey(ev({ key: 'G', repeat: true }), FIRST, NOW)).toBeNull();
+  });
+
+  it('is blocked while a modal is open', () => {
+    expect(resolveHotkey(ev({ key: 'g', modalOpen: true }), FIRST, NOW)).toBeNull();
+    expect(resolveHotkey(ev({ key: 'G', modalOpen: true, targetKind: 'interactive' }), FIRST, NOW)).toBeNull();
+  });
+
+  it('is ignored on an editable target (typing g in a text box)', () => {
+    expect(resolveHotkey(ev({ key: 'g', targetKind: 'editable' }), FIRST, NOW)).toBeNull();
+    expect(resolveHotkey(ev({ key: 'G', targetKind: 'editable' }), FIRST, NOW)).toBeNull();
+  });
+
+  it('does not depend on the crank timing', () => {
+    expect(resolveHotkey(ev({ key: 'g' }), 4999, NOW)).toBe('find');
+  });
+
+  it('leaves f (fault), t (tech tree), Space (crank) and Escape (menu) as before', () => {
+    expect(resolveHotkey(ev({ key: 'f' }), FIRST, NOW)).toBe('fault');
+    expect(resolveHotkey(ev({ key: 't' }), FIRST, NOW)).toBe('techTree');
+    expect(resolveHotkey(ev({ key: ' ' }), FIRST, NOW)).toBe('crank');
+    expect(resolveHotkey(ev({ key: 'Escape' }), FIRST, NOW)).toBe('menu');
+  });
+
+  it('does not match longer key names (the lower-cased key must be exactly g)', () => {
+    expect(resolveHotkey(ev({ key: 'Gamepad' }), FIRST, NOW)).toBeNull();
+    expect(resolveHotkey(ev({ key: 'F7' }), FIRST, NOW)).toBeNull();
+  });
+});
+
 describe('resolveHotkey menu (Escape)', () => {
   it('opens the menu on Escape when no modal is open', () => {
     expect(resolveHotkey(ev({ key: 'Escape' }), FIRST, NOW)).toBe('menu');

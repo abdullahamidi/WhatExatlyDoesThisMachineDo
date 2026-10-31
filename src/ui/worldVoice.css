@@ -21,3 +21,7 @@
 
 /* Polite live region: read by screen readers, invisible on screen (clip-path keeps the 1 px box empty). */
 .wv-live{position:absolute;width:1px;height:1px;overflow:clip;clip-path:inset(50%)}
+
+/* WP28 Splice tooltip (PokeLayer). */
+.wv-tip{position:absolute;left:0;top:0;z-index:70;padding:5px 8px;background:#14110f;color:#ddc9a3;white-space:nowrap;font:14px/18px ui-monospace,Consolas,monospace;opacity:0;box-shadow:0 -2px,0 2px,-2px 0,2px 0}
+.wv-tip.on{opacity:1}

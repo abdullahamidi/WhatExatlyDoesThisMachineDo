@@ -4,13 +4,13 @@ const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PW_PATH);
 const url = process.argv[2], out = process.argv[3], nframes = +(process.argv[4] || 0);
 const S7 = ['wornMotor', 'gearRatio','gearRatio','gearRatio','reinforcedCrank','motorTuning','motorTuning','motorTuning','motorTuning','motorTuning','flywheel','pistonArray','improvedPistons'];
-const S9 = [...S7, '@blueprint', 'generator', ...Array(5).fill('motorRetrofit'), ...Array(20).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(3).fill('transformer'), 'powerLines'];
+const S9 = [...S7, '@blueprint', 'generator', ...Array(10).fill('motorRetrofit'), ...Array(40).fill('copperWinding'), 'dynamoCrank', 'capacitorBank', 'sparkGap', ...Array(6).fill('transformer'), 'powerLines'];
 const S10 = [...S9, '@substationBlueprint', 'boiler'];
-const S11 = [...S10, ...Array(3).fill('inductionHeater'), ...Array(20).fill('firebox'), 'steamHammer', 'superheater', ...Array(5).fill('condenser'), 'turbine', 'reliefValves', ...Array(3).fill('bellowsDrive'), '@pressureVesselBlueprint'];
+const S11 = [...S10, ...Array(9).fill('inductionHeater'), ...Array(40).fill('firebox'), 'steamHammer', 'superheater', ...Array(15).fill('condenser'), 'turbine', 'reliefValves', ...Array(9).fill('bellowsDrive'), '@pressureVesselBlueprint'];
 const S12 = [...S11, 'resonatorSpire'];
-const S13 = [...S12, ...Array(3).fill('crankServo'), ...Array(25).fill('harmonicCoil'), ...Array(3).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(3).fill('standingWave'), 'crystalLattice', ...Array(5).fill('gridExciter'), '@harmonicConvergence'];
+const S13 = [...S12, ...Array(3).fill('crankServo'), ...Array(50).fill('harmonicCoil'), ...Array(6).fill('pressureResonator'), 'echoCrank', 'phaseLock', ...Array(6).fill('standingWave'), 'crystalLattice', ...Array(15).fill('gridExciter'), '@harmonicConvergence'];
 const S14 = [...S13, 'nullChamber'];
-const S15 = [...S14, ...Array(25).fill('containmentRing'), '@resonantSiphon:20', '@graviticAnchor:10', 'inversionCrank', 'lensArray', ...Array(20).fill('horizonField'), 'skyAperture', ...Array(5).fill('mainsBackfeed'), ...Array(5).fill('steamLance'), '@finalAlignment'];
+const S15 = [...S14, ...Array(50).fill('containmentRing'), '@resonantSiphon:60', '@graviticAnchor:20', 'inversionCrank', 'lensArray', ...Array(40).fill('horizonField'), 'skyAperture', ...Array(15).fill('mainsBackfeed'), ...Array(15).fill('steamLance'), '@finalAlignment'];
 const S16 = [...S15, 'primaryFunction'];
 // the 16 Era III machine parts (WP9 C3), reported for s10_boiler / s11_era3_full
 const PARTS = ['boiler', 'chimney', 'steamManifold', 'pressureGauge', 'gaugeNeedle', 'fireboxGlow1', 'fireboxGlow2', 'fireboxGlow3', 'inductionHeater', 'superheater', 'reliefValves', 'steamHammer', 'hammerRam', 'condenser', 'turbine', 'turbineRotor'];

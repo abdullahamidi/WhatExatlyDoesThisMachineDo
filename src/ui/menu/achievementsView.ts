@@ -1,6 +1,7 @@
 // Pure view model for the RECORDS tab (WP12 T8). No DOM, no Phaser.
 import { ACHIEVEMENT_IDS, ACHIEVEMENT_LIST, UI_ART } from '../../data/achievements';
 import type { AchievementDefinition, AchievementId } from '../../data/achievements';
+import { FIND_TEXT, RELIC_NOTES, relicTotal } from '../../data/finds';
 import { ACHIEVEMENT_TEXT, BADGE_VIEW } from '../../data/notifications';
 import { RESOURCES } from '../../data/resources';
 import { TECHNOLOGIES } from '../../data/technologies';
@@ -113,4 +114,15 @@ export function counterText(
 ): string {
   const count = ids.filter((id) => unlocked[id] !== undefined).length;
   return `${count}/${total} ${ACHIEVEMENT_TEXT.logged}`;
+}
+
+// FIELD NOTES section of the RECORDS tab (WP28): the notes found so far, in order, as `n/N` (N = relicTotal: 6 in the demo,
+// 15 in the full game). A capped edition lists only the notes whose era is inside the cap. There is no miss count.
+export interface FieldNotesView { title: string; countText: string; notes: string[] }
+
+export function fieldNotes(relics: number, maxEra: number | null): FieldNotesView {
+  const notes = RELIC_NOTES.slice(0, Math.max(0, relics))
+    .filter((note) => maxEra === null || note.era <= maxEra)
+    .map((note) => note.text);
+  return { title: FIND_TEXT.notesTitle, countText: `${notes.length}/${relicTotal(maxEra)}`, notes };
 }

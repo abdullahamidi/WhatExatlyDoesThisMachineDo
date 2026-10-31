@@ -8,7 +8,7 @@ import type { GameState, TechId } from '../data/types';
 import { applyOffline } from './production/tick';
 import { evaluateMilestones } from './progression/milestones';
 import { runGreedy } from './sim/greedy';
-import type { GreedyFaults, GreedyOptions, GreedyResult } from './sim/greedy';
+import type { GreedyFaults, GreedyFinds, GreedyOptions, GreedyResult } from './sim/greedy';
 
 // WP21 demo cap timing guard. Greedy players must reach the demo cap tech inside fixed windows, the
 // era gate must not move that time, and nothing above the cap may leak in, also after a long offline
@@ -16,6 +16,8 @@ import type { GreedyFaults, GreedyOptions, GreedyResult } from './sim/greedy';
 // supersedes the WP21 N / C values, passive-first seed); P1d is the WP25 passive-first player. A failing window is
 // a balance finding, so do not widen them.
 // WP27 (playtest 2026-10-27): A, B, N and C also run the Machine Faults process (`faults`); P1d runs none.
+// WP28: A, B, N and C also pick up Finds (`finds`: 0.85 / 4 s, 0.85 / 5 s, 0.85 / 5 s, 0.4 / 6 s); P1d runs none.
+// WP28 P15: the B window moves to 58:00-80:00 (see the comment on PROFILE_B).
 // One run per profile in beforeAll; the tests only assert. Re-run: npx vitest run src/simulation/demoCap.sim.test.ts
 
 const MINUTE = 60;
@@ -51,13 +53,16 @@ interface Profile {
   readonly clickRate?: (state: Readonly<GameState>) => number;
   // WP27: Machine Faults process (catch chance, reaction seconds). Absent = no fault process (P1d).
   readonly faults?: GreedyFaults;
+  // WP28: Finds process (catch chance, reaction seconds). Absent = no Finds (P1d).
+  readonly finds?: GreedyFinds;
 }
 
-const PROFILE_A: Profile = { id: 'A', name: 'A (4 clicks/s, buys every 1 s)', clicksPerSecond: 4, buyIntervalSeconds: 1, seconds: 17400, lo: 55 * MINUTE, hi: 66 * MINUTE, faults: { catchProb: 1, reactionSeconds: 2 } };
-const PROFILE_B: Profile = { id: 'B', name: 'B (4 clicks/s, buys every 30 s)', clicksPerSecond: 4, buyIntervalSeconds: 30, seconds: 18000, lo: 66 * MINUTE, hi: 80 * MINUTE, faults: { catchProb: 1, reactionSeconds: 3 } };
+const PROFILE_A: Profile = { id: 'A', name: 'A (4 clicks/s, buys every 1 s)', clicksPerSecond: 4, buyIntervalSeconds: 1, seconds: 17400, lo: 55 * MINUTE, hi: 66 * MINUTE, faults: { catchProb: 1, reactionSeconds: 2 }, finds: { catchProb: 0.85, reactionSeconds: 4 } };
+// WP28 P15: the multi-buy greedy (H1) makes the 30 s buyer buy everything affordable per tick; v0.11.0 data under H1 measures 62:56; REC 61:57.
+const PROFILE_B: Profile = { id: 'B', name: 'B (4 clicks/s, buys every 30 s)', clicksPerSecond: 4, buyIntervalSeconds: 30, seconds: 18000, lo: 58 * MINUTE, hi: 80 * MINUTE, faults: { catchProb: 1, reactionSeconds: 3 }, finds: { catchProb: 0.85, reactionSeconds: 5 } };
 // New player: slower clicks and buys than B, so it lands after B and before the 1 cps player.
-const PROFILE_N: Profile = { id: 'N', name: 'N new player (2 clicks/s, buys every 10 s)', clicksPerSecond: 2, buyIntervalSeconds: 10, seconds: 18000, lo: 66 * MINUTE, hi: 90 * MINUTE, faults: { catchProb: 1, reactionSeconds: 3 } };
-const PROFILE_C: Profile = { id: 'C', name: 'C (1 click/s, buys every 30 s)', clicksPerSecond: 1, buyIntervalSeconds: 30, seconds: 28800, lo: 80 * MINUTE, hi: 120 * MINUTE, faults: { catchProb: 0.5, reactionSeconds: 4 } };
+const PROFILE_N: Profile = { id: 'N', name: 'N new player (2 clicks/s, buys every 10 s)', clicksPerSecond: 2, buyIntervalSeconds: 10, seconds: 18000, lo: 66 * MINUTE, hi: 90 * MINUTE, faults: { catchProb: 1, reactionSeconds: 3 }, finds: { catchProb: 0.85, reactionSeconds: 5 } };
+const PROFILE_C: Profile = { id: 'C', name: 'C (1 click/s, buys every 30 s)', clicksPerSecond: 1, buyIntervalSeconds: 30, seconds: 28800, lo: 80 * MINUTE, hi: 120 * MINUTE, faults: { catchProb: 0.5, reactionSeconds: 4 }, finds: { catchProb: 0.4, reactionSeconds: 6 } };
 // WP25 passive-first player: 4 clicks/s until the Generator is owned, then 0.5. clicksPerSecond is unused (the type needs it).
 const PROFILE_P1D: Profile = {
   id: 'P1d',
@@ -81,6 +86,7 @@ function greedyOptions(p: Profile, gated: boolean): GreedyOptions {
     ...(gated ? { maxEra: MAX_ERA } : {}),
     ...(p.clickRate !== undefined ? { clickRate: p.clickRate } : {}),
     ...(p.faults !== undefined ? { faults: p.faults } : {}),
+    ...(p.finds !== undefined ? { finds: p.finds } : {}),
   };
 }
 
@@ -112,6 +118,7 @@ beforeAll(() => {
     stepSeconds: STEP_SECONDS,
     buyIntervalSeconds: PROFILE_A.buyIntervalSeconds,
     faults: PROFILE_A.faults,
+    finds: PROFILE_A.finds,
     maxEra: MAX_ERA,
   });
   const credited = applyOffline(longRun.final, longRun.final.lastSimTime + OFFLINE_MS, TECHNOLOGIES);

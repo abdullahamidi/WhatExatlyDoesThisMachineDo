@@ -255,7 +255,7 @@ describe('living-world PNG gate (WP23a)', () => {
   }
 
   it('maps the allow-list to the finale cells: puddle whole and sprout bloom do use restored colours', () => {
-    expect(GATED).toEqual(expect.arrayContaining(['world.puddle', 'world.sprout', 'bg.virga']));
+    expect(GATED).toEqual(expect.arrayContaining(['world.puddle', 'world.sprout', 'bg.virga', 'world.splicesB', 'world.splicesC']));
     for (const id of ['world.puddle', 'world.sprout'] as const) {
       const entry = ASSET_MANIFEST[id];
       const img = decodePng(readFileSync(new URL(`../../public/assets/${entry.file ?? ''}`, import.meta.url)));

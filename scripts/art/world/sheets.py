@@ -8,13 +8,15 @@ ERA_ROWS = ('I', 'II', 'III', 'IV', 'V', 'whole')
 # WP24 D8 (AD1a): the living world v2 columns are APPENDED to the cast sheets (inspector lookUp, crouch, umbrellaHalf;
 # dog scratch0, scratch1, lookUp; crow frozenTip, ruffle; girl lanternUp, tilt; girlMini palm), so every older column
 # keeps its index (supersedes WP23 D7 "layouts final"). WP27 D5 appends the crow's folded-wing perched frames the same
-# way: perchTurn (head turned back), perchHead and perchTalk (the era I-II bubble frames), columns 12-14.
+# way: perchTurn (head turned back), perchHead and perchTalk (the era I-II bubble frames), columns 12-14. WP28b AD3-CELLS
+# appends the machine-event reaction cells the same way: inspector startle, point (22-23); dog bark0, bark1 (23-24).
 FRAMES = {
     'inspector': ('idleA', 'idleB', 'walk0', 'walk1', 'walk2', 'walk3', 'write0', 'write1', 'glance', 'front', 'talk',
                   'shield', 'pat0', 'pat1', 'wave', 'watch', 'umbrellaOpen', 'frontUmbrella', 'talkUmbrella',
-                  'lookUp', 'crouch', 'umbrellaHalf'),
+                  'lookUp', 'crouch', 'umbrellaHalf', 'startle', 'point'),
     'dog': ('sit0', 'sit1', 'sniff0', 'sniff1', 'walk0', 'walk1', 'walk2', 'walk3', 'dig0', 'dig1', 'shake0', 'shake1',
-            'head', 'talk', 'flat', 'lie', 'sleep', 'chase0', 'chase1', 'wag', 'scratch0', 'scratch1', 'lookUp'),
+            'head', 'talk', 'flat', 'lie', 'sleep', 'chase0', 'chase1', 'wag', 'scratch0', 'scratch1', 'lookUp',
+            'bark0', 'bark1'),
     'crow': ('frozen', 'perch0', 'perch1', 'head', 'talk', 'peck0', 'peck1', 'fly0', 'fly1', 'fly2', 'frozenTip',
              'ruffle', 'perchTurn', 'perchHead', 'perchTalk'),
     'girl': ('stand0', 'stand1', 'palm', 'talk', 'shield', 'run0', 'run1', 'run2', 'run3', 'lanternDrop', 'lanternUp',
@@ -41,6 +43,26 @@ FRAMES = {
     'sprout': ('stage1', 'stage2', 'stage3', 'stage4', 'bloom'),
     'page': ('flat', 'tilt'),
     'virga': ('fall', 'frozen'),
+    # WP28a AD1: the era I-II Splice objects in ONE uniform-cell sheet (cell 32x24, objects bottom-centered) and the Finds
+    # sheet (8x8 cells: items 0-6, relic note 7, glint 8-10). Frame names are the hand-off names (cell index = column).
+    'splicesA': ('bicycleDead', 'bicycleSpin0', 'bicycleSpin1', 'bicycleSpin2', 'bicycleWhole',
+                 'organDead', 'organCrank0', 'organCrank1', 'organCrank2', 'organCrank3', 'organWhole',
+                 'radioDark', 'radioLitA', 'radioLitB', 'radioWhole',
+                 'signDark', 'signHalfA', 'signHalfB', 'signWhole', 'clockLit'),
+    'finds': ('bolt', 'tag', 'gear', 'tin', 'key', 'photo', 'token', 'note', 'glint0', 'glint1', 'glint2'),
+    # WP28b AD3-OBJ: the era III-V Splice objects in TWO uniform-cell sheets (one cell would waste 114 KiB decoded): the tall
+    # objects in splicesB (18x56), the small ones and the overlays in splicesC (24x18). Cell index = column.
+    'splicesB': ('pumpDead', 'pumpUp', 'pumpDown', 'pumpCough', 'pumpWhole',
+                 'whistleDead', 'whistleBlow', 'whistleWhole',
+                 'bellStill', 'bellSwingL', 'bellSwingR', 'bellWhole',
+                 'kiteTangled', 'kiteFlutter0', 'kiteFlutter1', 'kiteWhole',
+                 'cairnStack', 'cairnLift1', 'cairnLift2', 'cairnLift3', 'cairnLift4', 'cairnWhole'),
+    'splicesC': ('hydrantDead', 'hydrantRattle', 'hydrantMistA', 'hydrantMistB', 'hydrantWhole',
+                 'gramophoneStill', 'gramophoneSpin0', 'gramophoneSpin1', 'gramophoneSpin2', 'gramophoneSkip',
+                 'gramophoneWhole',
+                 'chimesStill', 'chimesSway0', 'chimesSway1', 'chimesWhole',
+                 'vaneDir0', 'vaneDir1', 'vaneDir2', 'vaneDown', 'vaneWhole',
+                 'coinClosed', 'coinRattle0', 'coinRattle1', 'coinWhole'),
 }
 
 # key -> asset id, file under public/assets/, cell (w, h) art px, era rows?, pivot, per-sheet recolour pins,
@@ -114,6 +136,36 @@ SHEETS = {
     'virga': dict(id='bg.virga', file='bg/virga.png', cell=(512, 64), era_rows=False, pivot='plane', ring=False,
                   pins={}, master='virga', parts=True, only=('p', 'q', 'r', 'x'),
                   vertical=True),    # frames stacked top to bottom: 512x128 = 2 frames of 512x64 (manifest frame grid)
+    # WP28a AD1 (single row, street furniture like the lamp and clock). splicesA: full ink ring except the bicycle cells
+    # (`no_ring`: 1 px tubes, spokes and stand), whose silhouette counts 8-connected (`conn8`: diagonal 1 px tubes);
+    # clockLit is a stacked overlay on world.clock (bottom-centered anyway). finds: the glint cells are a one-color
+    # sparkle centered in the cell (no outline, not on the ground): `no_ring` + `overlays`.
+    'splicesA': dict(id='world.splicesA', file='world/splices-a.png', cell=(32, 24), era_rows=False, pivot='feet',
+                     ring=True, pins={}, master='splicesA', overlays=('clockLit',),
+                     no_ring=('bicycleDead', 'bicycleSpin0', 'bicycleSpin1', 'bicycleSpin2', 'bicycleWhole'),
+                     conn8=('bicycleDead', 'bicycleSpin0', 'bicycleSpin1', 'bicycleSpin2', 'bicycleWhole')),
+    'finds': dict(id='world.finds', file='world/finds.png', cell=(8, 8), era_rows=False, pivot='feet', ring=True,
+                  pins={}, master='finds', overlays=('glint0', 'glint1', 'glint2'),
+                  no_ring=('glint0', 'glint1', 'glint2')),
+    # WP28b AD3-OBJ (single row, objects bottom-centred, pivot (0.5, 1)). Per-frame gate options: `no_ring` for the soft
+    # steam and mist (no ink edge) and the kite's 1 px string, tail and bows; `parts_frames` where pieces float free by
+    # design (the coughed drops, the plume wisps, the mist specks, the lifted cairn stones); `violet_frames` for the era V
+    # violetLight rim on the lifted stones (single-row sheets allow it nowhere else). The kite and the chimes hang on the
+    # lamp, the vane stands on the booth apex, the coin flap sits on the booth's phone unit: stacked `overlays` (the kite's
+    # string ends at the finial, above its cell bottom, so it is exempt from the feet check).
+    'splicesB': dict(id='world.splicesB', file='world/splices-b.png', cell=(18, 56), era_rows=False, pivot='feet',
+                     ring=True, pins={}, master='splicesB',
+                     overlays=('kiteTangled', 'kiteFlutter0', 'kiteFlutter1', 'kiteWhole'),
+                     no_ring=('whistleBlow', 'kiteTangled', 'kiteFlutter0', 'kiteFlutter1', 'kiteWhole'),
+                     parts_frames=('pumpCough', 'whistleBlow', 'cairnLift1', 'cairnLift2', 'cairnLift3', 'cairnLift4'),
+                     violet_frames=('cairnLift1', 'cairnLift2', 'cairnLift3', 'cairnLift4')),
+    'splicesC': dict(id='world.splicesC', file='world/splices-c.png', cell=(24, 18), era_rows=False, pivot='feet',
+                     ring=True, pins={}, master='splicesC',
+                     overlays=('chimesStill', 'chimesSway0', 'chimesSway1', 'chimesWhole', 'vaneDir0', 'vaneDir1',
+                               'vaneDir2', 'vaneDown', 'vaneWhole', 'coinClosed', 'coinRattle0', 'coinRattle1',
+                               'coinWhole'),
+                     no_ring=('hydrantMistA', 'hydrantMistB'),
+                     parts_frames=('hydrantMistA', 'hydrantMistB')),
 }
 
 # Era-row sheets may use VIOLET_LIGHT in row V (the rim). Nothing else off the 25 is allowed anywhere.

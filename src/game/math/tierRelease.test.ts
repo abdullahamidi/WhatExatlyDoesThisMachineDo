@@ -32,9 +32,9 @@ const MOTOR_T2: TierChange = { techId: 'motorTuning', from: 1, to: 2, top: 5, ho
 const MOTOR_T5: TierChange = { techId: 'motorTuning', from: 1, to: 5, top: 5, hosts: ['wornMotor', 'motorPlinth'], debris: 'mote', staged: false };
 
 /** Six tier-1-to-2 crossings in one release (levels in brackets): gearRatio 5 to 6, flywheel 3 to 4, motorTuning 4 to 5,
- *  improvedPistons 4 to 5, copperWinding 4 to 5, transformer 3 to 4. */
-const BURST_PREV: Levels = { gearRatio: 5, flywheel: 3, motorTuning: 4, improvedPistons: 4, copperWinding: 4, transformer: 3 };
-const BURST_NEXT: Levels = { gearRatio: 6, flywheel: 4, motorTuning: 5, improvedPistons: 5, copperWinding: 5, transformer: 4 };
+ *  improvedPistons 4 to 5, copperWinding 8 to 9, transformer 6 to 7 (the REC part thresholds). */
+const BURST_PREV: Levels = { gearRatio: 5, flywheel: 3, motorTuning: 4, improvedPistons: 4, copperWinding: 8, transformer: 6 };
+const BURST_NEXT: Levels = { gearRatio: 6, flywheel: 4, motorTuning: 5, improvedPistons: 5, copperWinding: 9, transformer: 7 };
 
 describe('planTierRelease: one crossing', () => {
   it('motorTuning 4 to 5 with everything settled: one beat on wornMotor, nothing else', () => {
@@ -132,16 +132,16 @@ describe('planTierRelease: burst cap and order', () => {
 });
 
 describe('planTierRelease: staged changes', () => {
-  it('copperWinding 9 to 10 is one staged change: fly-in only, no beat, no torque', () => {
-    const p = plan({ copperWinding: 9 }, { copperWinding: 10 });
+  it('copperWinding 18 to 19 is one staged change: fly-in only, no beat, no torque', () => {
+    const p = plan({ copperWinding: 18 }, { copperWinding: 19 });
     expect(p.staged).toEqual([{ techId: 'copperWinding', from: 2, to: 3, top: 5, hosts: ['coilStage2'], debris: 'scale', staged: true }]);
     expect(p.beats).toEqual([]);
     expect(p.instant).toEqual([]);
     expect(p.torques).toEqual([]);
   });
 
-  it('containmentRing 3 to 4 and resonantSiphon 4 to 5 are staged', () => {
-    const p = plan({ containmentRing: 3, resonantSiphon: 4 }, { containmentRing: 4, resonantSiphon: 5 });
+  it('containmentRing 6 to 7 and resonantSiphon 12 to 13 are staged', () => {
+    const p = plan({ containmentRing: 6, resonantSiphon: 12 }, { containmentRing: 7, resonantSiphon: 13 });
     expect(p.staged.map((c) => c.techId)).toEqual(['containmentRing', 'resonantSiphon']);
     expect(p.beats).toEqual([]);
     expect(p.instant).toEqual([]);
@@ -149,7 +149,7 @@ describe('planTierRelease: staged changes', () => {
   });
 
   it('staged changes never use the cap: a burst plus a staged change still plays four beats', () => {
-    const p = plan({ ...BURST_PREV, containmentRing: 3 }, { ...BURST_NEXT, containmentRing: 4 });
+    const p = plan({ ...BURST_PREV, containmentRing: 6 }, { ...BURST_NEXT, containmentRing: 7 });
     expect(p.beats).toHaveLength(PART_TIER_FX.maxBeatsPerRelease);
     expect(p.staged.map((c) => c.techId)).toEqual(['containmentRing']);
     expect(p.instant.map((i) => i.change.techId)).toEqual(['copperWinding', 'transformer']);

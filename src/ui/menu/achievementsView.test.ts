@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { achievementCards, achievementInEdition, counterText, editionAchievements } from './achievementsView';
+import { achievementCards, achievementInEdition, counterText, editionAchievements, fieldNotes } from './achievementsView';
 import { ACHIEVEMENTS, ACHIEVEMENT_IDS, ACHIEVEMENT_LIST, UI_ART } from '../../data/achievements';
 import type { AchievementDefinition } from '../../data/achievements';
+import { RELIC_NOTES } from '../../data/finds';
 import { ACHIEVEMENT_TEXT, BADGE_VIEW } from '../../data/notifications';
 import type { AchievementsState } from '../../data/types';
 
@@ -206,5 +207,41 @@ describe('achievementInEdition', () => {
   it('stat: cycle rows are hidden, other stats are shown', () => {
     expect(achievementInEdition(ACHIEVEMENTS.newCycle, 2)).toBe(false);
     expect(achievementInEdition(ACHIEVEMENTS.firstTurn, 2)).toBe(true);
+  });
+});
+
+// WP28 FIELD NOTES: n/N with N = 15 in the full game and 6 in the demo; the found notes in order; no miss counter.
+describe('fieldNotes (WP28)', () => {
+  const ALL = RELIC_NOTES.map((note) => note.text);
+
+  it('shows 0/15 with no notes listed at zero relics', () => {
+    expect(fieldNotes(0, null)).toEqual({ title: 'FIELD NOTES', countText: '0/15', notes: [] });
+  });
+
+  it('lists the first note after one relic', () => {
+    expect(fieldNotes(1, null)).toEqual({ title: 'FIELD NOTES', countText: '1/15', notes: [ALL[0]] });
+  });
+
+  it('lists all 15 notes in order at 15 relics', () => {
+    const view = fieldNotes(15, null);
+    expect(view.countText).toBe('15/15');
+    expect(view.notes).toEqual(ALL);
+  });
+
+  it('the demo counts out of 6 and lists the era I-II notes', () => {
+    expect(fieldNotes(0, 2).countText).toBe('0/6');
+    expect(fieldNotes(3, 2)).toEqual({ title: 'FIELD NOTES', countText: '3/6', notes: ALL.slice(0, 3) });
+    expect(fieldNotes(6, 2)).toEqual({ title: 'FIELD NOTES', countText: '6/6', notes: ALL.slice(0, 6) });
+  });
+
+  it('a capped edition never lists a note above its era', () => {
+    // The game cannot reach more than 6 relics in the demo; the view still keeps the cap.
+    expect(fieldNotes(7, 2).notes).toEqual(ALL.slice(0, 6));
+    expect(fieldNotes(7, 2).countText).toBe('6/6');
+  });
+
+  it('has no miss counter', () => {
+    expect(JSON.stringify(fieldNotes(2, null))).not.toMatch(/miss/i);
+    expect(JSON.stringify(fieldNotes(6, 2))).not.toMatch(/miss/i);
   });
 });

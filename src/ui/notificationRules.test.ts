@@ -6,6 +6,7 @@ import {
   nextPurchaseBurst,
   purchaseBurstMessage,
   recoveredMessage,
+  relicMessage,
   welcomeBackMessage,
 } from './notificationRules';
 import type { PurchaseBurst } from './notificationRules';
@@ -13,6 +14,7 @@ import { setRevealed } from './revealRules';
 import type { NotificationEvent } from './notificationRules';
 import { ACHIEVEMENTS } from '../data/achievements';
 import type { AchievementId } from '../data/achievements';
+import { FIND_TEXT, RELIC_NOTES, relicTotal } from '../data/finds';
 import {
   ACHIEVEMENT_TEXT,
   FIRST_CLICK_MESSAGE,
@@ -291,7 +293,7 @@ describe('welcomeBackMessage with the xf reveal (WP13 D4)', () => {
 
 describe('cycleMessage (WP14 T8a)', () => {
   it('cycle 2 with 3 Echoes: CYCLE 0043 and +3 ECHOES (+42% ALL/S), system tone', () => {
-    expect(cycleMessage({ cycle: 2, echoesGained: 3, echoesEarned: 3 })).toEqual({
+    expect(cycleMessage({ cycle: 2, echoesGained: 3, echoesEarned: 3, splicesCut: 0 })).toEqual({
       key: 'cycle',
       title: 'CYCLE 0043',
       body: '+3 ECHOES (+42% ALL/S)',
@@ -301,12 +303,12 @@ describe('cycleMessage (WP14 T8a)', () => {
   });
 
   it('bonus follows the earned total, capped at 12 counted Echoes', () => {
-    expect(cycleMessage({ cycle: 3, echoesGained: 3, echoesEarned: 6 }).body).toBe('+3 ECHOES (+84% ALL/S)');
-    expect(cycleMessage({ cycle: 9, echoesGained: 4, echoesEarned: 40 }).body).toBe('+4 ECHOES (+168% ALL/S)');
+    expect(cycleMessage({ cycle: 3, echoesGained: 3, echoesEarned: 6, splicesCut: 0 }).body).toBe('+3 ECHOES (+84% ALL/S)');
+    expect(cycleMessage({ cycle: 9, echoesGained: 4, echoesEarned: 40, splicesCut: 0 }).body).toBe('+4 ECHOES (+168% ALL/S)');
   });
 
   it('title counts the cycle with the CYCLE label', () => {
-    expect(cycleMessage({ cycle: 3, echoesGained: 3, echoesEarned: 6 }).title).toBe('CYCLE 0044');
+    expect(cycleMessage({ cycle: 3, echoesGained: 3, echoesEarned: 6, splicesCut: 0 }).title).toBe('CYCLE 0044');
   });
 });
 
@@ -369,6 +371,41 @@ describe('purchase bursts (WP20 T6)', () => {
     expect(purchaseBurstMessage({ id: 'gearRatio', fromLevel: 1, toLevel: 4, lastMs: 0 }).title).toContain('→');
   });
 });
+// WP28 FIELD NOTE toast: `FIELD NOTE n/total` with the note text; a blank page when no note is left.
+describe('relicMessage (WP28)', () => {
+  it('shows the first note as FIELD NOTE 1/6 in the demo, with its text', () => {
+    expect(relicMessage(0, relicTotal(2))).toEqual({
+      key: 'relic',
+      title: 'FIELD NOTE 1/6',
+      body: RELIC_NOTES[0]?.text,
+      tone: 'system',
+      durationMs: TOAST_CONFIG.durationMs,
+    });
+  });
+
+  it('counts the note out of the edition total (15 in the full game)', () => {
+    expect(relicMessage(14, relicTotal(null)).title).toBe('FIELD NOTE 15/15');
+    expect(relicMessage(5, relicTotal(2)).title).toBe('FIELD NOTE 6/6');
+    expect(relicMessage(5, relicTotal(2)).body).toBe(RELIC_NOTES[5]?.text);
+  });
+
+  it('is a blank page when no note is left (null), with the normal duration and key', () => {
+    expect(relicMessage(null, 6)).toEqual({
+      key: 'relic',
+      title: FIND_TEXT.blankTitle,
+      body: FIND_TEXT.blankPage,
+      tone: 'system',
+      durationMs: TOAST_CONFIG.durationMs,
+    });
+  });
+
+  it('treats an index past the list as a blank page too', () => {
+    const msg = relicMessage(RELIC_NOTES.length, 15);
+    expect(msg.title).toBe('FIELD NOTE');
+    expect(msg.body).toBe('A page. Blank on both sides.');
+  });
+});
+
 describe('purchase bursts with part tiers (WP22 A6)', () => {
   const W = TOAST_BURST.windowMs;
 

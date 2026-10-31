@@ -3,8 +3,13 @@ import {
   TECH_TREE_FIT,
   TECH_TREE_LAYOUT,
   buildEraTabs,
+  buildSpliceDetail,
+  buildSpliceRows,
+  buildSpliceTab,
   buildTechTreeView,
+  buyMaxAllowed,
   defaultSelection,
+  defaultSpliceSelection,
   edgePath,
   edgePathAround,
   eraHeaderText,
@@ -17,8 +22,10 @@ import {
   revealScroll,
   techNodePosition,
 } from './techTreeView';
-import type { TechNodeView } from './techTreeView';
+import type { SpliceRowView, TechNodeView } from './techTreeView';
 import { getAllTechViews, getTechView, createInitialState, emptyResourceMap } from '../simulation';
+import { isSplice } from '../simulation/progression/status';
+import { spliceState, spliceTooltip } from '../game/math/spliceWorld';
 import { TECHNOLOGIES } from '../data/technologies';
 import { DEMO_TEXT } from '../data/demo';
 import type { GameState, ResourceMap, TechDefinition, TechId, TechView } from '../data/types';
@@ -932,6 +939,159 @@ describe('techTreeView', () => {
   });
 });
 
+// WP28 C9 SPLICES tab. ERA_NODE_IDS is the era graph as of v0.11.0 (90ebfb2): the Splices (branch 'splice') never join it.
+const ERA_NODE_IDS: Record<number, TechId[]> = {
+  1: ['handCrank', 'gearRatio', 'reinforcedCrank', 'flywheel', 'wornMotor', 'motorTuning', 'pistonArray', 'improvedPistons', 'generatorBlueprint', 'faultLamp'],
+  2: ['generator', 'copperWinding', 'motorRetrofit', 'dynamoCrank', 'capacitorBank', 'sparkGap', 'transformer', 'powerLines', 'substationBlueprint', 'crankServo', 'dischargeLever'],
+  3: ['boiler', 'firebox', 'inductionHeater', 'steamHammer', 'superheater', 'condenser', 'turbine', 'reliefValves', 'pressureVesselBlueprint', 'bellowsDrive', 'leakWhistle'],
+  4: ['resonatorSpire', 'harmonicCoil', 'pressureResonator', 'echoCrank', 'phaseLock', 'standingWave', 'crystalLattice', 'harmonicConvergence', 'gridExciter', 'dampingFork'],
+  5: ['nullChamber', 'containmentRing', 'resonantSiphon', 'graviticAnchor', 'inversionCrank', 'lensArray', 'horizonField', 'skyAperture', 'finalAlignment', 'primaryFunction', 'mainsBackfeed', 'steamLance', 'overrunClutch'],
+};
+
+/** A fresh state with the given current balances, lifetime totals and tech levels. */
+function withBalances(res: Partial<ResourceMap>, lifetime: Partial<ResourceMap> = {}, techLevels: Partial<Record<TechId, number>> = {}): GameState {
+  return stateWith({
+    res: { ...emptyResourceMap(), ...res },
+    lifetime: { ...emptyResourceMap(), ...lifetime },
+    techLevels: { ...createInitialState(0).techLevels, ...techLevels },
+  });
+}
+
+/** The SPLICES rows of a state (its own lifetime map feeds the DARK progress). */
+function rowsOf(state: GameState): SpliceRowView[] {
+  return buildSpliceRows(viewsOf(state), state.lifetime);
+}
+
+describe('SPLICES tab (WP28 C9)', () => {
+  it('keeps the era graph, tab counts and default selection free of Splices', () => {
+    const state = withBalances({ me: 1000 }, { me: 15000 });
+    const all = viewsOf(state);
+    // spliceBicycle is affordable here: the era I count must not include it.
+    expect(all.some((v) => isSplice(v.def) && v.affordable)).toBe(true);
+    const tabs = buildEraTabs(all, state.res, 1);
+    expect(tabs[0]?.affordable).toBe(all.filter((v) => v.def.era === 1 && !isSplice(v.def) && v.affordable).length);
+    expect(defaultSelection(all.filter((v) => v.def.era === 1))).toBe(
+      defaultSelection(all.filter((v) => v.def.era === 1 && !isSplice(v.def))),
+    );
+    for (const era of [1, 2, 3, 4, 5]) {
+      const view = buildTechTreeView(all.filter((v) => v.def.era === era), state.res, null, era);
+      expect(view.nodes.map((n) => n.id)).toEqual(ERA_NODE_IDS[era]);
+    }
+  });
+
+  it.each([1, 2, 3, 4, 5])('era %i graph holds the v0.11.0 node ids in table order', (era) => {
+    const views = getAllTechViews(createInitialState(0)).filter((v) => v.def.era === era);
+    expect(buildTechTreeView(views, emptyResourceMap(), null, era).nodes.map((n) => n.id)).toEqual(ERA_NODE_IDS[era]);
+  });
+
+  it('is null while every Splice is locked, and shows with its affordable count once one is not locked', () => {
+    expect(buildSpliceTab(viewsOf(withBalances({})), false)).toBeNull();
+    expect(buildSpliceTab(viewsOf(withBalances({ me: 1000 }, { me: 15000 })), false)).toEqual({
+      label: 'SPLICES', affordable: 1, selected: false, ariaLabel: 'SPLICES, 1 affordable',
+    });
+    expect(buildSpliceTab(viewsOf(withBalances({}, { me: 15000 })), true)).toEqual({
+      label: 'SPLICES', affordable: 0, selected: true, ariaLabel: 'SPLICES',
+    });
+  });
+
+  it('counts a demo-capped Splice as locked', () => {
+    // A boiler owned and PR lifetime: the era III Splices are open in the full game but above the demo cap of 2.
+    const state = withBalances({}, { pr: 1e9 }, { boiler: 1 });
+    expect(buildSpliceTab(getAllTechViews(state, TECHNOLOGIES, 2), false)).toBeNull();
+    expect(buildSpliceTab(getAllTechViews(state), false)).not.toBeNull();
+  });
+
+  it('lists the 16 Splices in table order, grouped by era, all DARK on a fresh machine', () => {
+    const rows = rowsOf(withBalances({}));
+    expect(rows.map((r) => r.id)).toEqual(TECH_IDS.filter((id) => isSplice(TECHNOLOGIES[id])));
+    expect(rows).toHaveLength(16);
+    expect(rows.map((r) => r.era)).toEqual([...rows.map((r) => r.era)].sort((a, b) => a - b));
+    expect(new Set(rows.map((r) => r.state))).toEqual(new Set(['DARK']));
+    expect(rows[0]).toMatchObject({ name: 'Bicycle', costText: '900 ME', effectText: '+5% automation', progressText: '0 / 15K LIFETIME ME', affordable: false });
+  });
+
+  it('shows the lifetime progress on a DARK row and IN REACH, SPLICED rows without it', () => {
+    expect(rowsOf(withBalances({}, { me: 9100 }))[0]?.progressText).toBe('9.1K / 15K LIFETIME ME');
+    expect(rowsOf(withBalances({}, { me: 15000 }))[0]).toMatchObject({ state: 'IN REACH', progressText: '' });
+    expect(rowsOf(withBalances({}, { me: 15000 }, { spliceBicycle: 1 }))[0]).toMatchObject({ state: 'SPLICED', progressText: '' });
+  });
+
+  it('shows FULL GAME on the era III-V rows above a demo cap of 2', () => {
+    const rows = buildSpliceRows(getAllTechViews(withBalances({}, { pr: 1e9 }), TECHNOLOGIES, 2), emptyResourceMap());
+    expect(rows.filter((r) => r.era >= 3)).toHaveLength(10);
+    expect(rows.filter((r) => r.era >= 3).every((r) => r.state === 'FULL GAME')).toBe(true);
+    expect(rows.filter((r) => r.era <= 2).some((r) => r.state === 'FULL GAME')).toBe(false);
+  });
+
+  it('names a row with its state, cost, effect and the affordable flag', () => {
+    const [bicycle] = rowsOf(withBalances({ me: 1000 }, { me: 15000 }));
+    expect(bicycle?.ariaLabel).toBe('Bicycle, IN REACH, 900 ME, +5% automation, affordable');
+    const [, organ] = rowsOf(withBalances({ me: 1000 }, { me: 15000 }));
+    expect(organ?.ariaLabel).toBe('Barrel Organ, DARK, 12K ME, Finds pay +1s, 15K / 120K LIFETIME ME');
+  });
+
+  it('builds the Splice detail from the world tooltip lines and the buy state', () => {
+    const open = withBalances({ me: 1000 }, { me: 15000 });
+    expect(buildSpliceDetail(getTechView(open, 'spliceBicycle'), open)).toMatchObject({
+      title: 'SPLICE · BICYCLE', costText: '900 ME', effectText: '+5% automation', stateText: 'CLICK TO SPLICE',
+      buyState: 'buy', buyLabel: 'PURCHASE — 900 ME', buyEnabled: true,
+    });
+    const poor = withBalances({}, { me: 15000 });
+    expect(buildSpliceDetail(getTechView(poor, 'spliceBicycle'), poor)).toMatchObject({
+      stateText: 'NEED 900 MORE ME', buyState: 'insufficient', buyLabel: 'INSUFFICIENT ME', buyEnabled: true,
+    });
+    const fresh = withBalances({});
+    expect(buildSpliceDetail(getTechView(fresh, 'spliceBicycle'), fresh)).toMatchObject({
+      stateText: 'LINE NOT IN REACH · 0 / 15K LIFETIME ME', buyState: 'locked', buyLabel: 'REQUIREMENTS UNMET', buyEnabled: false,
+    });
+    const woken = withBalances({}, { me: 15000 }, { spliceBicycle: 1 });
+    expect(buildSpliceDetail(getTechView(woken, 'spliceBicycle'), woken)).toMatchObject({ stateText: 'SPLICED', buyState: 'owned', buyLabel: 'INSTALLED' });
+    const capped = withBalances({}, { pr: 1e9 }, { boiler: 1 });
+    expect(buildSpliceDetail(getTechView(capped, 'splicePump', TECHNOLOGIES, 2), capped)).toMatchObject({
+      stateText: 'FULL GAME', buyState: 'demo', buyLabel: DEMO_TEXT.fullGameOnly, buyEnabled: false,
+    });
+  });
+
+  it('matches the world tooltip lines (spliceTooltip) for every Splice in every state', () => {
+    const cases: Array<[GameState, 2 | null]> = [
+      [withBalances({}), null],
+      [withBalances({ me: 1000 }, { me: 15000 }), null],
+      [withBalances({}, { me: 15000 }), null],
+      [withBalances({}, { ee: 1e9 }), null],
+      [withBalances({}, { me: 15000 }, { spliceBicycle: 1 }), null],
+      [withBalances({}, { pr: 1e9 }, { boiler: 1 }), 2],
+    ];
+    for (const [state, cap] of cases) {
+      for (const view of getAllTechViews(state, TECHNOLOGIES, cap)) {
+        if (!isSplice(view.def)) continue;
+        const detail = buildSpliceDetail(view, state);
+        expect([detail.title, detail.costText, detail.effectText, detail.stateText]).toEqual(spliceTooltip(view, spliceState(view), state));
+      }
+    }
+    // A Splice whose era keystone is not owned names it (the tech line), once its lifetime is met.
+    expect(buildSpliceDetail(getTechView(withBalances({}, { ee: 1e9 }), 'spliceRadio'), withBalances({}, { ee: 1e9 })).stateText)
+      .toBe('LINE NOT IN REACH · GENERATOR FIRST');
+  });
+
+  it('selects the first affordable Splice, else the first row, and none without Splices', () => {
+    expect(defaultSpliceSelection(viewsOf(withBalances({}, { me: 15000 })))).toBe('spliceBicycle');
+    expect(defaultSpliceSelection(viewsOf(withBalances({ me: 1000 }, { me: 15000 })))).toBe('spliceBicycle');
+    expect(defaultSpliceSelection(viewsOf(withBalances({})).filter((v) => !isSplice(v.def)))).toBeNull();
+  });
+
+  it('allows BUY MAX only on an available, affordable repeatable', () => {
+    const rich = withBalances({ me: 1e9, ee: 1e9, pr: 1e9, rs: 1e9, xf: 1e9 }, { me: 1e9 });
+    expect(buyMaxAllowed(getTechView(rich, 'gearRatio'))).toBe(true);
+    expect(buyMaxAllowed(getTechView(withBalances({}), 'gearRatio'))).toBe(false);
+    expect(buyMaxAllowed(getTechView(withBalances({ me: 1e9 }, {}, { gearRatio: 15 }), 'gearRatio'))).toBe(false);
+    expect(getTechView(rich, 'copperWinding').status).toBe('locked');
+    expect(buyMaxAllowed(getTechView(rich, 'copperWinding'))).toBe(false);
+    // An affordable unlock (a Splice or any unlock) never takes BUY MAX.
+    expect(buyMaxAllowed(getTechView(rich, 'spliceBicycle'))).toBe(false);
+    expect(buildTechTreeView(viewsOf(rich).filter((v) => v.def.era === 1), rich.res, 'gearRatio', 1).detail?.buyMax).toBe(true);
+  });
+});
+
 describe('demo edition views (WP21)', () => {
   // Era II reached (generator owned), era III and up above the demo cap of 2.
   const MID_RES: ResourceMap = { ...emptyResourceMap(), me: 5000, ee: 1200 };
@@ -1059,8 +1219,8 @@ describe('part tier text in the tree detail panel (WP22 A6)', () => {
     expect(detailLevelOf('gearRatio', 15)).toBe('LV 15/15 · MK III AS BUILT');
   });
 
-  it('uncapped mainsBackfeed keeps the infinity cap and reads MK II', () => {
-    expect(detailLevelOf('mainsBackfeed', 4)).toBe('LV 4/∞ · MK II — MK III AT 7');
+  it('uncapped mainsBackfeed keeps the infinity cap and reads MK I', () => {
+    expect(detailLevelOf('mainsBackfeed', 4)).toBe('LV 4/∞ · MK I — MK II AT 10');
   });
 
   it('a tracked part at level 0 shows no tier mark', () => {
@@ -1068,7 +1228,7 @@ describe('part tier text in the tree detail panel (WP22 A6)', () => {
   });
 
   it('an untracked repeatable keeps the plain level text', () => {
-    expect(detailLevelOf('horizonField', 3)).toBe('LV 3/20');
+    expect(detailLevelOf('horizonField', 3)).toBe('LV 3/40');
   });
 
   it('unlocks and milestones keep their plain words', () => {

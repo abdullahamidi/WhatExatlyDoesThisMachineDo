@@ -10,8 +10,9 @@ import type { Rect } from './worldPlacement';
 import { visibleMachineBounds, boundsToWorld } from './machineBounds';
 import { layerPhase } from './parallax';
 import type { CameraPose } from './finale';
-import { VIEW, GROUND_Y, MACHINE_ANCHOR, CAMERA, PARALLAX_LAYERS, PIXEL_SCALE } from '../../data/world';
-import { WORLD_FAR_PLANES, WORLD_GIRL_PLACEMENTS, WORLD_LAYOUT, WORLD_PLACEMENTS } from '../../data/livingWorld';
+import { VIEW, GROUND_Y, MACHINE_ANCHOR, CAMERA, CRANK_FEEDBACK, FLOATING_TEXT, PARALLAX_LAYERS, PIXEL_SCALE } from '../../data/world';
+import { WORLD_FAR_PLANES, WORLD_GIRL_PLACEMENTS, WORLD_LAYOUT, WORLD_PLACEMENTS, WORLD_ROWS } from '../../data/livingWorld';
+import { WORLD_SPOTS, WORLD_YARD } from '../../data/worldBehaviour';
 import type { FramingKey, GroundId, WorldPlacement } from '../../data/livingWorld';
 import { WORLD_GIRL } from '../../data/worldEras';
 import { WORLD_ENDING } from '../../data/worldEnding';
@@ -23,18 +24,18 @@ import type { TechId } from '../../data/types';
 const rep = (id: string, n: number): string[] => Array.from({ length: n }, () => id);
 const S7 = ['wornMotor', 'gearRatio', 'gearRatio', 'gearRatio', 'reinforcedCrank', 'motorTuning', 'motorTuning', 'motorTuning',
   'motorTuning', 'motorTuning', 'flywheel', 'pistonArray', 'improvedPistons'];
-const S9 = [...S7, '@blueprint', 'generator', ...rep('motorRetrofit', 5), ...rep('copperWinding', 20), 'dynamoCrank',
-  'capacitorBank', 'sparkGap', ...rep('transformer', 3), 'powerLines'];
+const S9 = [...S7, '@blueprint', 'generator', ...rep('motorRetrofit', 10), ...rep('copperWinding', 40), 'dynamoCrank',
+  'capacitorBank', 'sparkGap', ...rep('transformer', 6), 'powerLines'];
 // The late stages S10-S16 (stages.mjs), copied the same way.
 const S10 = [...S9, '@substationBlueprint', 'boiler'];
-const S11 = [...S10, ...rep('inductionHeater', 3), ...rep('firebox', 20), 'steamHammer', 'superheater', ...rep('condenser', 5),
-  'turbine', 'reliefValves', ...rep('bellowsDrive', 3), '@pressureVesselBlueprint'];
+const S11 = [...S10, ...rep('inductionHeater', 9), ...rep('firebox', 40), 'steamHammer', 'superheater', ...rep('condenser', 15),
+  'turbine', 'reliefValves', ...rep('bellowsDrive', 9), '@pressureVesselBlueprint'];
 const S12 = [...S11, 'resonatorSpire'];
-const S13 = [...S12, ...rep('crankServo', 3), ...rep('harmonicCoil', 25), ...rep('pressureResonator', 3), 'echoCrank', 'phaseLock',
-  ...rep('standingWave', 3), 'crystalLattice', ...rep('gridExciter', 5), '@harmonicConvergence'];
+const S13 = [...S12, ...rep('crankServo', 3), ...rep('harmonicCoil', 50), ...rep('pressureResonator', 6), 'echoCrank', 'phaseLock',
+  ...rep('standingWave', 6), 'crystalLattice', ...rep('gridExciter', 15), '@harmonicConvergence'];
 const S14 = [...S13, 'nullChamber'];
-const S15 = [...S14, ...rep('containmentRing', 25), '@resonantSiphon:20', '@graviticAnchor:10', 'inversionCrank', 'lensArray',
-  ...rep('horizonField', 20), 'skyAperture', ...rep('mainsBackfeed', 5), ...rep('steamLance', 5), '@finalAlignment'];
+const S15 = [...S14, ...rep('containmentRing', 50), '@resonantSiphon:60', '@graviticAnchor:20', 'inversionCrank', 'lensArray',
+  ...rep('horizonField', 40), 'skyAperture', ...rep('mainsBackfeed', 15), ...rep('steamLance', 15), '@finalAlignment'];
 const S16 = [...S15, 'primaryFunction'];
 // The era II entry (S8) and the state with a capacitorBank and a sparkGap before the transformer (framing s8w, WP27 F6.1).
 const S8_BUYS = [...S7, '@blueprint', 'generator'];
@@ -622,6 +623,111 @@ describe('actorBand (WP24 T1)', () => {
       expect(band === null, actor).toBe(p === null);
       if (band !== null && p !== null) expect(band.min <= p.x && p.x <= band.max, actor).toBe(true);
     }
+  });
+});
+
+// WP28b B2: the placement guards of the spots v2 and the yard lanes, at each stage's framing pose. The spot pair rule and the yard limit are
+// also in worldBehaviour.test.ts (the spots block).
+describe('spots v2 and yard lanes (WP28b B2)', () => {
+  const SPOT_STAGES: readonly { name: string; buys: readonly string[]; key: FramingKey }[] = [
+    { name: 'S7', buys: S7, key: 'e1' }, { name: 'S8', buys: S8_BUYS, key: 's8' }, { name: 'S8W', buys: S8W_BUYS, key: 's8w' },
+    { name: 'S9', buys: S9, key: 's9' }, { name: 'S10', buys: S10, key: 's10' }, { name: 'S11', buys: S11, key: 's11' },
+    { name: 'S15', buys: S15, key: 's15' },
+  ];
+  // WP28b B-T8b re-pin: the spot corrections (e1 y1 1390@110, s8 y1 1552@56, no s8 y2) cleared both known occlusions.
+  // WP28b r2-FX1 B: the three visit stands that lay over the far mini are moved or dropped (s8 organ, s11 radio dropped; s11 cairn 910@170),
+  // so no Inspector spot is left over the mini and the list is empty.
+  const KNOWN_MINI_OCCLUSIONS: readonly string[] = [];
+  // The Inspector's body reaches 14 world px either side of his feet (the s8w mini test uses the same half width).
+  const BODY_HALF_PX = 14;
+  // The crank circle plus WORLD_LAYOUT.crankClearPx, and the gain-text block x-range (its bottom-centre sits at the crank + spawnOffset).
+  const HUB_CLEAR_PX = CRANK_FEEDBACK.hitRadius * PIXEL_SCALE + WORLD_LAYOUT.crankClearPx;
+  const GAIN_LEFT = WORLD_LAYOUT.crankHub.x + FLOATING_TEXT.spawnOffset.x - WORLD_LAYOUT.gainBox.w / 2;
+  const GAIN_RIGHT = WORLD_LAYOUT.crankHub.x + FLOATING_TEXT.spawnOffset.x + WORLD_LAYOUT.gainBox.w / 2;
+  const FRONT_LANE = WORLD_ROWS.front.y - GROUND_Y;
+
+  // The far-plane girl mini of a framing (WORLD_FAR_PLANES): its game x at the pose and its half width (8 art-scale px at zoom 1). e1 is the
+  // cycle 2+ foot (footArtXE1), s8 and s9 the far foot (footArtX), s11 the near pylon foot (girlMiniNear, era III). null where no mini stands.
+  function miniOf(key: FramingKey, pose: CameraPose): { x: number; halfPx: number } | null {
+    const far = WORLD_FAR_PLANES;
+    const y = far.pylon.tileTopY + 2 * far.girlMini.footArtY;
+    const halfPx = 8 * pose.zoom;
+    if (key === 'e1') return { x: screenOfWorld({ x: far.pylon.tileOriginX + 2 * far.girlMini.footArtXE1, y }, far.pylon.sf, pose).x, halfPx };
+    if (key === 's8' || key === 's9') {
+      return { x: screenOfWorld({ x: far.pylon.tileOriginX + 2 * far.girlMini.footArtX, y }, far.pylon.sf, pose).x, halfPx };
+    }
+    if (key === 's11') {
+      return { x: screenOfWorld({ x: far.girlMiniNear.tileOriginX + 2 * far.girlMiniNear.footArtX, y }, far.pylon.sf, pose).x, halfPx };
+    }
+    return null;
+  }
+
+  it.each(SPOT_STAGES)('$name: every Inspector and dog spot x lies in the wing band, off the crank circle + 24 px and the gain-text spawn', (s) => {
+    const levels = levelsOf(s.buys);
+    const pose = framingPose(levels);
+    for (const actor of ['inspector', 'dog'] as const) {
+      const band = actorBand(s.key, pose, levels, actor);
+      for (const spot of WORLD_SPOTS[s.key]?.[actor] ?? []) {
+        expect(band !== null && band.min <= spot.x && spot.x <= band.max, `${s.key} ${actor} ${spot.id} band`).toBe(true);
+        expect(Math.abs(spot.x - WORLD_LAYOUT.crankHub.x) >= HUB_CLEAR_PX, `${s.key} ${actor} ${spot.id} crank`).toBe(true);
+        expect(spot.x < GAIN_LEFT || spot.x > GAIN_RIGHT, `${s.key} ${actor} ${spot.id} gain spawn`).toBe(true);
+      }
+    }
+  });
+
+  // Director ruling 2026-10-30 R2 (docs/plan/WP28.md): the dog front-row (lane 32) spots listed here may lie under the UI 150 HUD buttons
+  // (AD4 N14 accepted the dog home row meeting the button tops at s9, s10 and s15); no new entry may be added; yard lanes obey WORLD_YARD.
+  const FRONT_ROW_BUTTON_EXEMPT: readonly string[] = [
+    's8 dog home', 's8 dog b1', 's8 dog v1', 's8 dog v2', 's8w dog home', 's8w dog b1', 's9 dog home', 's9 dog v1', 's9 dog v2', 's9 dog v3',
+    's10 dog home', 's10 dog b1', 's15 dog home', 's15 dog b1', 's15 dog stake', 's15 dog v1',
+  ];
+  it.each(SPOT_STAGES)('$name: a yard spot inside the HUD x-range is within WORLD_YARD.maxLane (the front row too, but the named dog spots)', (s) => {
+    const yard = WORLD_YARD[s.key];
+    expect(yard, `${s.key} yard`).toBeDefined();
+    if (yard === undefined) return;
+    for (const actor of ['inspector', 'dog'] as const) {
+      for (const spot of WORLD_SPOTS[s.key]?.[actor] ?? []) {
+        if (spot.lane <= 0 || spot.x < yard.hudMinX || spot.x > yard.hudMaxX) continue;
+        if (spot.lane === FRONT_LANE && FRONT_ROW_BUTTON_EXEMPT.includes(`${s.key} ${actor} ${spot.id}`)) continue;
+        expect(spot.lane <= yard.maxLane, `${s.key} ${actor} ${spot.id} lane ${spot.lane}`).toBe(true);
+      }
+    }
+  });
+
+  // WP28b F25: a visit stand (v<n>) clears Sensor 7's tripod: a yard stand (lane 48 or more, so the walker's body stays below the tripod's base,
+  // the yard lanes start at yard48) or 24 px or more from the tripod's x.
+  it.each(SPOT_STAGES)('$name: every visit stand of the Inspector clears Sensor 7 (a yard lane of 48 or more, or 24 px from the tripod)', (s) => {
+    const sensor7 = WORLD_PLACEMENTS[s.key].sensor7;
+    if (sensor7 === undefined) return;
+    for (const spot of WORLD_SPOTS[s.key]?.inspector ?? []) {
+      if (!spot.id.startsWith('v')) continue;
+      expect(spot.lane >= 48 || Math.abs(spot.x - sensor7.x) >= 24, `${s.key} inspector ${spot.id} x ${spot.x} lane ${spot.lane}`).toBe(true);
+    }
+  });
+
+  it('every framing that places the Inspector and Sensor 7 keeps them within 120 px (Sensor 7 stands beside him)', () => {
+    for (const key of Object.keys(WORLD_PLACEMENTS) as FramingKey[]) {
+      const ins = WORLD_PLACEMENTS[key].inspector;
+      const s7 = WORLD_PLACEMENTS[key].sensor7;
+      if (ins === undefined || s7 === undefined) continue;
+      expect(Math.abs(ins.x - s7.x) <= 120, `${key} inspector ${ins.x} sensor7 ${s7.x}`).toBe(true);
+    }
+  });
+
+  it('the far girl mini is not occluded by an Inspector spot (his body span overlaps the mini slot), except the known findings', () => {
+    const found: string[] = [];
+    for (const s of SPOT_STAGES) {
+      const levels = levelsOf(s.buys);
+      const pose = framingPose(levels);
+      const mini = miniOf(s.key, pose);
+      if (mini === null) continue;
+      for (const spot of WORLD_SPOTS[s.key]?.inspector ?? []) {
+        const feet = screenOfWorld({ x: spot.x, y: GROUND_Y }, 1, pose).x;
+        const body = BODY_HALF_PX * pose.zoom;
+        if (feet + body > mini.x - mini.halfPx && feet - body < mini.x + mini.halfPx) found.push(`${s.key} inspector ${spot.id}`);
+      }
+    }
+    expect(found).toEqual(KNOWN_MINI_OCCLUSIONS);
   });
 });
 

@@ -714,10 +714,10 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     description: 'Flywheel rim 2 plus a one pixel brass inlay ring, drawn over rim 2 at MK III; rotationally symmetric.',
   },
   'world.inspector': {
-    id: 'world.inspector', file: 'world/inspector.png', width: 440, height: 240, origin: { x: 0.5, y: 1 }, tileable: 'none',
-    frame: { width: 20, height: 40, count: 132 },
+    id: 'world.inspector', file: 'world/inspector.png', width: 480, height: 240, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 20, height: 40, count: 144 },
     eraRows: 6,
-    description: 'Inspector sheet, 19 frames per era row (dome hat, long coat, clipboard at the chest, umbrella) in rows I, II, III, IV, V, whole; file world/inspector.png.',
+    description: 'Inspector sheet, 24 frames x 6 era rows (I-V, whole): dome hat, long coat, clipboard, umbrella.',
   },
   'world.clipboardPages': {
     id: 'world.clipboardPages', file: 'world/clipboard-pages.png', width: 18, height: 3, origin: { x: 0.5, y: 1 }, tileable: 'none',
@@ -725,10 +725,10 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     description: 'Cycle trace on the Inspector clipboard, 3 frames of 6x3; file world/clipboard-pages.png.',
   },
   'world.dog': {
-    id: 'world.dog', file: 'world/dog.png', width: 644, height: 120, origin: { x: 0.5, y: 1 }, tileable: 'none',
-    frame: { width: 28, height: 20, count: 138 },
+    id: 'world.dog', file: 'world/dog.png', width: 700, height: 120, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 28, height: 20, count: 150 },
     eraRows: 6,
-    description: 'Dog sheet, 20 frames per era row (low wedge, one upright ear, curled tail) in rows I, II, III, IV, V, whole; file world/dog.png.',
+    description: 'Dog sheet, 25 frames x 6 era rows (I-V, whole): low wedge, one upright ear, curled tail.',
   },
   'world.stakeChain': {
     id: 'world.stakeChain', file: 'world/stake-chain.png', width: 20, height: 6, origin: { x: 0.5, y: 1 }, tileable: 'none',
@@ -848,6 +848,28 @@ export const ASSET_MANIFEST: Record<AssetId, AssetEntry> = {
     id: 'fx.fault', file: 'fx/fault.png', width: 288, height: 24, origin: { x: 0.5, y: 1 }, tileable: 'none',
     frame: { width: 24, height: 24, count: 12 },
     description: 'Twelve-frame fault marker sheet: 0 tag lit and 1 tag dim (amber plate, ink exclamation mark, pointer), 2-3 spark (eras I-II), 4-5 steam hiss (III), 6-7 ring wobble (IV), 8-9 null static (V), 10 clear puff, 11 spare (empty); file fx/fault.png.',
+  },
+  // WP28a AD1: the era I-II Splice objects (one uniform-cell sheet, objects bottom-centred) and the Finds sheet.
+  'world.splicesA': {
+    id: 'world.splicesA', file: 'world/splices-a.png', width: 640, height: 24, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 32, height: 24, count: 20 },
+    description: 'Era I-II Splice objects: bicycle, barrel organ, valve radio, bulb arrow sign, lit clock face.',
+  },
+  'world.finds': {
+    id: 'world.finds', file: 'world/finds.png', width: 88, height: 8, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 8, height: 8, count: 11 },
+    description: 'Finds: items 0-6, relic note 7, one-color glint 8-10 (tinted per era).',
+  },
+  // WP28b AD3-OBJ: the era III-V Splice objects in two uniform-cell sheets (one cell size would waste 114 KiB decoded).
+  'world.splicesB': {
+    id: 'world.splicesB', file: 'world/splices-b.png', width: 396, height: 56, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 18, height: 56, count: 22 },
+    description: 'Era III-V Splice objects, tall set: hand pump, factory whistle, bell on a frame, kite, cairn.',
+  },
+  'world.splicesC': {
+    id: 'world.splicesC', file: 'world/splices-c.png', width: 576, height: 18, origin: { x: 0.5, y: 1 }, tileable: 'none',
+    frame: { width: 24, height: 18, count: 24 },
+    description: 'Era III-V Splice objects, small set: hydrant, gramophone, chimes, weathervane, coin flap.',
   },
 };
 

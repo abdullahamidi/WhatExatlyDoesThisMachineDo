@@ -1,5 +1,6 @@
 import './toasts.css';
 import { TOAST_CONFIG } from '../data/notifications';
+import { relicTotal } from '../data/finds';
 import type { ToastMessage, ToastTone } from '../data/notifications';
 import type { TechId } from '../data/types';
 import { TOAST_BURST } from '../data/ux';
@@ -10,6 +11,7 @@ import {
   messageFor,
   nextPurchaseBurst,
   purchaseBurstMessage,
+  relicMessage,
   welcomeBackMessage,
 } from './notificationRules';
 import type { NotificationEvent, PurchaseBurst } from './notificationRules';
@@ -178,6 +180,11 @@ export function connectNotifications(session: GameSession, toasts: Toasts): () =
     }),
     session.on('milestone', ({ id }) => {
       forward(toasts, { type: 'milestone', id });
+    }),
+    // WP28: a relic collect shows its FIELD NOTE. Ordinary collects and spawns stay silent (the gain block shows the payout).
+    session.on('find', (event) => {
+      if (event.kind !== 'collect' || !event.relic) return;
+      toasts.show(relicMessage(event.noteIndex, relicTotal(session.maxEra)));
     }),
   ];
   return () => {

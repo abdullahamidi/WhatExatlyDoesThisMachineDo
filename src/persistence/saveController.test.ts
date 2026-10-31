@@ -126,7 +126,7 @@ describe('stats, achievements and export / import (WP12)', () => {
 
   it('saveNow writes the session living-world block (WP23a); recordWorld alone writes nothing', () => {
     const { session, controller, storage } = setup();
-    const block: WorldSaveState = { seen: ['INS-01'], seenEver: ['INS-01'], eraMoments: [1, 0, 0, 0, 0], youEras: 0 };
+    const block: WorldSaveState = { seen: ['INS-01'], seenEver: ['INS-01'], eraMoments: [1, 0, 0, 0, 0], youEras: 0, relics: 0 };
     const before = writesOf(storage);
     session.recordWorld(block);
     expect(writesOf(storage)).toBe(before);

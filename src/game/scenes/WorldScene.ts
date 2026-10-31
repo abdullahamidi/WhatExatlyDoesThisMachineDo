@@ -14,6 +14,7 @@ import { DustField } from '../rendering/DustField';
 import { FloatingText } from '../rendering/FloatingText';
 import { OutputTicker } from '../rendering/OutputTicker';
 import type { FaultMarker } from '../rendering/FaultMarker';
+import type { WorldReach } from '../rendering/WorldReach';
 import { CameraController } from '../rendering/CameraController';
 import { Eclipse } from '../rendering/Eclipse';
 import { ApertureBeam } from '../rendering/ApertureBeam';
@@ -127,6 +128,8 @@ export class WorldScene extends Phaser.Scene {
   private worldDirector: LivingWorldDirector | null = null;
   /** WP27 fault marker; null before `create`, until its lazy chunk resolves, after its teardown. */
   private faultMarker: FaultMarker | null = null;
+  /** WP28 the machine's reach (Finds, and the poke layer later); null before `create`, until its lazy chunk resolves, after its teardown. */
+  private worldReach: WorldReach | null = null;
   /** The gain-text pool of this scene (the crank and the fault popups share it); null before `create` and after its teardown. */
   private floatingText: FloatingText | null = null;
   /** performance.now() of the last HUD rebuild (poll or event); the poll waits HUD_REFRESH_MS after it. */
@@ -188,6 +191,31 @@ export class WorldScene extends Phaser.Scene {
         });
       })
       .catch((err: unknown) => console.error('[faults] marker failed to load', err));
+    // WP28 the machine's reach (the Find marker now, the poke layer next): a lazy chunk like the fault marker, built with the same
+    // torn-down guard. Its tooltip slab lives in #ui-root, so without the root there is no reach.
+    let reachTornDown = false;
+    if (worldRoot !== null) {
+      import('../rendering/WorldReach')
+        .then(({ WorldReach: Reach }) => {
+          if (reachTornDown) return;
+          this.worldReach = new Reach(this, {
+            session: this.ctx.session,
+            floatingText,
+            director: () => this.worldDirector,
+            ui: this.ui,
+            photo: () => this.photo,
+            cycle: () => this.cycleTransition,
+            collectCommand: this.ctx.commands.collectFind,
+            reducedMotion: () => this.ctx.session.settings.reducedMotion,
+            tooltipRoot: worldRoot,
+            feedback: this.ctx.feedback,
+            // WP28b (D6 b): the lit cable points for the pylon pulses and the dust frequency for the base dust (WorldReach's optional ports).
+            pylonPoints: (feed, out) => this.pylonLines[feed]?.cablePoints(out) ?? 0,
+            setDustFrequency: (ms) => this.dust?.setFrequencyMs(ms),
+          });
+        })
+        .catch((err: unknown) => console.error('[finds] reach failed to load', err));
+    }
     const camera = new CameraController(this, this.ctx.session);
     const unsubscribeRefocus = this.ctx.commands.refocus.on(() => camera.refocus());
     // WP23a living world: after SteamFx, before the finale. Its ports read scene and UI state lazily, so the photo mode and the
@@ -348,6 +376,12 @@ export class WorldScene extends Phaser.Scene {
         this.faultMarker = null;
         marker?.destroy();
       },
+      () => {
+        reachTornDown = true;
+        const reach = this.worldReach;
+        this.worldReach = null;
+        reach?.destroy();
+      },
       // WP23a: the living world goes before SteamFx and the dust (and so before the display source, which is disposed last).
       ...worldDisposables,
       () => {
@@ -431,6 +465,11 @@ export class WorldScene extends Phaser.Scene {
   /** The WP27 fault marker, or null before `create`, until its lazy chunk resolves, after its teardown. */
   getFaultMarker(): FaultMarker | null {
     return this.faultMarker;
+  }
+
+  /** The WP28 reach (the Find marker, the poke layer later), or null before `create`, until its lazy chunk resolves, after its teardown. */
+  getWorldReach(): WorldReach | null {
+    return this.worldReach;
   }
 
   /** The gain-text pool, or null before `create` and after its teardown. */
@@ -524,6 +563,7 @@ export class WorldScene extends Phaser.Scene {
     this.ui.techTree.update();
     OutputTicker.of(this)?.update(delta);
     this.faultMarker?.update(delta);
+    this.worldReach?.update(delta);
     this.frameTimings.record((sessionEnd - sessionStart) + (performance.now() - hudStart));
     // Photo mode ends itself when another modal sits on top or the finale runs again.
     this.photo?.update();

@@ -22,8 +22,10 @@ import type { ShowcaseState } from './scenes/ShowcaseScene';
 import type { FinaleState } from './rendering/FinaleDirector';
 import type { FinaleFrame } from './math/finale';
 import type { CycleTransitionState } from './rendering/CycleTransition';
-import type { WorldDebugApi, WorldDebugState } from './rendering/LivingWorldDirector';
+import type { PokeTargetId, SpliceDebugRow, WorldDebugApi, WorldDebugState } from './rendering/LivingWorldDirector';
 import type { FaultDebugStats } from './rendering/FaultMarker';
+import type { FindDebugStats } from './rendering/FindMarker';
+import type { PokeDebugStats, PokeTargetDebug, ReachDebugProbe, ReachDebugStats } from './rendering/WorldReach';
 import { OutputTicker } from './rendering/OutputTicker';
 import type { NewCycleController } from './newCycle';
 import type { DemoEndDebugState } from '../ui/demoEndModel';
@@ -72,12 +74,13 @@ declare global {
       // WP23a: living world debug API (C7). Null, false, [] or no-op when the World scene or its director is missing
       worldState(): WorldDebugState | null;
       worldSay(id: string): boolean;
+      forceGlance(id: string): boolean;
       worldQuiet(on: boolean): void;
       worldAdvance(ms: number): void;
       worldLogShown(logId: string): void;
       worldClock(hour: number | null): void;
-      livingWorld(): { id: string; variant: string; x: number; y: number; alpha: number; visible: boolean; speaking: boolean }[];
-      worldStats(): { objects: number; meanMs: number; parts: { cast: number; props: number; atmos: number; clocks: number; runners: number } };
+      livingWorld(): { id: string; variant: string; x: number; y: number; alpha: number; visible: boolean; speaking: boolean; flip: boolean }[];
+      worldStats():{ objects: number; meanMs: number; parts: { cast: number; props: number; atmos: number; clocks: number; runners: number } };
       worldBubble(): { visible: boolean; rect: { x: number; y: number; w: number; h: number } | null; text: string; side: string } | null;
       // WP18: parts visibility probe, photo mode and the final-machine teaser (ShowcaseScene)
       partsVisible(): { visible: number; total: number; hidden: MachineComponentId[] } | null;
@@ -121,6 +124,20 @@ declare global {
       windupStats(): { stored: number; cap: number; refill: number } | null;
       // WP27 smoke probe: the text of each line of the last gain block (FloatingText.lastBlockLines); null without a World scene.
       gainLines(): string[] | null;
+      // WP28 Finds (C14): the clock, the marker and the forced spawn (null / false without a World scene or marker); the gate switch.
+      findStats(): FindDebugStats | null;
+      forceFind(): boolean;
+      setFinds(on: boolean): void;
+      // WP28 NEXT BUY readout: the text of the goal line's buy row (#hud-goal-buy); null when hidden or absent.
+      nextBuyText(): string | null;
+      // WP28 Splices and pokes (C14): the director's Splice rows, the poke targets (client px), a debug poke (its reaction id), the poke
+      // readings and reset, and the reach's counters (null / [] / false without a World scene or reach).
+      spliceStats(): SpliceDebugRow[];
+      pokeTargets(): PokeTargetDebug[];
+      poke(id: PokeTargetId): string | null;
+      pokeStats(): PokeDebugStats | null;
+      pokeReset(): void;
+      reachStats(): ReachDebugStats | null;
     };
   }
 }
@@ -191,6 +208,8 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
   const worldState = (): WorldDebugState | null => worldDirector()?.worldState() ?? null;
   /** Forces a line (bypasses gaps and caps, not hard silence); false when refused or missing. */
   const worldSay = (id: string): boolean => worldDirector()?.worldSay(id) ?? false;
+  /** WP28a debug: starts an ambient glance now; false when refused or missing. */
+  const forceGlance = (id: string): boolean => worldDirector()?.forceGlance(id) ?? false;
   /** Quiet on: no bubbles, no blips, no glances (figures stay). */
   const worldQuiet = (on: boolean): void => {
     worldDirector()?.worldQuiet(on);
@@ -208,8 +227,9 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     worldDirector()?.worldClock(hour);
   };
   /** Each living-world figure and prop: id, current frame, world x and feet y, alpha, visibility and speaking flag; [] when missing. */
-  const livingWorld = (): { id: string; variant: string; x: number; y: number; alpha: number; visible: boolean; speaking: boolean }[] =>
-    worldDirector()?.livingWorld() ?? [];
+  // flip (WP28): the sprite's flipX; false until the director reports it.
+  const livingWorld = (): { id: string; variant: string; x: number; y: number; alpha: number; visible: boolean; speaking: boolean; flip: boolean }[] =>
+    (worldDirector()?.livingWorld() ?? []).map((row) => ({ ...row, flip: 'flip' in row && row.flip === true }));
   /** Object count, mean director frame time (ms) and the mean update time of each part (ms, WP24 r2); zeros when missing. */
   const worldStats = (): { objects: number; meanMs: number; parts: { cast: number; props: number; atmos: number; clocks: number; runners: number } } =>
     worldDirector()?.worldStats() ?? { objects: 0, meanMs: 0, parts: { cast: 0, props: 0, atmos: 0, clocks: 0, runners: 0 } };
@@ -346,6 +366,27 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     const lines = game.scene.getScene<WorldScene>('World')?.getFloatingText()?.lastBlockLines() ?? null;
     return lines === null ? null : lines.map((line) => line.text);
   };
+  /** WP28 Finds: the reach's probe (built in the lazy chunk); null without a World scene or reach. The client points use the hook's conversion. */
+  const reachProbe = (): ReachDebugProbe | null =>
+    game.scene.getScene<WorldScene>('World')?.getWorldReach()?.debugProbe((gx, gy) => worldPointClient({ x: gx, y: gy })) ?? null;
+  /** WP28 Finds: the clock, eligibility and the marker's stats; null without a World scene or reach. */
+  const findStats = (): FindDebugStats | null => reachProbe()?.findStats() ?? null;
+  /** WP28: forces the next eligible clock step to spawn a Find (session.debugForceFind); false when refused. */
+  const forceFind = (): boolean => reachProbe()?.forceFind() ?? false;
+  /** WP28: the Finds gate (off freezes the clock and hides a live marker); no-op without a reach. */
+  const setFinds = (on: boolean): void => { reachProbe()?.setFinds(on); };
+  /** WP28 NEXT BUY readout: the text of the goal line's buy row (#hud-goal-buy); null when hidden or absent. */
+  const nextBuyText = (): string | null => {
+    const el = document.getElementById('hud-goal-buy');
+    return el === null || el.hidden ? null : el.textContent;
+  };
+  /** WP28 Splices and pokes: the reach's probe forwards (null / [] / false without a World scene or reach). */
+  const spliceStats = (): SpliceDebugRow[] => reachProbe()?.spliceStats() ?? [];
+  const pokeTargets = (): PokeTargetDebug[] => reachProbe()?.pokeTargets() ?? [];
+  const poke = (id: PokeTargetId): string | null => reachProbe()?.poke(id) ?? null;
+  const pokeStats = (): PokeDebugStats | null => reachProbe()?.pokeStats() ?? null;
+  const pokeReset = (): void => { reachProbe()?.pokeReset(); };
+  const reachStats = (): ReachDebugStats | null => reachProbe()?.reachStats() ?? null;
   window.__wedtmd = {
     session,
     crankClientPoint,
@@ -369,6 +410,7 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     cycleState,
     worldState,
     worldSay,
+    forceGlance,
     worldQuiet,
     worldAdvance,
     worldLogShown,
@@ -405,5 +447,15 @@ export function installDebugHook(session: GameSession, game: Phaser.Game, techTr
     setFaults,
     windupStats,
     gainLines,
+    findStats,
+    forceFind,
+    setFinds,
+    nextBuyText,
+    spliceStats,
+    pokeTargets,
+    poke,
+    pokeStats,
+    pokeReset,
+    reachStats,
   };
 }

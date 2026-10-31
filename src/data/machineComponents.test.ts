@@ -27,6 +27,7 @@ import { PYLON_FEEDS } from './world';
 import type { AssetId } from '../assets/assetIds';
 import { ASSET_MANIFEST } from '../assets/manifest';
 import { visibleMachineBounds } from '../game/math/machineBounds';
+import { isSplice } from '../simulation/progression/status';
 
 const COMPONENTS = MACHINE_COMPONENT_IDS.map((id) => MACHINE_COMPONENTS[id]);
 
@@ -124,9 +125,9 @@ function hasVisibleSupport(def: MachineComponentDefinition, visible: ReadonlySet
   return SUPPORTS.some((s) => visible.has(s) && contains(boundsOf(MACHINE_COMPONENTS[s]), p));
 }
 
-/** Era II unlock steps in order; copperWinding is set to each coil stage level in turn (1, 10, 20). crankServo (moved from era IV in WP25) is last. */
+/** Era II unlock steps in order; copperWinding is set to each coil stage level in turn (1, 19, 39). crankServo (moved from era IV in WP25) is last. */
 const ERA_TWO_STEPS: readonly (readonly [TechId, number])[] = [
-  ['generator', 1], ['copperWinding', 1], ['copperWinding', 10], ['copperWinding', 20],
+  ['generator', 1], ['copperWinding', 1], ['copperWinding', 19], ['copperWinding', 39],
   ['motorRetrofit', 1], ['dynamoCrank', 1], ['capacitorBank', 1], ['sparkGap', 1], ['transformer', 1], ['powerLines', 1],
   ['crankServo', 1],
 ];
@@ -138,9 +139,9 @@ function levelsEraTwo(n: number): Record<TechId, number> {
   return levels;
 }
 
-/** Era III unlock steps in order; firebox is set to each glow stage level in turn (1, 10, 20). */
+/** Era III unlock steps in order; firebox is set to each glow stage level in turn (1, 19, 39). */
 const ERA_THREE_STEPS: readonly (readonly [TechId, number])[] = [
-  ['boiler', 1], ['firebox', 1], ['firebox', 10], ['firebox', 20],
+  ['boiler', 1], ['firebox', 1], ['firebox', 19], ['firebox', 39],
   ['inductionHeater', 1], ['steamHammer', 1], ['superheater', 1], ['condenser', 1], ['turbine', 1], ['reliefValves', 1],
 ];
 
@@ -732,8 +733,8 @@ describe('era II machine data', () => {
     expect(MACHINE_COMPONENTS.generator.techId).toBe('generator');
     expect(MACHINE_COMPONENTS.generatorPulley.techId).toBe('generator');
     expect(MACHINE_COMPONENTS.coilStage1).toMatchObject({ techId: 'copperWinding', minLevel: 1 });
-    expect(MACHINE_COMPONENTS.coilStage2).toMatchObject({ techId: 'copperWinding', minLevel: 10 });
-    expect(MACHINE_COMPONENTS.coilStage3).toMatchObject({ techId: 'copperWinding', minLevel: 20 });
+    expect(MACHINE_COMPONENTS.coilStage2).toMatchObject({ techId: 'copperWinding', minLevel: 19 });
+    expect(MACHINE_COMPONENTS.coilStage3).toMatchObject({ techId: 'copperWinding', minLevel: 39 });
     expect(MACHINE_COMPONENTS.crankDynamo.techId).toBe('dynamoCrank');
     expect(MACHINE_COMPONENTS.motorRetrofitKit.techId).toBe('motorRetrofit');
     expect(MACHINE_COMPONENTS.capacitorRack.techId).toBe('capacitorBank');
@@ -912,8 +913,8 @@ const ERA_THREE_TABLE: readonly EraThreeRow[] = [
   { id: 'pressureGauge', techId: 'boiler', minLevel: 1, assetId: 'machine.gauge', width: 24, height: 24, origin: { x: 0.5, y: 1 }, socket: 'gaugeSeat', layer: 'mid', depthBias: 2 },
   { id: 'gaugeNeedle', techId: 'boiler', minLevel: 1, assetId: 'machine.gaugeNeedle', width: 24, height: 24, origin: { x: 0.5, y: 1 }, socket: 'gaugeSeat', layer: 'mid', depthBias: 3 },
   { id: 'fireboxGlow1', techId: 'firebox', minLevel: 1, assetId: 'machine.fireGlow1', width: 24, height: 24, origin: { x: 0.5, y: 0.5 }, socket: 'fireDoor', layer: 'mid', depthBias: 2 },
-  { id: 'fireboxGlow2', techId: 'firebox', minLevel: 10, assetId: 'machine.fireGlow2', width: 24, height: 24, origin: { x: 0.5, y: 0.5 }, socket: 'fireDoor', layer: 'mid', depthBias: 3 },
-  { id: 'fireboxGlow3', techId: 'firebox', minLevel: 20, assetId: 'machine.fireGlow3', width: 24, height: 24, origin: { x: 0.5, y: 0.5 }, socket: 'fireDoor', layer: 'mid', depthBias: 4 },
+  { id: 'fireboxGlow2', techId: 'firebox', minLevel: 19, assetId: 'machine.fireGlow2', width: 24, height: 24, origin: { x: 0.5, y: 0.5 }, socket: 'fireDoor', layer: 'mid', depthBias: 3 },
+  { id: 'fireboxGlow3', techId: 'firebox', minLevel: 39, assetId: 'machine.fireGlow3', width: 24, height: 24, origin: { x: 0.5, y: 0.5 }, socket: 'fireDoor', layer: 'mid', depthBias: 4 },
   { id: 'inductionHeater', techId: 'inductionHeater', minLevel: 1, assetId: 'machine.inductionHeater', width: 56, height: 40, origin: { x: 0.5, y: 1 }, socket: 'heaterSeat', layer: 'mid', depthBias: 5 },
   { id: 'superheater', techId: 'superheater', minLevel: 1, assetId: 'machine.superheater', width: 40, height: 32, origin: { x: 0.5, y: 1 }, socket: 'superheaterSeat', layer: 'mid', depthBias: 2 },
   { id: 'reliefValves', techId: 'reliefValves', minLevel: 1, assetId: 'machine.reliefValves', width: 16, height: 24, origin: { x: 0.5, y: 1 }, socket: 'reliefSeat', layer: 'mid', depthBias: 2 },
@@ -966,7 +967,7 @@ describe('era III machine data', () => {
     }
   });
 
-  it('fireboxGlow1/2/3 share size, origin, attach and frames animation at tech levels 1 / 10 / 20', () => {
+  it('fireboxGlow1/2/3 share size, origin, attach and frames animation at tech levels 1 / 19 / 39', () => {
     const glows = [MACHINE_COMPONENTS.fireboxGlow1, MACHINE_COMPONENTS.fireboxGlow2, MACHINE_COMPONENTS.fireboxGlow3];
     for (const g of glows) {
       expect(g.size).toEqual(glows[0]?.size);
@@ -974,7 +975,7 @@ describe('era III machine data', () => {
       expect(g.attach).toEqual(glows[0]?.attach);
       expect(g.animation).toEqual({ kind: 'frames', frames: 4, maxHz: 3, driver: 'thermal' });
     }
-    expect(glows.map((g) => g.minLevel)).toEqual([1, 10, 20]);
+    expect(glows.map((g) => g.minLevel)).toEqual([1, 19, 39]);
     expect(ASSET_MANIFEST['machine.fireGlow1'].frame?.count).toBe(4);
     expect(ASSET_MANIFEST['machine.fireGlow2'].frame?.count).toBe(4);
     expect(ASSET_MANIFEST['machine.fireGlow3'].frame?.count).toBe(4);
@@ -1128,7 +1129,7 @@ describe('era III prefixes', () => {
     }
   });
 
-  it('firebox glow stages come one at a time: glow 1 at firebox 1, glow 2 at 10, glow 3 at 20', () => {
+  it('firebox glow stages come one at a time: glow 1 at firebox 1, glow 2 at 19, glow 3 at 39', () => {
     expect(visibleAt(levelsForEra3(2)).has('fireboxGlow1')).toBe(true);
     expect(visibleAt(levelsForEra3(2)).has('fireboxGlow2')).toBe(false);
     expect(visibleAt(levelsForEra3(3)).has('fireboxGlow2')).toBe(true);
@@ -1179,9 +1180,9 @@ const ERA_FOUR_ONLY_IDS: readonly MachineComponentId[] = ERA_FOUR_COMPONENT_IDS.
 /** Era-V component ids: the 38 appended after the era-IV block (WP11 contract C3), then WP22 ring1Bead2 (the last id of the list). The five WP17 legacy feeds follow at index 99. */
 const ERA_FIVE_COMPONENT_IDS: readonly MachineComponentId[] = [...MACHINE_COMPONENT_IDS.slice(61, 99), 'ring1Bead2'];
 
-/** Unlock steps of era IV in order; harmonicCoil is set to each coil ring level in turn (1, 8, 16, 25). */
+/** Unlock steps of era IV in order; harmonicCoil is set to each coil ring level in turn (1, 15, 31, 49). */
 const ERA_FOUR_STEPS: readonly (readonly [TechId, number])[] = [
-  ['resonatorSpire', 1], ['harmonicCoil', 1], ['harmonicCoil', 8], ['harmonicCoil', 16], ['harmonicCoil', 25],
+  ['resonatorSpire', 1], ['harmonicCoil', 1], ['harmonicCoil', 15], ['harmonicCoil', 31], ['harmonicCoil', 49],
   ['pressureResonator', 1], ['echoCrank', 1], ['phaseLock', 1], ['standingWave', 1], ['crystalLattice', 1],
 ];
 
@@ -1204,9 +1205,9 @@ const ERA_FOUR_TABLE: readonly EraFourRow[] = [
   { id: 'spireExciter', techId: 'resonatorSpire', minLevel: 1, assetId: 'machine.spireExciter', width: 24, height: 32, origin: { x: 0.5, y: 1 }, socket: 'spireBase', layer: 'mid', depthBias: 2, animation: { kind: 'none' }, connections: [{ id: 'steam', at: { x: -12, y: -16 }, kind: 'pipe' }] },
   { id: 'spireWave', techId: 'standingWave', minLevel: 1, assetId: 'machine.spireWave', width: 16, height: 270, origin: { x: 0.5, y: 1 }, socket: 'spireRod', layer: 'mid', depthBias: 1, animation: { kind: 'frames', frames: 8, maxHz: 12, driver: 'resonance', hz: { base: 1, gain: 1.75, min: 2, max: 12 } }, connections: [] },
   { id: 'coilRing1', techId: 'harmonicCoil', minLevel: 1, assetId: 'machine.coilRing1', width: 62, height: 8, origin: { x: 0.5, y: 0.5 }, socket: 'coilRing1', layer: 'mid', depthBias: 3, animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' }, connections: [] },
-  { id: 'coilRing2', techId: 'harmonicCoil', minLevel: 8, assetId: 'machine.coilRing2', width: 48, height: 8, origin: { x: 0.5, y: 0.5 }, socket: 'coilRing2', layer: 'mid', depthBias: 3, animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' }, connections: [] },
-  { id: 'coilRing3', techId: 'harmonicCoil', minLevel: 16, assetId: 'machine.coilRing3', width: 36, height: 8, origin: { x: 0.5, y: 0.5 }, socket: 'coilRing3', layer: 'mid', depthBias: 3, animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' }, connections: [] },
-  { id: 'coilRing4', techId: 'harmonicCoil', minLevel: 25, assetId: 'machine.coilRing4', width: 30, height: 8, origin: { x: 0.5, y: 0.5 }, socket: 'coilRing4', layer: 'mid', depthBias: 3, animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' }, connections: [] },
+  { id: 'coilRing2', techId: 'harmonicCoil', minLevel: 15, assetId: 'machine.coilRing2', width: 48, height: 8, origin: { x: 0.5, y: 0.5 }, socket: 'coilRing2', layer: 'mid', depthBias: 3, animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' }, connections: [] },
+  { id: 'coilRing3', techId: 'harmonicCoil', minLevel: 31, assetId: 'machine.coilRing3', width: 36, height: 8, origin: { x: 0.5, y: 0.5 }, socket: 'coilRing3', layer: 'mid', depthBias: 3, animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' }, connections: [] },
+  { id: 'coilRing4', techId: 'harmonicCoil', minLevel: 49, assetId: 'machine.coilRing4', width: 30, height: 8, origin: { x: 0.5, y: 0.5 }, socket: 'coilRing4', layer: 'mid', depthBias: 3, animation: { kind: 'frames', frames: 4, maxHz: 6, driver: 'resonance' }, connections: [] },
   { id: 'calliope', techId: 'pressureResonator', minLevel: 1, assetId: 'machine.calliope', width: 72, height: 40, origin: { x: 0.5, y: 1 }, socket: 'calliopeSeat', layer: 'back', depthBias: 3, animation: { kind: 'none' }, connections: [] },
   { id: 'servoBase', techId: 'crankServo', minLevel: 1, assetId: 'machine.servoBase', width: 28, height: 20, origin: { x: 0.5, y: 1 }, socket: 'servoBase', layer: 'mid', depthBias: 3, animation: { kind: 'none' }, connections: [] },
   { id: 'servoArm', techId: 'crankServo', minLevel: 1, assetId: 'machine.servoArm', width: 48, height: 48, origin: { x: 0.5, y: 0.5 }, socket: 'servoHub', layer: 'front', depthBias: 3, animation: { kind: 'driven', ratio: -1.75, phaseDeg: 0 }, connections: [{ id: 'pin', at: { x: 0, y: -19 }, kind: 'pin' }] },
@@ -1262,9 +1263,9 @@ describe('era IV machine data', () => {
     expect(MACHINE_SOCKETS.dishWavesR.y).toBe(MACHINE_SOCKETS.dishWavesL.y);
   });
 
-  it('coil rings: harmonicCoil levels 1 / 8 / 16 / 25, widths 62 / 48 / 36 / 30, all 8 px tall', () => {
+  it('coil rings: harmonicCoil levels 1 / 15 / 31 / 49, widths 62 / 48 / 36 / 30, all 8 px tall', () => {
     const rings = [MACHINE_COMPONENTS.coilRing1, MACHINE_COMPONENTS.coilRing2, MACHINE_COMPONENTS.coilRing3, MACHINE_COMPONENTS.coilRing4];
-    expect(rings.map((r) => r.minLevel)).toEqual([1, 8, 16, 25]);
+    expect(rings.map((r) => r.minLevel)).toEqual([1, 15, 31, 49]);
     expect(rings.map((r) => r.size.width)).toEqual([62, 48, 36, 30]);
     for (const r of rings) {
       expect(r.techId).toBe('harmonicCoil');
@@ -1379,7 +1380,7 @@ describe('era IV prefixes', () => {
     for (const id of ERA_FOUR_ONLY_IDS) expect(visible.has(id), id).toBe(false);
   });
 
-  it('each era-IV part appears at its unlock step (1 spire, 2 coil 1, 3 coil 8, 4 coil 16, 5 coil 25, 6 pressure resonator, 7 echo crank, 8 phase lock, 9 standing wave, 10 crystal lattice)', () => {
+  it('each era-IV part appears at its unlock step (1 spire, 2 coil 1, 3 coil 15, 4 coil 31, 5 coil 49, 6 pressure resonator, 7 echo crank, 8 phase lock, 9 standing wave, 10 crystal lattice)', () => {
     const unlockStep: [MachineComponentId, number][] = [
       ['spireTower', 1], ['spireExciter', 1], ['coilRing1', 2], ['coilRing2', 3], ['coilRing3', 4], ['coilRing4', 5], ['calliope', 6],
       ['koenigFork', 7], ['emitterDishL', 8], ['emitterDishR', 8], ['dishWavesL', 8], ['dishWavesR', 8],
@@ -1417,8 +1418,8 @@ function anchorGlowId(k: number, side: 'L' | 'R'): MachineComponentId { return `
 
 /** Era-V unlock steps applied on top of the full era I-IV stage: every era-V gate tech and level (contract C1). */
 const ERA_FIVE_FULL: readonly (readonly [TechId, number])[] = [
-  ['nullChamber', 1], ['containmentRing', 25], ['resonantSiphon', 20], ['graviticAnchor', 10], ['inversionCrank', 1],
-  ['lensArray', 1], ['horizonField', 20], ['skyAperture', 1], ['finalAlignment', 1], ['primaryFunction', 1],
+  ['nullChamber', 1], ['containmentRing', 49], ['resonantSiphon', 58], ['graviticAnchor', 19], ['inversionCrank', 1],
+  ['lensArray', 1], ['horizonField', 39], ['skyAperture', 1], ['finalAlignment', 1], ['primaryFunction', 1],
 ];
 
 /** WP17 legacy feed techs at their unlock level (each legacy part is minLevel 1); applied on top of the era-V full stage. */
@@ -1448,32 +1449,32 @@ const ERA_FIVE_TABLE: readonly EraFiveRow[] = [
   { id: 'nullCore', techId: 'nullChamber', minLevel: 1, assetId: 'machine.nullCore', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 7, animation: { kind: 'spin', driver: 'exotic', speed: { base: 109, gain: 0.39, min: 6, max: 360 } }, connections: [] },
   { id: 'nullCoreGlint', techId: 'nullChamber', minLevel: 1, assetId: 'machine.nullCoreGlint', width: 64, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 8, animation: { kind: 'none' }, connections: [] },
   { id: 'ring1Back', techId: 'containmentRing', minLevel: 1, assetId: 'machine.ring1Back', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6, animation: { kind: 'none' }, connections: [] },
-  { id: 'ring2Back', techId: 'containmentRing', minLevel: 8, assetId: 'machine.ring2Back', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6, animation: { kind: 'none' }, connections: [] },
-  { id: 'ring3Back', techId: 'containmentRing', minLevel: 16, assetId: 'machine.ring3Back', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6, animation: { kind: 'none' }, connections: [] },
-  { id: 'ring4Back', techId: 'containmentRing', minLevel: 25, assetId: 'machine.ring4Back', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6, animation: { kind: 'none' }, connections: [] },
+  { id: 'ring2Back', techId: 'containmentRing', minLevel: 15, assetId: 'machine.ring2Back', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6, animation: { kind: 'none' }, connections: [] },
+  { id: 'ring3Back', techId: 'containmentRing', minLevel: 31, assetId: 'machine.ring3Back', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6, animation: { kind: 'none' }, connections: [] },
+  { id: 'ring4Back', techId: 'containmentRing', minLevel: 49, assetId: 'machine.ring4Back', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6, animation: { kind: 'none' }, connections: [] },
   { id: 'ring1Front', techId: 'containmentRing', minLevel: 1, assetId: 'machine.ring1Front', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 9, animation: { kind: 'none' }, connections: [] },
-  { id: 'ring2Front', techId: 'containmentRing', minLevel: 8, assetId: 'machine.ring2Front', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 9, animation: { kind: 'none' }, connections: [] },
-  { id: 'ring3Front', techId: 'containmentRing', minLevel: 16, assetId: 'machine.ring3Front', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 9, animation: { kind: 'none' }, connections: [] },
-  { id: 'ring4Front', techId: 'containmentRing', minLevel: 25, assetId: 'machine.ring4Front', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 9, animation: { kind: 'none' }, connections: [] },
+  { id: 'ring2Front', techId: 'containmentRing', minLevel: 15, assetId: 'machine.ring2Front', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 9, animation: { kind: 'none' }, connections: [] },
+  { id: 'ring3Front', techId: 'containmentRing', minLevel: 31, assetId: 'machine.ring3Front', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 9, animation: { kind: 'none' }, connections: [] },
+  { id: 'ring4Front', techId: 'containmentRing', minLevel: 49, assetId: 'machine.ring4Front', width: 112, height: 72, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 9, animation: { kind: 'none' }, connections: [] },
   { id: 'ring1Bead', techId: 'containmentRing', minLevel: 1, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
     animation: { kind: 'orbit', ring: 1, phi0Deg: 0, dir: 1, speed: BEAD_SPEED, speedScale: 1, frontLayer: 'front', frontBias: 0 }, connections: [] },
-  { id: 'ring2Bead', techId: 'containmentRing', minLevel: 8, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
+  { id: 'ring2Bead', techId: 'containmentRing', minLevel: 15, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
     animation: { kind: 'orbit', ring: 2, phi0Deg: 97, dir: -1, speed: BEAD_SPEED, speedScale: 1.25, frontLayer: 'front', frontBias: 0 }, connections: [] },
-  { id: 'ring3Bead', techId: 'containmentRing', minLevel: 16, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
+  { id: 'ring3Bead', techId: 'containmentRing', minLevel: 31, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
     animation: { kind: 'orbit', ring: 3, phi0Deg: 194, dir: 1, speed: BEAD_SPEED, speedScale: 1.5, frontLayer: 'front', frontBias: 0 }, connections: [] },
-  { id: 'ring4Bead', techId: 'containmentRing', minLevel: 25, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
+  { id: 'ring4Bead', techId: 'containmentRing', minLevel: 49, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
     animation: { kind: 'orbit', ring: 4, phi0Deg: 291, dir: -1, speed: BEAD_SPEED, speedScale: 1.75, frontLayer: 'front', frontBias: 0 }, connections: [] },
   { id: 'siphonTube1L', techId: 'resonantSiphon', minLevel: 1, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon1L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
   { id: 'siphonTube1R', techId: 'resonantSiphon', minLevel: 1, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon1R', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
-  { id: 'siphonTube2L', techId: 'resonantSiphon', minLevel: 5, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon2L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
-  { id: 'siphonTube2R', techId: 'resonantSiphon', minLevel: 5, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon2R', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
-  { id: 'siphonTube3L', techId: 'resonantSiphon', minLevel: 10, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon3L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
-  { id: 'siphonTube3R', techId: 'resonantSiphon', minLevel: 10, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon3R', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
+  { id: 'siphonTube2L', techId: 'resonantSiphon', minLevel: 13, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon2L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
+  { id: 'siphonTube2R', techId: 'resonantSiphon', minLevel: 13, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon2R', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
+  { id: 'siphonTube3L', techId: 'resonantSiphon', minLevel: 28, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon3L', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
+  { id: 'siphonTube3R', techId: 'resonantSiphon', minLevel: 28, assetId: 'machine.siphonTube', width: 12, height: 30, origin: { x: 0.5, y: 1 }, socket: 'siphon3R', layer: 'mid', depthBias: 4, animation: { kind: 'none' }, connections: [] },
   { id: 'siphonArcs1', techId: 'resonantSiphon', minLevel: 1, assetId: 'machine.siphonArcs1', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
     animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 0, hz: { base: 1, gain: 1.18, min: 2, max: 8 } }, connections: [] },
-  { id: 'siphonArcs2', techId: 'resonantSiphon', minLevel: 5, assetId: 'machine.siphonArcs2', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
+  { id: 'siphonArcs2', techId: 'resonantSiphon', minLevel: 13, assetId: 'machine.siphonArcs2', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
     animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 1, hz: { base: 1, gain: 1.18, min: 2, max: 8 } }, connections: [] },
-  { id: 'siphonArcs3', techId: 'resonantSiphon', minLevel: 10, assetId: 'machine.siphonArcs3', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
+  { id: 'siphonArcs3', techId: 'resonantSiphon', minLevel: 28, assetId: 'machine.siphonArcs3', width: 128, height: 64, origin: { x: 0.5, y: 0.5 }, socket: 'siphonArcs', layer: 'mid', depthBias: 8,
     animation: { kind: 'frames', frames: 4, maxHz: 8, driver: 'exotic', frameOffset: 2, hz: { base: 1, gain: 1.18, min: 2, max: 8 } }, connections: [] },
   { id: 'graviticAnchorL', techId: 'graviticAnchor', minLevel: 1, assetId: 'machine.graviticAnchor', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorL', layer: 'mid', depthBias: 0,
     animation: { kind: 'none' }, connections: [{ id: 'eye', at: { x: 0, y: -121 }, kind: 'cable' }] },
@@ -1483,13 +1484,13 @@ const ERA_FIVE_TABLE: readonly EraFiveRow[] = [
     animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
   { id: 'anchorGlow1R', techId: 'graviticAnchor', minLevel: 1, assetId: 'machine.anchorGlow1', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorR', layer: 'mid', depthBias: 1,
     animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
-  { id: 'anchorGlow2L', techId: 'graviticAnchor', minLevel: 2, assetId: 'machine.anchorGlow2', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorL', layer: 'mid', depthBias: 1,
+  { id: 'anchorGlow2L', techId: 'graviticAnchor', minLevel: 3, assetId: 'machine.anchorGlow2', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorL', layer: 'mid', depthBias: 1,
     animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
-  { id: 'anchorGlow2R', techId: 'graviticAnchor', minLevel: 2, assetId: 'machine.anchorGlow2', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorR', layer: 'mid', depthBias: 1,
+  { id: 'anchorGlow2R', techId: 'graviticAnchor', minLevel: 3, assetId: 'machine.anchorGlow2', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorR', layer: 'mid', depthBias: 1,
     animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
-  { id: 'anchorGlow3L', techId: 'graviticAnchor', minLevel: 3, assetId: 'machine.anchorGlow3', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorL', layer: 'mid', depthBias: 1,
+  { id: 'anchorGlow3L', techId: 'graviticAnchor', minLevel: 5, assetId: 'machine.anchorGlow3', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorL', layer: 'mid', depthBias: 1,
     animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
-  { id: 'anchorGlow3R', techId: 'graviticAnchor', minLevel: 3, assetId: 'machine.anchorGlow3', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorR', layer: 'mid', depthBias: 1,
+  { id: 'anchorGlow3R', techId: 'graviticAnchor', minLevel: 5, assetId: 'machine.anchorGlow3', width: 32, height: 128, origin: { x: 0.5, y: 1 }, socket: 'anchorR', layer: 'mid', depthBias: 1,
     animation: { kind: 'frames', frames: 4, maxHz: 3, driver: 'exotic' }, connections: [] },
   { id: 'inversionGhost', techId: 'inversionCrank', minLevel: 1, assetId: 'machine.inversionGhost', width: 48, height: 48, origin: { x: 0.5, y: 0.5 }, socket: 'crankHub', layer: 'mid', depthBias: 9,
     animation: { kind: 'driven', ratio: 1.75, phaseDeg: 0 }, connections: [] },
@@ -1500,7 +1501,7 @@ const ERA_FIVE_TABLE: readonly EraFiveRow[] = [
     animation: { kind: 'latch', techId: 'skyAperture', minLevel: 1, frames: 6, fps: 5 }, connections: [] },
   { id: 'namePlate', techId: 'handCrank', minLevel: 1, assetId: 'machine.namePlate', width: 40, height: 11, origin: { x: 0.5, y: 1 }, socket: 'plateSeat', layer: 'frame', depthBias: 2,
     animation: { kind: 'stage', frames: 6, gates: [['generatorBlueprint', 1], ['substationBlueprint', 1], ['pressureVesselBlueprint', 1], ['harmonicConvergence', 1]], endingFrame: 5 }, connections: [] },
-  { id: 'ring1Bead2', techId: 'containmentRing', minLevel: 4, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
+  { id: 'ring1Bead2', techId: 'containmentRing', minLevel: 7, assetId: 'machine.ringBead', width: 5, height: 5, origin: { x: 0.5, y: 0.5 }, socket: 'coreHub', layer: 'mid', depthBias: 6,
     animation: { kind: 'orbit', ring: 1, phi0Deg: 180, dir: 1, speed: BEAD_SPEED, speedScale: 1, frontLayer: 'front', frontBias: 0, alignOffsetDeg: 180, phaseOf: 'ring1Bead' }, connections: [] },
 ];
 
@@ -1543,7 +1544,7 @@ describe('era V machine data (WP11)', () => {
   });
 
   it('ring back and front halves share size, socket and gate; each bead has its ring gate and sits on the core hub', () => {
-    const gates = [1, 8, 16, 25];
+    const gates = [1, 15, 31, 49];
     [1, 2, 3, 4].forEach((k, i) => {
       const back = MACHINE_COMPONENTS[ringId('Back', k)];
       const front = MACHINE_COMPONENTS[ringId('Front', k)];
@@ -1584,8 +1585,8 @@ describe('era V machine data (WP11)', () => {
     }
   });
 
-  it('anchor glows come in stages at graviticAnchor 1 / 2 / 3 on both sides, with 4 exotic frames at up to 3 Hz', () => {
-    const gates = [1, 2, 3];
+  it('anchor glows come in stages at graviticAnchor 1 / 3 / 5 on both sides, with 4 exotic frames at up to 3 Hz', () => {
+    const gates = [1, 3, 5];
     [1, 2, 3].forEach((k, i) => {
       for (const side of ['L', 'R'] as const) {
         const def = MACHINE_COMPONENTS[anchorGlowId(k, side)];
@@ -1598,7 +1599,7 @@ describe('era V machine data (WP11)', () => {
 
   it('siphon pairs mirror about x 64 (L + R = 128), share tech and stage level, and the arcs take the stage frame offset', () => {
     const pairs: readonly (readonly [SocketId, SocketId])[] = [['siphon1L', 'siphon1R'], ['siphon2L', 'siphon2R'], ['siphon3L', 'siphon3R']];
-    const levels = [1, 5, 10];
+    const levels = [1, 13, 28];
     pairs.forEach(([l, r], i) => {
       expect(MACHINE_SOCKETS[l].x + MACHINE_SOCKETS[r].x, `pair ${i + 1}`).toBe(128);
       expect(MACHINE_SOCKETS[l].y).toBe(MACHINE_SOCKETS[r].y);
@@ -1734,7 +1735,7 @@ describe('era V machine data (WP11)', () => {
     }
   });
 
-  it('coverage: every unlock tech has a component (techId, alsoVisibleWith, latch or stage gate); the exemptions are the ending tech primaryFunction and the control upgrades faultLamp, dischargeLever, leakWhistle, dampingFork, overrunClutch', () => {
+  it('coverage: every unlock tech has a component (techId, alsoVisibleWith, latch or stage gate); the exemptions are the ending tech primaryFunction, the control upgrades faultLamp, dischargeLever, leakWhistle, dampingFork, overrunClutch, and the 16 Splices (isSplice, WP28)', () => {
     const referenced = new Set<TechId>();
     for (const def of COMPONENTS) {
       for (const t of techsOf(def)) referenced.add(t);
@@ -1747,10 +1748,15 @@ describe('era V machine data (WP11)', () => {
     for (const id of TECH_IDS) {
       const def = TECHNOLOGIES[id];
       if (def.kind !== 'unlock') continue;
-      if (def.effects.some((e) => e.type === 'ending') || CONTROL_UPGRADES.includes(id)) { exempt.push(id); continue; }
+      // Splices are wired to dead world objects by the world layer (WP28), not by machine parts
+      if (def.effects.some((e) => e.type === 'ending') || CONTROL_UPGRADES.includes(id) || isSplice(def)) { exempt.push(id); continue; }
       expect(referenced.has(id), id).toBe(true);
     }
-    expect(exempt).toEqual(['primaryFunction', 'faultLamp', 'dischargeLever', 'leakWhistle', 'dampingFork', 'overrunClutch']);
+    expect(exempt).toEqual([
+      'primaryFunction', 'faultLamp', 'dischargeLever', 'leakWhistle', 'dampingFork', 'overrunClutch',
+      'spliceBicycle', 'spliceOrgan', 'spliceClock', 'spliceRadio', 'splicePayphone', 'spliceSign', 'splicePump', 'spliceWhistle',
+      'spliceHydrant', 'spliceBell', 'spliceGramophone', 'spliceChimes', 'spliceVane', 'spliceKite', 'spliceCairn', 'spliceCoinReturn',
+    ]);
   });
 
   it('era-V visibility: nothing of era V is visible at the start except the name plate', () => {
@@ -1763,9 +1769,9 @@ describe('era V machine data (WP11)', () => {
     for (const id of MACHINE_COMPONENT_IDS) expect(visible.has(id), id).toBe(true);
   });
 
-  it('ring back, front and bead parts come in at containmentRing 1 / 8 / 16 / 25, and ring N implies ring N-1', () => {
-    const gates = [1, 8, 16, 25];
-    for (let level = 0; level <= 25; level++) {
+  it('ring back, front and bead parts come in at containmentRing 1 / 15 / 31 / 49, and ring N implies ring N-1', () => {
+    const gates = [1, 15, 31, 49];
+    for (let level = 0; level <= 50; level++) {
       const visible = visibleAt(levelsForEra5([['containmentRing', level]]));
       if (visible.has(ringId('Back', 4))) expect(visible.has(ringId('Back', 3))).toBe(true);
       if (visible.has(ringId('Back', 3))) expect(visible.has(ringId('Back', 2))).toBe(true);
@@ -1779,7 +1785,7 @@ describe('era V machine data (WP11)', () => {
     }
   });
 
-  it('ring1Bead2 is the second ring-1 bead: same socket, layer, bias and speed curve as ring1Bead, phi0 180 against 0, comes in at containmentRing 4', () => {
+  it('ring1Bead2 is the second ring-1 bead: same socket, layer, bias and speed curve as ring1Bead, phi0 180 against 0, comes in at containmentRing 7', () => {
     const first = MACHINE_COMPONENTS.ring1Bead;
     const second = MACHINE_COMPONENTS.ring1Bead2;
     expect(second.attach).toEqual(first.attach);
@@ -1789,9 +1795,9 @@ describe('era V machine data (WP11)', () => {
     expect(first.animation).toMatchObject({ kind: 'orbit', phi0Deg: 0 });
     expect(second.animation).toEqual({ ...first.animation, phi0Deg: 180, alignOffsetDeg: 180, phaseOf: 'ring1Bead' });
     expect(second.techId).toBe('containmentRing');
-    expect(second.minLevel).toBe(4);
-    expect(visibleAt(levelsForEra5([['containmentRing', 3]])).has('ring1Bead2')).toBe(false);
-    expect(visibleAt(levelsForEra5([['containmentRing', 4]])).has('ring1Bead2')).toBe(true);
+    expect(second.minLevel).toBe(7);
+    expect(visibleAt(levelsForEra5([['containmentRing', 5]])).has('ring1Bead2')).toBe(false);
+    expect(visibleAt(levelsForEra5([['containmentRing', 7]])).has('ring1Bead2')).toBe(true);
   });
 
   it('ring1Bead2 phaseOf ring1Bead: only ring1Bead2 sets phaseOf; the lead is an orbit part on the same ring with the same dir, speed curve and speedScale, and comes before it in MACHINE_COMPONENT_IDS', () => {
@@ -1843,9 +1849,9 @@ describe('era V machine data (WP11)', () => {
     expect([...aligned[1]].sort((a, b) => a - b)).toEqual([90, 270]);
   });
 
-  it('siphon tubes and arcs come in at resonantSiphon 1 / 5 / 10, tube 3 implies tube 2 implies tube 1', () => {
-    const gates = [1, 5, 10];
-    for (let level = 0; level <= 20; level++) {
+  it('siphon tubes and arcs come in at resonantSiphon 1 / 13 / 28, tube 3 implies tube 2 implies tube 1', () => {
+    const gates = [1, 13, 28];
+    for (let level = 0; level <= 60; level++) {
       const visible = visibleAt(levelsForEra5([['resonantSiphon', level]]));
       if (visible.has(siphonTubeId(3, 'L'))) expect(visible.has(siphonTubeId(2, 'L'))).toBe(true);
       if (visible.has(siphonTubeId(2, 'L'))) expect(visible.has(siphonTubeId(1, 'L'))).toBe(true);
@@ -1858,9 +1864,9 @@ describe('era V machine data (WP11)', () => {
     }
   });
 
-  it('anchor glows come in at graviticAnchor 1 / 2 / 3, glow 3 implies glow 2 implies glow 1 on each side', () => {
-    const gates = [1, 2, 3];
-    for (let level = 0; level <= 10; level++) {
+  it('anchor glows come in at graviticAnchor 1 / 3 / 5, glow 3 implies glow 2 implies glow 1 on each side', () => {
+    const gates = [1, 3, 5];
+    for (let level = 0; level <= 20; level++) {
       const visible = visibleAt(levelsForEra5([['graviticAnchor', level]]));
       for (const side of ['L', 'R'] as const) {
         if (visible.has(anchorGlowId(3, side))) expect(visible.has(anchorGlowId(2, side))).toBe(true);
